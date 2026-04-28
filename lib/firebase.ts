@@ -1,4 +1,4 @@
-import { initializeApp, getApps } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -11,8 +11,16 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+// Only initialize on client — prevents SSG prerender crash with placeholder env vars
+function getFirebaseApp() {
+  if (typeof window === "undefined") return null;
+  return getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+}
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const googleProvider = new GoogleAuthProvider();
+const app = getFirebaseApp();
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const auth = app ? getAuth(app) : (null as any);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const db = app ? getFirestore(app) : (null as any);
+export const googleProvider = typeof window !== "undefined" ? new GoogleAuthProvider() : (null as any); // eslint-disable-line @typescript-eslint/no-explicit-any
