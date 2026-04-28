@@ -87,7 +87,7 @@ export default function LoginPage() {
       }}>
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 32, justifyContent: "center" }}>
-          <Image src="/logo.png" alt="SalesPal" width={40} height={40} style={{ borderRadius: 12, objectFit: "cover" }} />
+          <Image src="/logo.png" alt="SalesPal" width={40} height={40} style={{ borderRadius: 12, objectFit: "contain", background: "#0c1a3a" }} />
           <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 28, fontWeight: 900, letterSpacing: -1, color: "#f2f3f6" }}>
             SALES<em style={{ color: "#1b6cf2", fontStyle: "normal" }}>PAL</em>
           </span>

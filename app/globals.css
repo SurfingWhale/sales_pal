@@ -75,7 +75,8 @@ html, body {
 }
 .logo-img {
   width: 56px; height: 56px; border-radius: 16px;
-  object-fit: cover;
+  object-fit: contain;
+  background: #0c1a3a;
   box-shadow: 0 0 0 2px rgba(27,108,242,0.5), 0 12px 40px rgba(27,108,242,0.35);
 }
 .logo-text {
