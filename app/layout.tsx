@@ -4,6 +4,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "SALESPAL – AI-Powered Lead Tracker",
   description: "AI-powered CRM + outreach tracker buat sales yang mau scale di era otomasi.",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
