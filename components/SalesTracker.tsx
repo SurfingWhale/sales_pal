@@ -5,8 +5,10 @@ import { signOut, User } from "firebase/auth";
 import { collection, doc, setDoc, onSnapshot, deleteDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
+import SalesSimulator from "@/components/SalesSimulator";
+import ScriptLibrary from "@/components/ScriptLibrary";
 
-const TABS = ["Dashboard", "Leads", "Outreach", "Rejection Log", "AI Playbook"];
+const TABS = ["Dashboard", "Leads", "Outreach", "Rejection Log", "Simulator", "Script Library", "AI Playbook"];
 
 interface Lead {
   id: string; name: string; contact: string; source: string; status: string;
@@ -461,6 +463,12 @@ export default function SalesTracker({ user }: { user: User }) {
             </div>
           </div>
         )}
+
+        {/* SIMULATOR */}
+        {activeTab === "Simulator" && <SalesSimulator />}
+
+        {/* SCRIPT LIBRARY */}
+        {activeTab === "Script Library" && <ScriptLibrary />}
 
         {/* AI PLAYBOOK */}
         {activeTab === "AI Playbook" && (
