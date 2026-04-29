@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
-import SalesTracker from "@/components/SalesTracker";
+import SalesPalApp from "@/components/SalesPalApp";
 
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -34,5 +34,5 @@ export default function DashboardPage() {
 
   if (!user) return null;
 
-  return <SalesTracker user={user} />;
+  return <SalesPalApp user={user} />;
 }
