@@ -229,27 +229,24 @@ export default function SalesTracker({ user }: { user: User }) {
       `}</style>
 
       {/* Header */}
-      <div style={{ borderBottom: "1px solid var(--app-border)", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--app-nav)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 50 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #00ff88, #00cc6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 400, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "3px", color: "var(--app-text)" }}>SALES<span style={{ color: "#1b6cf2" }}>PAL</span></div>
-            <div style={{ fontSize: 9, color: "var(--app-muted)", letterSpacing: "2px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 600 }}>AI-POWERED SALES ASSISTANT</div>
-          </div>
+      <div style={{ borderBottom: "1px solid var(--app-border)", padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--app-nav)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 50, gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 9, background: "#1b6cf2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>⚡</div>
+          <div style={{ fontSize: 22, fontWeight: 400, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "3px", color: "var(--app-text)", lineHeight: 1 }}>SALES<span style={{ color: "#1b6cf2" }}>PAL</span></div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ fontSize: 11, color: "var(--app-muted)", textAlign: "right" }}>
-            <span style={{ color: "#00cc6a" }}>● </span>
-            {user.displayName || user.email}
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <span style={{ color: "#00cc6a", fontSize: 10, flexShrink: 0 }}>●</span>
+          <span style={{ fontSize: 11, color: "var(--app-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+            {(user.displayName || user.email || "").split("@")[0]}
+          </span>
           <button
             onClick={toggleTheme}
             title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            style={{ background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 8, color: "var(--app-muted)", padding: "6px 10px", fontSize: 14, cursor: "pointer", lineHeight: 1 }}
+            style={{ background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 8, color: "var(--app-muted)", padding: "6px 10px", fontSize: 14, cursor: "pointer", lineHeight: 1, flexShrink: 0 }}
           >
             {isDark ? "☀️" : "🌙"}
           </button>
-          <button onClick={handleLogout} style={{ background: "transparent", border: "1px solid var(--app-border)", borderRadius: 8, color: "var(--app-muted)", padding: "6px 14px", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
+          <button onClick={handleLogout} style={{ background: "transparent", border: "1px solid var(--app-border)", borderRadius: 8, color: "var(--app-muted)", padding: "6px 12px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
             Logout
           </button>
         </div>
