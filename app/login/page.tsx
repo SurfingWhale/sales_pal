@@ -60,7 +60,7 @@ export default function LoginPage() {
   return (
     <div style={{
       minHeight: "100vh",
-      background: "#04040a",
+      background: "var(--app-bg)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -79,7 +79,7 @@ export default function LoginPage() {
 
       <div style={{
         width: "100%", maxWidth: 420,
-        background: "#0c0d13",
+        background: "var(--app-card)",
         border: "1px solid #1e2028",
         borderRadius: 28,
         padding: "44px 40px",
@@ -88,15 +88,15 @@ export default function LoginPage() {
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 32, justifyContent: "center" }}>
           <Image src="/logo.png" alt="SalesPal" width={40} height={40} style={{ borderRadius: 12, objectFit: "contain", background: "#0c1a3a" }} />
-          <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 28, fontWeight: 900, letterSpacing: -1, color: "#f2f3f6" }}>
+          <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 28, fontWeight: 900, letterSpacing: -1, color: "var(--app-text)" }}>
             SALES<em style={{ color: "#1b6cf2", fontStyle: "normal" }}>PAL</em>
           </span>
         </div>
 
-        <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 900, letterSpacing: -1, color: "#fff", marginBottom: 6, textAlign: "center" }}>
+        <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 900, letterSpacing: -1, color: "var(--app-text)", marginBottom: 6, textAlign: "center" }}>
           {mode === "login" ? "Welcome back" : "Buat akun baru"}
         </h1>
-        <p style={{ fontSize: 13, color: "#5a6270", textAlign: "center", marginBottom: 28 }}>
+        <p style={{ fontSize: 13, color: "var(--app-muted)", textAlign: "center", marginBottom: 28 }}>
           {mode === "login" ? "Masuk ke dashboard sales lo" : "Mulai gratis, track lebih banyak deal"}
         </p>
 
@@ -107,7 +107,7 @@ export default function LoginPage() {
           style={{
             width: "100%",
             background: "#fff",
-            border: "1px solid #e8ecf4",
+            border: "1px solid var(--app-border)",
             borderRadius: 12,
             padding: "13px 20px",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
@@ -126,9 +126,9 @@ export default function LoginPage() {
         </button>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-          <div style={{ flex: 1, height: 1, background: "#1e2028" }} />
+          <div style={{ flex: 1, height: 1, background: "var(--app-border)" }} />
           <span style={{ fontSize: 11, color: "#3a4050" }}>atau dengan email</span>
-          <div style={{ flex: 1, height: 1, background: "#1e2028" }} />
+          <div style={{ flex: 1, height: 1, background: "var(--app-border)" }} />
         </div>
 
         {/* Email form */}
@@ -140,8 +140,8 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
             style={{
-              background: "#0d1117", border: "1px solid #21262d", borderRadius: 10,
-              color: "#e6edf3", padding: "13px 16px", fontSize: 14,
+              background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 10,
+              color: "var(--app-text)", padding: "13px 16px", fontSize: 14,
               outline: "none", fontFamily: "inherit",
             }}
           />
@@ -153,8 +153,8 @@ export default function LoginPage() {
             required
             minLength={6}
             style={{
-              background: "#0d1117", border: "1px solid #21262d", borderRadius: 10,
-              color: "#e6edf3", padding: "13px 16px", fontSize: 14,
+              background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 10,
+              color: "var(--app-text)", padding: "13px 16px", fontSize: 14,
               outline: "none", fontFamily: "inherit",
             }}
           />
@@ -180,7 +180,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p style={{ textAlign: "center", fontSize: 13, color: "#5a6270", marginTop: 20 }}>
+        <p style={{ textAlign: "center", fontSize: 13, color: "var(--app-muted)", marginTop: 20 }}>
           {mode === "login" ? "Belum punya akun? " : "Udah punya akun? "}
           <button
             onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}

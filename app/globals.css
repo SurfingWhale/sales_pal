@@ -16,6 +16,29 @@ html, body {
   --card: #0e0f14;
   --border: #1e2028;
   --surface: #0a0b10;
+
+  /* App dashboard theme — light (default) */
+  --app-bg: #f0f2f5;
+  --app-card: #ffffff;
+  --app-inner: #f6f8fa;
+  --app-border: #d0d7de;
+  --app-text: #1c2128;
+  --app-muted: #57606a;
+  --app-dim: #6e7681;
+  --app-sub: #57606a;
+  --app-nav: rgba(240,242,245,0.94);
+}
+
+[data-theme="dark"] {
+  --app-bg: #010409;
+  --app-card: #0d1117;
+  --app-inner: #161b22;
+  --app-border: #21262d;
+  --app-text: #e6edf3;
+  --app-muted: #7d8590;
+  --app-dim: #5a6270;
+  --app-sub: #8b949e;
+  --app-nav: rgba(4,4,10,0.85);
 }
 
 /* Landing page styles */
