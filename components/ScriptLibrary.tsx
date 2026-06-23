@@ -53,13 +53,13 @@ export default function ScriptLibrary() {
   const inputBase = {
     background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8,
     color: "var(--app-text)", padding: "10px 14px", fontSize: 12,
-    outline: "none", fontFamily: "'IBM Plex Mono', monospace",
+    outline: "none", fontFamily: "'Plus Jakarta Sans', sans-serif",
   } as React.CSSProperties;
 
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif" }}>Script Library</div>
+        <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Script Library</div>
         <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 4 }}>
           {filtered.length} script tersedia · Filter dan copy langsung ke chat
         </div>
@@ -102,7 +102,7 @@ export default function ScriptLibrary() {
                 background: filterTone === t ? "var(--app-border)" : "transparent",
                 border: "none", color: filterTone === t ? "var(--app-text)" : "var(--app-muted)",
                 padding: "10px 14px", fontSize: 12, cursor: "pointer",
-                fontFamily: "'IBM Plex Mono', monospace", transition: "all 0.15s",
+                fontFamily: "'Plus Jakarta Sans', sans-serif", transition: "all 0.15s",
               }}
             >
               {t === "all" ? "Semua" : t.charAt(0).toUpperCase() + t.slice(1)}

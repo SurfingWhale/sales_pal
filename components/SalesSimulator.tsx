@@ -36,7 +36,7 @@ export default function SalesSimulator() {
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif" }}>Sales Simulator</div>
+        <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Sales Simulator</div>
         <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 4 }}>Pilih tipe nasabah + skenario → dapat script terbaik siap pakai</div>
       </div>
 
@@ -95,7 +95,7 @@ export default function SalesSimulator() {
                 }}
               >
                 <div style={{ fontSize: 38, marginBottom: 12 }}>{a.animal}</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: a.color, fontFamily: "'Space Grotesk', sans-serif", marginBottom: 6 }}>{a.name}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: a.color, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 6 }}>{a.name}</div>
                 <div style={{ fontSize: 11, color: "var(--app-muted)", lineHeight: 1.6, marginBottom: 14 }}>{a.comStyle}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                   {a.traits.map(t => (
@@ -149,7 +149,7 @@ export default function SalesSimulator() {
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--app-border)"; }}
               >
                 <div style={{ fontSize: 26, marginBottom: 10 }}>{o.icon}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", marginBottom: 6 }}>{o.label}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 6 }}>{o.label}</div>
                 <div style={{ fontSize: 11, color: "var(--app-dim)", fontStyle: "italic", lineHeight: 1.5 }}>{o.example}</div>
               </button>
             ))}
@@ -227,7 +227,7 @@ export default function SalesSimulator() {
             style={{
               marginTop: 28, background: "linear-gradient(135deg, #00ff88, #00cc6a)",
               color: "#000", border: "none", borderRadius: 8, padding: "12px 28px",
-              fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace",
+              fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif",
             }}
           >
             ↺ Simulasi Baru

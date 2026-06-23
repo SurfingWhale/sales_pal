@@ -81,18 +81,18 @@ const AI_PLAYBOOK = [
   },
 ];
 
-const statusColor: Record<string, string> = { Hot: "#ff4444", Warm: "#ff9900", Cold: "#4488ff", Closed: "#00cc66" };
-const statusBg: Record<string, string> = { Hot: "#ff44441a", Warm: "#ff99001a", Cold: "#4488ff1a", Closed: "#00cc661a" };
+const statusColor: Record<string, string> = { Hot: "#ff4444", Warm: "#ff9900", Cold: "#1b6cf2", Closed: "#00cc66" };
+const statusBg: Record<string, string> = { Hot: "#ff44441a", Warm: "#ff99001a", Cold: "#1b6cf21a", Closed: "#00cc661a" };
 
 const inputStyle = {
   background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8,
   color: "var(--app-text)", padding: "10px 14px", fontSize: 13, width: "100%",
-  outline: "none", fontFamily: "'IBM Plex Mono', monospace",
+  outline: "none", fontFamily: "'Plus Jakarta Sans', sans-serif",
 };
 const btnPrimary = {
   background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000",
   border: "none", borderRadius: 8, padding: "10px 20px",
-  fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace",
+  fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif",
 };
 
 export default function SalesTracker({ user }: { user: User }) {
@@ -216,9 +216,8 @@ export default function SalesTracker({ user }: { user: User }) {
   const filteredLeads = filterStatus === "All" ? leads : leads.filter(l => l.status === filterStatus);
 
   return (
-    <div style={{ background: "var(--app-bg)", minHeight: "100vh", fontFamily: "'IBM Plex Mono', monospace", color: "var(--app-text)" }}>
+    <div style={{ background: "var(--app-bg)", minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, color: "var(--app-text)" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;600;700&display=swap');
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: var(--app-card); } ::-webkit-scrollbar-thumb { background: var(--app-border); border-radius: 4px; }
         .tab-btn:hover { background: var(--app-inner) !important; }
         .lead-row:hover { background: var(--app-inner) !important; cursor: pointer; }
@@ -234,8 +233,8 @@ export default function SalesTracker({ user }: { user: User }) {
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #00ff88, #00cc6a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "-0.5px", color: "var(--app-text)" }}>SALES<span style={{ color: "#00cc6a" }}>PAL</span></div>
-            <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "2px" }}>AI-POWERED SALES ASSISTANT</div>
+            <div style={{ fontSize: 20, fontWeight: 400, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "3px", color: "var(--app-text)" }}>SALES<span style={{ color: "#1b6cf2" }}>PAL</span></div>
+            <div style={{ fontSize: 9, color: "var(--app-muted)", letterSpacing: "2px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 600 }}>AI-POWERED SALES ASSISTANT</div>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -260,7 +259,7 @@ export default function SalesTracker({ user }: { user: User }) {
       <div style={{ borderBottom: "1px solid var(--app-border)", padding: "0 24px", display: "flex", gap: 4, overflowX: "auto", background: "var(--app-card)" }}>
         {TABS.map(tab => (
           <button key={tab} className="tab-btn" onClick={() => setActiveTab(tab)}
-            style={{ background: activeTab === tab ? "var(--app-inner)" : "transparent", border: "none", borderBottom: activeTab === tab ? "2px solid #00ff88" : "2px solid transparent", color: activeTab === tab ? "var(--app-text)" : "var(--app-muted)", padding: "12px 16px", fontSize: 12, cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace", fontWeight: activeTab === tab ? 700 : 400, letterSpacing: "0.5px", whiteSpace: "nowrap" }}>
+            style={{ background: activeTab === tab ? "var(--app-inner)" : "transparent", border: "none", borderBottom: activeTab === tab ? "2px solid #1b6cf2" : "2px solid transparent", color: activeTab === tab ? "var(--app-text)" : "var(--app-muted)", padding: "12px 16px", fontSize: 12, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: activeTab === tab ? 700 : 400, letterSpacing: "0.5px", whiteSpace: "nowrap" }}>
             {tab.toUpperCase()}
           </button>
         ))}
@@ -272,7 +271,7 @@ export default function SalesTracker({ user }: { user: User }) {
         {activeTab === "Dashboard" && (
           <div>
             <div style={{ marginBottom: 24 }}>
-              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif" }}>Sales Command Center</div>
+              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Sales Command Center</div>
               <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 4 }}>Overview pipeline & performance real-time lo</div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 32 }}>
@@ -281,19 +280,19 @@ export default function SalesTracker({ user }: { user: User }) {
                 { label: "Pipeline Value", value: `${(totalValue / 1000000).toFixed(1)}M`, sub: "estimasi total", color: "#00ff88", icon: "💰" },
                 { label: "Conversion Rate", value: `${conversionRate}%`, sub: `${closedLeads.length} closed`, color: "#a78bfa", icon: "📈" },
                 { label: "Reply Rate", value: `${replyRate}%`, sub: `${repliedOutreach}/${outreach.length} outreach`, color: "#f59e0b", icon: "📬" },
-                { label: "Avg Lead Score", value: avgScore, sub: "dari 100", color: "#00ccff", icon: "⭐" },
+                { label: "Avg Lead Score", value: avgScore, sub: "dari 100", color: "#1b6cf2", icon: "⭐" },
                 { label: "Rejections", value: rejections.length, sub: "perlu follow up", color: "#ff6b35", icon: "❌" },
               ].map(s => (
                 <div key={s.label} className="stat-card-dash" style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "20px 16px" }}>
                   <div style={{ fontSize: 22, marginBottom: 8 }}>{s.icon}</div>
-                  <div style={{ fontSize: 26, fontWeight: 700, color: s.color, fontFamily: "'Space Grotesk', sans-serif" }}>{s.value}</div>
+                  <div style={{ fontSize: 26, fontWeight: 700, color: s.color, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{s.value}</div>
                   <div style={{ fontSize: 11, color: "var(--app-text)", marginTop: 2, fontWeight: 600 }}>{s.label}</div>
                   <div style={{ fontSize: 10, color: "var(--app-muted)", marginTop: 2 }}>{s.sub}</div>
                 </div>
               ))}
             </div>
             <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 24, marginBottom: 24 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, fontFamily: "'Space Grotesk', sans-serif" }}>Sales Pipeline</div>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Sales Pipeline</div>
               {["Cold", "Warm", "Hot", "Closed"].map(s => {
                 const count = leads.filter(l => l.status === s).length;
                 const pct = leads.length ? (count / leads.length) * 100 : 0;
@@ -311,14 +310,14 @@ export default function SalesTracker({ user }: { user: User }) {
               })}
             </div>
             <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 24 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, fontFamily: "'Space Grotesk', sans-serif" }}>🔥 Hot Leads - Prioritas Sekarang</div>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>🔥 Hot Leads - Prioritas Sekarang</div>
               {hotLeads.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Belum ada hot leads.</div>}
               {hotLeads.map(l => (
                 <div key={l.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid var(--app-inner)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     <div style={{ width: 36, height: 36, borderRadius: 8, background: "#ff44441a", border: "1px solid #ff444430", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🔥</div>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, fontFamily: "'Space Grotesk', sans-serif" }}>{l.name}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{l.name}</div>
                       <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{l.contact} · {l.category}</div>
                     </div>
                   </div>
@@ -337,13 +336,13 @@ export default function SalesTracker({ user }: { user: User }) {
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
               <div>
-                <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif" }}>Lead Database</div>
+                <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Lead Database</div>
                 <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 2 }}>{filteredLeads.length} leads ditampilkan</div>
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {["All", "Hot", "Warm", "Cold", "Closed"].map(s => (
                   <button key={s} onClick={() => setFilterStatus(s)}
-                    style={{ background: filterStatus === s ? (statusColor[s] || "var(--app-border)") : "var(--app-card)", color: filterStatus === s ? "#fff" : "var(--app-muted)", border: "1px solid var(--app-border)", borderRadius: 6, padding: "6px 12px", fontSize: 11, cursor: "pointer", fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace" }}>
+                    style={{ background: filterStatus === s ? (statusColor[s] || "var(--app-border)") : "var(--app-card)", color: filterStatus === s ? "#fff" : "var(--app-muted)", border: "1px solid var(--app-border)", borderRadius: 6, padding: "6px 12px", fontSize: 11, cursor: "pointer", fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                     {s}
                   </button>
                 ))}
@@ -363,7 +362,7 @@ export default function SalesTracker({ user }: { user: User }) {
                   {filteredLeads.map(lead => (
                     <tr key={lead.id} className="lead-row" onClick={() => setSelectedLead(lead)} style={{ borderBottom: "1px solid var(--app-inner)" }}>
                       <td style={{ padding: "14px 16px" }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, fontFamily: "'Space Grotesk', sans-serif" }}>{lead.name}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{lead.name}</div>
                         <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{lead.category}</div>
                       </td>
                       <td style={{ padding: "14px 16px", fontSize: 12, color: "var(--app-muted)" }}>{lead.contact}</td>
@@ -399,34 +398,34 @@ export default function SalesTracker({ user }: { user: User }) {
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div>
-                <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif" }}>Outreach Tracker</div>
+                <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Outreach Tracker</div>
                 <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 2 }}>Track semua DM, email, dan WA lo</div>
               </div>
               <button onClick={() => setShowAddOutreach(true)} style={btnPrimary}>+ LOG OUTREACH</button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 24 }}>
               {[
-                { label: "Total Sent", value: outreach.length, color: "#00ccff" },
+                { label: "Total Sent", value: outreach.length, color: "#1b6cf2" },
                 { label: "Replied", value: outreach.filter(o => o.status === "Replied").length, color: "#00ff88" },
                 { label: "Seen/Open", value: outreach.filter(o => o.status === "Seen").length, color: "#f59e0b" },
                 { label: "No Response", value: outreach.filter(o => o.status === "No Response").length, color: "var(--app-muted)" },
                 { label: "Rejected", value: outreach.filter(o => o.status === "Rejected").length, color: "#ff4444" },
               ].map(s => (
                 <div key={s.label} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 10, padding: 16 }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: s.color, fontFamily: "'Space Grotesk', sans-serif" }}>{s.value}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: s.color, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{s.value}</div>
                   <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>{s.label}</div>
                 </div>
               ))}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {outreach.map(o => {
-                const statusColors: Record<string, string> = { Replied: "#00ff88", Seen: "#f59e0b", Sent: "#00ccff", "No Response": "var(--app-muted)", Rejected: "#ff4444" };
+                const statusColors: Record<string, string> = { Replied: "#00ff88", Seen: "#f59e0b", Sent: "#1b6cf2", "No Response": "var(--app-muted)", Rejected: "#ff4444" };
                 return (
                   <div key={o.id} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 10, padding: 20, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
                       <div style={{ fontSize: 20 }}>{o.type === "Email" ? "📧" : o.type === "DM Instagram" ? "📸" : "💬"}</div>
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif" }}>{o.leadName}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{o.leadName}</div>
                         <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{o.subject}</div>
                         <div style={{ fontSize: 10, color: "var(--app-muted)", marginTop: 2 }}>{o.type} · {o.date}</div>
                       </div>
@@ -447,7 +446,7 @@ export default function SalesTracker({ user }: { user: User }) {
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div>
-                <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif" }}>Rejection Log</div>
+                <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Rejection Log</div>
                 <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 2 }}>Tiap rejection = data buat improve. Catat & belajar.</div>
               </div>
               <button onClick={() => setShowAddRejection(true)} style={btnPrimary}>+ LOG REJECTION</button>
@@ -460,7 +459,7 @@ export default function SalesTracker({ user }: { user: User }) {
                 <div key={r.id} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 20 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif" }}>{r.leadName}</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{r.leadName}</div>
                       <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{r.channel} · {r.date}</div>
                     </div>
                     <span className="badge" style={{ background: "#ff44441a", color: "#ff4444", border: "1px solid #ff444430" }}>REJECTED</span>
@@ -495,13 +494,13 @@ export default function SalesTracker({ user }: { user: User }) {
         {activeTab === "AI Playbook" && (
           <div>
             <div style={{ marginBottom: 24 }}>
-              <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif" }}>AI Sales Playbook</div>
+              <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>AI Sales Playbook</div>
               <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 4 }}>Cara scraping, outreach, dan dominasi sales di era AI</div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
               {AI_PLAYBOOK.map((section, si) => (
                 <div key={si} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 14, padding: 24 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", marginBottom: 20, color: section.color }}>{section.category}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20, color: section.color }}>{section.category}</div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
                     {section.steps.map((step, i) => (
                       <div key={i} className="step-card" style={{ ["--accent" as string]: section.color, background: "var(--app-inner)", borderRadius: 10, padding: 16, border: "1px solid var(--app-border)", transition: "border-color 0.2s" }}>
@@ -517,19 +516,19 @@ export default function SalesTracker({ user }: { user: User }) {
               ))}
             </div>
             <div style={{ background: "var(--app-card)", border: "1px solid #a78bfa40", borderRadius: 14, padding: 24, marginTop: 24 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: "#a78bfa", fontFamily: "'Space Grotesk', sans-serif" }}>🎯 Target Benchmark Sales Metrics Lo</div>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: "#a78bfa", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>🎯 Target Benchmark Sales Metrics Lo</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
                 {[
                   { metric: "Cold Email Reply Rate", target: "5–15%", world: "< 3%", color: "#00ff88" },
                   { metric: "DM Instagram Reply", target: "20–35%", world: "< 10%", color: "#f59e0b" },
-                  { metric: "Meeting Rate dari Reply", target: "40%+", world: "< 20%", color: "#00ccff" },
+                  { metric: "Meeting Rate dari Reply", target: "40%+", world: "< 20%", color: "#1b6cf2" },
                   { metric: "Close Rate dari Meeting", target: "25–35%", world: "< 15%", color: "#a78bfa" },
                   { metric: "Follow-up Response Rate", target: "30%+", world: "< 10%", color: "#ff6b35" },
                   { metric: "Avg Deal Cycle", target: "< 14 hari", world: "> 30 hari", color: "#ff4444" },
                 ].map(m => (
                   <div key={m.metric} style={{ background: "var(--app-inner)", borderRadius: 10, padding: 14 }}>
                     <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 6 }}>{m.metric}</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: m.color, fontFamily: "'Space Grotesk', sans-serif" }}>{m.target}</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: m.color, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{m.target}</div>
                     <div style={{ fontSize: 10, color: "var(--app-muted)", marginTop: 4 }}>Rata-rata industri: {m.world}</div>
                   </div>
                 ))}
@@ -543,7 +542,7 @@ export default function SalesTracker({ user }: { user: User }) {
       {showAddLead && (
         <div className="modal-overlay" onClick={() => setShowAddLead(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 500 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", marginBottom: 20 }}>+ Add New Lead</div>
+            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20 }}>+ Add New Lead</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {([["name", "Nama Perusahaan"], ["contact", "Nama Kontak"], ["email", "Email"], ["phone", "No. HP"], ["value", "Estimasi Value (Rp)"]] as [string, string][]).map(([k, label]) => (
                 <div key={k} style={{ gridColumn: k === "name" || k === "value" ? "1/-1" : "auto" }}>
@@ -576,7 +575,7 @@ export default function SalesTracker({ user }: { user: User }) {
       {showAddOutreach && (
         <div className="modal-overlay" onClick={() => setShowAddOutreach(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", marginBottom: 20 }}>+ Log Outreach</div>
+            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20 }}>+ Log Outreach</div>
             {([["leadName", "Nama Lead/Perusahaan"], ["subject", "Subject / Pesan Pembuka"]] as [string, string][]).map(([k, label]) => (
               <div key={k} style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
@@ -603,7 +602,7 @@ export default function SalesTracker({ user }: { user: User }) {
       {showAddRejection && (
         <div className="modal-overlay" onClick={() => setShowAddRejection(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", marginBottom: 20 }}>+ Log Rejection</div>
+            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20 }}>+ Log Rejection</div>
             {([["leadName", "Nama Lead/Perusahaan"], ["reason", "Alasan Rejection"], ["lesson", "Lesson Learned"]] as [string, string][]).map(([k, label]) => (
               <div key={k} style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
@@ -636,10 +635,10 @@ export default function SalesTracker({ user }: { user: User }) {
           <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 480 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif" }}>{selectedLead.name}</div>
+                <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{selectedLead.name}</div>
                 <span className="badge" style={{ background: statusBg[selectedLead.status], color: statusColor[selectedLead.status], border: `1px solid ${statusColor[selectedLead.status]}30`, marginTop: 6, display: "inline-block" }}>{selectedLead.status}</span>
               </div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: "#00ff88", fontFamily: "'Space Grotesk', sans-serif" }}>Rp {(selectedLead.value / 1000000).toFixed(1)}M</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: "#00ff88", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Rp {(selectedLead.value / 1000000).toFixed(1)}M</div>
             </div>
             {([["👤 Kontak", selectedLead.contact], ["📧 Email", selectedLead.email], ["📱 Phone", selectedLead.phone], ["🏷️ Kategori", selectedLead.category], ["📍 Source", selectedLead.source], ["📅 Last Contact", selectedLead.lastContact]] as [string, string][]).map(([k, v]) => (
               <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--app-inner)", fontSize: 13 }}>

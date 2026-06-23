@@ -88,12 +88,12 @@ export default function LoginPage() {
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 32, justifyContent: "center" }}>
           <Image src="/logo.png" alt="SalesPal" width={40} height={40} style={{ borderRadius: 12, objectFit: "contain", background: "#0c1a3a" }} />
-          <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 28, fontWeight: 900, letterSpacing: -1, color: "var(--app-text)" }}>
+          <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 30, fontWeight: 400, letterSpacing: 3, color: "var(--app-text)" }}>
             SALES<em style={{ color: "#1b6cf2", fontStyle: "normal" }}>PAL</em>
           </span>
         </div>
 
-        <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 900, letterSpacing: -1, color: "var(--app-text)", marginBottom: 6, textAlign: "center" }}>
+        <h1 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, fontWeight: 400, letterSpacing: 2, color: "var(--app-text)", marginBottom: 6, textAlign: "center" }}>
           {mode === "login" ? "Welcome back" : "Buat akun baru"}
         </h1>
         <p style={{ fontSize: 13, color: "var(--app-muted)", textAlign: "center", marginBottom: 28 }}>
