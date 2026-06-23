@@ -64,7 +64,7 @@ export default function LandingPage() {
   return (
     <>
       {/* NAV */}
-      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, background: "rgba(4,4,10,0.85)", backdropFilter: "blur(12px)", borderBottom: "1px solid #14151c", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, background: "rgba(245,247,250,0.92)", backdropFilter: "blur(12px)", borderBottom: "1px solid #d0d7de", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div className="logo-text" style={{ fontSize: 22, marginBottom: 0 }}>SALES<em>PAL</em></div>
         <Link href="/login" className="btn-primary" style={{ padding: "10px 24px", fontSize: 13 }}>
           🚀 Masuk / Daftar
