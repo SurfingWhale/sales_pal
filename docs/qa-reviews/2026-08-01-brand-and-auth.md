@@ -15,8 +15,10 @@ Flow QA ini nge-walk aplikasi dari sisi user beneran (install PWA → buka → l
 | # | Area | Severity | Judul |
 |---|------|----------|-------|
 | QA-1 | Auth / PWA | 🔴 Blocker | Tiap buka PWA harus login ulang |
-| QA-2 | Brand identity | 🟠 Major | Identitas macan yang dibayangkan ga kepakai — nuansa utama malah biru + ⚡ |
-| QA-3 | Brand konsistensi | 🟡 Minor | Maskot campur aduk: 🐯 di archetype "Singa", 🐺 wolf di footer, ⚡ di header |
+| QA-2 | Brand identity | 🟠 Major | Warna app (`#1b6cf2`) ga match warna logo (cakar biru `#005eb0`) |
+| QA-3 | Brand konsistensi | 🟡 Minor | Ikon/maskot campur: ⚡ di header, 🐺 di footer — logo (cakar) ga dipakai konsisten |
+
+> **Koreksi (2026-08-01):** revisi awal QA ini salah mengira brand mau di-rebrand jadi macan oranye. Identitas sebenarnya = **logo cakar biru** yang udah ada; birunya bener, cuma app-nya pakai shade biru yang salah. Lihat `docs/brand-identity.md`.
 
 ---
 
@@ -40,33 +42,30 @@ Flow QA ini nge-walk aplikasi dari sisi user beneran (install PWA → buka → l
 
 ---
 
-## QA-2 — Identitas macan ga kepakai 🟠
+## QA-2 — Warna app ga match logo 🟠
 
-**Ekspektasi user (brand vision):**
-- Maskot / ikon = **macan (tiger)**
-- Palet warna = **nuansa macan** (oranye/amber + hitam garis + krem) sebagai nuansa utama
+**Identitas sebenarnya:** logo = **cakar (paw) macan biru** + wordmark `SALESPAL` hitam tebal (`public/logo.png`). Birunya, di-sample dari logo, = **`#005eb0`** (azure dalam).
 
 **Actual saat ini:**
-- Ikon utama = ⚡ (kotak biru), logo `logo.png` bukan macan
-- Warna utama = biru `#1b6cf2` (hasil "blue unification" sebelumnya)
-- Ga ada elemen macan di landing, header, login, maupun app icon
+- Seluruh app diseragamin ke **`#1b6cf2`** (periwinkle, lebih terang & keunguan) — ini BUKAN biru logo.
+- Header pakai ikon **⚡**, bukan mark cakar dari logo.
 
-**Gap:** Arah brand yang dibayangkan (bold, garang, "macan closer") ga ke-deliver sama sekali. Warna biru berasa corporate-generic, bukan karakter macan.
+**Gap:** App dan logo keliatan beda warna biru. Yang bener: seragamin semua aksen brand ke biru logo `#005eb0`.
 
-**Dampak:** Brand recall lemah, ga ada diferensiasi. Ini yang bikin user ngerasa "beda banget dari yang gw bayangin".
+**Dampak:** Brand keliatan ga konsisten — logo satu biru, UI biru lain.
 
 ---
 
-## QA-3 — Maskot campur aduk 🟡
+## QA-3 — Ikon brand ga konsisten 🟡
 
-Ditemukan tiga hewan berbeda di produk yang sama tanpa sistem:
-- Header app: **⚡** (petir)
-- Archetype "Singa": pakai emoji **🐯 (macan)** — nama vs emoji ga cocok
-- Footer landing: **🐺** ("Built for closers 🐺")
+Brand mark = cakar biru (dari logo), tapi di produk muncul ikon lain:
+- Header app: **⚡** (petir) — harusnya mark cakar / logo.
+- Footer landing: **🐺** wolf — off-brand.
+- Archetype "Singa" pakai emoji **🐯** — ini sistem fungsional terpisah (bukan brand), tapi nama vs emoji ga cocok; beresin sekalian.
 
-**Expected:** Satu sistem maskot yang konsisten. Kalau macan jadi brand utama, elemen lain harus tunduk ke situ (atau dibedain jelas: macan = brand, hewan archetype = fungsional).
+**Expected:** Header & footer pakai mark cakar dari logo. Emoji archetype = sistem fungsional, dibedain jelas dari brand.
 
-**Dampak:** Persepsi produk jadi ga rapi / belum matang.
+**Dampak:** Produk keliatan belum matang / ga rapi.
 
 ---
 
@@ -74,5 +73,5 @@ Ditemukan tiga hewan berbeda di produk yang sama tanpa sistem:
 
 Semua temuan diteruskan ke **PRD-001**. Prioritas eksekusi:
 1. QA-1 (blocker) — auth persistence.
-2. QA-2 (major) — rebrand ke identitas macan.
-3. QA-3 (minor) — beresin sistem maskot bareng QA-2.
+2. QA-2 (major) — seragamin warna app ke biru logo `#005eb0`.
+3. QA-3 (minor) — pakai mark cakar konsisten, beresin ikon off-brand.
