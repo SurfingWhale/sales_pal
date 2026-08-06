@@ -133,7 +133,6 @@ export default function SalesTracker({ user }: { user: User }) {
       onSnapshot(collection(db, "users", uid, "leads"), (snap) => {
         const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Lead));
         setLeads(docs);
-        // Seed demo data on first load
         if (!seeded && docs.length === 0) {
           setSeeded(true);
           SEED_LEADS.forEach((l) => {
