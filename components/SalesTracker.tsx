@@ -231,7 +231,8 @@ export default function SalesTracker({ user }: { user: User }) {
       {/* Header */}
       <div style={{ borderBottom: "1px solid var(--app-border)", padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--app-nav)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 50, gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 9, background: "#005eb0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>⚡</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-mark.png" alt="SalesPal" width={32} height={32} style={{ display: "block", flexShrink: 0 }} />
           <div style={{ fontSize: 22, fontWeight: 400, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "3px", color: "var(--app-text)", lineHeight: 1 }}>SALES<span style={{ color: "#005eb0" }}>PAL</span></div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
