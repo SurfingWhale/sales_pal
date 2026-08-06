@@ -181,9 +181,9 @@ export default function ScriptLibrary() {
                   <button
                     onClick={() => copyScript(item.script, item.key)}
                     style={{
-                      background: isCopied ? "#00ff8820" : "transparent",
-                      border: `1px solid ${isCopied ? "#00ff88" : "var(--app-border)"}`,
-                      color: isCopied ? "#00ff88" : "var(--app-muted)",
+                      background: isCopied ? "#00a8621a" : "transparent",
+                      border: `1px solid ${isCopied ? "var(--ok)" : "var(--app-border)"}`,
+                      color: isCopied ? "var(--ok)" : "var(--app-muted)",
                       borderRadius: 6, padding: "4px 12px", fontSize: 11,
                       cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
                     }}
@@ -203,7 +203,7 @@ export default function ScriptLibrary() {
 
                 {/* Tips */}
                 <div style={{ fontSize: 11, color: "var(--app-muted)" }}>
-                  <span style={{ color: "#00ff88" }}>💡 </span>{item.tips}
+                  <span style={{ color: "var(--ok)" }}>💡 </span>{item.tips}
                 </div>
               </div>
             );

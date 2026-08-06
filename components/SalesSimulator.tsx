@@ -50,11 +50,11 @@ export default function SalesSimulator() {
               <div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
                 <div style={{
                   width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
-                  background: isActive ? "#00ff88" : isDone ? "#00ff8830" : "var(--app-inner)",
-                  border: `2px solid ${isActive || isDone ? "#00ff88" : "var(--app-border)"}`,
+                  background: isActive ? "#005eb0" : isDone ? "#005eb030" : "var(--app-inner)",
+                  border: `2px solid ${isActive || isDone ? "#005eb0" : "var(--app-border)"}`,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 11, fontWeight: 700,
-                  color: isActive ? "#000" : isDone ? "#00ff88" : "var(--app-muted)",
+                  color: isActive ? "#000" : isDone ? "#005eb0" : "var(--app-muted)",
                 }}>
                   {isDone ? "✓" : i + 1}
                 </div>
@@ -63,7 +63,7 @@ export default function SalesSimulator() {
                 </span>
               </div>
               {i < 2 && (
-                <div style={{ flex: 1, height: 1, background: isDone ? "#00ff8850" : "var(--app-border)", margin: "0 12px" }} />
+                <div style={{ flex: 1, height: 1, background: isDone ? "#005eb050" : "var(--app-border)", margin: "0 12px" }} />
               )}
             </div>
           );
@@ -145,7 +145,7 @@ export default function SalesSimulator() {
                   padding: "18px 16px", textAlign: "left", cursor: "pointer",
                   color: "inherit", fontFamily: "inherit", transition: "border-color 0.15s",
                 }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "#00ff88"; }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "#005eb0"; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--app-border)"; }}
               >
                 <div style={{ fontSize: 26, marginBottom: 10 }}>{o.icon}</div>
@@ -172,10 +172,10 @@ export default function SalesSimulator() {
             </button>
             <button
               onClick={() => setStep("objection")}
-              style={{ display: "flex", alignItems: "center", gap: 8, background: "#00ff881a", border: "1px solid #00ff8830", borderRadius: 20, padding: "6px 14px", cursor: "pointer", color: "inherit", fontFamily: "inherit" }}
+              style={{ display: "flex", alignItems: "center", gap: 8, background: "#005eb01a", border: "1px solid #005eb030", borderRadius: 20, padding: "6px 14px", cursor: "pointer", color: "inherit", fontFamily: "inherit" }}
             >
               <span>{objection.icon}</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "#00ff88" }}>{objection.label}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ok)" }}>{objection.label}</span>
               <span style={{ fontSize: 10, color: "var(--app-dim)" }}>✕</span>
             </button>
           </div>
@@ -198,9 +198,9 @@ export default function SalesSimulator() {
                   <button
                     onClick={() => copyScript(s.script, i)}
                     style={{
-                      background: copiedIdx === i ? "#00ff8820" : "transparent",
-                      border: `1px solid ${copiedIdx === i ? "#00ff88" : "var(--app-border)"}`,
-                      color: copiedIdx === i ? "#00ff88" : "var(--app-muted)",
+                      background: copiedIdx === i ? "#005eb020" : "transparent",
+                      border: `1px solid ${copiedIdx === i ? "#005eb0" : "var(--app-border)"}`,
+                      color: copiedIdx === i ? "#005eb0" : "var(--app-muted)",
                       borderRadius: 6, padding: "5px 14px", fontSize: 11, cursor: "pointer", fontFamily: "inherit",
                     }}
                   >
@@ -214,8 +214,8 @@ export default function SalesSimulator() {
                 }}>
                   &ldquo;{s.script}&rdquo;
                 </div>
-                <div style={{ background: "#00ff881a", borderRadius: 8, padding: "10px 14px", border: "1px solid #00ff8815" }}>
-                  <span style={{ fontSize: 10, color: "#00ff88", fontWeight: 700, letterSpacing: "1px" }}>💡 WHY IT WORKS&nbsp;&nbsp;</span>
+                <div style={{ background: "#005eb01a", borderRadius: 8, padding: "10px 14px", border: "1px solid #005eb015" }}>
+                  <span style={{ fontSize: 10, color: "var(--ok)", fontWeight: 700, letterSpacing: "1px" }}>💡 WHY IT WORKS&nbsp;&nbsp;</span>
                   <span style={{ fontSize: 12, color: "#8b949e" }}>{s.tips}</span>
                 </div>
               </div>
@@ -225,8 +225,8 @@ export default function SalesSimulator() {
           <button
             onClick={reset}
             style={{
-              marginTop: 28, background: "linear-gradient(135deg, #00ff88, #00cc6a)",
-              color: "#000", border: "none", borderRadius: 8, padding: "12px 28px",
+              marginTop: 28, background: "#005eb0",
+              color: "#fff", border: "none", borderRadius: 8, padding: "12px 28px",
               fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif",
             }}
           >
