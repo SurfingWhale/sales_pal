@@ -195,8 +195,8 @@ export default function LandingPage() {
           ))}
         </div>
         <div className="dots">
-          {showcaseItems.map((_, i) => (
-            <button key={i} className={`landing-dot${activeIdx === i ? " on" : ""}`} onClick={() => scrollToItem(i)} />
+          {showcaseItems.map((item, i) => (
+            <button key={i} className={`landing-dot${activeIdx === i ? " on" : ""}`} onClick={() => scrollToItem(i)} aria-label={`Lihat ${item.name}`} aria-current={activeIdx === i} />
           ))}
         </div>
       </section>

@@ -20,7 +20,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   if (user === undefined) {
     return (
       <div style={{ background: "var(--app-bg, #f0f2f5)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ width: 40, height: 40, border: "3px solid var(--app-border, #d0d7de)", borderTopColor: "#1b6cf2", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+        <div style={{ width: 40, height: 40, border: "3px solid var(--app-border, #d0d7de)", borderTopColor: "#005eb0", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );

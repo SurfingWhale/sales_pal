@@ -73,7 +73,7 @@ export default function LoginPage() {
         position: "absolute", top: "50%", left: "50%",
         transform: "translate(-50%, -50%)",
         width: 600, height: 600, borderRadius: "50%",
-        background: "radial-gradient(ellipse, rgba(27,108,242,0.12) 0%, transparent 70%)",
+        background: "radial-gradient(ellipse, rgba(0,94,176,0.12) 0%, transparent 70%)",
         pointerEvents: "none",
       }} />
 
@@ -89,7 +89,7 @@ export default function LoginPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 32, justifyContent: "center" }}>
           <Image src="/logo.png" alt="SalesPal" width={40} height={40} style={{ borderRadius: 12, objectFit: "contain", background: "#0c1a3a" }} />
           <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 30, fontWeight: 400, letterSpacing: 3, color: "var(--app-text)" }}>
-            SALES<em style={{ color: "#1b6cf2", fontStyle: "normal" }}>PAL</em>
+            SALES<em style={{ color: "#005eb0", fontStyle: "normal" }}>PAL</em>
           </span>
         </div>
 
@@ -136,6 +136,8 @@ export default function LoginPage() {
           <input
             type="email"
             placeholder="Email lo"
+            aria-label="Email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -148,6 +150,8 @@ export default function LoginPage() {
           <input
             type="password"
             placeholder="Password"
+            aria-label="Password"
+            autoComplete={mode === "login" ? "current-password" : "new-password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -169,11 +173,11 @@ export default function LoginPage() {
             type="submit"
             disabled={loading}
             style={{
-              background: "#1b6cf2", color: "#fff", border: "none", borderRadius: 12,
+              background: "#005eb0", color: "#fff", border: "none", borderRadius: 12,
               padding: "14px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer",
               fontFamily: "inherit", marginTop: 4,
               opacity: loading ? 0.7 : 1,
-              boxShadow: "0 4px 20px rgba(27,108,242,0.4)",
+              boxShadow: "0 4px 20px rgba(0,94,176,0.4)",
             }}
           >
             {loading ? "Loading..." : mode === "login" ? "🚀 Masuk" : "✨ Buat Akun"}
@@ -184,7 +188,7 @@ export default function LoginPage() {
           {mode === "login" ? "Belum punya akun? " : "Udah punya akun? "}
           <button
             onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}
-            style={{ color: "#1b6cf2", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600 }}
+            style={{ color: "#005eb0", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600 }}
           >
             {mode === "login" ? "Daftar gratis" : "Masuk"}
           </button>
