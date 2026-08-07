@@ -97,6 +97,8 @@ const btnPrimary = {
   fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif",
 };
 
+const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || "dev";
+
 // --- XLS/CSV import ---
 const IMPORT_FIELDS: { key: string; label: string; required?: boolean; keywords: string[] }[] = [
   { key: "name", label: "Nama Perusahaan", required: true, keywords: ["perusahaan", "nama", "company", "name", "client", "bisnis"] },
@@ -213,6 +215,10 @@ export default function SalesTracker({ user }: { user: User }) {
   const [importMode, setImportMode] = useState<"file" | "scan">("file");
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
+  const [showProfile, setShowProfile] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<{ latest: string; hasUpdate: boolean; error?: boolean } | null>(null);
+  const [clearing, setClearing] = useState(false);
 
   const uid = user.uid;
 
@@ -412,6 +418,42 @@ export default function SalesTracker({ user }: { user: User }) {
     router.replace("/login");
   }
 
+  async function checkUpdate() {
+    setCheckingUpdate(true);
+    setUpdateInfo(null);
+    try {
+      const res = await fetch("/api/version", { cache: "no-store" });
+      const j = await res.json();
+      const latest = String(j?.version || "");
+      setUpdateInfo({ latest, hasUpdate: !!latest && latest !== APP_VERSION });
+    } catch {
+      setUpdateInfo({ latest: "", hasUpdate: false, error: true });
+    } finally {
+      setCheckingUpdate(false);
+    }
+  }
+
+  // Clears app caches + any service worker, then hard-reloads to fetch the latest
+  // build. Login is preserved (auth lives in IndexedDB, which we don't touch).
+  async function clearCacheAndReload() {
+    setClearing(true);
+    try {
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+    } catch {
+      /* ignore — reload anyway */
+    }
+    const u = new URL(window.location.href);
+    u.searchParams.set("_v", Date.now().toString());
+    window.location.replace(u.toString());
+  }
+
   const totalValue = leads.reduce((a, b) => a + b.value, 0);
   const closedLeads = leads.filter(l => l.status === "Closed");
   const hotLeads = leads.filter(l => l.status === "Hot");
@@ -454,8 +496,13 @@ export default function SalesTracker({ user }: { user: User }) {
           >
             {isDark ? "☀️" : "🌙"}
           </button>
-          <button onClick={handleLogout} style={{ background: "transparent", border: "1px solid var(--app-border)", borderRadius: 8, color: "var(--app-muted)", padding: "6px 12px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
-            Logout
+          <button
+            onClick={() => { setShowProfile(true); setUpdateInfo(null); }}
+            aria-label="Profil & pengaturan"
+            title="Profil & pengaturan"
+            style={{ width: 32, height: 32, borderRadius: "50%", background: "#005eb0", color: "#fff", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+            {(user.displayName || user.email || "U").charAt(0).toUpperCase()}
           </button>
         </div>
       </div>
@@ -923,6 +970,67 @@ export default function SalesTracker({ user }: { user: User }) {
               <div style={{ fontSize: 13, fontWeight: 700, marginTop: 6, color: selectedLead.score > 80 ? "#00a862" : selectedLead.score > 60 ? "#f59e0b" : "#ff4444" }}>{selectedLead.score} / 100</div>
             </div>
             <button onClick={() => setSelectedLead(null)} style={{ ...btnPrimary, width: "100%", marginTop: 20 }}>TUTUP</button>
+          </div>
+        </div>
+      )}
+
+      {/* Profile & Settings Modal */}
+      {showProfile && (
+        <div className="modal-overlay" onClick={() => setShowProfile(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Profil & Pengaturan</div>
+              <button onClick={() => setShowProfile(false)} aria-label="Tutup" style={{ background: "transparent", border: "none", color: "var(--app-muted)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
+            </div>
+
+            {/* User */}
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
+              <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#005eb0", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, flexShrink: 0 }}>
+                {(user.displayName || user.email || "U").charAt(0).toUpperCase()}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.displayName || (user.email || "").split("@")[0]}</div>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.email}</div>
+              </div>
+            </div>
+
+            {/* Version / update */}
+            <div style={{ background: "var(--app-inner)", borderRadius: 12, padding: 16, marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>Versi aplikasi</div>
+                  <div style={{ fontSize: 12, color: "var(--app-muted)", fontFamily: "monospace", marginTop: 2 }}>{APP_VERSION}</div>
+                </div>
+                <button onClick={checkUpdate} disabled={checkingUpdate} style={{ ...btnPrimary, background: "transparent", color: "#005eb0", border: "1px solid #005eb0", padding: "8px 14px", opacity: checkingUpdate ? 0.6 : 1 }}>
+                  {checkingUpdate ? "Cek..." : "Cek update"}
+                </button>
+              </div>
+              {updateInfo && (
+                <div style={{ marginTop: 12, fontSize: 12 }}>
+                  {updateInfo.error ? (
+                    <span style={{ color: "#ff4444" }}>Gagal cek update. Coba lagi.</span>
+                  ) : updateInfo.hasUpdate ? (
+                    <div>
+                      <div style={{ color: "var(--ok)", fontWeight: 700, marginBottom: 8 }}>🎉 Update tersedia (versi {updateInfo.latest})</div>
+                      <button onClick={clearCacheAndReload} disabled={clearing} style={{ ...btnPrimary, width: "100%" }}>{clearing ? "Memperbarui..." : "Update sekarang"}</button>
+                    </div>
+                  ) : (
+                    <span style={{ color: "var(--app-muted)" }}>✓ Kamu udah di versi terbaru.</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Clear cache */}
+            <button onClick={clearCacheAndReload} disabled={clearing} style={{ width: "100%", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 16, textAlign: "left", cursor: "pointer", fontFamily: "inherit", marginBottom: 12, opacity: clearing ? 0.6 : 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--app-text)" }}>🧹 {clearing ? "Membersihkan..." : "Clear cache & muat ulang"}</div>
+              <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>Hapus cache app & load versi terbaru. Login kamu tetap aman.</div>
+            </button>
+
+            {/* Logout */}
+            <button onClick={handleLogout} style={{ width: "100%", background: "transparent", border: "1px solid #ff444440", borderRadius: 12, padding: 14, color: "#ff4444", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              Logout
+            </button>
           </div>
         </div>
       )}
