@@ -13,6 +13,23 @@ import {
 } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
 
+function authErrorMessage(e: unknown): string {
+  const code = (e as { code?: string })?.code || "";
+  switch (code) {
+    case "auth/invalid-email": return "Format email salah.";
+    case "auth/user-not-found":
+    case "auth/wrong-password":
+    case "auth/invalid-credential": return "Email atau password salah.";
+    case "auth/email-already-in-use": return "Email ini udah terdaftar. Coba login aja.";
+    case "auth/weak-password": return "Password minimal 6 karakter.";
+    case "auth/too-many-requests": return "Kebanyakan percobaan. Tunggu sebentar terus coba lagi.";
+    case "auth/network-request-failed": return "Koneksi bermasalah. Cek internet lo.";
+    case "auth/popup-closed-by-user":
+    case "auth/cancelled-popup-request": return "";
+    default: return "Gagal masuk. Coba lagi ya.";
+  }
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -34,7 +51,7 @@ export default function LoginPage() {
       await signInWithPopup(auth, googleProvider);
       router.replace("/dashboard");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Google login gagal");
+      setError(authErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -51,7 +68,7 @@ export default function LoginPage() {
       }
       router.replace("/dashboard");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Login gagal");
+      setError(authErrorMessage(e));
     } finally {
       setLoading(false);
     }
