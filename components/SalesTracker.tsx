@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { signOut, User } from "firebase/auth";
-import { collection, doc, setDoc, onSnapshot, deleteDoc } from "firebase/firestore";
+import { collection, doc, setDoc, onSnapshot, deleteDoc, writeBatch } from "firebase/firestore";
 import { useRouter } from "next/navigation";
+import * as XLSX from "xlsx";
 import { auth, db } from "@/lib/firebase";
 import SalesSimulator from "@/components/SalesSimulator";
 import ScriptLibrary from "@/components/ScriptLibrary";
@@ -96,6 +97,44 @@ const btnPrimary = {
   fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif",
 };
 
+// --- XLS/CSV import ---
+const IMPORT_FIELDS: { key: string; label: string; required?: boolean; keywords: string[] }[] = [
+  { key: "name", label: "Nama Perusahaan", required: true, keywords: ["perusahaan", "nama", "company", "name", "client", "bisnis"] },
+  { key: "contact", label: "Kontak", keywords: ["kontak", "contact", "pic", "person", "cp"] },
+  { key: "email", label: "Email", keywords: ["email", "e-mail", "mail"] },
+  { key: "phone", label: "No. HP", keywords: ["hp", "phone", "telp", "telepon", "wa", "whatsapp", "nomor", "no."] },
+  { key: "category", label: "Kategori", keywords: ["kategori", "category", "industri", "industry", "segmen"] },
+  { key: "source", label: "Source", keywords: ["source", "sumber", "channel", "asal"] },
+  { key: "status", label: "Status", keywords: ["status", "stage", "tahap"] },
+  { key: "value", label: "Value (Rp)", keywords: ["value", "nilai", "deal", "amount", "harga", "estimasi", "potensi"] },
+  { key: "notes", label: "Notes", keywords: ["notes", "catatan", "note", "keterangan", "remark"] },
+];
+
+const VALID_STATUS = ["Cold", "Warm", "Hot", "Closed"];
+
+function autoMap(headers: string[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const f of IMPORT_FIELDS) {
+    const hit = headers.find(h => {
+      const n = h.toLowerCase().trim();
+      return f.keywords.some(k => n === k || n.includes(k));
+    });
+    if (hit) map[f.key] = hit;
+  }
+  return map;
+}
+
+function normStatus(v: unknown): string {
+  const s = String(v ?? "").toLowerCase();
+  const hit = VALID_STATUS.find(st => s.includes(st.toLowerCase()));
+  return hit || "Cold";
+}
+
+function parseValue(v: unknown): number {
+  const digits = String(v ?? "").replace(/[^0-9]/g, "");
+  return digits ? parseInt(digits, 10) : 0;
+}
+
 export default function SalesTracker({ user }: { user: User }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("Dashboard");
@@ -125,6 +164,13 @@ export default function SalesTracker({ user }: { user: User }) {
   const [newLead, setNewLead] = useState({ name: "", contact: "", source: "GMaps", status: "Cold", email: "", phone: "", category: "F&B", notes: "", value: "" });
   const [newOutreach, setNewOutreach] = useState({ leadName: "", type: "Email", subject: "", status: "Sent" });
   const [newRejection, setNewRejection] = useState({ leadName: "", reason: "", channel: "Email", followUpDate: "", lesson: "" });
+  const [showImport, setShowImport] = useState(false);
+  const [importHeaders, setImportHeaders] = useState<string[]>([]);
+  const [importRows, setImportRows] = useState<Record<string, unknown>[]>([]);
+  const [colMap, setColMap] = useState<Record<string, string>>({});
+  const [importFileName, setImportFileName] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importDone, setImportDone] = useState<number | null>(null);
 
   const uid = user.uid;
 
@@ -164,6 +210,82 @@ export default function SalesTracker({ user }: { user: User }) {
     ];
     return () => unsubs.forEach(u => u());
   }, [uid, seeded]);
+
+  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFileName(file.name);
+    setImportDone(null);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = new Uint8Array(ev.target?.result as ArrayBuffer);
+        const wb = XLSX.read(data, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
+        if (!rows.length) { setImportHeaders([]); setImportRows([]); setColMap({}); return; }
+        const headers = Object.keys(rows[0]);
+        setImportHeaders(headers);
+        setImportRows(rows);
+        setColMap(autoMap(headers));
+      } catch {
+        setImportHeaders([]); setImportRows([]); setColMap({});
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function mappedPreview(row: Record<string, unknown>) {
+    const out: Record<string, string> = {};
+    for (const f of IMPORT_FIELDS) {
+      const src = colMap[f.key];
+      out[f.key] = src ? String(row[src] ?? "") : "";
+    }
+    return out;
+  }
+
+  const importableCount = colMap.name
+    ? importRows.filter(r => String(r[colMap.name] ?? "").trim()).length
+    : 0;
+
+  async function runImport() {
+    if (!colMap.name) return;
+    setImporting(true);
+    const valid = importRows.filter(r => String(r[colMap.name] ?? "").trim());
+    let written = 0;
+    for (let i = 0; i < valid.length; i += 400) {
+      const batch = writeBatch(db);
+      const slice = valid.slice(i, i + 400);
+      slice.forEach((r, j) => {
+        const id = `imp_${Date.now()}_${i + j}`;
+        const get = (k: string) => (colMap[k] ? String(r[colMap[k]] ?? "").trim() : "");
+        batch.set(doc(db, "users", uid, "leads", id), {
+          name: get("name"),
+          contact: get("contact"),
+          email: get("email"),
+          phone: get("phone"),
+          category: get("category") || "F&B",
+          source: get("source") || "Import",
+          status: normStatus(colMap.status ? r[colMap.status] : ""),
+          value: parseValue(colMap.value ? r[colMap.value] : ""),
+          notes: get("notes"),
+          score: Math.floor(50 + Math.random() * 40),
+          lastContact: new Date().toISOString().split("T")[0],
+        });
+      });
+      await batch.commit();
+      written += slice.length;
+    }
+    setImporting(false);
+    setImportDone(written);
+    setImportRows([]); setImportHeaders([]); setColMap({});
+  }
+
+  function closeImport() {
+    setShowImport(false);
+    setImportHeaders([]); setImportRows([]); setColMap({});
+    setImportFileName(""); setImportDone(null); setImporting(false);
+  }
 
   async function addLead() {
     if (!newLead.name) return;
@@ -345,6 +467,7 @@ export default function SalesTracker({ user }: { user: User }) {
                     {s}
                   </button>
                 ))}
+                <button onClick={() => setShowImport(true)} style={{ ...btnPrimary, background: "transparent", color: "#005eb0", border: "1px solid #005eb0" }}>⬆ IMPORT</button>
                 <button onClick={() => setShowAddLead(true)} style={btnPrimary}>+ ADD LEAD</button>
               </div>
             </div>
@@ -657,6 +780,92 @@ export default function SalesTracker({ user }: { user: User }) {
               <div style={{ fontSize: 13, fontWeight: 700, marginTop: 6, color: selectedLead.score > 80 ? "#00a862" : selectedLead.score > 60 ? "#f59e0b" : "#ff4444" }}>{selectedLead.score} / 100</div>
             </div>
             <button onClick={() => setSelectedLead(null)} style={{ ...btnPrimary, width: "100%", marginTop: 20 }}>TUTUP</button>
+          </div>
+        </div>
+      )}
+
+      {/* Import Leads Modal */}
+      {showImport && (
+        <div className="modal-overlay" onClick={closeImport}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 640, maxHeight: "85vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Import Leads dari Excel/CSV</div>
+              <button onClick={closeImport} aria-label="Tutup" style={{ background: "transparent", border: "none", color: "var(--app-muted)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Upload file .xlsx / .xls / .csv. Kolom dipetakan otomatis — bisa diubah sebelum simpan.</div>
+
+            {importDone !== null ? (
+              <div style={{ textAlign: "center", padding: "32px 16px" }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+                <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{importDone} lead berhasil diimport</div>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Data udah masuk ke Lead Database lo.</div>
+                <button onClick={closeImport} style={btnPrimary}>Selesai</button>
+              </div>
+            ) : (
+              <>
+                <label style={{ display: "block", border: "1.5px dashed var(--app-border)", borderRadius: 12, padding: 24, textAlign: "center", cursor: "pointer", marginBottom: 20, background: "var(--app-inner)" }}>
+                  <input type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: "none" }} />
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>📄</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{importFileName || "Klik buat pilih file"}</div>
+                  <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>.xlsx, .xls, atau .csv</div>
+                </label>
+
+                {importHeaders.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Petakan kolom · {importRows.length} baris ditemukan</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, marginBottom: 20 }}>
+                      {IMPORT_FIELDS.map(f => (
+                        <div key={f.key}>
+                          <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 4 }}>
+                            {f.label}{f.required && <span style={{ color: "#ff4444" }}> *</span>}
+                          </label>
+                          <select value={colMap[f.key] || ""} onChange={e => setColMap({ ...colMap, [f.key]: e.target.value })} style={inputStyle} aria-label={`Kolom untuk ${f.label}`}>
+                            <option value="">— lewati —</option>
+                            {importHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Preview (3 baris pertama)</div>
+                    <div style={{ overflowX: "auto", border: "1px solid var(--app-border)", borderRadius: 8, marginBottom: 20 }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 480 }}>
+                        <thead>
+                          <tr style={{ background: "var(--app-inner)" }}>
+                            {IMPORT_FIELDS.filter(f => colMap[f.key]).map(f => (
+                              <th key={f.key} style={{ padding: "8px 10px", textAlign: "left", color: "var(--app-muted)", whiteSpace: "nowrap" }}>{f.label}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {importRows.slice(0, 3).map((r, i) => {
+                            const m = mappedPreview(r);
+                            return (
+                              <tr key={i} style={{ borderTop: "1px solid var(--app-inner)" }}>
+                                {IMPORT_FIELDS.filter(f => colMap[f.key]).map(f => (
+                                  <td key={f.key} style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>{m[f.key] || "—"}</td>
+                                ))}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {!colMap.name && (
+                      <div style={{ fontSize: 12, color: "#ff4444", marginBottom: 12 }}>⚠️ Kolom &quot;Nama Perusahaan&quot; wajib dipetakan.</div>
+                    )}
+
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button onClick={runImport} disabled={!colMap.name || importing} style={{ ...btnPrimary, opacity: (!colMap.name || importing) ? 0.5 : 1, cursor: (!colMap.name || importing) ? "not-allowed" : "pointer" }}>
+                        {importing ? "Mengimport..." : `Import ${importableCount} lead`}
+                      </button>
+                      <button onClick={closeImport} style={{ ...btnPrimary, background: "var(--app-border)", color: "var(--app-text)" }}>Batal</button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
