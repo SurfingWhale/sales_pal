@@ -471,6 +471,21 @@ export default function SalesTracker({ user }: { user: User }) {
                 <button onClick={() => setShowAddLead(true)} style={btnPrimary}>+ ADD LEAD</button>
               </div>
             </div>
+            {filteredLeads.length === 0 ? (
+              <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "56px 24px", textAlign: "center" }}>
+                <div style={{ fontSize: 34, marginBottom: 12 }}>{leads.length === 0 ? "📇" : "🔍"}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{leads.length === 0 ? "Belum ada lead" : "Ga ada lead yang cocok"}</div>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>{leads.length === 0 ? "Mulai dengan import Excel/CSV, atau tambah manual." : `Ga ada lead berstatus "${filterStatus}". Coba filter lain.`}</div>
+                {leads.length === 0 ? (
+                  <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                    <button onClick={() => setShowImport(true)} style={{ ...btnPrimary, background: "transparent", color: "#005eb0", border: "1px solid #005eb0" }}>⬆ Import Excel/CSV</button>
+                    <button onClick={() => setShowAddLead(true)} style={btnPrimary}>+ Tambah Lead</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setFilterStatus("All")} style={btnPrimary}>Reset filter</button>
+                )}
+              </div>
+            ) : (
             <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
                 <thead>
@@ -512,6 +527,7 @@ export default function SalesTracker({ user }: { user: User }) {
                 </tbody>
               </table>
             </div>
+            )}
           </div>
         )}
 
@@ -540,6 +556,14 @@ export default function SalesTracker({ user }: { user: User }) {
               ))}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {outreach.length === 0 && (
+                <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "48px 24px", textAlign: "center" }}>
+                  <div style={{ fontSize: 34, marginBottom: 12 }}>📭</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ada outreach</div>
+                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Catat email, DM, atau WA pertama lo biar bisa dilacak.</div>
+                  <button onClick={() => setShowAddOutreach(true)} style={btnPrimary}>+ Log Outreach</button>
+                </div>
+              )}
               {outreach.map(o => {
                 const statusColors: Record<string, string> = { Replied: "#00a862", Seen: "#f59e0b", Sent: "#005eb0", "No Response": "var(--app-muted)", Rejected: "#ff4444" };
                 return (
@@ -577,6 +601,14 @@ export default function SalesTracker({ user }: { user: User }) {
               <span style={{ fontWeight: 700 }}>💡 Mindset:</span> Rejection bukan kegagalan — itu adalah data. Setiap &quot;tidak&quot; lo adalah insight buat close deal berikutnya lebih cepet.
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {rejections.length === 0 && (
+                <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "48px 24px", textAlign: "center" }}>
+                  <div style={{ fontSize: 34, marginBottom: 12 }}>🗂️</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ada rejection dicatat</div>
+                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Setiap penolakan itu data. Catat biar bisa dipelajari & di-follow up.</div>
+                  <button onClick={() => setShowAddRejection(true)} style={btnPrimary}>+ Log Rejection</button>
+                </div>
+              )}
               {rejections.map(r => (
                 <div key={r.id} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 20 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
