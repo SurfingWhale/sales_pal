@@ -161,8 +161,21 @@ function downscaleImage(file: File, maxDim = 1600, quality = 0.82): Promise<stri
   });
 }
 
+function useIsNarrow(bp = 640) {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${bp}px)`);
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, [bp]);
+  return narrow;
+}
+
 export default function SalesTracker({ user }: { user: User }) {
   const router = useRouter();
+  const isNarrow = useIsNarrow();
   const [activeTab, setActiveTab] = useState("Dashboard");
   const [isDark, setIsDark] = useState(false);
 
@@ -555,6 +568,33 @@ export default function SalesTracker({ user }: { user: User }) {
                 ) : (
                   <button onClick={() => setFilterStatus("All")} style={btnPrimary}>Reset filter</button>
                 )}
+              </div>
+            ) : isNarrow ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {filteredLeads.map(lead => (
+                  <div key={lead.id} className="lead-row" onClick={() => setSelectedLead(lead)} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 16, cursor: "pointer" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lead.name}</div>
+                        <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{lead.contact || "—"} · {lead.category}</div>
+                      </div>
+                      <span className="badge" style={{ background: statusBg[lead.status], color: statusColor[lead.status], border: `1px solid ${statusColor[lead.status]}30`, flexShrink: 0 }}>{lead.status}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                        <div style={{ width: 44, height: 4, background: "var(--app-inner)", borderRadius: 2, flexShrink: 0 }}>
+                          <div style={{ width: `${lead.score}%`, height: "100%", background: lead.score > 80 ? "#00a862" : lead.score > 60 ? "#f59e0b" : "#ff4444", borderRadius: 2 }} />
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 700 }}>{lead.score}</span>
+                        <span style={{ fontSize: 11, color: "var(--app-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>· {lead.source}</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ok)" }}>Rp {(lead.value / 1000000).toFixed(1)}M</span>
+                        <button onClick={(e) => { e.stopPropagation(); deleteLead(lead.id); }} aria-label={`Hapus lead ${lead.name}`} style={{ background: "transparent", border: "1px solid #ff444430", color: "#ff4444", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>Del</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
             <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, overflowX: "auto" }}>

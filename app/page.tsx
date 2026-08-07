@@ -235,7 +235,7 @@ export default function LandingPage() {
             <Image src="/logo.png" alt="SalesPal" width={30} height={30} style={{ borderRadius: 9, objectFit: "contain", background: "#0c1a3a" }} />
             SALES<em>PAL</em>
           </div>
-          <p>AI-Powered Sales Intelligence · Built for closers 🐺</p>
+          <p>AI-Powered Sales Intelligence · Built for closers 🐾</p>
           <p>© 2026 SalesPal. All rights reserved.</p>
         </div>
       </footer>

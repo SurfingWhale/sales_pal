@@ -35,7 +35,7 @@ export const archetypes: Archetype[] = [
   },
   {
     id: "lion",
-    animal: "🐯",
+    animal: "🦁",
     name: "Singa",
     color: "#f59e0b",
     traits: ["Dominan", "Cepat memutuskan", "Berorientasi hasil", "Kompetitif"],
