@@ -135,6 +135,32 @@ function parseValue(v: unknown): number {
   return digits ? parseInt(digits, 10) : 0;
 }
 
+// Downscale an image file client-side before sending to the scan API (keeps payload small).
+function downscaleImage(file: File, maxDim = 1600, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      const longest = Math.max(width, height);
+      if (longest > maxDim) {
+        const scale = maxDim / longest;
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("Canvas tidak didukung")); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Gambar tidak bisa dibaca")); };
+    img.src = url;
+  });
+}
+
 export default function SalesTracker({ user }: { user: User }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("Dashboard");
@@ -171,6 +197,9 @@ export default function SalesTracker({ user }: { user: User }) {
   const [importFileName, setImportFileName] = useState("");
   const [importing, setImporting] = useState(false);
   const [importDone, setImportDone] = useState<number | null>(null);
+  const [importMode, setImportMode] = useState<"file" | "scan">("file");
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState("");
 
   const uid = user.uid;
 
@@ -235,6 +264,47 @@ export default function SalesTracker({ user }: { user: User }) {
     reader.readAsArrayBuffer(file);
   }
 
+  function resetParsed() {
+    setImportHeaders([]); setImportRows([]); setColMap({});
+    setImportFileName(""); setScanError("");
+  }
+
+  async function handleScanImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFileName(file.name);
+    setScanError(""); setImportDone(null); setScanning(true);
+    setImportHeaders([]); setImportRows([]); setColMap({});
+    try {
+      const dataUrl = await downscaleImage(file);
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: dataUrl }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Gagal memproses gambar.");
+      const leads: Record<string, unknown>[] = Array.isArray(json?.rows) ? json.rows : [];
+      const rows = leads.map(l => {
+        const o: Record<string, unknown> = {};
+        IMPORT_FIELDS.forEach(f => { o[f.key] = (l as Record<string, unknown>)[f.key] ?? ""; });
+        return o;
+      });
+      const withData = rows.filter(r => String(r.name ?? "").trim() || String(r.contact ?? "").trim());
+      if (!withData.length) { setScanError("Ga ada lead yang kebaca dari gambar ini. Coba gambar yang lebih jelas."); return; }
+      setImportRows(withData);
+      const headers = IMPORT_FIELDS.map(f => f.key).filter(k => withData.some(r => String(r[k] ?? "").trim()));
+      setImportHeaders(headers);
+      const map: Record<string, string> = {};
+      IMPORT_FIELDS.forEach(f => { if (headers.includes(f.key)) map[f.key] = f.key; });
+      setColMap(map);
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : "Gagal memproses gambar.");
+    } finally {
+      setScanning(false);
+    }
+  }
+
   function mappedPreview(row: Record<string, unknown>) {
     const out: Record<string, string> = {};
     for (const f of IMPORT_FIELDS) {
@@ -285,6 +355,7 @@ export default function SalesTracker({ user }: { user: User }) {
     setShowImport(false);
     setImportHeaders([]); setImportRows([]); setColMap({});
     setImportFileName(""); setImportDone(null); setImporting(false);
+    setImportMode("file"); setScanning(false); setScanError("");
   }
 
   async function addLead() {
@@ -824,7 +895,7 @@ export default function SalesTracker({ user }: { user: User }) {
               <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Import Leads dari Excel/CSV</div>
               <button onClick={closeImport} aria-label="Tutup" style={{ background: "transparent", border: "none", color: "var(--app-muted)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
             </div>
-            <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Upload file .xlsx / .xls / .csv. Kolom dipetakan otomatis — bisa diubah sebelum simpan.</div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 16 }}>Upload Excel/CSV, atau scan gambar (screenshot/foto data) pakai AI. Kolom dipetakan otomatis — bisa diubah sebelum simpan.</div>
 
             {importDone !== null ? (
               <div style={{ textAlign: "center", padding: "32px 16px" }}>
@@ -835,12 +906,39 @@ export default function SalesTracker({ user }: { user: User }) {
               </div>
             ) : (
               <>
-                <label style={{ display: "block", border: "1.5px dashed var(--app-border)", borderRadius: 12, padding: 24, textAlign: "center", cursor: "pointer", marginBottom: 20, background: "var(--app-inner)" }}>
-                  <input type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: "none" }} />
-                  <div style={{ fontSize: 24, marginBottom: 8 }}>📄</div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{importFileName || "Klik buat pilih file"}</div>
-                  <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>.xlsx, .xls, atau .csv</div>
-                </label>
+                {/* Mode switcher */}
+                <div style={{ display: "flex", gap: 4, marginBottom: 18, background: "var(--app-inner)", padding: 4, borderRadius: 10 }}>
+                  {([["file", "📄 Excel / CSV"], ["scan", "📷 Scan Gambar"]] as const).map(([m, label]) => (
+                    <button key={m} onClick={() => { setImportMode(m); resetParsed(); }}
+                      style={{ flex: 1, padding: "9px 8px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit",
+                        background: importMode === m ? "var(--app-card)" : "transparent",
+                        color: importMode === m ? "#005eb0" : "var(--app-muted)",
+                        boxShadow: importMode === m ? "0 1px 3px rgba(0,0,0,0.08)" : "none" }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {importMode === "file" ? (
+                  <label style={{ display: "block", border: "1.5px dashed var(--app-border)", borderRadius: 12, padding: 24, textAlign: "center", cursor: "pointer", marginBottom: 20, background: "var(--app-inner)" }}>
+                    <input type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: "none" }} />
+                    <div style={{ fontSize: 24, marginBottom: 8 }}>📄</div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{importFileName || "Klik buat pilih file"}</div>
+                    <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>.xlsx, .xls, atau .csv</div>
+                  </label>
+                ) : (
+                  <>
+                    <label style={{ display: "block", border: "1.5px dashed var(--app-border)", borderRadius: 12, padding: 24, textAlign: "center", cursor: scanning ? "wait" : "pointer", marginBottom: 12, background: "var(--app-inner)", opacity: scanning ? 0.7 : 1 }}>
+                      <input type="file" accept="image/*" onChange={handleScanImage} disabled={scanning} style={{ display: "none" }} />
+                      <div style={{ fontSize: 24, marginBottom: 8 }}>{scanning ? "🤖" : "📷"}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{scanning ? "Membaca gambar dengan AI..." : (importFileName || "Klik buat pilih / foto data")}</div>
+                      <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>Screenshot chat, tabel, atau kartu nama · JPG/PNG</div>
+                    </label>
+                    {scanError && (
+                      <div style={{ fontSize: 12, color: "#ff4444", background: "#ff44440d", border: "1px solid #ff444430", borderRadius: 8, padding: "10px 14px", marginBottom: 16 }}>{scanError}</div>
+                    )}
+                  </>
+                )}
 
                 {importHeaders.length > 0 && (
                   <>
