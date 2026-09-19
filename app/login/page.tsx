@@ -7,11 +7,24 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
 } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
+
+// iOS/Android standalone PWA runs in a context isolated from Safari, where
+// signInWithPopup opens in a separate browser and the session never lands back
+// in the app. Redirect keeps the whole flow in-context so the session persists.
+function isStandalonePWA(): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    window.matchMedia?.("(display-mode: standalone)").matches ||
+    (window.navigator as unknown as { standalone?: boolean }).standalone === true
+  );
+}
 
 function authErrorMessage(e: unknown): string {
   const code = (e as { code?: string })?.code || "";
@@ -42,16 +55,31 @@ export default function LoginPage() {
     const unsub = onAuthStateChanged(auth, (u) => {
       if (u) router.replace("/dashboard");
     });
+    // Complete a redirect-based sign-in (PWA path) and surface any error.
+    getRedirectResult(auth).catch((e) => {
+      const msg = authErrorMessage(e);
+      if (msg) setError(msg);
+    });
     return unsub;
   }, [router]);
 
   async function handleGoogle() {
     setError(""); setLoading(true);
     try {
+      if (isStandalonePWA()) {
+        await signInWithRedirect(auth, googleProvider);
+        return; // full-page redirect; session restored on return
+      }
       await signInWithPopup(auth, googleProvider);
       router.replace("/dashboard");
     } catch (e: unknown) {
-      setError(authErrorMessage(e));
+      // Popup blocked/unsupported (common in webviews) → fall back to redirect.
+      const code = (e as { code?: string })?.code || "";
+      if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment" || code === "auth/cancelled-popup-request") {
+        try { await signInWithRedirect(auth, googleProvider); return; } catch (e2) { setError(authErrorMessage(e2)); }
+      } else {
+        setError(authErrorMessage(e));
+      }
     } finally {
       setLoading(false);
     }
