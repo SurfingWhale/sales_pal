@@ -8,6 +8,7 @@ import * as XLSX from "xlsx";
 import { auth, db } from "@/lib/firebase";
 import SalesSimulator from "@/components/SalesSimulator";
 import ScriptLibrary from "@/components/ScriptLibrary";
+import QuickPitch from "@/components/QuickPitch";
 
 const TABS = ["Dashboard", "Leads", "Outreach", "Rejection Log", "Simulator", "Script Library", "AI Playbook"];
 
@@ -975,8 +976,7 @@ export default function SalesTracker({ user }: { user: User }) {
       )}
 
       {/* Profile & Settings Modal */}
-      {showProfile && (
-        <div className="modal-overlay" onClick={() => setShowProfile(false)}>
+      {showProfile && (        <div className="modal-overlay" onClick={() => setShowProfile(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Profil & Pengaturan</div>
@@ -1147,6 +1147,9 @@ export default function SalesTracker({ user }: { user: User }) {
           </div>
         </div>
       )}
+
+      {/* Global Quick Pitch floating button */}
+      <QuickPitch uid={uid} />
     </div>
   );
 }
