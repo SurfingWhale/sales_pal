@@ -1,0 +1,94 @@
+rules_version = '2';
+
+// SalesPal's Firestore — and the one place every website's leads flow into.
+//
+//   users/{uid}/...        SalesPal's own data. Each account sees only its own.
+//   inbound_leads/{id}     Leads sent by the websites (Visufavor, BeUntamed,
+//                          UNTMD Sports). Anyone may ADD one, in exactly the
+//                          shape below; only the owner may read them, mark them
+//                          imported, or delete them. See docs/LEADS-PRD.md in
+//                          the Visufavor repo for the standard.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Who runs the pipeline. A verified email, so a typed-in address cannot
+    // pose as one.
+    function isOwner() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['fauzymuhamad43@gmail.com'];
+    }
+
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /inbound_leads/{id} {
+      allow create: if validLead(request.resource.data);
+      allow read, delete: if isOwner();
+      // SalesPal marks a lead imported; nothing else about it changes.
+      allow update: if isOwner()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'importedAt', 'importedBy'])
+        && request.resource.data.status in ['new', 'imported', 'spam'];
+    }
+
+    // ---- the lead's shape (v1) ------------------------------------------
+    function str(v, max) { return v is string && v.size() <= max; }
+    function opt(m, k, max) { return !(k in m) || str(m[k], max); }
+
+    function validLead(d) {
+      return d.keys().hasOnly(['v', 'site', 'siteUrl', 'offer', 'contact', 'answers', 'attribution', 'account', 'createdAt', 'status'])
+        && d.keys().hasAll(['v', 'site', 'contact', 'createdAt', 'status'])
+        && d.v == 1
+        && d.site in ['visufavor', 'beuntamed', 'untmd-sports']
+        && d.status == 'new'
+        && d.createdAt == request.time
+        && opt(d, 'siteUrl', 200)
+        && validContact(d.contact)
+        && (!('offer' in d) || validOffer(d.offer))
+        && (!('answers' in d) || validAnswers(d.answers))
+        && (!('attribution' in d) || validAttribution(d.attribution))
+        && (!('account' in d) || validAccount(d.account));
+    }
+
+    // A name, and at least one way to reach them.
+    function validContact(c) {
+      return c is map
+        && c.keys().hasOnly(['name', 'email', 'whatsapp', 'business'])
+        && str(c.name, 120) && c.name.size() > 0
+        && opt(c, 'email', 200) && opt(c, 'whatsapp', 30) && opt(c, 'business', 160)
+        && (('email' in c && c.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'))
+            || ('whatsapp' in c && c.whatsapp.matches('^\\+?[0-9 -]{8,20}$')));
+    }
+
+    function validOffer(o) {
+      return o is map && o.keys().hasOnly(['code', 'kind', 'value'])
+        && str(o.code, 40) && str(o.kind, 20)
+        && o.value is number && o.value >= 0 && o.value <= 100;
+    }
+
+    function validAnswers(a) {
+      return a is map && a.keys().hasOnly(['need', 'timing', 'heardFrom', 'budget', 'message'])
+        && opt(a, 'need', 120) && opt(a, 'timing', 60) && opt(a, 'heardFrom', 60)
+        && opt(a, 'budget', 60) && opt(a, 'message', 600);
+    }
+
+    // Where the visitor came from: ads, links, search. Kept whole so a paid
+    // campaign can be traced to the leads it brought.
+    function validAttribution(t) {
+      return t is map && t.keys().hasOnly(['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
+                                          'fbclid', 'gclid', 'ttclid', 'referrer', 'landing', 'firstSeenAt'])
+        && opt(t, 'utm_source', 100) && opt(t, 'utm_medium', 100) && opt(t, 'utm_campaign', 150)
+        && opt(t, 'utm_content', 150) && opt(t, 'utm_term', 150)
+        && opt(t, 'fbclid', 300) && opt(t, 'gclid', 300) && opt(t, 'ttclid', 300)
+        && opt(t, 'referrer', 300) && opt(t, 'landing', 300) && opt(t, 'firstSeenAt', 40);
+    }
+
+    // The website account the lead signed in with (that site's own Firebase
+    // project), so SalesPal can tell repeat sign-ups apart.
+    function validAccount(a) {
+      return a is map && a.keys().hasOnly(['provider', 'uid', 'project'])
+        && opt(a, 'provider', 40) && opt(a, 'uid', 128) && opt(a, 'project', 60);
+    }
+  }
+}
