@@ -6,6 +6,7 @@ import { collection, doc, setDoc, onSnapshot, deleteDoc, writeBatch, query, wher
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import { auth, db } from "@/lib/firebase";
+import { clearCacheAndReload as resetAppCache } from "@/lib/appCache";
 import SalesSimulator from "@/components/SalesSimulator";
 import ScriptLibrary from "@/components/ScriptLibrary";
 import QuickPitch from "@/components/QuickPitch";
@@ -533,25 +534,9 @@ export default function SalesTracker({ user }: { user: User }) {
     }
   }
 
-  // Clears app caches + any service worker, then hard-reloads to fetch the latest
-  // build. Login is preserved (auth lives in IndexedDB, which we don't touch).
   async function clearCacheAndReload() {
     setClearing(true);
-    try {
-      if ("serviceWorker" in navigator) {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map(r => r.unregister()));
-      }
-      if ("caches" in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map(k => caches.delete(k)));
-      }
-    } catch {
-      /* ignore — reload anyway */
-    }
-    const u = new URL(window.location.href);
-    u.searchParams.set("_v", Date.now().toString());
-    window.location.replace(u.toString());
+    await resetAppCache();
   }
 
   const totalValue = leads.reduce((a, b) => a + b.value, 0);
