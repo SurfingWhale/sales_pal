@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { signOut, User } from "firebase/auth";
-import { collection, doc, setDoc, onSnapshot, deleteDoc, writeBatch, query, where, updateDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, getDoc, setDoc, onSnapshot, deleteDoc, writeBatch, query, where, updateDoc, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import { auth, db } from "@/lib/firebase";
@@ -14,7 +14,9 @@ import Services from "@/components/Services";
 import Quotes, { LeadRef } from "@/components/Quotes";
 import Invoices from "@/components/Invoices";
 import Hunting from "@/components/Hunting";
+import LeadSources from "@/components/LeadSources";
 import { Hunt, useHuntGoal } from "@/lib/hunting";
+import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, longDate, rupiah, today, useBusiness, useUserCollection, waLink } from "@/lib/billing";
 
 const TABS = ["Dashboard", "Hunting", "Leads", "Penawaran", "Invoice", "Paket", "Outreach", "Rejection Log", "Simulator", "Script Library", "AI Playbook"];
@@ -24,6 +26,7 @@ interface Lead {
   score: number; email: string; phone: string; category: string; notes: string;
   lastContact: string; value: number;
   nextAction?: string; nextActionDate?: string;
+  accountUid?: string;
 }
 interface Outreach {
   id: string; leadName: string; type: string; date: string; subject: string;
@@ -96,48 +99,6 @@ const AI_PLAYBOOK = [
 // inbound_leads, in the shape firestore.rules checks — the standard is
 // docs/LEADS-PRD.md in the Visufavor repo. The owner's SalesPal turns each new
 // one into a lead here and marks it imported, so it arrives exactly once.
-interface InboundLead {
-  site: string;
-  siteUrl?: string;
-  offer?: { code: string; kind: string; value: number };
-  contact: { name: string; email?: string; whatsapp?: string; business?: string };
-  answers?: { need?: string; timing?: string; heardFrom?: string; budget?: string; message?: string };
-  attribution?: Record<string, string>;
-}
-
-const SITE_CATEGORY: Record<string, string> = { visufavor: "F&B", "untmd-sports": "Sports", beuntamed: "Photography" };
-
-function leadFromInbound(l: InboundLead): Omit<Lead, "id"> {
-  const a = l.answers || {};
-  const t = l.attribution || {};
-  const campaign = [t.utm_source, t.utm_campaign].filter(Boolean).join("/");
-  const paid = /paid|cpc|ads?|boost/i.test(t.utm_medium || "") || Boolean(t.fbclid || t.gclid || t.ttclid);
-  const soon = /this month|bulan ini|asap|secepatnya/i.test(a.timing || "");
-  const later = /next month|bulan depan/i.test(a.timing || "");
-  const score = Math.min(98, 55 + (soon ? 25 : later ? 12 : 0) + (l.contact.whatsapp ? 10 : 0) + (l.contact.business ? 5 : 0));
-  const notes = [
-    a.need && `Need: ${a.need}`,
-    a.timing && `When: ${a.timing}`,
-    a.heardFrom && `Heard from: ${a.heardFrom}`,
-    a.message && `Message: ${a.message}`,
-    l.offer && `Voucher ${l.offer.code} (${l.offer.value}% ${l.offer.kind})`,
-    campaign && `Campaign: ${campaign}${paid ? " (paid)" : ""}`,
-  ].filter(Boolean).join(" · ");
-  return {
-    name: l.contact.business || l.contact.name,
-    contact: l.contact.name,
-    source: `Web · ${l.site}${campaign ? ` · ${campaign}` : ""}`,
-    status: soon ? "Hot" : "Warm",
-    score,
-    email: l.contact.email || "",
-    phone: l.contact.whatsapp || "",
-    category: SITE_CATEGORY[l.site] || "Other",
-    notes,
-    lastContact: new Date().toISOString().split("T")[0],
-    value: parseInt((a.budget || "").replace(/\D/g, "")) || 0,
-  };
-}
-
 // Cold uses a slate/dormant hue kept distinct from the brand blue (#005eb0)
 const statusColor: Record<string, string> = { Hot: "#ff4444", Warm: "#ff9900", Cold: "#64748b", Closed: "#00a862" };
 const statusBg: Record<string, string> = { Hot: "#ff44441a", Warm: "#ff99001a", Cold: "#64748b1a", Closed: "#00a8621a" };
@@ -330,7 +291,11 @@ export default function SalesTracker({ user }: { user: User }) {
         (snap) => {
           snap.docs.forEach(async (d) => {
             try {
-              await setDoc(doc(db, "users", uid, "leads", `in_${d.id}`), leadFromInbound(d.data() as InboundLead));
+              const l = d.data() as InboundLead;
+              const ref = doc(db, "users", uid, "leads", leadIdFor(l, d.id));
+              const existing = await getDoc(ref);
+              const lead = mergeInbound(existing.exists() ? existing.data() : null, leadFromInbound(l), isMember(l));
+              if (lead) await setDoc(ref, lead, { merge: true });
               await updateDoc(doc(db, "inbound_leads", d.id), { status: "imported", importedAt: serverTimestamp(), importedBy: uid });
             } catch (err) {
               console.warn("Could not import website lead", d.id, err);
@@ -687,6 +652,7 @@ export default function SalesTracker({ user }: { user: User }) {
                 );
               })}
             </div>
+            <LeadSources leads={leads} invoices={invoices} />
             <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 24, marginBottom: 24 }}>
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Sales Pipeline</div>
               {["Cold", "Warm", "Hot", "Closed"].map(s => {
