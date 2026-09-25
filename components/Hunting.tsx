@@ -8,6 +8,8 @@ import {
   HUNT_STATUS, Hunt, HuntStatus, MIN_SAMPLE, PLATFORMS, STALE_DAYS, PitchTemplate, Platform,
   fill, waLinkFor, huntColor, huntIcon, isStale, parseProfile, pct, platformSource, responded, scoreTemplates, verdict,
 } from "@/lib/hunting";
+import ThreadsRadar from "@/components/ThreadsRadar";
+import { profileUrl } from "@/lib/threads";
 import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
 type Filter = "Semua" | "Follow-up" | "Tertarik";
@@ -47,6 +49,15 @@ export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt
     window.history.replaceState(null, "", window.location.pathname);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // From the Radar: this person, on Threads, ready for a message.
+  function targetFromRadar(username: string) {
+    setTarget(`@${username}`);
+    setPlatform("Threads");
+    setUrl(profileUrl(username));
+    targetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    targetRef.current?.focus({ preventScroll: true });
+  }
 
   async function pasteLink() {
     setPasteMsg("");
@@ -176,6 +187,8 @@ export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt
           <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>{interested.filter(h => !h.leadId).length} belum jadi lead</div>
         </div>
       </div>
+
+      <ThreadsRadar uid={uid} hunts={hunts} onTarget={targetFromRadar} />
 
       {/* The hunt itself: who, where, which message */}
       <div style={{ ...card, padding: 20, marginBottom: 20 }}>
