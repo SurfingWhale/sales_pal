@@ -1,12 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { deleteDoc, doc, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { addDays, daysBetween, longDate, today, useUserCollection } from "@/lib/billing";
 import {
   HUNT_STATUS, Hunt, HuntStatus, MIN_SAMPLE, PLATFORMS, STALE_DAYS, PitchTemplate, Platform,
-  fill, huntColor, huntIcon, isStale, pct, platformSource, responded, scoreTemplates, verdict,
+  fill, waLinkFor, huntColor, huntIcon, isStale, parseProfile, pct, platformSource, responded, scoreTemplates, verdict,
 } from "@/lib/hunting";
 import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
@@ -23,7 +23,41 @@ export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt
   const [noting, setNoting] = useState<{ id: string; note: string } | null>(null);
   const [filter, setFilter] = useState<Filter>("Semua");
   const [limit, setLimit] = useState(PAGE);
+  const [url, setUrl] = useState("");
+  const [pasteMsg, setPasteMsg] = useState("");
   const targetRef = useRef<HTMLInputElement>(null);
+
+  function apply(text: string) {
+    const p = parseProfile(text);
+    if (!p) return false;
+    setTarget(p.target);
+    if (p.platform) setPlatform(p.platform);
+    setUrl(p.url || "");
+    return true;
+  }
+
+  // Opened from a share or a bookmarklet: /dashboard?hunt&target=…&platform=…&url=…
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (!q.has("hunt")) return;
+    const from = q.get("url") || q.get("target") || "";
+    if (from) apply(from);
+    const pl = q.get("platform");
+    if (pl && (PLATFORMS as readonly string[]).includes(pl)) setPlatform(pl as Platform);
+    window.history.replaceState(null, "", window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function pasteLink() {
+    setPasteMsg("");
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!apply(text)) setPasteMsg("Clipboard kosong. Copy link profil dulu di Threads/IG.");
+    } catch {
+      setPasteMsg("Browser nggak izinkan baca clipboard. Tahan kolom Target lalu Tempel.");
+      targetRef.current?.focus();
+    }
+  }
 
   const now = today();
   const weekAgo = addDays(now, -6);
@@ -46,7 +80,7 @@ export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt
       setCopiedId(t.id);
       setTimeout(() => setCopiedId(c => (c === t.id ? null : c)), 1800);
     } else {
-      window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank");
+      window.open(waLinkFor(target, text), "_blank");
     }
     setPending(t);
   }
@@ -56,10 +90,11 @@ export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt
     const id = `hunt_${Date.now()}`;
     const h: Omit<Hunt, "id"> = {
       target: target.trim(), platform, templateId: pending.id, templateTitle: pending.title,
-      status: "Terkirim", note: "", date: now, createdAt: Date.now(),
+      status: "Terkirim", note: "", date: now, createdAt: Date.now(), ...(url ? { url } : {}),
     };
     setPending(null);
     setTarget("");
+    setUrl("");
     targetRef.current?.focus();
     await setDoc(doc(db, "users", uid, "hunts", id), h);
   }
@@ -145,8 +180,14 @@ export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt
       {/* The hunt itself: who, where, which message */}
       <div style={{ ...card, padding: 20, marginBottom: 20 }}>
         <label htmlFor="hunt-target" style={label}>Target</label>
-        <input id="hunt-target" ref={targetRef} value={target} onChange={e => setTarget(e.target.value)}
-          placeholder="Nama akun / bisnis, mis. @kopisenja" autoComplete="off" style={{ ...inputStyle, fontSize: 16, marginBottom: 12 }} />
+        <div style={{ display: "flex", gap: 8, marginBottom: pasteMsg || url ? 6 : 12 }}>
+          <input id="hunt-target" ref={targetRef} value={target}
+            onChange={e => { const v = e.target.value; if (!(/https?:\/\//.test(v) && apply(v))) { setTarget(v); if (!v) setUrl(""); } }}
+            placeholder="@akun, atau tempel link profil" autoComplete="off" style={{ ...inputStyle, fontSize: 16 }} />
+          <button onClick={pasteLink} aria-label="Tempel link profil dari clipboard" style={{ ...chip, flexShrink: 0, minHeight: 44, padding: "0 12px", fontSize: 12, fontWeight: 700, color: "var(--app-text)" }}>📋 Tempel link</button>
+        </div>
+        {url && <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>🔗 {url}</div>}
+        {pasteMsg && <div role="status" style={{ fontSize: 11, color: "#ff9900", marginBottom: 12 }}>{pasteMsg}</div>}
         <div role="radiogroup" aria-label="Platform" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
           {PLATFORMS.map(p => (
             <button key={p} role="radio" aria-checked={platform === p} onClick={() => setPlatform(p)}
@@ -238,6 +279,7 @@ export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt
                 {isStale(h, now) && <button onClick={() => followUp(h)} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "#ff9900", border: "1px solid #ff990060" }}>↻ Follow-up</button>}
                 {h.status === "Tertarik" && !h.leadId && <button onClick={() => makeLead(h)} style={{ ...chip, minHeight: 36, background: "#00a862", color: "#fff", border: "none", fontWeight: 700 }}>Jadiin Lead →</button>}
                 {h.leadId && <span style={{ fontSize: 11, color: "var(--ok)", fontWeight: 700 }}>✓ Sudah jadi lead</span>}
+                {h.url && <a href={h.url} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Profil ↗</a>}
                 {h.status === "Ditolak" && noting?.id !== h.id && <button onClick={() => setNoting({ id: h.id, note: h.note })} style={chip}>{h.note ? "Ubah alasan" : "+ Alasan"}</button>}
                 <button onClick={() => remove(h)} aria-label={`Hapus DM ke ${h.target || "target"}`} style={{ ...chip, minHeight: 36, color: "#ff4444", border: "1px solid #ff444440" }}>🗑</button>
               </div>

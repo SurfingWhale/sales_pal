@@ -36,6 +36,7 @@ export interface Hunt {
   date: string;          // local YYYY-MM-DD the DM went out
   createdAt: number;
   leadId?: string;       // set once "Jadiin Lead" has run
+  url?: string;          // the profile, to go back and check for a reply
 }
 
 export const DEFAULT_GOAL = 20;
@@ -110,11 +111,45 @@ export function pct(r: number): string {
   return `${Math.round(r * 100)}%`;
 }
 
+// {nama} reads as a name: "@kopisenja" → "kopisenja", a phone number → "kak".
 export function fill(body: string, target: string): string {
-  return body.replace(/\{nama\}/gi, target.trim() || "kak");
+  const t = target.trim().replace(/^@/, "");
+  const name = !t || /^\+?[0-9][0-9 -]{6,}$/.test(t) ? "kak" : t;
+  return body.replace(/\{nama\}/gi, name);
+}
+
+// WhatsApp straight to the target when the target is a number.
+export function waLinkFor(target: string, text: string): string {
+  const digits = /^\+?[0-9][0-9 -]{6,}$/.test(target.trim()) ? target.replace(/\D/g, "").replace(/^0/, "62") : "";
+  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
 }
 
 // Where a hunt lands in Leads.
 export const platformSource: Record<Platform, string> = {
   Threads: "Threads", IG: "DM IG", WA: "WhatsApp", Lainnya: "Lainnya",
 };
+
+// A profile link or handle pasted from the app, or passed in the URL
+// (?hunt&target=…&platform=…&url=…): who to DM, and where.
+export function parseProfile(text: string): { target: string; platform?: Platform; url?: string } | null {
+  const t = (text || "").trim();
+  if (!t) return null;
+  const m = t.match(/https?:\/\/[^\s]+/);
+  if (m) {
+    const raw = m[0].replace(/[),.]+$/, "");
+    let u: URL;
+    try { u = new URL(raw); } catch { return null; }
+    const host = u.hostname.replace(/^www\./, "");
+    const first = u.pathname.split("/").filter(Boolean)[0] || "";
+    const url = `${u.origin}/${first}`;
+    if (/^threads\.(net|com)$/.test(host) && first.startsWith("@")) return { target: first, platform: "Threads", url };
+    if (/^instagram\.com$/.test(host) && first && !["p", "reel", "reels", "stories", "explore"].includes(first)) return { target: `@${first}`, platform: "IG", url };
+    if (/^(wa\.me|api\.whatsapp\.com)$/.test(host)) {
+      const num = first.replace(/\D/g, "") || (u.searchParams.get("phone") || "").replace(/\D/g, "");
+      return num ? { target: `+${num}`, platform: "WA", url: `https://wa.me/${num}` } : null;
+    }
+    return { target: host + (first ? `/${first}` : ""), platform: "Lainnya", url: raw };
+  }
+  const handle = t.split(/\s+/)[0].slice(0, 80);
+  return { target: handle };
+}
