@@ -1,6 +1,6 @@
 # PRD-002 — Hunting Mode
 
-- **Status:** Draft → buat direview sebelum dibangun
+- **Status:** Built 2026-09-25 (tab Hunting, `components/Hunting.tsx`, `lib/hunting.ts`)
 - **Tanggal:** 2026-09-19
 - **Konteks:** User berburu klien (mis. jasa foto makanan) lewat **Threads / IG DM**. Udah ada **Quick Pitch** (FAB + template + kirim WA). Hunting Mode = naikin ini jadi satu section utuh buat "mode berburu".
 
@@ -67,13 +67,13 @@ Kalau outcome = "Tertarik", 1-tap **"Jadiin Lead"** → masuk ke Lead Database (
 
 ---
 
-## 6. Keputusan terbuka (buat user)
-- **D1:** Hunting Mode = **tab baru** di app, atau tetap di dalam panel Quick Pitch (FAB) yang diperbesar?
-- **D2:** Platform yang dilacak — cukup Threads/IG/WA, atau tambah lain?
-- **D3:** Status outcome — cukup 5 di atas, atau mau custom?
-- **D4:** "Jadiin Lead" otomatis pas Tertarik, atau manual aja?
+## 6. Keputusan (diambil 2026-09-25, bisa diubah)
+- **D1:** Tab baru **Hunting**, tepat setelah Dashboard. Quick Pitch (FAB) tetap ada buat kirim cepat tanpa log.
+- **D2:** Threads / IG / WA / Lainnya. Sumber lead ikut: Threads, DM IG, WhatsApp, Lainnya.
+- **D3:** 5 status di atas. "Dibales" dihitung dari Dibales + Tertarik + Ditolak (ditolak = tetap dibaca & dijawab).
+- **D4:** Manual, 1 tap **Jadiin Lead** (status Warm, value 0). DM yang Tertarik tapi belum jadi lead muncul di **Perlu Ditindak**.
 
----
+Tambahan di luar draft: target DM harian (default 20, `settings/hunting.dailyGoal`), filter **Follow-up** buat DM yang 2+ hari belum dibales, dan saran otomatis setelah ≥ 5 DM per template.
 
 ## 7. Fase eksekusi (kalau di-ACC)
 1. Extend Quick Pitch → template punya `id` stabil + kategori (udah setengah jalan).
