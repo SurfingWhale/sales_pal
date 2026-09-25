@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { signOut, User } from "firebase/auth";
 import { collection, doc, setDoc, onSnapshot, deleteDoc, writeBatch, query, where, updateDoc, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
@@ -9,13 +9,18 @@ import { auth, db } from "@/lib/firebase";
 import SalesSimulator from "@/components/SalesSimulator";
 import ScriptLibrary from "@/components/ScriptLibrary";
 import QuickPitch from "@/components/QuickPitch";
+import Services from "@/components/Services";
+import Quotes, { LeadRef } from "@/components/Quotes";
+import Invoices from "@/components/Invoices";
+import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, longDate, rupiah, today, useBusiness, useUserCollection, waLink } from "@/lib/billing";
 
-const TABS = ["Dashboard", "Leads", "Outreach", "Rejection Log", "Simulator", "Script Library", "AI Playbook"];
+const TABS = ["Dashboard", "Leads", "Penawaran", "Invoice", "Paket", "Outreach", "Rejection Log", "Simulator", "Script Library", "AI Playbook"];
 
 interface Lead {
   id: string; name: string; contact: string; source: string; status: string;
   score: number; email: string; phone: string; category: string; notes: string;
   lastContact: string; value: number;
+  nextAction?: string; nextActionDate?: string;
 }
 interface Outreach {
   id: string; leadName: string; type: string; date: string; subject: string;
@@ -269,6 +274,14 @@ export default function SalesTracker({ user }: { user: User }) {
   const [clearing, setClearing] = useState(false);
 
   const uid = user.uid;
+  const services = useUserCollection<Service>(uid, "services");
+  const quotes = useUserCollection<Quote>(uid, "quotes");
+  const invoices = useUserCollection<Invoice>(uid, "invoices");
+  const business = useBusiness(uid);
+  const [quoteFor, setQuoteFor] = useState<LeadRef | null>(null);
+  const [fu, setFu] = useState({ action: "", date: "" });
+  const clearQuoteFor = useCallback(() => setQuoteFor(null), []);
+  const gotoInvoices = useCallback(() => setActiveTab("Invoice"), []);
 
   useEffect(() => {
     const unsubs = [
@@ -479,6 +492,27 @@ export default function SalesTracker({ user }: { user: User }) {
     await deleteDoc(doc(db, "users", uid, "leads", id));
   }
 
+  function openLead(lead: Lead) {
+    setSelectedLead(lead);
+    setFu({ action: lead.nextAction || "", date: lead.nextActionDate || "" });
+  }
+
+  async function saveFollowUp(id: string) {
+    await updateDoc(doc(db, "users", uid, "leads", id), { nextAction: fu.action.trim(), nextActionDate: fu.date });
+  }
+
+  // Done: log today as the last contact and clear the reminder.
+  async function doneFollowUp(id: string) {
+    await updateDoc(doc(db, "users", uid, "leads", id), { nextAction: "", nextActionDate: "", lastContact: today() });
+    setFu({ action: "", date: "" });
+  }
+
+  function startQuote(lead: Lead) {
+    setQuoteFor({ id: lead.id, name: lead.name, contact: lead.contact, phone: lead.phone });
+    setSelectedLead(null);
+    setActiveTab("Penawaran");
+  }
+
   function handleLogout() {
     signOut(auth);
     router.replace("/login");
@@ -528,6 +562,32 @@ export default function SalesTracker({ user }: { user: User }) {
   const repliedOutreach = outreach.filter(o => o.status === "Replied").length;
   const replyRate = outreach.length ? ((repliedOutreach / outreach.length) * 100).toFixed(0) : "0";
   const filteredLeads = filterStatus === "All" ? leads : leads.filter(l => l.status === filterStatus);
+  const receivable = invoices.reduce((a, i) => a + balance(i), 0);
+  const liveLead = selectedLead ? leads.find(l => l.id === selectedLead.id) || selectedLead : null;
+
+  // Everything that needs a move today: reminders due, quotes left hanging,
+  // invoices late or nearly due. Upcoming reminders show three days ahead.
+  const now = today();
+  const soon = addDays(now, 3);
+  const todo = [
+    ...leads.filter(l => l.nextActionDate && l.nextActionDate <= soon && l.status !== "Closed").map(l => ({
+      key: `l_${l.id}`, when: l.nextActionDate as string, icon: "📅", title: l.name,
+      what: l.nextAction || "Follow-up", phone: l.phone, text: `Halo ${l.contact || l.name}, `,
+      open: () => openLead(l),
+    })),
+    ...quotes.filter(q => q.status === "Terkirim" && q.sentAt && daysBetween(q.sentAt, now) >= 3).map(q => ({
+      key: `q_${q.id}`, when: addDays(q.sentAt as string, 3), icon: "📝", title: q.leadName,
+      what: `Penawaran ${q.number} belum dijawab ${daysBetween(q.sentAt as string, now)} hari`, phone: q.phone,
+      text: `Halo ${q.contact || q.leadName}, mau follow up penawaran ${q.number} kemarin. Ada yang bisa aku bantu jelasin?`,
+      open: () => setActiveTab("Penawaran"),
+    })),
+    ...invoices.filter(i => balance(i) > 0 && i.dueDate && i.dueDate <= soon).map(i => ({
+      key: `i_${i.id}`, when: i.dueDate, icon: "🧾", title: i.leadName,
+      what: `${invoiceState(i, now) === "Telat" ? "Telat bayar" : "Jatuh tempo"} ${i.number} · sisa ${rupiah(balance(i))}`, phone: i.phone,
+      text: `Halo ${i.contact || i.leadName}, reminder invoice ${i.number} jatuh tempo ${longDate(i.dueDate)}, sisa ${rupiah(balance(i))}. Terima kasih!`,
+      open: () => setActiveTab("Invoice"),
+    })),
+  ].sort((a, b) => a.when.localeCompare(b.when));
 
   return (
     <div style={{ background: "var(--app-bg)", minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, color: "var(--app-text)" }}>
@@ -599,6 +659,7 @@ export default function SalesTracker({ user }: { user: User }) {
                 { label: "Conversion Rate", value: `${conversionRate}%`, sub: `${closedLeads.length} closed`, color: "#a78bfa", icon: "📈" },
                 { label: "Reply Rate", value: `${replyRate}%`, sub: `${repliedOutreach}/${outreach.length} outreach`, color: "#f59e0b", icon: "📬" },
                 { label: "Avg Lead Score", value: avgScore, sub: "dari 100", color: "#005eb0", icon: "⭐" },
+                { label: "Belum Tertagih", value: `${(receivable / 1000000).toFixed(1)}M`, sub: `${invoices.filter(i => balance(i) > 0).length} invoice terbuka`, color: "#ff9900", icon: "🧾" },
                 { label: "Rejections", value: rejections.length, sub: "perlu follow up", color: "#ff6b35", icon: "❌" },
               ].map(s => (
                 <div key={s.label} className="stat-card-dash" style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "20px 16px" }}>
@@ -608,6 +669,29 @@ export default function SalesTracker({ user }: { user: User }) {
                   <div style={{ fontSize: 10, color: "var(--app-muted)", marginTop: 2 }}>{s.sub}</div>
                 </div>
               ))}
+            </div>
+            <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 24, marginBottom: 24 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>✅ Perlu Ditindak</div>
+              {todo.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Aman. Nggak ada follow-up, penawaran, atau tagihan yang nunggu. Pasang jadwal follow-up dari detail lead.</div>}
+              {todo.map(t => {
+                const late = t.when < now;
+                const isToday = t.when === now;
+                return (
+                  <div key={t.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--app-inner)" }}>
+                    <button onClick={t.open} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", color: "inherit", fontFamily: "inherit" }}>
+                      <div style={{ fontSize: 18, flexShrink: 0 }}>{t.icon}</div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
+                        <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{t.what}</div>
+                      </div>
+                    </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: late ? "#ff4444" : isToday ? "#ff9900" : "var(--app-muted)" }}>{late ? `telat ${daysBetween(t.when, now)}h` : isToday ? "hari ini" : longDate(t.when)}</span>
+                      {t.phone && <a href={waLink(t.phone, t.text)} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${t.title}`} style={{ background: "#25D366", color: "#fff", borderRadius: 6, padding: "6px 10px", fontSize: 11, fontWeight: 700, textDecoration: "none" }}>WA</a>}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 24, marginBottom: 24 }}>
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Sales Pipeline</div>
@@ -685,11 +769,12 @@ export default function SalesTracker({ user }: { user: User }) {
             ) : isNarrow ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {filteredLeads.map(lead => (
-                  <div key={lead.id} className="lead-row" onClick={() => setSelectedLead(lead)} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 16, cursor: "pointer" }}>
+                  <div key={lead.id} className="lead-row" onClick={() => openLead(lead)} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 16, cursor: "pointer" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lead.name}</div>
                         <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{lead.contact || "—"} · {lead.category}</div>
+                        {lead.nextActionDate && <div style={{ fontSize: 11, marginTop: 4, color: lead.nextActionDate < now ? "#ff4444" : lead.nextActionDate === now ? "#ff9900" : "var(--app-muted)" }}>📅 {lead.nextAction || "Follow-up"} · {longDate(lead.nextActionDate)}</div>}
                       </div>
                       <span className="badge" style={{ background: statusBg[lead.status], color: statusColor[lead.status], border: `1px solid ${statusColor[lead.status]}30`, flexShrink: 0 }}>{lead.status}</span>
                     </div>
@@ -721,10 +806,11 @@ export default function SalesTracker({ user }: { user: User }) {
                 </thead>
                 <tbody>
                   {filteredLeads.map(lead => (
-                    <tr key={lead.id} className="lead-row" onClick={() => setSelectedLead(lead)} style={{ borderBottom: "1px solid var(--app-inner)" }}>
+                    <tr key={lead.id} className="lead-row" onClick={() => openLead(lead)} style={{ borderBottom: "1px solid var(--app-inner)" }}>
                       <td style={{ padding: "14px 16px" }}>
                         <div style={{ fontSize: 13, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{lead.name}</div>
                         <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{lead.category}</div>
+                        {lead.nextActionDate && <div style={{ fontSize: 11, marginTop: 2, color: lead.nextActionDate < now ? "#ff4444" : lead.nextActionDate === now ? "#ff9900" : "var(--app-muted)" }}>📅 {lead.nextAction || "Follow-up"} · {longDate(lead.nextActionDate)}</div>}
                       </td>
                       <td style={{ padding: "14px 16px", fontSize: 12, color: "var(--app-muted)" }}>{lead.contact}</td>
                       <td style={{ padding: "14px 16px" }}>
@@ -754,6 +840,14 @@ export default function SalesTracker({ user }: { user: User }) {
             )}
           </div>
         )}
+
+        {activeTab === "Penawaran" && (
+          <Quotes uid={uid} quotes={quotes} invoices={invoices} services={services} business={business}
+            leads={leads.map(l => ({ id: l.id, name: l.name, contact: l.contact, phone: l.phone }))}
+            startFor={quoteFor} onStarted={clearQuoteFor} onInvoiceCreated={gotoInvoices} />
+        )}
+        {activeTab === "Invoice" && <Invoices uid={uid} invoices={invoices} business={business} />}
+        {activeTab === "Paket" && <Services uid={uid} services={services} business={business} />}
 
         {/* OUTREACH */}
         {activeTab === "Outreach" && (
@@ -1008,17 +1102,17 @@ export default function SalesTracker({ user }: { user: User }) {
       )}
 
       {/* Lead Detail Modal */}
-      {selectedLead && (
+      {liveLead && (
         <div className="modal-overlay" onClick={() => setSelectedLead(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 480 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 480, maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{selectedLead.name}</div>
-                <span className="badge" style={{ background: statusBg[selectedLead.status], color: statusColor[selectedLead.status], border: `1px solid ${statusColor[selectedLead.status]}30`, marginTop: 6, display: "inline-block" }}>{selectedLead.status}</span>
+                <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{liveLead.name}</div>
+                <span className="badge" style={{ background: statusBg[liveLead.status], color: statusColor[liveLead.status], border: `1px solid ${statusColor[liveLead.status]}30`, marginTop: 6, display: "inline-block" }}>{liveLead.status}</span>
               </div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: "var(--ok)", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Rp {(selectedLead.value / 1000000).toFixed(1)}M</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: "var(--ok)", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Rp {(liveLead.value / 1000000).toFixed(1)}M</div>
             </div>
-            {([["👤 Kontak", selectedLead.contact], ["📧 Email", selectedLead.email], ["📱 Phone", selectedLead.phone], ["🏷️ Kategori", selectedLead.category], ["📍 Source", selectedLead.source], ["📅 Last Contact", selectedLead.lastContact]] as [string, string][]).map(([k, v]) => (
+            {([["👤 Kontak", liveLead.contact], ["📧 Email", liveLead.email], ["📱 Phone", liveLead.phone], ["🏷️ Kategori", liveLead.category], ["📍 Source", liveLead.source], ["📅 Last Contact", liveLead.lastContact]] as [string, string][]).map(([k, v]) => (
               <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--app-inner)", fontSize: 13 }}>
                 <span style={{ color: "var(--app-muted)" }}>{k}</span>
                 <span style={{ fontWeight: 600 }}>{v}</span>
@@ -1026,16 +1120,34 @@ export default function SalesTracker({ user }: { user: User }) {
             ))}
             <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12, marginTop: 16 }}>
               <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 6 }}>NOTES</div>
-              <div style={{ fontSize: 12 }}>{selectedLead.notes || "—"}</div>
+              <div style={{ fontSize: 12 }}>{liveLead.notes || "—"}</div>
             </div>
             <div style={{ marginTop: 16 }}>
               <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 8 }}>LEAD SCORE</div>
               <div style={{ background: "var(--app-inner)", borderRadius: 6, height: 10 }}>
-                <div style={{ width: `${selectedLead.score}%`, height: "100%", background: selectedLead.score > 80 ? "#00a862" : selectedLead.score > 60 ? "#f59e0b" : "#ff4444", borderRadius: 6, transition: "width 0.6s" }} />
+                <div style={{ width: `${liveLead.score}%`, height: "100%", background: liveLead.score > 80 ? "#00a862" : liveLead.score > 60 ? "#f59e0b" : "#ff4444", borderRadius: 6, transition: "width 0.6s" }} />
               </div>
-              <div style={{ fontSize: 13, fontWeight: 700, marginTop: 6, color: selectedLead.score > 80 ? "#00a862" : selectedLead.score > 60 ? "#f59e0b" : "#ff4444" }}>{selectedLead.score} / 100</div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginTop: 6, color: liveLead.score > 80 ? "#00a862" : liveLead.score > 60 ? "#f59e0b" : "#ff4444" }}>{liveLead.score} / 100</div>
             </div>
-            <button onClick={() => setSelectedLead(null)} style={{ ...btnPrimary, width: "100%", marginTop: 20 }}>TUTUP</button>
+            <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12, marginTop: 16 }}>
+              <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 8 }}>FOLLOW-UP BERIKUTNYA</div>
+              <input value={fu.action} onChange={e => setFu({ ...fu, action: e.target.value })} style={{ ...inputStyle, marginBottom: 8 }} placeholder="mis. Kirim portfolio, telpon owner" aria-label="Tindakan berikutnya" />
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                {([["Besok", 1], ["3 hari", 3], ["1 minggu", 7]] as [string, number][]).map(([l, d]) => (
+                  <button key={l} onClick={() => setFu({ ...fu, date: addDays(today(), d) })} style={{ background: "transparent", border: "1px solid var(--app-border)", color: "var(--app-muted)", borderRadius: 6, padding: "6px 10px", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>{l}</button>
+                ))}
+                <input type="date" value={fu.date} onChange={e => setFu({ ...fu, date: e.target.value })} style={{ ...inputStyle, width: "auto", padding: "5px 8px", fontSize: 12 }} aria-label="Tanggal follow-up" />
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => saveFollowUp(liveLead.id)} disabled={!fu.date} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 12, opacity: fu.date ? 1 : 0.5 }}>Simpan jadwal</button>
+                {liveLead.nextActionDate && <button onClick={() => doneFollowUp(liveLead.id)} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 12, background: "transparent", color: "var(--ok)", border: "1px solid var(--ok)" }}>✓ Selesai</button>}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button onClick={() => startQuote(liveLead)} style={{ ...btnPrimary, flex: 1 }}>BUAT PENAWARAN</button>
+              {liveLead.phone && <a href={waLink(liveLead.phone, `Halo ${liveLead.contact || liveLead.name}, `)} target="_blank" rel="noreferrer" style={{ ...btnPrimary, background: "#25D366", textDecoration: "none", textAlign: "center" }}>WA</a>}
+            </div>
+            <button onClick={() => setSelectedLead(null)} style={{ ...btnPrimary, width: "100%", marginTop: 8, background: "var(--app-border)", color: "var(--app-text)" }}>TUTUP</button>
           </div>
         </div>
       )}
