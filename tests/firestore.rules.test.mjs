@@ -30,6 +30,7 @@ const t = async (name, p) => { try { await p; pass++; console.log("  ok  ", name
 console.log("public (not signed in to SalesPal):");
 await t("adds a valid lead", assertSucceeds(addDoc(collection(anon, "inbound_leads"), good())));
 await t("adds with only name + WhatsApp", assertSucceeds(addDoc(collection(anon, "inbound_leads"), { v: 1, site: "untmd-sports", contact: { name: "A", whatsapp: "08123456789" }, createdAt: serverTimestamp(), status: "new" })));
+await t("adds a member sign-up (no offer, no answers)", assertSucceeds(addDoc(collection(anon, "inbound_leads"), { v: 1, site: "visufavor", siteUrl: "https://visufavor.vercel.app/", contact: { name: "Rani", email: "rani@mail.com" }, attribution: { utm_source: "instagram", landing: "/" }, account: { provider: "password", uid: "e456", project: "visufavor" }, createdAt: serverTimestamp(), status: "new" })));
 await t("cannot read leads", assertFails(getDocs(collection(anon, "inbound_leads"))));
 await t("cannot add unknown site", assertFails(addDoc(collection(anon, "inbound_leads"), { ...good(), site: "evil" })));
 await t("cannot add extra field", assertFails(addDoc(collection(anon, "inbound_leads"), { ...good(), admin: true })));
