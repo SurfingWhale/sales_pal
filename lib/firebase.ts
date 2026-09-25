@@ -9,9 +9,19 @@ import {
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+// On the production host, sign-in runs through this site's own /__/auth proxy
+// (next.config.mjs) instead of firebaseapp.com. Only on the host named in
+// NEXT_PUBLIC_AUTH_HOST: that host's /__/auth/handler must be an authorized
+// redirect URI in Google Cloud, and previews and localhost are not.
+function authDomain(): string | undefined {
+  const own = process.env.NEXT_PUBLIC_AUTH_HOST;
+  if (own && typeof window !== "undefined" && window.location.host === own) return own;
+  return process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
+}
+
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  authDomain: authDomain(),
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
