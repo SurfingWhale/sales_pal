@@ -8,7 +8,7 @@ then here.
 
 - **`firestore.rules` is deployed as a whole and replaces what is live.** Every
   collection the app reads or writes must stay covered. Today that is
-  `users/{uid}/{leads,outreach,rejections,pitchTemplates,services,quotes,invoices,settings}`
+  `users/{uid}/{leads,outreach,rejections,pitchTemplates,hunts,services,quotes,invoices,settings}`
   plus `inbound_leads`.
   Run `tests/firestore.rules.test.mjs` (see its header) before
   `firebase deploy --only firestore:rules --project sales-pal`.

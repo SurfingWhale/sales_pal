@@ -13,9 +13,11 @@ import QuickPitch from "@/components/QuickPitch";
 import Services from "@/components/Services";
 import Quotes, { LeadRef } from "@/components/Quotes";
 import Invoices from "@/components/Invoices";
+import Hunting from "@/components/Hunting";
+import { Hunt, useHuntGoal } from "@/lib/hunting";
 import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, longDate, rupiah, today, useBusiness, useUserCollection, waLink } from "@/lib/billing";
 
-const TABS = ["Dashboard", "Leads", "Penawaran", "Invoice", "Paket", "Outreach", "Rejection Log", "Simulator", "Script Library", "AI Playbook"];
+const TABS = ["Dashboard", "Hunting", "Leads", "Penawaran", "Invoice", "Paket", "Outreach", "Rejection Log", "Simulator", "Script Library", "AI Playbook"];
 
 interface Lead {
   id: string; name: string; contact: string; source: string; status: string;
@@ -279,6 +281,8 @@ export default function SalesTracker({ user }: { user: User }) {
   const quotes = useUserCollection<Quote>(uid, "quotes");
   const invoices = useUserCollection<Invoice>(uid, "invoices");
   const business = useBusiness(uid);
+  const hunts = useUserCollection<Hunt>(uid, "hunts");
+  const huntGoal = useHuntGoal(uid);
   const [quoteFor, setQuoteFor] = useState<LeadRef | null>(null);
   const [fu, setFu] = useState({ action: "", date: "" });
   const clearQuoteFor = useCallback(() => setQuoteFor(null), []);
@@ -560,6 +564,11 @@ export default function SalesTracker({ user }: { user: User }) {
       what: l.nextAction || "Follow-up", phone: l.phone, text: `Halo ${l.contact || l.name}, `,
       open: () => openLead(l),
     })),
+    ...hunts.filter(h => h.status === "Tertarik" && !h.leadId).map(h => ({
+      key: `h_${h.id}`, when: h.date, icon: "🎯", title: h.target || "Tanpa nama",
+      what: `Tertarik via ${h.platform} — jadiin lead`, phone: "", text: "",
+      open: () => setActiveTab("Hunting"),
+    })),
     ...quotes.filter(q => q.status === "Terkirim" && q.sentAt && daysBetween(q.sentAt, now) >= 3).map(q => ({
       key: `q_${q.id}`, when: addDays(q.sentAt as string, 3), icon: "📝", title: q.leadName,
       what: `Penawaran ${q.number} belum dijawab ${daysBetween(q.sentAt as string, now)} hari`, phone: q.phone,
@@ -826,6 +835,8 @@ export default function SalesTracker({ user }: { user: User }) {
           </div>
         )}
 
+        {activeTab === "Hunting" && <Hunting uid={uid} hunts={hunts} goal={huntGoal} />}
+
         {activeTab === "Penawaran" && (
           <Quotes uid={uid} quotes={quotes} invoices={invoices} services={services} business={business}
             leads={leads.map(l => ({ id: l.id, name: l.name, contact: l.contact, phone: l.phone }))}
@@ -1007,7 +1018,7 @@ export default function SalesTracker({ user }: { user: User }) {
                   <input value={(newLead as Record<string, string>)[k]} onChange={e => setNewLead({ ...newLead, [k]: e.target.value })} style={inputStyle} placeholder={label} />
                 </div>
               ))}
-              {([["source", "Source", ["GMaps", "DM IG", "Cold Email", "Referral", "WhatsApp", "LinkedIn"]], ["status", "Status", ["Cold", "Warm", "Hot", "Closed"]], ["category", "Kategori", ["F&B", "Retail", "Health", "Property", "Service", "Tech", "Education"]]] as [string, string, string[]][]).map(([k, label, opts]) => (
+              {([["source", "Source", ["GMaps", "DM IG", "Threads", "Cold Email", "Referral", "WhatsApp", "LinkedIn", "Lainnya"]], ["status", "Status", ["Cold", "Warm", "Hot", "Closed"]], ["category", "Kategori", ["F&B", "Retail", "Health", "Property", "Service", "Tech", "Education"]]] as [string, string, string[]][]).map(([k, label, opts]) => (
                 <div key={k}>
                   <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
                   <select value={(newLead as Record<string, string>)[k]} onChange={e => setNewLead({ ...newLead, [k]: e.target.value })} style={inputStyle}>
