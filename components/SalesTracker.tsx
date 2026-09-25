@@ -195,7 +195,9 @@ function useIsNarrow(bp = 640) {
 export default function SalesTracker({ user }: { user: User }) {
   const router = useRouter();
   const isNarrow = useIsNarrow();
-  const [activeTab, setActiveTab] = useState("Dashboard");
+  // A share or bookmarklet opens straight into Hunting (/dashboard?hunt&target=…).
+  const [activeTab, setActiveTab] = useState(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("hunt") ? "Hunting" : "Dashboard");
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
