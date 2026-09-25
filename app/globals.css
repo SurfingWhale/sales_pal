@@ -510,3 +510,15 @@ footer {
 .foot-brand img { width: 30px; height: 30px; border-radius: 9px; object-fit: cover; }
 .foot-brand em { color: var(--blue); font-style: normal; }
 footer p { font-size: 12px; color: #8b949e; }
+
+/* Printing a quote or invoice: PrintSheet portals itself onto <body>, so the
+   print keeps only that overlay and drops the app behind it. */
+@media print {
+  @page { margin: 14mm; }
+  body > *:not(.print-overlay) { display: none !important; }
+  body { background: #fff !important; }
+  .print-overlay { position: static !important; background: none !important; padding: 0 !important; display: block !important; }
+  .print-frame { max-height: none !important; overflow: visible !important; max-width: none !important; }
+  .print-root { padding: 0 !important; border-radius: 0 !important; }
+  .no-print { display: none !important; }
+}
