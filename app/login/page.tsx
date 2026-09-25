@@ -14,6 +14,7 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
+import { clearCacheAndReload } from "@/lib/appCache";
 
 // iOS/Android standalone PWA runs in a context isolated from Safari, where
 // signInWithPopup opens in a separate browser and the session never lands back
@@ -50,18 +51,34 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // Until both the stored session and any pending Google redirect have been
+  // read, the form stays hidden: coming back from Google, it used to flash
+  // the login form for a second and invite a second tap.
+  const [checking, setChecking] = useState(true);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
+    let sessionKnown = false;
+    let redirectKnown = false;
+    const settle = () => { if (sessionKnown && redirectKnown) setChecking(false); };
     const unsub = onAuthStateChanged(auth, (u) => {
-      if (u) router.replace("/dashboard");
+      if (u) { router.replace("/dashboard"); return; }
+      sessionKnown = true; settle();
     });
     // Complete a redirect-based sign-in (PWA path) and surface any error.
-    getRedirectResult(auth).catch((e) => {
-      const msg = authErrorMessage(e);
-      if (msg) setError(msg);
-    });
+    getRedirectResult(auth)
+      .catch((e) => {
+        const msg = authErrorMessage(e);
+        if (msg) setError(msg);
+      })
+      .finally(() => { redirectKnown = true; settle(); });
     return unsub;
   }, [router]);
+
+  async function handleClearCache() {
+    setClearing(true);
+    await clearCacheAndReload();
+  }
 
   async function handleGoogle() {
     setError(""); setLoading(true);
@@ -125,7 +142,7 @@ export default function LoginPage() {
       <div style={{
         width: "100%", maxWidth: 420,
         background: "var(--app-card)",
-        border: "1px solid #1e2028",
+        border: "1px solid var(--app-border)",
         borderRadius: 28,
         padding: "44px 40px",
         position: "relative", zIndex: 1,
@@ -138,6 +155,13 @@ export default function LoginPage() {
           </span>
         </div>
 
+        {checking ? (
+          <div role="status" style={{ textAlign: "center", padding: "32px 0 8px" }}>
+            <div style={{ width: 36, height: 36, border: "3px solid var(--app-border)", borderTopColor: "#005eb0", borderRadius: "50%", animation: "spin 0.7s linear infinite", margin: "0 auto 14px" }} />
+            <div style={{ fontSize: 13, color: "var(--app-muted)" }}>Memeriksa sesi…</div>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+        ) : (<>
         <h1 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, fontWeight: 400, letterSpacing: 2, color: "var(--app-text)", marginBottom: 6, textAlign: "center" }}>
           {mode === "login" ? "Welcome back" : "Buat akun baru"}
         </h1>
@@ -172,7 +196,7 @@ export default function LoginPage() {
 
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
           <div style={{ flex: 1, height: 1, background: "var(--app-border)" }} />
-          <span style={{ fontSize: 11, color: "#3a4050" }}>atau dengan email</span>
+          <span style={{ fontSize: 11, color: "var(--app-muted)" }}>atau dengan email</span>
           <div style={{ flex: 1, height: 1, background: "var(--app-border)" }} />
         </div>
 
@@ -238,6 +262,17 @@ export default function LoginPage() {
             {mode === "login" ? "Daftar gratis" : "Masuk"}
           </button>
         </p>
+        </>)}
+
+        <div style={{ borderTop: "1px solid var(--app-border)", marginTop: 24, paddingTop: 16, textAlign: "center" }}>
+          <button
+            onClick={handleClearCache}
+            disabled={clearing}
+            style={{ background: "none", border: "none", color: "var(--app-muted)", fontSize: 12, cursor: "pointer", fontFamily: "inherit", padding: "10px 12px", minHeight: 44, opacity: clearing ? 0.6 : 1 }}
+          >
+            {clearing ? "Membersihkan…" : "Susah masuk? 🧹 Bersihkan cache & muat ulang"}
+          </button>
+        </div>
       </div>
     </div>
   );
