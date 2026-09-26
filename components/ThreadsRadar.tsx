@@ -91,7 +91,24 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
     setPeople(null);
   }
 
-  if (!APP_ID) return null;
+  // Not set up yet (docs/prd/PRD-003-threads-radar.md): say what is coming,
+  // and what to do meanwhile.
+  if (!APP_ID) {
+    return (
+      <div style={{ ...card, padding: 16, marginBottom: 20, display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <div aria-hidden="true" style={{ fontSize: 20, lineHeight: 1 }}>📡</div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>Radar Threads</span>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#005eb014", color: "#005eb0", border: "1px solid #005eb040" }}>Segera hadir</span>
+          </div>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4, lineHeight: 1.5 }}>
+            Daftar orang yang balas atau mention post Threads lo, sekali tap jadi target DM. Sementara: buka Aktivitas di Threads, Copy link profilnya, lalu 📋 Tempel link di bawah.
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (conn === undefined) return null;
 
   const dmd = new Set(hunts.map(h => h.target.replace(/^@/, "").toLowerCase()));
