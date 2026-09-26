@@ -16,7 +16,7 @@ const SEED: Omit<Template, "id">[] = [
   { title: "Follow-up", body: "Hai {nama}, mau follow up penawaran foto menu kemarin. Minggu ini ada slot promo kalau tertarik 😊" },
 ];
 
-export default function QuickPitch({ uid }: { uid: string }) {
+export default function QuickPitch({ uid, hideButton = false }: { uid: string; hideButton?: boolean }) {
   const [open, setOpen] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [target, setTarget] = useState("");
@@ -70,7 +70,7 @@ export default function QuickPitch({ uid }: { uid: string }) {
   return (
     <>
       {/* Floating action button */}
-      <button
+      {!hideButton && <button
         onClick={() => setOpen(true)}
         className="sp-fab"
         aria-label="Quick Pitch — template pesan cepat"
@@ -82,7 +82,7 @@ export default function QuickPitch({ uid }: { uid: string }) {
         }}
       >
         💬
-      </button>
+      </button>}
 
       {open && (
         <div className="modal-overlay" onClick={() => { setOpen(false); setEditing(null); }}>
@@ -118,7 +118,7 @@ export default function QuickPitch({ uid }: { uid: string }) {
                         <div style={{ fontSize: 13, fontWeight: 700 }}>{t.title}</div>
                         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                           <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} style={chipBtn}>✎</button>
-                          <button onClick={() => remove(t.id)} aria-label={`Hapus ${t.title}`} style={{ ...chipBtn, borderColor: "#ff444440", color: "#ff4444" }}>🗑</button>
+                          <button onClick={() => remove(t.id)} aria-label={`Hapus ${t.title}`} style={{ ...chipBtn, borderColor: "#ff444440", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}>🗑</button>
                         </div>
                       </div>
                       <div style={{ fontSize: 12, color: "var(--app-sub)", lineHeight: 1.6, marginBottom: 12, whiteSpace: "pre-wrap" }}>{render(t.body)}</div>
@@ -134,7 +134,7 @@ export default function QuickPitch({ uid }: { uid: string }) {
                   ))}
                 </div>
 
-                <button onClick={() => setEditing({ id: "", title: "", body: "" })} style={{ width: "100%", marginTop: 14, background: "transparent", color: "#005eb0", border: "1px dashed #005eb0", borderRadius: 10, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                <button onClick={() => setEditing({ id: "", title: "", body: "" })} style={{ width: "100%", marginTop: 14, background: "transparent", color: "var(--brand-text)", border: "1px dashed #005eb0", borderRadius: 10, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                   + Template baru
                 </button>
               </>

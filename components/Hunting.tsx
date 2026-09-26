@@ -177,7 +177,7 @@ export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt
           <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 6 }}>{progress >= 1 ? "Tercapai 🎯" : "Ubah target"}</div>
         </button>
         <div style={{ ...card, padding: 12 }}>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#f59e0b" }}>{week.length ? pct(weekReplied / week.length) : "—"}</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))" }}>{week.length ? pct(weekReplied / week.length) : "—"}</div>
           <div style={{ fontSize: 12, fontWeight: 700, marginTop: 2 }}>Dibales 7 hari</div>
           <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>{weekReplied} dari {week.length} DM</div>
         </div>
@@ -200,7 +200,7 @@ export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt
           <button onClick={pasteLink} aria-label="Tempel link profil dari clipboard" style={{ ...chip, flexShrink: 0, minHeight: 44, padding: "0 12px", fontSize: 12, fontWeight: 700, color: "var(--app-text)" }}>📋 Tempel link</button>
         </div>
         {url && <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>🔗 {url}</div>}
-        {pasteMsg && <div role="status" style={{ fontSize: 11, color: "#ff9900", marginBottom: 12 }}>{pasteMsg}</div>}
+        {pasteMsg && <div role="status" style={{ fontSize: 11, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginBottom: 12 }}>{pasteMsg}</div>}
         <div role="radiogroup" aria-label="Platform" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
           {PLATFORMS.map(p => (
             <button key={p} role="radio" aria-checked={platform === p} onClick={() => setPlatform(p)}
@@ -289,12 +289,12 @@ export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt
                   <button key={s} onClick={() => setStatus(h, s)} aria-label={`Tandai ${s}`} title={s}
                     style={{ ...chip, minWidth: 40, minHeight: 36, fontSize: 14, padding: "4px 8px" }}>{huntIcon[s]}</button>
                 ))}
-                {isStale(h, now) && <button onClick={() => followUp(h)} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "#ff9900", border: "1px solid #ff990060" }}>↻ Follow-up</button>}
+                {isStale(h, now) && <button onClick={() => followUp(h)} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", border: "1px solid #ff990060" }}>↻ Follow-up</button>}
                 {h.status === "Tertarik" && !h.leadId && <button onClick={() => makeLead(h)} style={{ ...chip, minHeight: 36, background: "#00a862", color: "#fff", border: "none", fontWeight: 700 }}>Jadiin Lead →</button>}
                 {h.leadId && <span style={{ fontSize: 11, color: "var(--ok)", fontWeight: 700 }}>✓ Sudah jadi lead</span>}
                 {h.url && <a href={h.url} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Profil ↗</a>}
                 {h.status === "Ditolak" && noting?.id !== h.id && <button onClick={() => setNoting({ id: h.id, note: h.note })} style={chip}>{h.note ? "Ubah alasan" : "+ Alasan"}</button>}
-                <button onClick={() => remove(h)} aria-label={`Hapus DM ke ${h.target || "target"}`} style={{ ...chip, minHeight: 36, color: "#ff4444", border: "1px solid #ff444440" }}>🗑</button>
+                <button onClick={() => remove(h)} aria-label={`Hapus DM ke ${h.target || "target"}`} style={{ ...chip, minHeight: 36, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🗑</button>
               </div>
               {noting?.id === h.id && (
                 <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
@@ -352,8 +352,8 @@ export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt
             <textarea id="tpl-body" value={editing.body} onChange={e => setEditing({ ...editing, body: e.target.value })} placeholder="Halo {nama}! ..." style={{ ...inputStyle, fontSize: 16, height: 140, resize: "vertical", marginBottom: 16 }} />
             {editing.id && <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 12 }}>Kalau isinya berubah banyak, mending bikin template baru supaya angka evaluasinya nggak kecampur.</div>}
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={saveTemplate} disabled={!editing.title.trim() || !editing.body.trim()} style={{ ...btnPrimary, opacity: editing.title.trim() && editing.body.trim() ? 1 : 0.5 }}>SIMPAN</button>
-              <button onClick={() => setEditing(null)} style={btnMuted}>BATAL</button>
+              <button onClick={saveTemplate} disabled={!editing.title.trim() || !editing.body.trim()} style={{ ...btnPrimary, opacity: editing.title.trim() && editing.body.trim() ? 1 : 0.5 }}>Simpan</button>
+              <button onClick={() => setEditing(null)} style={btnMuted}>Batal</button>
             </div>
           </div>
         </div>
