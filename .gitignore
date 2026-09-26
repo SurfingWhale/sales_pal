@@ -38,3 +38,5 @@ next-env.d.ts
 
 # flow test output
 /tests/flows/out/
+firestore-debug.log
+firebase-debug.log
