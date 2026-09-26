@@ -3,7 +3,14 @@
     "rules": "firestore.rules"
   },
   "emulators": {
-    "firestore": { "port": 8089 },
-    "ui": { "enabled": false }
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "port": 8089
+    },
+    "ui": {
+      "enabled": false
+    }
   }
 }
