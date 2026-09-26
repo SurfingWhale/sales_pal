@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:flows": "node tests/flows/run.mjs"
   },
   "dependencies": {
     "firebase": "^10.14.0",
@@ -19,6 +20,7 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "playwright": "^1.63.0",
     "typescript": "^5"
   }
 }

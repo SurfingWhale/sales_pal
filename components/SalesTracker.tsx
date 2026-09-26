@@ -1329,7 +1329,8 @@ export default function SalesTracker({ user }: { user: User }) {
       )}
 
       {/* Global Quick Pitch floating button */}
-      <QuickPitch uid={uid} />
+      {/* Hunting has the same templates on the page; the button would sit on Kirim WA. */}
+      {activeTab !== "Hunting" && <QuickPitch uid={uid} />}
     </div>
   );
 }

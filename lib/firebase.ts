@@ -6,8 +6,9 @@ import {
   browserLocalPersistence,
   browserPopupRedirectResolver,
   GoogleAuthProvider,
+  connectAuthEmulator,
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 
 // On the production host, sign-in runs through this site's own /__/auth proxy
 // (next.config.mjs) instead of firebaseapp.com. Only on the host named in
@@ -56,4 +57,13 @@ function getFirebaseAuth(): any {
 export const auth = getFirebaseAuth();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const db = app ? getFirestore(app) : (null as any);
+
+// Local flow tests (npm run test:flows) run against the Firebase emulators.
+// Only when NEXT_PUBLIC_FIREBASE_EMULATORS is set at build time, so a
+// production build never contains a path to them.
+if (app && process.env.NEXT_PUBLIC_FIREBASE_EMULATORS && !(globalThis as { __emulators?: boolean }).__emulators) {
+  (globalThis as { __emulators?: boolean }).__emulators = true;
+  connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+  connectFirestoreEmulator(db, "127.0.0.1", 8089);
+}
 export const googleProvider = typeof window !== "undefined" ? new GoogleAuthProvider() : (null as any); // eslint-disable-line @typescript-eslint/no-explicit-any

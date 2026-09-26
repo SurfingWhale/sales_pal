@@ -99,9 +99,14 @@ const RANK: Record<string, number> = { Cold: 0, Warm: 1, Hot: 2, Closed: 3 };
 export function mergeInbound(existing: Partial<LeadFields> | null, incoming: LeadFields, member: boolean): LeadFields | null {
   if (!existing) return incoming;
   if (member) return null;
-  const keep = (existing.notes || "").split(" · ").filter(n => n && n !== MEMBER_NOTE && !n.startsWith("Campaign: ") && !incoming.notes.includes(n));
+  // A claim from another device may carry no campaign; the one that first
+  // brought this person stays, so "Dari mana uangnya" keeps crediting it.
+  const campaignOf = (src = "") => src.split(" · ").slice(2).join(" · ");
+  const keptCampaign = !campaignOf(incoming.source) && campaignOf(existing.source) ? campaignOf(existing.source) : "";
+  const keep = (existing.notes || "").split(" · ").filter(n => n && n !== MEMBER_NOTE && (keptCampaign || !n.startsWith("Campaign: ")) && !incoming.notes.includes(n));
   return {
     ...incoming,
+    source: keptCampaign ? `${incoming.source} · ${keptCampaign}` : incoming.source,
     status: (RANK[existing.status || ""] ?? -1) > RANK[incoming.status] ? (existing.status as string) : incoming.status,
     score: Math.max(existing.score || 0, incoming.score),
     value: Math.max(existing.value || 0, incoming.value),
