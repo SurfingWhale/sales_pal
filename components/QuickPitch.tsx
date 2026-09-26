@@ -72,6 +72,7 @@ export default function QuickPitch({ uid }: { uid: string }) {
       {/* Floating action button */}
       <button
         onClick={() => setOpen(true)}
+        className="sp-fab"
         aria-label="Quick Pitch — template pesan cepat"
         style={{
           position: "fixed", right: 18, bottom: "calc(18px + env(safe-area-inset-bottom, 0px))",
