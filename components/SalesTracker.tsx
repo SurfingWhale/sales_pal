@@ -19,7 +19,16 @@ import { Hunt, useHuntGoal } from "@/lib/hunting";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, longDate, rupiah, today, useBusiness, useUserCollection, waLink } from "@/lib/billing";
 
-const TABS = ["Dashboard", "Hunting", "Leads", "Penawaran", "Invoice", "Paket", "Outreach", "Rejection Log", "Simulator", "Script Library", "AI Playbook"];
+// Five places, so a phone never scrolls sideways to find one. Jualan and
+// Lainnya hold several tabs, picked from a second row.
+const SECTIONS: { id: string; label: string; icon: string; tabs: string[] }[] = [
+  { id: "home", label: "Beranda", icon: "🏠", tabs: ["Dashboard"] },
+  { id: "hunt", label: "Hunting", icon: "🎯", tabs: ["Hunting"] },
+  { id: "leads", label: "Leads", icon: "👥", tabs: ["Leads"] },
+  { id: "sell", label: "Jualan", icon: "💼", tabs: ["Penawaran", "Invoice", "Paket"] },
+  { id: "more", label: "Lainnya", icon: "☰", tabs: ["Outreach", "Rejection Log", "Simulator", "Script Library", "AI Playbook"] },
+];
+const sectionOf = (tab: string) => SECTIONS.find(x => x.tabs.includes(tab)) || SECTIONS[0];
 
 interface Lead {
   id: string; name: string; contact: string; source: string; status: string;
@@ -461,6 +470,8 @@ export default function SalesTracker({ user }: { user: User }) {
   }
 
   async function deleteLead(id: string) {
+    const name = leads.find(l => l.id === id)?.name || "lead ini";
+    if (!confirm(`Hapus ${name}? Nggak bisa dibatalkan.`)) return;
     await deleteDoc(doc(db, "users", uid, "leads", id));
   }
 
@@ -554,6 +565,24 @@ export default function SalesTracker({ user }: { user: User }) {
     <div style={{ background: "var(--app-bg)", minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, color: "var(--app-text)" }}>
       <style>{`
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: var(--app-card); } ::-webkit-scrollbar-thumb { background: var(--app-border); border-radius: 4px; }
+        .sp-nav { display: flex; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--app-border); background: var(--app-card); }
+        .sp-nav-btn { display: flex; align-items: center; gap: 8px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--app-muted); padding: 12px 16px; font: 500 13px 'Plus Jakarta Sans', sans-serif; cursor: pointer; white-space: nowrap; }
+        .sp-nav-btn.is-on { color: var(--app-text); font-weight: 700; border-bottom-color: #005eb0; background: var(--app-inner); }
+        .sp-nav-btn:hover { background: var(--app-inner); }
+        .sp-nav-icon { font-size: 15px; line-height: 1; }
+        .sp-subnav { display: flex; gap: 6px; padding: 10px 24px; overflow-x: auto; background: var(--app-bg); border-bottom: 1px solid var(--app-border); scrollbar-width: none; }
+        .sp-subnav::-webkit-scrollbar { display: none; }
+        .sp-sub-btn { flex-shrink: 0; min-height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--app-border); background: var(--app-card); color: var(--app-muted); font: 600 12px 'Plus Jakarta Sans', sans-serif; cursor: pointer; white-space: nowrap; }
+        .sp-sub-btn.is-on { background: #005eb0; border-color: #005eb0; color: #fff; }
+        @media (max-width: 767px) {
+          .sp-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; padding: 0 0 env(safe-area-inset-bottom, 0px); gap: 0; border-bottom: none; border-top: 1px solid var(--app-border); background: var(--app-nav); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+          .sp-nav-btn { flex: 1; flex-direction: column; gap: 3px; padding: 8px 0 6px; min-height: 56px; font-size: 11px; border-bottom: none; border-top: 2px solid transparent; }
+          .sp-nav-btn.is-on { background: transparent; border-top-color: #005eb0; color: #005eb0; }
+          .sp-nav-icon { font-size: 19px; }
+          .sp-subnav { padding: 10px 16px; position: sticky; top: 57px; z-index: 40; }
+          .sp-main { padding: 16px 16px calc(96px + env(safe-area-inset-bottom, 0px)) !important; }
+          .sp-fab { bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important; }
+        }
         .tab-btn:hover { background: var(--app-inner) !important; }
         .lead-row:hover { background: var(--app-inner) !important; cursor: pointer; }
         .stat-card-dash { transition: transform 0.2s; } .stat-card-dash:hover { transform: translateY(-2px); }
@@ -594,26 +623,37 @@ export default function SalesTracker({ user }: { user: User }) {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ borderBottom: "1px solid var(--app-border)", padding: "0 24px", display: "flex", gap: 4, overflowX: "auto", background: "var(--app-card)" }}>
-        {TABS.map(tab => (
-          <button key={tab} className="tab-btn" onClick={() => setActiveTab(tab)}
-            style={{ background: activeTab === tab ? "var(--app-inner)" : "transparent", border: "none", borderBottom: activeTab === tab ? "2px solid #005eb0" : "2px solid transparent", color: activeTab === tab ? "var(--app-text)" : "var(--app-muted)", padding: "12px 16px", fontSize: 12, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: activeTab === tab ? 700 : 400, letterSpacing: "0.5px", whiteSpace: "nowrap" }}>
-            {tab.toUpperCase()}
-          </button>
-        ))}
-      </div>
+      {/* Navigation: a top bar on wide screens, a bottom bar on phones */}
+      <nav className="sp-nav" aria-label="Menu utama">
+        {SECTIONS.map(sec => {
+          const on = sectionOf(activeTab).id === sec.id;
+          return (
+            <button key={sec.id} className={`tab-btn sp-nav-btn${on ? " is-on" : ""}`} aria-current={on ? "page" : undefined}
+              onClick={() => { if (!on) setActiveTab(sec.tabs[0]); }}>
+              <span className="sp-nav-icon" aria-hidden="true">{sec.icon}</span>
+              <span className="sp-nav-label">{sec.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+      {sectionOf(activeTab).tabs.length > 1 && (
+        <div className="sp-subnav" role="tablist" aria-label={sectionOf(activeTab).label}>
+          {sectionOf(activeTab).tabs.map(tab => (
+            <button key={tab} role="tab" aria-selected={activeTab === tab} className={`sp-sub-btn${activeTab === tab ? " is-on" : ""}`} onClick={() => setActiveTab(tab)}>{tab}</button>
+          ))}
+        </div>
+      )}
 
-      <div style={{ padding: "24px", maxWidth: 1200, margin: "0 auto" }}>
+      <div className="sp-main" style={{ padding: "24px", maxWidth: 1200, margin: "0 auto" }}>
 
         {/* DASHBOARD */}
         {activeTab === "Dashboard" && (
-          <div>
-            <div style={{ marginBottom: 24 }}>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <div style={{ marginBottom: 20, order: -2 }}>
               <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Sales Command Center</div>
               <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 4 }}>Overview pipeline & performance real-time lo</div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 32 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 24 }}>
               {[
                 { label: "Total Leads", value: leads.length, sub: `${hotLeads.length} hot leads`, color: "#ff4444", icon: "👥" },
                 { label: "Pipeline Value", value: `${(totalValue / 1000000).toFixed(1)}M`, sub: "estimasi total", color: "var(--ok)", icon: "💰" },
@@ -623,16 +663,15 @@ export default function SalesTracker({ user }: { user: User }) {
                 { label: "Belum Tertagih", value: `${(receivable / 1000000).toFixed(1)}M`, sub: `${invoices.filter(i => balance(i) > 0).length} invoice terbuka`, color: "#ff9900", icon: "🧾" },
                 { label: "Rejections", value: rejections.length, sub: "perlu follow up", color: "#ff6b35", icon: "❌" },
               ].map(s => (
-                <div key={s.label} className="stat-card-dash" style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "20px 16px" }}>
-                  <div style={{ fontSize: 22, marginBottom: 8 }}>{s.icon}</div>
-                  <div style={{ fontSize: 26, fontWeight: 700, color: s.color, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{s.value}</div>
-                  <div style={{ fontSize: 11, color: "var(--app-text)", marginTop: 2, fontWeight: 600 }}>{s.label}</div>
-                  <div style={{ fontSize: 10, color: "var(--app-muted)", marginTop: 2 }}>{s.sub}</div>
+                <div key={s.label} className="stat-card-dash" style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "14px 14px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--app-text)", fontWeight: 600 }}><span aria-hidden="true">{s.icon}</span>{s.label}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: s.color, fontFamily: "'Plus Jakarta Sans', sans-serif", marginTop: 6, fontVariantNumeric: "tabular-nums" }}>{s.value}</div>
+                  <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{s.sub}</div>
                 </div>
               ))}
             </div>
-            <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 24, marginBottom: 24 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>✅ Perlu Ditindak</div>
+            <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 20, marginBottom: 20, order: -1 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>✅ Perlu Ditindak</div>
               {todo.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Aman. Nggak ada follow-up, penawaran, atau tagihan yang nunggu. Pasang jadwal follow-up dari detail lead.</div>}
               {todo.map(t => {
                 const late = t.when < now;
@@ -706,7 +745,7 @@ export default function SalesTracker({ user }: { user: User }) {
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {["All", "Hot", "Warm", "Cold", "Closed"].map(s => (
                   <button key={s} onClick={() => setFilterStatus(s)}
-                    style={{ background: filterStatus === s ? (statusColor[s] || "var(--app-border)") : "var(--app-card)", color: filterStatus === s ? "#fff" : "var(--app-muted)", border: "1px solid var(--app-border)", borderRadius: 6, padding: "6px 12px", fontSize: 11, cursor: "pointer", fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                    style={{ background: filterStatus === s ? (statusColor[s] || "var(--app-border)") : "var(--app-card)", color: filterStatus === s ? "#fff" : "var(--app-muted)", border: "1px solid var(--app-border)", borderRadius: 18, padding: "0 14px", minHeight: 36, fontSize: 12, cursor: "pointer", fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                     {s}
                   </button>
                 ))}
@@ -750,7 +789,7 @@ export default function SalesTracker({ user }: { user: User }) {
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ok)" }}>Rp {(lead.value / 1000000).toFixed(1)}M</span>
-                        <button onClick={(e) => { e.stopPropagation(); deleteLead(lead.id); }} aria-label={`Hapus lead ${lead.name}`} style={{ background: "transparent", border: "1px solid #ff444430", color: "#ff4444", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>Del</button>
+                        <button onClick={(e) => { e.stopPropagation(); deleteLead(lead.id); }} aria-label={`Hapus lead ${lead.name}`} style={{ background: "transparent", border: "1px solid #ff444430", color: "#ff4444", borderRadius: 8, minWidth: 36, minHeight: 36, fontSize: 14, cursor: "pointer" }}>🗑</button>
                       </div>
                     </div>
                   </div>

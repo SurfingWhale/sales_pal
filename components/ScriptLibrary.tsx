@@ -32,6 +32,12 @@ export default function ScriptLibrary() {
   const [filterTone, setFilterTone] = useState<"all" | "formal" | "santai">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  // Eight at a time: all 32 at once made a phone scroll for ages.
+  const PAGE = 8;
+  const [limit, setLimit] = useState(PAGE);
+  const filterKey = `${filterArchetype}|${filterObjection}|${filterTone}|${searchQuery}`;
+  const [shownFor, setShownFor] = useState(filterKey);
+  if (shownFor !== filterKey) { setShownFor(filterKey); setLimit(PAGE); }
 
   function copyScript(text: string, key: string) {
     navigator.clipboard.writeText(text);
@@ -147,7 +153,7 @@ export default function ScriptLibrary() {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {filtered.map(item => {
+          {filtered.slice(0, limit).map(item => {
             const arch = archetypes.find(a => a.id === item.archetypeId)!;
             const obj = objections.find(o => o.id === item.objectionId)!;
             const isCopied = copiedKey === item.key;
@@ -157,19 +163,19 @@ export default function ScriptLibrary() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <span style={{
-                      fontSize: 10, background: `${arch.color}15`, color: arch.color,
+                      fontSize: 11, background: `${arch.color}15`, color: arch.color,
                       border: `1px solid ${arch.color}30`, borderRadius: 20, padding: "3px 10px",
                     }}>
                       {arch.animal} {arch.name}
                     </span>
                     <span style={{
-                      fontSize: 10, background: "var(--app-inner)", color: "#8b949e",
+                      fontSize: 11, background: "var(--app-inner)", color: "var(--app-muted)",
                       border: "1px solid var(--app-border)", borderRadius: 20, padding: "3px 10px",
                     }}>
                       {obj.icon} {obj.label}
                     </span>
                     <span style={{
-                      fontSize: 10,
+                      fontSize: 11,
                       background: item.tone === "formal" ? "#a78bfa20" : "#00ccff20",
                       color: item.tone === "formal" ? "#a78bfa" : "#00ccff",
                       border: `1px solid ${item.tone === "formal" ? "#a78bfa40" : "#00ccff40"}`,
@@ -178,18 +184,6 @@ export default function ScriptLibrary() {
                       {item.tone === "formal" ? "Formal" : "Santai"}
                     </span>
                   </div>
-                  <button
-                    onClick={() => copyScript(item.script, item.key)}
-                    style={{
-                      background: isCopied ? "#00a8621a" : "transparent",
-                      border: `1px solid ${isCopied ? "var(--ok)" : "var(--app-border)"}`,
-                      color: isCopied ? "var(--ok)" : "var(--app-muted)",
-                      borderRadius: 6, padding: "4px 12px", fontSize: 11,
-                      cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
-                    }}
-                  >
-                    {isCopied ? "✓ Tersalin!" : "Copy"}
-                  </button>
                 </div>
 
                 {/* Script text */}
@@ -201,13 +195,32 @@ export default function ScriptLibrary() {
                   &ldquo;{item.script}&rdquo;
                 </div>
 
-                {/* Tips */}
-                <div style={{ fontSize: 11, color: "var(--app-muted)" }}>
-                  <span style={{ color: "var(--ok)" }}>💡 </span>{item.tips}
+                {/* Tips + copy */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <div style={{ fontSize: 12, color: "var(--app-muted)", lineHeight: 1.5 }}>
+                    <span style={{ color: "var(--ok)" }}>💡 </span>{item.tips}
+                  </div>
+                  <button
+                    onClick={() => copyScript(item.script, item.key)}
+                    style={{
+                      background: isCopied ? "#00a8621a" : "transparent",
+                      border: `1px solid ${isCopied ? "var(--ok)" : "var(--app-border)"}`,
+                      color: isCopied ? "var(--ok)" : "var(--app-text)",
+                      borderRadius: 8, padding: "0 16px", minHeight: 40, fontSize: 12, fontWeight: 700,
+                      cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
+                    }}
+                  >
+                    {isCopied ? "✓ Tersalin" : "Copy"}
+                  </button>
                 </div>
               </div>
             );
           })}
+          {filtered.length > limit && (
+            <button onClick={() => setLimit(limit + PAGE)} style={{ minHeight: 44, borderRadius: 10, border: "1px dashed var(--app-border)", background: "transparent", color: "#005eb0", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              Tampilkan {Math.min(PAGE, filtered.length - limit)} lagi · {filtered.length - limit} tersisa
+            </button>
+          )}
         </div>
       )}
     </div>
