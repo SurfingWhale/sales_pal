@@ -15,6 +15,7 @@ import Quotes, { LeadRef } from "@/components/Quotes";
 import Invoices from "@/components/Invoices";
 import Hunting from "@/components/Hunting";
 import LeadSources from "@/components/LeadSources";
+import ModalA11y from "@/components/ModalA11y";
 import { Hunt, useHuntGoal } from "@/lib/hunting";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, longDate, rupiah, today, useBusiness, useUserCollection, waLink } from "@/lib/billing";
@@ -75,7 +76,7 @@ const AI_PLAYBOOK = [
     ]
   },
   {
-    category: "📩 Cold Outreach di Era AI", color: "#ff6b35",
+    category: "📩 Cold Outreach di Era AI", color: "color-mix(in srgb, #ff6b35 55%, var(--app-text))",
     steps: [
       { title: "AI Personalization Hook", desc: "Pakai Claude/GPT untuk generate opening line unik per lead berdasarkan Google review, post IG, atau berita terbaru mereka." },
       { title: "Sequence: 7-Touch Formula", desc: "D1: Email → D3: LinkedIn/IG DM → D5: Follow-up email → D8: WhatsApp → D14: Nilai tambah konten → D21: Last call → D30: Break-up email." },
@@ -84,7 +85,7 @@ const AI_PLAYBOOK = [
     ]
   },
   {
-    category: "📊 Meningkatkan Sales Metrics", color: "#a78bfa",
+    category: "📊 Meningkatkan Sales Metrics", color: "color-mix(in srgb, #a78bfa 55%, var(--app-text))",
     steps: [
       { title: "AI Scoring Leads", desc: "Pakai model sederhana: website ada? (20pts) → Review GMaps 4+ (20pts) → Aktif sosmed (20pts) → Kategori high-intent (20pts) → Budget signals (20pts). Score 70+ = prioritas utama." },
       { title: "Conversion Rate Optimization", desc: "Target: Cold email reply rate 5-15% | DM reply rate 20-35% | Meeting rate dari reply 40%+ | Close rate dari meeting 25%+." },
@@ -93,7 +94,7 @@ const AI_PLAYBOOK = [
     ]
   },
   {
-    category: "🤖 Stack AI Sales Modern", color: "#f59e0b",
+    category: "🤖 Stack AI Sales Modern", color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))",
     steps: [
       { title: "Prospecting: Clay.com", desc: "Build lead list dinamis dari 50+ sumber data. Auto-enrich + auto-personalize dengan AI waterfall." },
       { title: "Outreach: Instantly.ai / Lemlist", desc: "Kirim cold email skala besar (100-500/hari) dengan warming otomatis. Deliverability terjaga." },
@@ -577,7 +578,7 @@ export default function SalesTracker({ user }: { user: User }) {
         @media (max-width: 767px) {
           .sp-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; padding: 0 0 env(safe-area-inset-bottom, 0px); gap: 0; border-bottom: none; border-top: 1px solid var(--app-border); background: var(--app-nav); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
           .sp-nav-btn { flex: 1; flex-direction: column; gap: 3px; padding: 8px 0 6px; min-height: 56px; font-size: 11px; border-bottom: none; border-top: 2px solid transparent; }
-          .sp-nav-btn.is-on { background: transparent; border-top-color: #005eb0; color: #005eb0; }
+          .sp-nav-btn.is-on { background: transparent; border-top-color: #005eb0; color: var(--brand-text); }
           .sp-nav-icon { font-size: 19px; }
           .sp-subnav { padding: 10px 16px; position: sticky; top: 57px; z-index: 40; }
           .sp-main { padding: 16px 16px calc(96px + env(safe-area-inset-bottom, 0px)) !important; }
@@ -597,7 +598,7 @@ export default function SalesTracker({ user }: { user: User }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-mark.png" alt="SalesPal" width={32} height={32} style={{ display: "block", flexShrink: 0 }} />
-          <div style={{ fontSize: 22, fontWeight: 400, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "3px", color: "var(--app-text)", lineHeight: 1 }}>SALES<span style={{ color: "#005eb0" }}>PAL</span></div>
+          <div style={{ fontSize: 22, fontWeight: 400, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "3px", color: "var(--app-text)", lineHeight: 1 }}>SALES<span style={{ color: "var(--brand-text)" }}>PAL</span></div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           <span style={{ color: "#00cc6a", fontSize: 10, flexShrink: 0 }}>●</span>
@@ -655,17 +656,17 @@ export default function SalesTracker({ user }: { user: User }) {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 24 }}>
               {[
-                { label: "Total Leads", value: leads.length, sub: `${hotLeads.length} hot leads`, color: "#ff4444", icon: "👥" },
+                { label: "Total Leads", value: leads.length, sub: `${hotLeads.length} hot leads`, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", icon: "👥" },
                 { label: "Pipeline Value", value: `${(totalValue / 1000000).toFixed(1)}M`, sub: "estimasi total", color: "var(--ok)", icon: "💰" },
-                { label: "Conversion Rate", value: `${conversionRate}%`, sub: `${closedLeads.length} closed`, color: "#a78bfa", icon: "📈" },
-                { label: "Reply Rate", value: `${replyRate}%`, sub: `${repliedOutreach}/${outreach.length} outreach`, color: "#f59e0b", icon: "📬" },
-                { label: "Avg Lead Score", value: avgScore, sub: "dari 100", color: "#005eb0", icon: "⭐" },
-                { label: "Belum Tertagih", value: `${(receivable / 1000000).toFixed(1)}M`, sub: `${invoices.filter(i => balance(i) > 0).length} invoice terbuka`, color: "#ff9900", icon: "🧾" },
-                { label: "Rejections", value: rejections.length, sub: "perlu follow up", color: "#ff6b35", icon: "❌" },
+                { label: "Conversion Rate", value: `${conversionRate}%`, sub: `${closedLeads.length} closed`, color: "color-mix(in srgb, #a78bfa 55%, var(--app-text))", icon: "📈" },
+                { label: "Reply Rate", value: `${replyRate}%`, sub: `${repliedOutreach}/${outreach.length} outreach`, color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))", icon: "📬" },
+                { label: "Avg Lead Score", value: avgScore, sub: "dari 100", color: "var(--brand-text)", icon: "⭐" },
+                { label: "Belum Tertagih", value: `${(receivable / 1000000).toFixed(1)}M`, sub: `${invoices.filter(i => balance(i) > 0).length} invoice terbuka`, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", icon: "🧾" },
+                { label: "Rejections", value: rejections.length, sub: "perlu follow up", color: "color-mix(in srgb, #ff6b35 55%, var(--app-text))", icon: "❌" },
               ].map(s => (
                 <div key={s.label} className="stat-card-dash" style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "14px 14px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--app-text)", fontWeight: 600 }}><span aria-hidden="true">{s.icon}</span>{s.label}</div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: s.color, fontFamily: "'Plus Jakarta Sans', sans-serif", marginTop: 6, fontVariantNumeric: "tabular-nums" }}>{s.value}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: `color-mix(in srgb, ${s.color} 55%, var(--app-text))`, fontFamily: "'Plus Jakarta Sans', sans-serif", marginTop: 6, fontVariantNumeric: "tabular-nums" }}>{s.value}</div>
                   <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{s.sub}</div>
                 </div>
               ))}
@@ -702,7 +703,7 @@ export default function SalesTracker({ user }: { user: User }) {
                 return (
                   <div key={s} style={{ marginBottom: 12 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, color: statusColor[s], fontWeight: 600 }}>{s}</span>
+                      <span style={{ fontSize: 12, color: `color-mix(in srgb, ${statusColor[s]} 55%, var(--app-text))`, fontWeight: 600 }}>{s}</span>
                       <span style={{ fontSize: 11, color: "var(--app-muted)" }}>{count} leads · {pct.toFixed(0)}%</span>
                     </div>
                     <div style={{ background: "var(--app-inner)", borderRadius: 4, height: 8 }}>
@@ -749,8 +750,8 @@ export default function SalesTracker({ user }: { user: User }) {
                     {s}
                   </button>
                 ))}
-                <button onClick={() => setShowImport(true)} style={{ ...btnPrimary, background: "transparent", color: "#005eb0", border: "1px solid #005eb0" }}>⬆ IMPORT</button>
-                <button onClick={() => setShowAddLead(true)} style={btnPrimary}>+ ADD LEAD</button>
+                <button onClick={() => setShowImport(true)} style={{ ...btnPrimary, background: "transparent", color: "var(--brand-text)", border: "1px solid #005eb0" }}>⬆ Impor</button>
+                <button onClick={() => setShowAddLead(true)} style={btnPrimary}>+ Tambah lead</button>
               </div>
             </div>
             {filteredLeads.length === 0 ? (
@@ -760,7 +761,7 @@ export default function SalesTracker({ user }: { user: User }) {
                 <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>{leads.length === 0 ? "Mulai dengan import Excel/CSV, atau tambah manual." : `Ga ada lead berstatus "${filterStatus}". Coba filter lain.`}</div>
                 {leads.length === 0 ? (
                   <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-                    <button onClick={() => setShowImport(true)} style={{ ...btnPrimary, background: "transparent", color: "#005eb0", border: "1px solid #005eb0" }}>⬆ Import Excel/CSV</button>
+                    <button onClick={() => setShowImport(true)} style={{ ...btnPrimary, background: "transparent", color: "var(--brand-text)", border: "1px solid #005eb0" }}>⬆ Import Excel/CSV</button>
                     <button onClick={() => setShowAddLead(true)} style={btnPrimary}>+ Tambah Lead</button>
                   </div>
                 ) : (
@@ -770,14 +771,14 @@ export default function SalesTracker({ user }: { user: User }) {
             ) : isNarrow ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {filteredLeads.map(lead => (
-                  <div key={lead.id} className="lead-row" onClick={() => openLead(lead)} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 16, cursor: "pointer" }}>
+                  <div key={lead.id} className="lead-row" role="button" tabIndex={0} aria-label={`Buka lead ${lead.name}`} onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openLead(lead); } }} onClick={() => openLead(lead)} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 16, cursor: "pointer" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lead.name}</div>
                         <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{lead.contact || "—"} · {lead.category}</div>
                         {lead.nextActionDate && <div style={{ fontSize: 11, marginTop: 4, color: lead.nextActionDate < now ? "#ff4444" : lead.nextActionDate === now ? "#ff9900" : "var(--app-muted)" }}>📅 {lead.nextAction || "Follow-up"} · {longDate(lead.nextActionDate)}</div>}
                       </div>
-                      <span className="badge" style={{ background: statusBg[lead.status], color: statusColor[lead.status], border: `1px solid ${statusColor[lead.status]}30`, flexShrink: 0 }}>{lead.status}</span>
+                      <span className="badge" style={{ background: statusBg[lead.status], color: `color-mix(in srgb, ${statusColor[lead.status]} 55%, var(--app-text))`, border: `1px solid ${statusColor[lead.status]}30`, flexShrink: 0 }}>{lead.status}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, gap: 8 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -789,7 +790,7 @@ export default function SalesTracker({ user }: { user: User }) {
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ok)" }}>Rp {(lead.value / 1000000).toFixed(1)}M</span>
-                        <button onClick={(e) => { e.stopPropagation(); deleteLead(lead.id); }} aria-label={`Hapus lead ${lead.name}`} style={{ background: "transparent", border: "1px solid #ff444430", color: "#ff4444", borderRadius: 8, minWidth: 36, minHeight: 36, fontSize: 14, cursor: "pointer" }}>🗑</button>
+                        <button onClick={(e) => { e.stopPropagation(); deleteLead(lead.id); }} aria-label={`Hapus lead ${lead.name}`} style={{ background: "transparent", border: "1px solid #ff444430", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderRadius: 8, minWidth: 36, minHeight: 36, fontSize: 14, cursor: "pointer" }}>🗑</button>
                       </div>
                     </div>
                   </div>
@@ -807,7 +808,7 @@ export default function SalesTracker({ user }: { user: User }) {
                 </thead>
                 <tbody>
                   {filteredLeads.map(lead => (
-                    <tr key={lead.id} className="lead-row" onClick={() => openLead(lead)} style={{ borderBottom: "1px solid var(--app-inner)" }}>
+                    <tr key={lead.id} className="lead-row" tabIndex={0} aria-label={`Buka lead ${lead.name}`} onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openLead(lead); } }} onClick={() => openLead(lead)} style={{ borderBottom: "1px solid var(--app-inner)" }}>
                       <td style={{ padding: "14px 16px" }}>
                         <div style={{ fontSize: 13, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{lead.name}</div>
                         <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{lead.category}</div>
@@ -818,7 +819,7 @@ export default function SalesTracker({ user }: { user: User }) {
                         <span style={{ fontSize: 11, background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 4, padding: "3px 8px" }}>{lead.source}</span>
                       </td>
                       <td style={{ padding: "14px 16px" }}>
-                        <span className="badge" style={{ background: statusBg[lead.status], color: statusColor[lead.status], border: `1px solid ${statusColor[lead.status]}30` }}>{lead.status}</span>
+                        <span className="badge" style={{ background: statusBg[lead.status], color: `color-mix(in srgb, ${statusColor[lead.status]} 55%, var(--app-text))`, border: `1px solid ${statusColor[lead.status]}30` }}>{lead.status}</span>
                       </td>
                       <td style={{ padding: "14px 16px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -831,7 +832,7 @@ export default function SalesTracker({ user }: { user: User }) {
                       <td style={{ padding: "14px 16px", fontSize: 13, fontWeight: 700, color: "var(--ok)" }}>Rp {(lead.value / 1000000).toFixed(1)}M</td>
                       <td style={{ padding: "14px 16px", fontSize: 11, color: "var(--app-muted)" }}>{lead.lastContact}</td>
                       <td style={{ padding: "14px 16px" }}>
-                        <button onClick={(e) => { e.stopPropagation(); deleteLead(lead.id); }} aria-label={`Hapus lead ${lead.name}`} style={{ background: "transparent", border: "1px solid #ff444430", color: "#ff4444", borderRadius: 6, padding: "6px 10px", fontSize: 11, cursor: "pointer" }}>Del</button>
+                        <button onClick={(e) => { e.stopPropagation(); deleteLead(lead.id); }} aria-label={`Hapus lead ${lead.name}`} style={{ background: "transparent", border: "1px solid #ff444430", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderRadius: 6, padding: "6px 10px", fontSize: 11, cursor: "pointer" }}>Del</button>
                       </td>
                     </tr>
                   ))}
@@ -860,18 +861,18 @@ export default function SalesTracker({ user }: { user: User }) {
                 <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Outreach Tracker</div>
                 <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 2 }}>Track semua DM, email, dan WA lo</div>
               </div>
-              <button onClick={() => setShowAddOutreach(true)} style={btnPrimary}>+ LOG OUTREACH</button>
+              <button onClick={() => setShowAddOutreach(true)} style={btnPrimary}>+ Catat outreach</button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 24 }}>
               {[
-                { label: "Total Sent", value: outreach.length, color: "#005eb0" },
+                { label: "Total Sent", value: outreach.length, color: "var(--brand-text)" },
                 { label: "Replied", value: outreach.filter(o => o.status === "Replied").length, color: "var(--ok)" },
-                { label: "Seen/Open", value: outreach.filter(o => o.status === "Seen").length, color: "#f59e0b" },
+                { label: "Seen/Open", value: outreach.filter(o => o.status === "Seen").length, color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))" },
                 { label: "No Response", value: outreach.filter(o => o.status === "No Response").length, color: "var(--app-muted)" },
-                { label: "Rejected", value: outreach.filter(o => o.status === "Rejected").length, color: "#ff4444" },
+                { label: "Rejected", value: outreach.filter(o => o.status === "Rejected").length, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" },
               ].map(s => (
                 <div key={s.label} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 10, padding: 16 }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: s.color, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{s.value}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: `color-mix(in srgb, ${s.color} 55%, var(--app-text))`, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{s.value}</div>
                   <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>{s.label}</div>
                 </div>
               ))}
@@ -937,7 +938,7 @@ export default function SalesTracker({ user }: { user: User }) {
                       <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{r.leadName}</div>
                       <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{r.channel} · {r.date}</div>
                     </div>
-                    <span className="badge" style={{ background: "#ff44441a", color: "#ff4444", border: "1px solid #ff444430" }}>REJECTED</span>
+                    <span className="badge" style={{ background: "#ff44441a", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444430" }}>REJECTED</span>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12 }}>
@@ -946,7 +947,7 @@ export default function SalesTracker({ user }: { user: User }) {
                     </div>
                     <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12 }}>
                       <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 4 }}>FOLLOW-UP DATE</div>
-                      <div style={{ fontSize: 12, color: "#f59e0b" }}>{r.followUpDate || "Belum dijadwal"}</div>
+                      <div style={{ fontSize: 12, color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))" }}>{r.followUpDate || "Belum dijadwal"}</div>
                     </div>
                   </div>
                   <div style={{ background: "#00ff881a", borderRadius: 8, padding: 12, marginTop: 12, border: "1px solid #00ff8820" }}>
@@ -991,15 +992,15 @@ export default function SalesTracker({ user }: { user: User }) {
               ))}
             </div>
             <div style={{ background: "var(--app-card)", border: "1px solid #a78bfa40", borderRadius: 14, padding: 24, marginTop: 24 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: "#a78bfa", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>🎯 Target Benchmark Sales Metrics Lo</div>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: "color-mix(in srgb, #a78bfa 55%, var(--app-text))", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>🎯 Target Benchmark Sales Metrics Lo</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
                 {[
                   { metric: "Cold Email Reply Rate", target: "5–15%", world: "< 3%", color: "var(--ok)" },
-                  { metric: "DM Instagram Reply", target: "20–35%", world: "< 10%", color: "#f59e0b" },
-                  { metric: "Meeting Rate dari Reply", target: "40%+", world: "< 20%", color: "#005eb0" },
-                  { metric: "Close Rate dari Meeting", target: "25–35%", world: "< 15%", color: "#a78bfa" },
-                  { metric: "Follow-up Response Rate", target: "30%+", world: "< 10%", color: "#ff6b35" },
-                  { metric: "Avg Deal Cycle", target: "< 14 hari", world: "> 30 hari", color: "#ff4444" },
+                  { metric: "DM Instagram Reply", target: "20–35%", world: "< 10%", color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))" },
+                  { metric: "Meeting Rate dari Reply", target: "40%+", world: "< 20%", color: "var(--brand-text)" },
+                  { metric: "Close Rate dari Meeting", target: "25–35%", world: "< 15%", color: "color-mix(in srgb, #a78bfa 55%, var(--app-text))" },
+                  { metric: "Follow-up Response Rate", target: "30%+", world: "< 10%", color: "color-mix(in srgb, #ff6b35 55%, var(--app-text))" },
+                  { metric: "Avg Deal Cycle", target: "< 14 hari", world: "> 30 hari", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" },
                 ].map(m => (
                   <div key={m.metric} style={{ background: "var(--app-inner)", borderRadius: 10, padding: 14 }}>
                     <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 6 }}>{m.metric}</div>
@@ -1039,8 +1040,8 @@ export default function SalesTracker({ user }: { user: User }) {
               </div>
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={addLead} style={btnPrimary}>SIMPAN LEAD</button>
-              <button onClick={() => setShowAddLead(false)} style={{ ...btnPrimary, background: "var(--app-border)", color: "var(--app-text)" }}>BATAL</button>
+              <button onClick={addLead} style={btnPrimary}>Simpan lead</button>
+              <button onClick={() => setShowAddLead(false)} style={{ ...btnPrimary, background: "var(--app-border)", color: "var(--app-text)" }}>Batal</button>
             </div>
           </div>
         </div>
@@ -1066,8 +1067,8 @@ export default function SalesTracker({ user }: { user: User }) {
               </div>
             ))}
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={addOutreach} style={btnPrimary}>SIMPAN</button>
-              <button onClick={() => setShowAddOutreach(false)} style={{ ...btnPrimary, background: "var(--app-border)", color: "var(--app-text)" }}>BATAL</button>
+              <button onClick={addOutreach} style={btnPrimary}>Simpan</button>
+              <button onClick={() => setShowAddOutreach(false)} style={{ ...btnPrimary, background: "var(--app-border)", color: "var(--app-text)" }}>Batal</button>
             </div>
           </div>
         </div>
@@ -1097,8 +1098,8 @@ export default function SalesTracker({ user }: { user: User }) {
               <input type="date" value={newRejection.followUpDate} onChange={e => setNewRejection({ ...newRejection, followUpDate: e.target.value })} style={inputStyle} />
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={addRejection} style={btnPrimary}>SIMPAN</button>
-              <button onClick={() => setShowAddRejection(false)} style={{ ...btnPrimary, background: "var(--app-border)", color: "var(--app-text)" }}>BATAL</button>
+              <button onClick={addRejection} style={btnPrimary}>Simpan</button>
+              <button onClick={() => setShowAddRejection(false)} style={{ ...btnPrimary, background: "var(--app-border)", color: "var(--app-text)" }}>Batal</button>
             </div>
           </div>
         </div>
@@ -1147,7 +1148,7 @@ export default function SalesTracker({ user }: { user: User }) {
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-              <button onClick={() => startQuote(liveLead)} style={{ ...btnPrimary, flex: 1 }}>BUAT PENAWARAN</button>
+              <button onClick={() => startQuote(liveLead)} style={{ ...btnPrimary, flex: 1 }}>Buat penawaran</button>
               {liveLead.phone && <a href={waLink(liveLead.phone, `Halo ${liveLead.contact || liveLead.name}, `)} target="_blank" rel="noreferrer" style={{ ...btnPrimary, background: "#25D366", textDecoration: "none", textAlign: "center" }}>WA</a>}
             </div>
             <button onClick={() => setSelectedLead(null)} style={{ ...btnPrimary, width: "100%", marginTop: 8, background: "var(--app-border)", color: "var(--app-text)" }}>TUTUP</button>
@@ -1181,14 +1182,14 @@ export default function SalesTracker({ user }: { user: User }) {
                   <div style={{ fontSize: 13, fontWeight: 700 }}>Versi aplikasi</div>
                   <div style={{ fontSize: 12, color: "var(--app-muted)", fontFamily: "monospace", marginTop: 2 }}>{APP_VERSION}</div>
                 </div>
-                <button onClick={checkUpdate} disabled={checkingUpdate} style={{ ...btnPrimary, background: "transparent", color: "#005eb0", border: "1px solid #005eb0", padding: "8px 14px", opacity: checkingUpdate ? 0.6 : 1 }}>
+                <button onClick={checkUpdate} disabled={checkingUpdate} style={{ ...btnPrimary, background: "transparent", color: "var(--brand-text)", border: "1px solid #005eb0", padding: "8px 14px", opacity: checkingUpdate ? 0.6 : 1 }}>
                   {checkingUpdate ? "Cek..." : "Cek update"}
                 </button>
               </div>
               {updateInfo && (
                 <div style={{ marginTop: 12, fontSize: 12 }}>
                   {updateInfo.error ? (
-                    <span style={{ color: "#ff4444" }}>Gagal cek update. Coba lagi.</span>
+                    <span style={{ color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}>Gagal cek update. Coba lagi.</span>
                   ) : updateInfo.hasUpdate ? (
                     <div>
                       <div style={{ color: "var(--ok)", fontWeight: 700, marginBottom: 8 }}>🎉 Update tersedia (versi {updateInfo.latest})</div>
@@ -1208,7 +1209,7 @@ export default function SalesTracker({ user }: { user: User }) {
             </button>
 
             {/* Logout */}
-            <button onClick={handleLogout} style={{ width: "100%", background: "transparent", border: "1px solid #ff444440", borderRadius: 12, padding: 14, color: "#ff4444", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={handleLogout} style={{ width: "100%", background: "transparent", border: "1px solid #ff444440", borderRadius: 12, padding: 14, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
               Logout
             </button>
           </div>
@@ -1263,7 +1264,7 @@ export default function SalesTracker({ user }: { user: User }) {
                       <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>Screenshot chat, tabel, atau kartu nama · JPG/PNG</div>
                     </label>
                     {scanError && (
-                      <div style={{ fontSize: 12, color: "#ff4444", background: "#ff44440d", border: "1px solid #ff444430", borderRadius: 8, padding: "10px 14px", marginBottom: 16 }}>{scanError}</div>
+                      <div style={{ fontSize: 12, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", background: "#ff44440d", border: "1px solid #ff444430", borderRadius: 8, padding: "10px 14px", marginBottom: 16 }}>{scanError}</div>
                     )}
                   </>
                 )}
@@ -1275,7 +1276,7 @@ export default function SalesTracker({ user }: { user: User }) {
                       {IMPORT_FIELDS.map(f => (
                         <div key={f.key}>
                           <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 4 }}>
-                            {f.label}{f.required && <span style={{ color: "#ff4444" }}> *</span>}
+                            {f.label}{f.required && <span style={{ color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}> *</span>}
                           </label>
                           <select value={colMap[f.key] || ""} onChange={e => setColMap({ ...colMap, [f.key]: e.target.value })} style={inputStyle} aria-label={`Kolom untuk ${f.label}`}>
                             <option value="">— lewati —</option>
@@ -1311,7 +1312,7 @@ export default function SalesTracker({ user }: { user: User }) {
                     </div>
 
                     {!colMap.name && (
-                      <div style={{ fontSize: 12, color: "#ff4444", marginBottom: 12 }}>⚠️ Kolom &quot;Nama Perusahaan&quot; wajib dipetakan.</div>
+                      <div style={{ fontSize: 12, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", marginBottom: 12 }}>⚠️ Kolom &quot;Nama Perusahaan&quot; wajib dipetakan.</div>
                     )}
 
                     <div style={{ display: "flex", gap: 10 }}>
@@ -1329,8 +1330,10 @@ export default function SalesTracker({ user }: { user: User }) {
       )}
 
       {/* Global Quick Pitch floating button */}
-      {/* Hunting has the same templates on the page; the button would sit on Kirim WA. */}
-      {activeTab !== "Hunting" && <QuickPitch uid={uid} />}
+      {/* Always mounted: it seeds the starter templates Hunting shows too. On
+          Hunting the templates are on the page, and the button would sit on Kirim WA. */}
+      <QuickPitch uid={uid} hideButton={activeTab === "Hunting"} />
+      <ModalA11y />
     </div>
   );
 }

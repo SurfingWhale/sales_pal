@@ -50,9 +50,16 @@ export const modalBox: CSSProperties = {
 export const heading: CSSProperties = { fontSize: 20, fontWeight: 700, fontFamily: font };
 export const subheading: CSSProperties = { color: "var(--app-muted)", fontSize: 12, marginTop: 2 };
 
+// A status or accent color used as text. Raw orange, amber, green and violet
+// sit near 2–3:1 on the light card; mixed 55% toward the text color they keep
+// their hue and clear 4.5:1 on both themes (measured, docs/prd/PRD-004).
+export function ink(color: string): string {
+  return `color-mix(in srgb, ${color} 55%, var(--app-text))`;
+}
+
 export function badge(color: string): CSSProperties {
   return {
     display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-    background: `${color}1a`, color, border: `1px solid ${color}40`, whiteSpace: "nowrap",
+    background: `${color}1a`, color: ink(color), border: `1px solid ${color}40`, whiteSpace: "nowrap",
   };
 }

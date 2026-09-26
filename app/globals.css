@@ -24,7 +24,8 @@ html, body {
   --surface: #f5f7fa;
 
   /* Success/positive — accessible on light surfaces (neon green failed WCAG on white) */
-  --ok: #00a862;
+  --ok: #0a8052;  /* green as text: 5.0:1 on the card (was #00a862, 3.1:1) */
+  --brand-text: #005eb0;
 
   /* App dashboard theme — light (default) */
   --app-bg: #f0f2f5;
@@ -40,6 +41,7 @@ html, body {
 
 [data-theme="dark"] {
   --ok: #00e07a;
+  --brand-text: #58a6ff;  /* brand blue as text on dark: #005eb0 was 2.9:1 */
 
   --app-bg: #010409;
   --app-card: #0d1117;
@@ -53,6 +55,11 @@ html, body {
 }
 
 /* ---- Accessibility foundations (better-accessibility) ---- */
+
+/* iOS Safari zooms the page into any field under 16px. */
+@media (max-width: 767px) {
+  input, select, textarea { font-size: 16px !important; }
+}
 
 /* Visible keyboard focus on every interactive element, incl. inline-styled ones */
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {

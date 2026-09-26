@@ -55,15 +55,15 @@ export default function Services({ uid, services, business }: { uid: string; ser
           <div style={subheading}>Daftar jasa yang lo jual. Dipakai buat nyusun penawaran.</div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => setProfile(business)} style={btnGhost}>INFO BISNIS</button>
-          <button onClick={() => setEditing(BLANK)} style={btnPrimary}>+ PAKET</button>
+          <button onClick={() => setProfile(business)} style={btnGhost}>Info bisnis</button>
+          <button onClick={() => setEditing(BLANK)} style={btnPrimary}>+ Paket</button>
         </div>
       </div>
 
       {!profileReady && (
         <div style={{ background: "#ff99000d", border: "1px solid #ff990040", borderRadius: 10, padding: 14, marginBottom: 20, fontSize: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <span><b>Lengkapi info bisnis</b> — nama, WA, dan rekening muncul di penawaran & invoice.</span>
-          <button onClick={() => setProfile(business)} style={{ ...chip, color: "#ff9900", borderColor: "#ff990060" }}>Isi sekarang</button>
+          <button onClick={() => setProfile(business)} style={{ ...chip, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", borderColor: "#ff990060" }}>Isi sekarang</button>
         </div>
       )}
 
@@ -93,7 +93,7 @@ export default function Services({ uid, services, business }: { uid: string; ser
                 <span style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", fontWeight: 600 }}>{s.category.toUpperCase()}</span>
                 <div style={{ display: "flex", gap: 6 }}>
                   <button onClick={() => setEditing({ ...s, price: String(s.price) })} aria-label={`Edit ${s.name}`} style={chip}>✎</button>
-                  <button onClick={() => remove(s.id)} aria-label={`Hapus ${s.name}`} style={{ ...chip, borderColor: "#ff444440", color: "#ff4444" }}>🗑</button>
+                  <button onClick={() => remove(s.id)} aria-label={`Hapus ${s.name}`} style={{ ...chip, borderColor: "#ff444440", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}>🗑</button>
                 </div>
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, fontFamily: font }}>{s.name}</div>
@@ -138,8 +138,8 @@ export default function Services({ uid, services, business }: { uid: string; ser
               </div>
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={save} disabled={!editing.name.trim()} style={{ ...btnPrimary, opacity: editing.name.trim() ? 1 : 0.5 }}>SIMPAN</button>
-              <button onClick={() => setEditing(null)} style={btnMuted}>BATAL</button>
+              <button onClick={save} disabled={!editing.name.trim()} style={{ ...btnPrimary, opacity: editing.name.trim() ? 1 : 0.5 }}>Simpan</button>
+              <button onClick={() => setEditing(null)} style={btnMuted}>Batal</button>
             </div>
           </div>
         </div>
@@ -170,8 +170,8 @@ export default function Services({ uid, services, business }: { uid: string; ser
               </div>
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={saveProfile} style={btnPrimary}>SIMPAN</button>
-              <button onClick={() => setProfile(null)} style={btnMuted}>BATAL</button>
+              <button onClick={saveProfile} style={btnPrimary}>Simpan</button>
+              <button onClick={() => setProfile(null)} style={btnMuted}>Batal</button>
             </div>
           </div>
         </div>

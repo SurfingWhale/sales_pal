@@ -154,7 +154,7 @@ export default function Invoices({ uid, invoices, business }: { uid: string; inv
                   )}
                   <button onClick={() => copy(inv)} style={{ ...chip, color: copied === inv.id ? "var(--ok)" : "var(--app-text)" }}>{copied === inv.id ? "✓ Tersalin" : "Copy teks"}</button>
                   <button onClick={() => setPrinting(inv)} style={chip}>Cetak / PDF</button>
-                  <button onClick={() => remove(inv)} aria-label={`Hapus ${inv.number}`} style={{ ...chip, marginLeft: "auto", color: "#ff4444", borderColor: "#ff444440" }}>🗑</button>
+                  <button onClick={() => remove(inv)} aria-label={`Hapus ${inv.number}`} style={{ ...chip, marginLeft: "auto", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}>🗑</button>
                 </div>
               </div>
             );
@@ -174,8 +174,8 @@ export default function Invoices({ uid, invoices, business }: { uid: string; inv
             <label style={label}>Keterangan</label>
             <input value={paying.note} onChange={e => setPaying({ ...paying, note: e.target.value })} style={inputStyle} placeholder="DP / Pelunasan / Termin 2" />
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={savePayment} style={btnPrimary}>SIMPAN</button>
-              <button onClick={() => setPaying(null)} style={btnMuted}>BATAL</button>
+              <button onClick={savePayment} style={btnPrimary}>Simpan</button>
+              <button onClick={() => setPaying(null)} style={btnMuted}>Batal</button>
             </div>
           </div>
         </div>
