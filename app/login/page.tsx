@@ -151,7 +151,7 @@ export default function LoginPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 32, justifyContent: "center" }}>
           <Image src="/logo.png" alt="SalesPal" width={40} height={40} style={{ borderRadius: 12, objectFit: "contain", background: "#0c1a3a" }} />
           <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 30, fontWeight: 400, letterSpacing: 3, color: "var(--app-text)" }}>
-            SALES<em style={{ color: "#005eb0", fontStyle: "normal" }}>PAL</em>
+            SALES<em style={{ color: "var(--brand-text)", fontStyle: "normal" }}>PAL</em>
           </span>
         </div>
 
@@ -257,7 +257,7 @@ export default function LoginPage() {
           {mode === "login" ? "Belum punya akun? " : "Udah punya akun? "}
           <button
             onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}
-            style={{ color: "#005eb0", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600 }}
+            style={{ color: "var(--brand-text)", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600 }}
           >
             {mode === "login" ? "Daftar gratis" : "Masuk"}
           </button>

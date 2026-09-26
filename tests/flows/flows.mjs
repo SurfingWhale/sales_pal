@@ -30,9 +30,9 @@ const expectText = async (page, text, ms = 8000) => page.getByText(text).first()
 
 async function addLead(page, name) {
   await go(page, "Leads");
-  await page.getByRole("button", { name: /add lead/i }).click();
+  await page.getByRole("button", { name: /tambah lead/i }).click();
   await modal(page).locator("input").first().fill(name);
-  await modal(page).getByRole("button", { name: "SIMPAN LEAD" }).click();
+  await modal(page).getByRole("button", { name: "Simpan lead" }).click();
   await expectText(page, name);
 }
 
@@ -130,25 +130,25 @@ export const flows = [
       await t.step("add a lead", () => addLead(page, "Bakso Flow"));
       await t.step("fill in Info bisnis", async () => {
         await go(page, "Jualan", "Paket");
-        await page.getByRole("button", { name: "INFO BISNIS" }).click();
+        await page.getByRole("button", { name: "Info bisnis" }).click();
         const ins = modal(page).locator("input");
         for (let i = 0; i < await ins.count(); i++) await ins.nth(i).fill(["Studio Flow", "08123456789", "BCA", "1234567", "Flow"][i] ?? "x");
-        await modal(page).getByRole("button", { name: "SIMPAN" }).click();
+        await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
       });
       await t.step("add a package", async () => {
-        await page.getByRole("button", { name: "+ PAKET" }).click();
+        await page.getByRole("button", { name: "+ Paket" }).click();
         const ins = modal(page).locator("input");
         await ins.nth(0).fill("Foto Menu Flow"); await ins.nth(1).fill("1500000");
-        await modal(page).getByRole("button", { name: "SIMPAN" }).click();
+        await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
         await expectText(page, "Foto Menu Flow");
       });
       await t.step("create a quote for the lead from the package", async () => {
         await go(page, "Jualan", "Penawaran");
-        await page.getByRole("button", { name: "+ PENAWARAN" }).click();
+        await page.getByRole("button", { name: "+ Penawaran" }).click();
         const sel = modal(page).locator("select").first();
         await sel.selectOption(await sel.locator("option", { hasText: "Bakso Flow" }).getAttribute("value"));
         await modal(page).locator("select", { has: page.locator('option:text("+ dari paket…")') }).selectOption({ index: 1 });
-        await modal(page).getByRole("button", { name: "SIMPAN" }).click();
+        await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
         await expectText(page, "Rp 1.500.000");
       });
       await t.step("mark sent, then accepted", async () => {
@@ -166,7 +166,7 @@ export const flows = [
       await t.step("record the DP → DP masuk", async () => {
         await page.getByRole("button", { name: "+ Catat pembayaran" }).click();
         await modal(page).locator("input").first().fill("750000");
-        await modal(page).getByRole("button", { name: "SIMPAN" }).click();
+        await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
         await page.getByText("DP masuk").first().waitFor();
       });
     },
@@ -232,6 +232,34 @@ export const flows = [
         await go(page, "Beranda");
         await page.getByRole("button", { name: "Kampanye" }).click();
         await expectText(page, "threads/flow");
+      });
+    },
+  },
+  {
+    name: "dialogs work from the keyboard",
+    async run(t) {
+      const { page } = t;
+      await t.step("sign up", () => signup(t));
+      await t.step("a lead opens with Enter", async () => {
+        await addLead(page, "Keyboard Flow");
+        await page.locator(".lead-row", { hasText: "Keyboard Flow" }).first().focus();
+        await page.keyboard.press("Enter");
+        await page.getByRole("dialog").waitFor();
+      });
+      await t.step("Escape closes it and focus returns to the row", async () => {
+        await page.keyboard.press("Escape");
+        await page.getByRole("dialog").waitFor({ state: "detached" });
+        const back = await page.evaluate(() => document.activeElement?.getAttribute("aria-label"));
+        if (back !== "Buka lead Keyboard Flow") throw new Error(`focus went to "${back}"`);
+      });
+      await t.step("the add-lead dialog focuses its first field and keeps Tab inside", async () => {
+        await page.getByRole("button", { name: /tambah lead/i }).click();
+        const tag = await page.evaluate(() => document.activeElement?.tagName);
+        if (tag !== "INPUT") throw new Error(`focus on ${tag}`);
+        for (let i = 0; i < 25; i++) await page.keyboard.press("Tab");
+        const inside = await page.evaluate(() => !!document.activeElement?.closest("[role=dialog]"));
+        if (!inside) throw new Error("Tab left the dialog");
+        await page.keyboard.press("Escape");
       });
     },
   },

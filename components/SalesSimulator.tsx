@@ -83,7 +83,7 @@ export default function SalesSimulator() {
                   background: "var(--app-card)", border: `2px solid ${a.color}25`,
                   borderRadius: 16, padding: 24, textAlign: "left",
                   cursor: "pointer", color: "inherit", fontFamily: "inherit",
-                  transition: "all 0.15s",
+                  transition: "background-color 0.15s, color 0.15s, border-color 0.15s",
                 }}
                 onMouseEnter={e => {
                   (e.currentTarget as HTMLElement).style.borderColor = a.color;
@@ -216,7 +216,7 @@ export default function SalesSimulator() {
                 </div>
                 <div style={{ background: "#005eb01a", borderRadius: 8, padding: "10px 14px", border: "1px solid #005eb015" }}>
                   <span style={{ fontSize: 10, color: "var(--ok)", fontWeight: 700, letterSpacing: "1px" }}>💡 WHY IT WORKS&nbsp;&nbsp;</span>
-                  <span style={{ fontSize: 12, color: "#8b949e" }}>{s.tips}</span>
+                  <span style={{ fontSize: 12, color: "color-mix(in srgb, #8b949e 55%, var(--app-text))" }}>{s.tips}</span>
                 </div>
               </div>
             ))}

@@ -133,7 +133,7 @@ export default function Quotes({ uid, quotes, invoices, leads, services, busines
           <div style={heading}>Penawaran</div>
           <div style={subheading}>Susun dari paket, kirim lewat WA, pantau sampai disetujui.</div>
         </div>
-        <button onClick={() => setEditing(blank())} style={btnPrimary}>+ PENAWARAN</button>
+        <button onClick={() => setEditing(blank())} style={btnPrimary}>+ Penawaran</button>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
@@ -204,7 +204,7 @@ export default function Quotes({ uid, quotes, invoices, leads, services, busines
                   {q.status === "Terkirim" && (
                     <>
                       <button onClick={() => setStatus(q, "Disetujui")} style={{ ...chip, color: "var(--ok)", borderColor: "#00a86260" }}>✓ Disetujui</button>
-                      <button onClick={() => setStatus(q, "Ditolak")} style={{ ...chip, color: "#ff4444", borderColor: "#ff444440" }}>✗ Ditolak</button>
+                      <button onClick={() => setStatus(q, "Ditolak")} style={{ ...chip, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}>✗ Ditolak</button>
                     </>
                   )}
                   {q.status === "Draft" && <button onClick={() => setStatus(q, "Terkirim")} style={chip}>Tandai terkirim</button>}
@@ -212,9 +212,9 @@ export default function Quotes({ uid, quotes, invoices, leads, services, busines
                     <button onClick={() => makeInvoice(q)} style={{ ...chip, background: "#005eb0", color: "#fff", border: "none", fontWeight: 700 }}>Buat invoice →</button>
                   )}
                   {q.invoiceId && <span style={{ ...chip, cursor: "default", color: "var(--ok)" }}>Invoice dibuat</span>}
-                  <button onClick={() => remove(q)} aria-label={`Hapus ${q.number}`} style={{ ...chip, marginLeft: "auto", color: "#ff4444", borderColor: "#ff444440" }}>🗑</button>
+                  <button onClick={() => remove(q)} aria-label={`Hapus ${q.number}`} style={{ ...chip, marginLeft: "auto", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}>🗑</button>
                 </div>
-                {!waNumber(q.phone) && <div style={{ fontSize: 11, color: "#ff9900", marginTop: 8 }}>Belum ada nomor WA — Kirim WA akan minta pilih kontak.</div>}
+                {!waNumber(q.phone) && <div style={{ fontSize: 11, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 8 }}>Belum ada nomor WA — Kirim WA akan minta pilih kontak.</div>}
               </div>
             );
           })}
@@ -270,7 +270,7 @@ export default function Quotes({ uid, quotes, invoices, leads, services, busines
                   <input value={it.name} onChange={e => setItem(i, { name: e.target.value })} style={{ ...inputStyle, padding: "8px 10px", flex: "1 1 260px", width: "auto", minWidth: 0 }} placeholder="Deskripsi" aria-label="Deskripsi item" />
                   <input inputMode="numeric" value={it.qty || ""} onChange={e => setItem(i, { qty: num(e.target.value) })} style={{ ...inputStyle, padding: "8px 6px", textAlign: "center", flex: "0 0 56px" }} aria-label="Qty" />
                   <input inputMode="numeric" value={it.price ? it.price.toLocaleString("id-ID") : ""} onChange={e => setItem(i, { price: num(e.target.value) })} style={{ ...inputStyle, padding: "8px 10px", textAlign: "right", flex: "1 1 110px", width: "auto", minWidth: 0 }} placeholder="Harga" aria-label="Harga" />
-                  <button onClick={() => setEditing({ ...editing, items: editing.items.filter((_, n) => n !== i) })} aria-label="Hapus item" style={{ ...chip, padding: "8px 0", flex: "0 0 36px", color: "#ff4444", borderColor: "#ff444440" }}>×</button>
+                  <button onClick={() => setEditing({ ...editing, items: editing.items.filter((_, n) => n !== i) })} aria-label="Hapus item" style={{ ...chip, padding: "8px 0", flex: "0 0 36px", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}>×</button>
                 </div>
               ))}
             </div>
@@ -303,8 +303,8 @@ export default function Quotes({ uid, quotes, invoices, leads, services, busines
 
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
               <button onClick={save} disabled={!editing.leadName.trim() || editing.items.length === 0}
-                style={{ ...btnPrimary, opacity: !editing.leadName.trim() || editing.items.length === 0 ? 0.5 : 1 }}>SIMPAN</button>
-              <button onClick={() => setEditing(null)} style={btnMuted}>BATAL</button>
+                style={{ ...btnPrimary, opacity: !editing.leadName.trim() || editing.items.length === 0 ? 0.5 : 1 }}>Simpan</button>
+              <button onClick={() => setEditing(null)} style={btnMuted}>Batal</button>
             </div>
           </div>
         </div>
