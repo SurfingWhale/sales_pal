@@ -9,8 +9,9 @@ import { auth, db } from "@/lib/firebase";
 import SalesSimulator from "@/components/SalesSimulator";
 import ScriptLibrary from "@/components/ScriptLibrary";
 import QuickPitch from "@/components/QuickPitch";
+import HuntingMode from "@/components/HuntingMode";
 
-const TABS = ["Dashboard", "Leads", "Outreach", "Rejection Log", "Simulator", "Script Library", "AI Playbook"];
+const TABS = ["Dashboard", "Leads", "Hunting", "Outreach", "Rejection Log", "Simulator", "Script Library", "AI Playbook"];
 
 interface Lead {
   id: string; name: string; contact: string; source: string; status: string;
@@ -867,6 +868,9 @@ export default function SalesTracker({ user }: { user: User }) {
 
         {/* SCRIPT LIBRARY */}
         {activeTab === "Script Library" && <ScriptLibrary />}
+
+        {/* HUNTING MODE */}
+        {activeTab === "Hunting" && <HuntingMode uid={uid} />}
 
         {/* AI PLAYBOOK */}
         {activeTab === "AI Playbook" && (
