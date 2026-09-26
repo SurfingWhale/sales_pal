@@ -14,3 +14,8 @@ then here.
   `firebase deploy --only firestore:rules --project sales-pal`.
 - This repository is public: the rules hold the owner's sign-in email and no
   other personal detail. Keep it that way.
+- **Before a PR, run `npm run test:flows`** (and `DESKTOP=1 npm run test:flows`).
+  It clicks through every flow against the Firebase emulators and writes
+  `tests/flows/out/report.md` with the failing step and a screenshot. Needs
+  Java (`brew install openjdk@21`). A new feature gets a flow in
+  `tests/flows/flows.mjs`.
