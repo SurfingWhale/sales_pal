@@ -80,3 +80,15 @@ Tambahan di luar draft: target DM harian (default 20, `settings/hunting.dailyGoa
 2. Hunting Mode tab: target + deck + log 1-tap → tulis ke `hunts`.
 3. Panel eval per template (response/win rate).
 4. "Jadiin Lead" bridge ke Leads.
+
+---
+
+## 8. Balas cepat (2026-09-27)
+
+Begitu DM dapat jawaban, tombol **💡 Balas** di baris log membuka saran balasan:
+- **Dibales / Tertarik** → *Lanjut ngobrol*: tanya kebutuhan, kirim contoh + paket, ajak jadwal.
+- **Ditolak** → keberatan ditebak dari alasan yang dicatat ("mahal" → Harga Mahal, "udah punya fotografer" → Sudah Punya, "nanti" → Nanti Dulu, "sibuk" → Lagi Sibuk, lainnya → Belum Yakin), lalu skrip dari Script Library, satu per tipe pelanggan.
+- **Ghosting** → skrip Di-ghosting.
+- Santai / Formal, `{nama}` terisi, Copy; di WA langsung **Kirim WA** ke nomornya, di Threads/IG **Buka chat ↗** ke profilnya.
+
+Logika di `lib/replies.ts`; flow test `hunting` mengecek tebakan keberatan, Copy, gaya, dan topik.
