@@ -15,6 +15,7 @@ import Quotes, { LeadRef } from "@/components/Quotes";
 import Invoices from "@/components/Invoices";
 import Hunting from "@/components/Hunting";
 import ClientHub from "@/components/ClientHub";
+import GuildHub from "@/components/GuildHub";
 import LeadSources from "@/components/LeadSources";
 import ModalA11y from "@/components/ModalA11y";
 import { Hunt, useHuntGoal } from "@/lib/hunting";
@@ -30,7 +31,7 @@ const SECTIONS: { id: string; label: string; icon: string; tabs: string[] }[] = 
   { id: "hunt", label: "Hunting", icon: "🎯", tabs: ["Hunting"] },
   { id: "leads", label: "Leads", icon: "👥", tabs: ["Leads"] },
   { id: "sell", label: "Jualan", icon: "💼", tabs: ["Penawaran", "Invoice", "Paket"] },
-  { id: "more", label: "Lainnya", icon: "☰", tabs: ["Report Klien", "Outreach", "Rejection Log", "Simulator", "Script Library", "AI Playbook"] },
+  { id: "more", label: "Lainnya", icon: "☰", tabs: ["Guild", "Report Klien", "Outreach", "Rejection Log", "Simulator", "Script Library", "AI Playbook"] },
 ];
 const sectionOf = (tab: string) => SECTIONS.find(x => x.tabs.includes(tab)) || SECTIONS[0];
 
@@ -193,9 +194,13 @@ function useIsNarrow(bp = 640) {
 export default function SalesTracker({ user }: { user: User }) {
   const router = useRouter();
   const isNarrow = useIsNarrow();
-  // A share or bookmarklet opens straight into Hunting (/dashboard?hunt&target=…).
-  const [activeTab, setActiveTab] = useState(() =>
-    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("hunt") ? "Hunting" : "Dashboard");
+  // A share or bookmarklet opens straight into Hunting (/dashboard?hunt&target=…);
+  // joining a guild lands on it (/dashboard?guild).
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window === "undefined") return "Dashboard";
+    const q = new URLSearchParams(window.location.search);
+    return q.has("hunt") ? "Hunting" : q.has("guild") ? "Guild" : "Dashboard";
+  });
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -847,6 +852,9 @@ export default function SalesTracker({ user }: { user: User }) {
 
         {/* REPORT KLIEN (PRD-005) */}
         {activeTab === "Report Klien" && <ClientHub uid={uid} />}
+
+        {/* GUILD (PRD-007) */}
+        {activeTab === "Guild" && <GuildHub uid={uid} name={user.displayName || (user.email || "").split("@")[0]} email={user.email || ""} />}
 
         {activeTab === "Penawaran" && (
           <Quotes uid={uid} quotes={quotes} invoices={invoices} services={services} business={business}
