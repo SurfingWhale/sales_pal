@@ -1,6 +1,6 @@
 # PRD-005 — Funnel Hulu ke Hilir (Konten → Lead → Lunas → Report)
 
-- **Status:** Draft → menunggu ACC
+- **Status:** Fase 0 dibangun 2026-10-08 — tab **Lainnya → Report Klien** (`components/ClientHub.tsx`, `lib/funnel.ts`). Fase 1–3 belum.
 - **Tanggal:** 2026-10-08
 - **Sumber:** deep research (5 topik: metrik engagement, akses API sosmed, atribusi lead WhatsApp, model funnel, reporting agency). Laporan lengkap + angka klien disimpan **lokal** (`reports/`, di-gitignore) karena repo ini public.
 - **Terkait:** `lib/report.ts`, `components/LeadSources.tsx`, `components/Insights.tsx`, `inbound_leads` (standar leads di `SurfingWhale/creative-hub`).
