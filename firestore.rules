@@ -24,6 +24,107 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
+    // ---- Guilds (docs/prd/PRD-007): shared team spaces with roles --------
+    //   leader   owns the guild: names it, sets roles, invites anyone, hands over
+    //   officer  runs the team: sees every deal, sets targets, invites members
+    //   member   sells: sees and works only the deals they own
+    //   viewer   reads the guild's frozen reports and members, nothing else
+    function guildPath(g) { return /databases/$(database)/documents/guilds/$(g); }
+    function memberPath(g, uid) { return /databases/$(database)/documents/guilds/$(g)/members/$(uid); }
+    function inGuild(g) { return request.auth != null && exists(memberPath(g, request.auth.uid)); }
+    function myRole(g) { return get(memberPath(g, request.auth.uid)).data.role; }
+    function hasRole(g, roles) { return inGuild(g) && myRole(g) in roles; }
+    function seller(g) { return hasRole(g, ['leader', 'officer', 'member']); }
+    function manager(g) { return hasRole(g, ['leader', 'officer']); }
+    function validInvite(g, code, role) {
+      let p = /databases/$(database)/documents/guilds/$(g)/invites/$(code);
+      return code is string && exists(p) && get(p).data.role == role && get(p).data.expiresAt > request.time.toMillis();
+    }
+    function guildShape(d) {
+      return d.keys().hasOnly(['name', 'leaderUid', 'titles', 'createdAt'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 80;
+    }
+    function memberShape(d) {
+      return d.keys().hasOnly(['uid', 'name', 'email', 'role', 'inviteCode', 'joinedAt'])
+        && d.role in ['leader', 'officer', 'member', 'viewer'];
+    }
+
+    match /guilds/{g} {
+      allow read: if inGuild(g);
+      // Founding: the guild and its leader's member doc go in one batch.
+      allow create: if request.auth != null && guildShape(request.resource.data)
+        && request.resource.data.leaderUid == request.auth.uid
+        && getAfter(memberPath(g, request.auth.uid)).data.role == 'leader';
+      // The leader renames it or hands it over; a handover makes the new leader
+      // a leader and the old one not, in the same batch.
+      allow update: if hasRole(g, ['leader']) && guildShape(request.resource.data)
+        && (request.resource.data.leaderUid == resource.data.leaderUid
+            || (getAfter(memberPath(g, request.resource.data.leaderUid)).data.role == 'leader'
+                && getAfter(memberPath(g, request.auth.uid)).data.role != 'leader'));
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow read: if inGuild(g);
+        // Join yourself: as founding leader of a new guild, or with an invite
+        // for exactly the role you take.
+        allow create: if request.auth != null && request.auth.uid == uid
+          && memberShape(request.resource.data) && request.resource.data.uid == uid
+          && ((request.resource.data.role == 'leader' && !exists(guildPath(g))
+                && getAfter(guildPath(g)).data.leaderUid == uid)
+              || (request.resource.data.role != 'leader'
+                && validInvite(g, request.resource.data.get('inviteCode', ''), request.resource.data.role)));
+        allow update: if inGuild(g) && memberShape(request.resource.data)
+          && request.resource.data.uid == resource.data.uid
+          && ((request.auth.uid == uid && request.resource.data.role == resource.data.role)
+              || (myRole(g) == 'leader' && request.auth.uid != uid
+                  && (request.resource.data.role != 'leader'
+                      || getAfter(guildPath(g)).data.leaderUid == uid))
+              || (myRole(g) == 'leader' && request.auth.uid == uid && request.resource.data.role == 'officer'
+                  && getAfter(guildPath(g)).data.leaderUid != uid)
+              || (myRole(g) == 'officer' && resource.data.role in ['member', 'viewer']
+                  && request.resource.data.role in ['member', 'viewer']));
+        // Leave (a leader hands over first), or be removed by those above you.
+        allow delete: if inGuild(g)
+          && ((request.auth.uid == uid && resource.data.role != 'leader')
+              || (myRole(g) == 'leader' && request.auth.uid != uid)
+              || (myRole(g) == 'officer' && resource.data.role in ['member', 'viewer']));
+      }
+
+      // An invite is read by whoever holds its code (the link), never listed by outsiders.
+      match /invites/{code} {
+        allow get: if request.auth != null;
+        allow list: if manager(g);
+        allow create: if request.resource.data.keys().hasOnly(['role', 'guildName', 'createdBy', 'createdAt', 'expiresAt'])
+          && request.resource.data.createdBy == request.auth.uid && request.resource.data.expiresAt is number
+          && ((hasRole(g, ['leader']) && request.resource.data.role in ['officer', 'member', 'viewer'])
+              || (hasRole(g, ['officer']) && request.resource.data.role in ['member', 'viewer']));
+        allow delete: if manager(g);
+      }
+
+      // Deals: a member works their own; leader and officer see and fix all.
+      // The first-touch source stays as logged, unless it was still unknown.
+      match /deals/{id} {
+        allow read: if manager(g) || (inGuild(g) && resource.data.ownerUid == request.auth.uid);
+        allow create: if seller(g) && request.resource.data.ownerUid is string
+          && (request.resource.data.ownerUid == request.auth.uid || manager(g));
+        allow update: if (manager(g)
+              || (seller(g) && resource.data.ownerUid == request.auth.uid
+                  && request.resource.data.ownerUid == resource.data.ownerUid))
+          && (request.resource.data.firstTouch == resource.data.firstTouch
+              || resource.data.firstTouch.channel == 'Ga tau');
+        allow delete: if manager(g) || (seller(g) && resource.data.ownerUid == request.auth.uid);
+      }
+
+      match /targets/{id} {
+        allow read: if inGuild(g);
+        allow write: if manager(g);
+      }
+      match /reports/{id} {
+        allow read: if inGuild(g);
+        allow write: if manager(g);
+      }
+    }
+
     // Server-only (lib/serverAuth.ts, Admin SDK): platform tokens and usage
     // quotas. No browser — not even the owner's — may read or write them.
     match /connections/{id} {

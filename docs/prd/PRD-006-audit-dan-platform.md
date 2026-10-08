@@ -1,6 +1,6 @@
 # PRD-006 — Audit Flow & Backend: dari Login sampai Sales Reporting
 
-- **Status:** P0 selesai 2026-10-08 (lihat §7). P1–P3 menunggu keputusan (§8).
+- **Status:** P0 selesai 2026-10-08. P1 berjalan sebagai **Guild** (PRD-007): alat internal, sales = tim sendiri + tim klien.
 - **Tanggal:** 2026-10-08
 - **Visi user:** *tiap user bisa login → isi preferensi bisnisnya → app nyesuain kebutuhannya → fiturnya jalan sampai tim sales bisa reporting sales.*
 - **Terkait:** PRD-001…005, `firestore.rules`, `CLAUDE.md`.

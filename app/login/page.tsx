@@ -44,6 +44,24 @@ function authErrorMessage(e: unknown): string {
   }
 }
 
+// Where to go once signed in: a same-site path from ?next= (e.g. an invite
+// link sent people here first), else the dashboard. Kept across the Google
+// redirect in sessionStorage.
+function destination(): string {
+  if (typeof window === "undefined") return "/dashboard";
+  let n = new URLSearchParams(window.location.search).get("next");
+  try {
+    if (n) sessionStorage.setItem("sp-next", n);
+    else n = sessionStorage.getItem("sp-next");
+  } catch { /* private mode */ }
+  return n && n.startsWith("/") && !n.startsWith("//") ? n : "/dashboard";
+}
+function go(router: { replace: (p: string) => void }) {
+  const d = destination();
+  try { sessionStorage.removeItem("sp-next"); } catch { /* private mode */ }
+  router.replace(d);
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -62,7 +80,7 @@ export default function LoginPage() {
     let redirectKnown = false;
     const settle = () => { if (sessionKnown && redirectKnown) setChecking(false); };
     const unsub = onAuthStateChanged(auth, (u) => {
-      if (u) { router.replace("/dashboard"); return; }
+      if (u) { go(router); return; }
       sessionKnown = true; settle();
     });
     // Complete a redirect-based sign-in (PWA path) and surface any error.
@@ -88,7 +106,7 @@ export default function LoginPage() {
         return; // full-page redirect; session restored on return
       }
       await signInWithPopup(auth, googleProvider);
-      router.replace("/dashboard");
+      go(router);
     } catch (e: unknown) {
       // Popup blocked/unsupported (common in webviews) → fall back to redirect.
       const code = (e as { code?: string })?.code || "";
@@ -111,7 +129,7 @@ export default function LoginPage() {
       } else {
         await createUserWithEmailAndPassword(auth, email, password);
       }
-      router.replace("/dashboard");
+      go(router);
     } catch (e: unknown) {
       setError(authErrorMessage(e));
     } finally {
