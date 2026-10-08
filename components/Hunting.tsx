@@ -9,6 +9,7 @@ import {
   fill, waLinkFor, huntColor, huntIcon, isStale, parseProfile, pct, platformSource, responded, scoreTemplates, verdict,
 } from "@/lib/hunting";
 import ThreadsRadar from "@/components/ThreadsRadar";
+import { NEXT_STEP, TOPICS, Tone, defaultTopic, repliesFor } from "@/lib/replies";
 import { profileUrl } from "@/lib/threads";
 import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
@@ -25,6 +26,8 @@ export default function Hunting({ hunts, goal }: { hunts: Hunt[]; goal: number }
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<PitchTemplate | null>(null);
   const [noting, setNoting] = useState<{ id: string; note: string } | null>(null);
+  const [replyFor, setReplyFor] = useState<{ id: string; topic: string; tone: Tone } | null>(null);
+  const [copiedReply, setCopiedReply] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("Semua");
   const [limit, setLimit] = useState(PAGE);
   const [url, setUrl] = useState("");
@@ -296,9 +299,50 @@ export default function Hunting({ hunts, goal }: { hunts: Hunt[]; goal: number }
                 {h.status === "Tertarik" && !h.leadId && <button onClick={() => makeLead(h)} style={{ ...chip, minHeight: 36, background: "#00a862", color: "#fff", border: "none", fontWeight: 700 }}>Jadiin Lead →</button>}
                 {h.leadId && <span style={{ fontSize: 11, color: "var(--ok)", fontWeight: 700 }}>✓ Sudah jadi lead</span>}
                 {h.url && <a href={h.url} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Profil ↗</a>}
+                {h.status !== "Terkirim" && (
+                  <button onClick={() => setReplyFor(replyFor?.id === h.id ? null : { id: h.id, topic: defaultTopic(h.status, h.note), tone: "santai" })}
+                    aria-expanded={replyFor?.id === h.id}
+                    style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>💡 Balas</button>
+                )}
                 {h.status === "Ditolak" && noting?.id !== h.id && <button onClick={() => setNoting({ id: h.id, note: h.note })} style={chip}>{h.note ? "Ubah alasan" : "+ Alasan"}</button>}
                 <button onClick={() => remove(h)} aria-label={`Hapus DM ke ${h.target || "target"}`} style={{ ...chip, minHeight: 36, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🗑</button>
               </div>
+              {replyFor?.id === h.id && (
+                <div role="region" aria-label={`Saran balasan untuk ${h.target || "target"}`} style={{ marginTop: 10, padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)" }}>
+                  <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, scrollbarWidth: "none" }}>
+                    {TOPICS.map(tp => (
+                      <button key={tp.id} onClick={() => setReplyFor({ ...replyFor, topic: tp.id })} aria-pressed={replyFor.topic === tp.id}
+                        style={{ ...chip, flexShrink: 0, minHeight: 34, fontWeight: 600, ...(replyFor.topic === tp.id ? { background: "#005eb0", color: "#fff", border: "1px solid #005eb0" } : {}) }}>{tp.label}</button>
+                    ))}
+                  </div>
+                  <div role="group" aria-label="Gaya bahasa" style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                    {(["santai", "formal"] as Tone[]).map(tn => (
+                      <button key={tn} onClick={() => setReplyFor({ ...replyFor, tone: tn })} aria-pressed={replyFor.tone === tn}
+                        style={{ ...chip, minHeight: 32, ...(replyFor.tone === tn ? { color: "var(--app-text)", border: "1px solid var(--app-text)" } : {}) }}>{tn === "santai" ? "Santai" : "Formal"}</button>
+                    ))}
+                  </div>
+                  {repliesFor(replyFor.topic, replyFor.tone).map(r => {
+                    const text = fill(r.text, h.target);
+                    const key = `${h.id}_${r.key}`;
+                    return (
+                      <div key={r.key} style={{ padding: "10px 0", borderTop: "1px solid var(--app-border)" }}>
+                        <div style={{ fontSize: 13, lineHeight: 1.55, color: "var(--app-text)" }}>{text}</div>
+                        <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>{r.hint}</div>
+                        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                          <button onClick={() => { navigator.clipboard?.writeText(text).catch(() => {}); setCopiedReply(key); setTimeout(() => setCopiedReply(c => (c === key ? null : c)), 1800); }}
+                            style={{ ...chip, minHeight: 36, fontWeight: 700, color: copiedReply === key ? "var(--ok)" : "var(--app-text)", border: `1px solid ${copiedReply === key ? "var(--ok)" : "var(--app-border)"}` }}>
+                            {copiedReply === key ? "✓ Tersalin" : "Copy"}
+                          </button>
+                          {h.platform === "WA"
+                            ? <a href={waLinkFor(h.target, text)} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", fontWeight: 700, background: "#25D366", color: "#fff", border: "none" }}>Kirim WA</a>
+                            : h.url && <a href={h.url} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Buka chat ↗</a>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {replyFor.topic !== NEXT_STEP && <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 6 }}>Pilih yang paling mirip gaya orangnya. Lengkapnya di Lainnya → Script Library.</div>}
+                </div>
+              )}
               {noting?.id === h.id && (
                 <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                   <input autoFocus value={noting.note} onChange={e => setNoting({ ...noting, note: e.target.value })}
