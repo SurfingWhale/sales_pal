@@ -48,6 +48,8 @@ export interface Deal {
   paidAmount?: number;
   isRepeat?: boolean;
   note?: string;
+  ownerUid?: string;      // guild deals: the seller who owns it
+  ownerName?: string;
 }
 
 export const PLATFORMS = ["Instagram", "TikTok", "Facebook", "Threads"] as const;

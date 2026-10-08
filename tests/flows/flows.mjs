@@ -33,6 +33,8 @@ async function addLead(page, name) {
   await page.getByRole("button", { name: /tambah lead/i }).click();
   await modal(page).locator("input").first().fill(name);
   await modal(page).getByRole("button", { name: "Simpan lead" }).click();
+  // The dialog closes once the write is confirmed; the row can show up before that.
+  await page.locator(".modal-overlay").waitFor({ state: "detached", timeout: 10000 });
   await expectText(page, name);
 }
 
@@ -278,6 +280,88 @@ export const flows = [
       await t.step("Quick Pitch opens from the floating button", async () => {
         await page.getByRole("button", { name: /Quick Pitch/ }).click();
         await expectText(page, "💬 Quick Pitch");
+      });
+    },
+  },
+  {
+    name: "guild: found, invite, join by link, sell, team report with target",
+    async run(t) {
+      const { page, base } = t;
+      const month = new Date().toISOString().slice(0, 7);
+      const memberEmail = `anggota${Date.now()}@contoh.id`;
+      const memberName = memberEmail.split("@")[0];
+      let link = "";
+      let p2;
+      await t.step("leader signs up and founds a guild", async () => {
+        await signup(t);
+        await go(page, "Lainnya", "Guild");
+        await page.getByRole("button", { name: "+ Bikin guild" }).click();
+        await modal(page).locator("#gd-name").fill("Tim Uji");
+        await modal(page).getByRole("button", { name: "Bikin guild" }).click();
+        await expectText(page, "Undang orang");
+      });
+      await t.step("leader makes a member invite link", async () => {
+        await page.locator("#inv-role").selectOption("member");
+        await page.getByRole("button", { name: "Bikin link undangan" }).click();
+        link = await page.locator("#inv-link").inputValue();
+        if (!link.includes("/join?g=")) throw new Error(`link ${link}`);
+      });
+      await t.step("someone else opens the link, signs up, and joins", async () => {
+        const ctx2 = await page.context().browser().newContext(page.viewportSize() ? { viewport: page.viewportSize() } : {});
+        p2 = await ctx2.newPage();
+        await p2.goto(link);
+        await p2.getByRole("link", { name: "Login buat gabung" }).click();
+        await p2.getByRole("button", { name: "Daftar gratis" }).click();
+        await p2.locator('input[type="email"]').fill(memberEmail);
+        await p2.locator('input[type="password"]').fill("rahasia123");
+        await p2.locator('form button[type="submit"]').click();
+        await p2.getByText("Tim Uji").first().waitFor({ timeout: 20000 });
+        await p2.getByRole("button", { name: "Gabung guild" }).click();
+        await p2.waitForURL("**/dashboard?guild", { timeout: 20000 });
+        await p2.getByText("Deal milik kamu").waitFor({ timeout: 15000 });
+      });
+      await t.step("the member logs a chat and closes it", async () => {
+        await p2.getByRole("button", { name: "+ Chat masuk" }).click();
+        await p2.locator("#ch-name").fill("Pak Budi");
+        await p2.getByRole("radio", { name: "TikTok" }).click();
+        await p2.getByRole("button", { name: "Simpan chat" }).click();
+        await p2.getByRole("button", { name: "Langsung lunas" }).click();
+        await p2.locator("#mv-amt").fill("10.000.000");
+        await p2.locator(".modal-overlay").last().getByRole("button", { name: "Simpan" }).click();
+        await p2.getByRole("button", { name: "lunas", exact: true }).click();
+        await p2.getByText("Lunas Rp 10 Jt").first().waitFor();
+      });
+      await t.step("the member sees only their own row in the team report", async () => {
+        await p2.getByRole("tab", { name: "Report Tim" }).click();
+        await p2.locator("#tr-month").selectOption(month);
+        await p2.getByText(`${memberName} (kamu)`).waitFor();
+        const rows = await p2.locator("tbody tr").count();
+        if (rows !== 1) throw new Error(`member sees ${rows} rows`);
+      });
+      await t.step("the leader sees the member's deal in the team pipeline", async () => {
+        await page.getByRole("tab", { name: "Pipeline" }).click();
+        await page.getByRole("button", { name: "semua", exact: true }).click();
+        await expectText(page, "Pak Budi");
+        await expectText(page, memberName);
+      });
+      await t.step("the leader sets a target and sees progress", async () => {
+        await page.getByRole("tab", { name: "Report Tim" }).click();
+        await page.locator("#tr-month").selectOption(month);
+        await page.getByRole("button", { name: `Atur target ${memberName}` }).click();
+        await modal(page).locator("#tg-rev").fill("20.000.000");
+        await modal(page).getByRole("button", { name: "Simpan target" }).click();
+        await expectText(page, "50%");
+      });
+      await t.step("the leader freezes the team report", async () => {
+        await page.getByRole("button", { name: "Bekukan report tim" }).click();
+        await expectText(page, "Dibekukan");
+      });
+      await t.step("the leader promotes the member to officer", async () => {
+        await page.getByRole("tab", { name: /^Anggota/ }).click();
+        await page.locator("select[id^='role-']").first().selectOption("officer");
+        await p2.getByRole("tab", { name: "Pipeline" }).click();
+        await p2.getByText("Semua deal tim").waitFor({ timeout: 10000 });
+        await p2.context().close();
       });
     },
   },

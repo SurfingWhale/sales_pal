@@ -7,7 +7,7 @@
 // or change `port` below.)
 import { initializeTestEnvironment, assertSucceeds, assertFails } from "@firebase/rules-unit-testing";
 import { readFileSync } from "node:fs";
-import { doc, setDoc, getDoc, updateDoc, deleteDoc, collection, addDoc, getDocs, serverTimestamp, Timestamp } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc, deleteDoc, collection, addDoc, getDocs, serverTimestamp, Timestamp, writeBatch, query, where } from "firebase/firestore";
 
 const env = await initializeTestEnvironment({ projectId: "demo-salespal", firestore: { rules: readFileSync(new URL("../firestore.rules", import.meta.url), "utf8"), host: "127.0.0.1", port: 8089 } });
 const anon = env.unauthenticatedContext().firestore();
@@ -66,6 +66,73 @@ await t("owner cannot write a token", assertFails(setDoc(doc(owner, "connections
 await t("another account cannot read the vault", assertFails(getDocs(collection(other, "connections"))));
 await t("nobody reads usage quotas", assertFails(getDoc(doc(owner, "usage", "owner1_scan_2026-10-08"))));
 await t("nobody resets their quota", assertFails(setDoc(doc(other, "usage", "u9_scan_2026-10-08"), { count: 0 })));
+
+
+console.log("guilds:");
+const G = "g1";
+const as = (uid) => env.authenticatedContext(uid, { email: `${uid}@x.com`, email_verified: true }).firestore();
+const L = as("lead"), O = as("offi"), M = as("memb"), M2 = as("memb2"), V = as("view"), X = as("outsider");
+const me = (uid, role, inviteCode) => ({ uid, name: uid, email: `${uid}@x.com`, role, joinedAt: Date.now(), ...(inviteCode ? { inviteCode } : {}) });
+const found = (db, g, uid) => { const b = writeBatch(db); b.set(doc(db, "guilds", g), { name: "Tim Uji", leaderUid: uid, titles: {}, createdAt: Date.now() }); b.set(doc(db, "guilds", g, "members", uid), me(uid, "leader")); return b.commit(); };
+const week = () => Date.now() + 7 * 86400000;
+const deal = (owner, channel = "TikTok") => ({ ownerUid: owner, contactName: "C", phone: "", stage: "lead", leadAt: "2026-10-08", firstTouch: { channel, method: "self_report", at: "2026-10-08" } });
+
+await t("anyone signed in founds a guild as its leader", assertSucceeds(found(L, G, "lead")));
+await t("cannot found a guild for someone else", assertFails((() => { const b = writeBatch(X); b.set(doc(X, "guilds", "g2"), { name: "x", leaderUid: "lead", titles: {}, createdAt: 1 }); b.set(doc(X, "guilds", "g2", "members", "outsider"), me("outsider", "leader")); return b.commit(); })()));
+await t("cannot take over an existing guild as leader", assertFails(setDoc(doc(X, "guilds", G, "members", "outsider"), me("outsider", "leader"))));
+await t("outsider cannot read the guild", assertFails(getDoc(doc(X, "guilds", G))));
+await t("outsider cannot create an invite", assertFails(setDoc(doc(X, "guilds", G, "invites", "badinv"), { role: "member", guildName: "x", createdBy: "outsider", createdAt: 1, expiresAt: week() })));
+await t("leader invites an officer", assertSucceeds(setDoc(doc(L, "guilds", G, "invites", "inv-off"), { role: "officer", guildName: "Tim Uji", createdBy: "lead", createdAt: 1, expiresAt: week() })));
+await t("leader invites members and a viewer", assertSucceeds(Promise.all([
+  setDoc(doc(L, "guilds", G, "invites", "inv-mem"), { role: "member", guildName: "Tim Uji", createdBy: "lead", createdAt: 1, expiresAt: week() }),
+  setDoc(doc(L, "guilds", G, "invites", "inv-view"), { role: "viewer", guildName: "Tim Uji", createdBy: "lead", createdAt: 1, expiresAt: week() }),
+  setDoc(doc(L, "guilds", G, "invites", "inv-old"), { role: "member", guildName: "Tim Uji", createdBy: "lead", createdAt: 1, expiresAt: Date.now() - 1000 }),
+])));
+await t("an invite is readable by its code", assertSucceeds(getDoc(doc(X, "guilds", G, "invites", "inv-mem"))));
+await t("outsiders cannot list invites", assertFails(getDocs(collection(X, "guilds", G, "invites"))));
+await t("officer joins with the officer invite", assertSucceeds(setDoc(doc(O, "guilds", G, "members", "offi"), me("offi", "officer", "inv-off"))));
+await t("member joins with the member invite", assertSucceeds(setDoc(doc(M, "guilds", G, "members", "memb"), me("memb", "member", "inv-mem"))));
+await t("second member joins too", assertSucceeds(setDoc(doc(M2, "guilds", G, "members", "memb2"), me("memb2", "member", "inv-mem"))));
+await t("viewer joins with the viewer invite", assertSucceeds(setDoc(doc(V, "guilds", G, "members", "view"), me("view", "viewer", "inv-view"))));
+await t("cannot take a higher role than the invite gives", assertFails(setDoc(doc(X, "guilds", G, "members", "outsider"), me("outsider", "officer", "inv-mem"))));
+await t("cannot join with an expired invite", assertFails(setDoc(doc(X, "guilds", G, "members", "outsider"), me("outsider", "member", "inv-old"))));
+await t("cannot join without an invite", assertFails(setDoc(doc(X, "guilds", G, "members", "outsider"), me("outsider", "member"))));
+await t("officer cannot invite another officer", assertFails(setDoc(doc(O, "guilds", G, "invites", "inv-o2"), { role: "officer", guildName: "x", createdBy: "offi", createdAt: 1, expiresAt: week() })));
+await t("officer invites a member", assertSucceeds(setDoc(doc(O, "guilds", G, "invites", "inv-o3"), { role: "member", guildName: "x", createdBy: "offi", createdAt: 1, expiresAt: week() })));
+await t("member cannot list invites", assertFails(getDocs(collection(M, "guilds", G, "invites"))));
+await t("members read the guild and the roster", assertSucceeds(getDocs(collection(V, "guilds", G, "members"))));
+
+await t("member logs a deal of their own", assertSucceeds(setDoc(doc(M, "guilds", G, "deals", "d1"), deal("memb"))));
+await t("member cannot log a deal for someone else", assertFails(setDoc(doc(M, "guilds", G, "deals", "d2"), deal("memb2"))));
+await t("member sees their own deals", assertSucceeds(getDocs(query(collection(M, "guilds", G, "deals"), where("ownerUid", "==", "memb")))));
+await t("member cannot see the whole pipeline", assertFails(getDocs(collection(M, "guilds", G, "deals"))));
+await t("second member cannot read the first one's deal", assertFails(getDoc(doc(M2, "guilds", G, "deals", "d1"))));
+await t("viewer cannot read deals", assertFails(getDoc(doc(V, "guilds", G, "deals", "d1"))));
+await t("viewer cannot log a deal", assertFails(setDoc(doc(V, "guilds", G, "deals", "d3"), deal("view"))));
+await t("leader sees every deal", assertSucceeds(getDocs(collection(L, "guilds", G, "deals"))));
+await t("officer logs a deal for a member", assertSucceeds(setDoc(doc(O, "guilds", G, "deals", "d4"), deal("memb2", "Ga tau"))));
+await t("member moves their deal along", assertSucceeds(updateDoc(doc(M, "guilds", G, "deals", "d1"), { stage: "quoted", quotedAt: "2026-10-09" })));
+await t("member cannot rewrite a known source", assertFails(updateDoc(doc(M, "guilds", G, "deals", "d1"), { firstTouch: { channel: "Instagram", method: "self_report", at: "2026-10-08" } })));
+await t("an unknown source can still be filled in", assertSucceeds(updateDoc(doc(M2, "guilds", G, "deals", "d4"), { firstTouch: { channel: "Facebook", method: "seller_guess", at: "2026-10-08" } })));
+await t("member cannot hand their deal to someone else", assertFails(updateDoc(doc(M, "guilds", G, "deals", "d1"), { ownerUid: "memb2" })));
+await t("officer edits any deal", assertSucceeds(updateDoc(doc(O, "guilds", G, "deals", "d1"), { note: "dicek officer" })));
+
+await t("member cannot promote themselves", assertFails(updateDoc(doc(M, "guilds", G, "members", "memb"), { role: "officer" })));
+await t("member updates their own name", assertSucceeds(updateDoc(doc(M, "guilds", G, "members", "memb"), { name: "Andri" })));
+await t("officer cannot make someone an officer", assertFails(updateDoc(doc(O, "guilds", G, "members", "memb2"), { role: "officer" })));
+await t("officer moves a member to viewer and back", assertSucceeds(updateDoc(doc(O, "guilds", G, "members", "memb2"), { role: "viewer" }).then(() => updateDoc(doc(O, "guilds", G, "members", "memb2"), { role: "member" }))));
+await t("leader cannot crown a second leader without handing over", assertFails(updateDoc(doc(L, "guilds", G, "members", "memb"), { role: "leader" })));
+await t("member cannot set targets", assertFails(setDoc(doc(M, "guilds", G, "targets", "2026-10_memb"), { revenue: 1 })));
+await t("officer sets a target", assertSucceeds(setDoc(doc(O, "guilds", G, "targets", "2026-10_memb"), { uid: "memb", month: "2026-10", revenue: 50000000, deals: 4 })));
+await t("viewer reads targets and reports", assertSucceeds(getDocs(collection(V, "guilds", G, "targets"))));
+await t("member cannot freeze a report", assertFails(setDoc(doc(M, "guilds", G, "reports", "2026-10"), { x: 1 })));
+await t("leader cannot leave without handing over", assertFails(deleteDoc(doc(L, "guilds", G, "members", "lead"))));
+await t("officer cannot remove the leader", assertFails(deleteDoc(doc(O, "guilds", G, "members", "lead"))));
+await t("leader hands the guild to the officer", assertSucceeds((() => { const b = writeBatch(L); b.update(doc(L, "guilds", G), { leaderUid: "offi" }); b.update(doc(L, "guilds", G, "members", "offi"), { role: "leader" }); b.update(doc(L, "guilds", G, "members", "lead"), { role: "officer" }); return b.commit(); })()));
+await t("the old leader, now officer, cannot invite officers", assertFails(setDoc(doc(L, "guilds", G, "invites", "inv-l2"), { role: "officer", guildName: "x", createdBy: "lead", createdAt: 1, expiresAt: week() })));
+await t("a member leaves", assertSucceeds(deleteDoc(doc(M2, "guilds", G, "members", "memb2"))));
+await t("having left, they cannot read the guild", assertFails(getDoc(doc(M2, "guilds", G))));
+await t("the new leader removes a member", assertSucceeds(deleteDoc(doc(O, "guilds", G, "members", "memb"))));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 await env.cleanup();

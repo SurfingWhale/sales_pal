@@ -113,7 +113,7 @@ export default function ClientHub({ uid }: { uid: string }) {
               </button>
             ))}
           </div>
-          {view === "pipeline" && <Pipeline uid={uid} clientId={client.id} deals={deals} />}
+          {view === "pipeline" && <Pipeline path={["users", uid, "clients", client.id, "deals"]} deals={deals} />}
           {view === "konten" && <Content uid={uid} clientId={client.id} posts={posts} />}
           {view === "report" && <Report uid={uid} client={client} deals={deals} posts={posts} reports={reports} />}
         </>
@@ -158,11 +158,13 @@ function SourcePicker({ value, onChange, id }: { value: Channel; onChange: (c: C
 interface ChatDraft { name: string; phone: string; channel: Channel; code: string; heardFrom: string; date: string; note: string; paidNow: boolean; amount: string; paidDate: string }
 const blankChat = (): ChatDraft => ({ name: "", phone: "", channel: UNKNOWN, code: "", heardFrom: "", date: today(), note: "", paidNow: false, amount: "", paidDate: today() });
 
-function Pipeline({ uid, clientId, deals }: { uid: string; clientId: string; deals: Deal[] }) {
+// The chat → lunas pipeline over any deals collection: a client's (Report
+// Klien) or a guild's, where `extra` stamps the owner on new deals.
+export function Pipeline({ path, deals, extra, showOwner }: { path: string[]; deals: Deal[]; extra?: Partial<Deal>; showOwner?: boolean }) {
   const [draft, setDraft] = useState<ChatDraft | null>(null);
   const [move, setMove] = useState<{ deal: Deal; to: Stage; amount: string; date: string; reason: string; channel: Channel } | null>(null);
   const [filter, setFilter] = useState<"aktif" | "lunas" | "gugur" | "semua">("aktif");
-  const col = (...p: string[]) => doc(db, "users", uid, "clients", clientId, "deals", ...(p as [string]));
+  const col = (id: string) => doc(db, path.join("/"), id);
 
   const shown = deals
     .filter(d => filter === "semua" || (filter === "lunas" ? d.stage === "paid" : filter === "gugur" ? d.stage === "lost" : d.stage !== "paid" && d.stage !== "lost"))
@@ -190,7 +192,7 @@ function Pipeline({ uid, clientId, deals }: { uid: string; clientId: string; dea
     if (draft.paidNow && n0(draft.amount)) {
       deal = { ...deal, ...advance({ id: "", ...deal }, "paid", draft.paidDate, n0(draft.amount)) };
     }
-    await setDoc(col(`deal_${Date.now()}`), clean(deal));
+    await setDoc(col(`deal_${Date.now()}`), clean({ ...deal, ...extra }));
     setDraft(null);
   }
 
@@ -264,6 +266,7 @@ function Pipeline({ uid, clientId, deals }: { uid: string; clientId: string; dea
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {d.contactName}{d.isRepeat && <span style={{ fontSize: 11, color: "var(--app-muted)", fontWeight: 600 }}> · repeat</span>}
+                      {showOwner && d.ownerName && <span style={{ fontSize: 11, color: "var(--app-muted)", fontWeight: 600 }}> · {d.ownerName}</span>}
                     </div>
                     <div style={{ fontSize: 11.5, color: "var(--app-muted)", marginTop: 2 }}>
                       Chat {d.leadAt}{d.firstTouch?.code ? ` · kode ${d.firstTouch.code}` : ""}{d.firstTouch?.heardFrom ? ` · "${d.firstTouch.heardFrom}"` : ""}
