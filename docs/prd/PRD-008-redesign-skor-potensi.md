@@ -1,6 +1,6 @@
 # PRD-008 — Arah desain baru: Beranda yang nyuruh, skor potensi, profil customer dari WhatsApp
 
-- **Status:** desain disetujui di canvas **SalesPal Redesign** (artifact, 5 artboard, 2026-10-08). 8.1 rilis.
+- **Status:** desain disetujui di canvas **SalesPal Redesign** (artifact, 5 artboard, 2026-10-08). 8.1–8.2 rilis.
 - **Sumber:** artboard *Beranda — desktop*, *Leads + skor potensi*, *Beranda — HP*, *Profil customer — HP*, *Tarik dari WhatsApp — HP*. Nama & angka di mockup itu contoh, bukan data.
 - **Lanjutan dari:** PRD-001 (brand), PRD-004 (audit tampilan), PRD-006 (Perlu Ditindak), PRD-002 §8 (Balas cepat).
 
@@ -96,7 +96,7 @@ Masuk ke `leads` yang udah dicakup rules (pribadi & ruang guild) — ga perlu ko
 | Fase | Isi | Selesai kalau |
 |---|---|---|
 | **8.1** ✅ | `lib/score.ts` (5 sinyal, level, "biar naik") + tes; skor acak dihapus; Leads nampilin skor, level, filter | flow: lead dengan follow-up & nomor naik skornya |
-| **8.2** | Beranda baru: sapaan, 4 angka, kartu Perlu ditindak dengan aksi, Peta lead + kuadran (desktop & HP) | flow: lead "kejar sekarang" muncul di peta & daftar |
+| **8.2** ✅ | Beranda baru: sapaan, 4 angka, kartu Perlu ditindak dengan aksi, Peta lead + kuadran (desktop & HP) | flow: lead "kejar sekarang" muncul di peta & daftar |
 | **8.3** | Panel detail Leads + Profil (isi manual), QuickPitch/Balas cepat baca arketipe dari profil | flow: isi profil manual, tampil di panel |
 | **8.4** | Tarik dari WhatsApp: parser ekspor lokal (pola chat, kata pemicu, pertanyaan), vCard, screenshot profil bisnis; layar pilih bagian | flow: unggah file ekspor contoh → simpan 3 bagian |
 | **8.5** | Brief/kebutuhan/keberatan via model (opt-in, potongan tanpa nomor) + Web Share Target Android | tes server: tanpa login 401, kuota jalan |

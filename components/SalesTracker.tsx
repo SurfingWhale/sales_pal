@@ -5,6 +5,7 @@ import { signOut, User } from "firebase/auth";
 import { STALL_DAYS, stalledWhat, useStalledDeals } from "@/lib/stalled";
 import { LEVEL_COLOR, Level, inPlay, scoreLead } from "@/lib/score";
 import LeadScore from "@/components/LeadScore";
+import Beranda from "@/components/Beranda";
 import { Space, SpaceContext, seesEveryone, spaceDoc, spaceQuery, stamp } from "@/lib/space";
 import { SpaceOption, useSpaceChoice } from "@/lib/spaceChoice";
 import { disablePush, restorePush } from "@/lib/push";
@@ -561,20 +562,13 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     await resetAppCache();
   }
 
-  const totalValue = leads.reduce((a, b) => a + b.value, 0);
-  const closedLeads = leads.filter(l => l.status === "Closed");
-  const hotLeads = leads.filter(l => l.status === "Hot");
-  const conversionRate = leads.length ? ((closedLeads.length / leads.length) * 100).toFixed(0) : "0";
   // Skor potensi, computed from the lead itself (lib/score.ts), never stored.
   const scores = new Map(leads.map(l => [l.id, scoreLead(l, today())]));
   const sc = (l: Lead) => scores.get(l.id) || scoreLead(l, today());
   const highPotential = leads.filter(l => inPlay(l.status) && sc(l).level === "tinggi").length;
-  const repliedOutreach = outreach.filter(o => o.status === "Replied").length;
-  const replyRate = outreach.length ? ((repliedOutreach / outreach.length) * 100).toFixed(0) : "0";
   const filteredLeads = (filterStatus === "All" ? leads : leads.filter(l => l.status === filterStatus))
     .filter(l => !filterLevel || sc(l).level === filterLevel)
     .sort((a, b) => sc(b).total - sc(a).total);
-  const receivable = invoices.reduce((a, i) => a + balance(i), 0);
   const liveLead = selectedLead ? leads.find(l => l.id === selectedLead.id) || selectedLead : null;
 
   // Everything that needs a move today: reminders due, quotes left hanging,
@@ -585,36 +579,61 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     ...leads.filter(l => l.nextActionDate && l.nextActionDate <= soon && l.status !== "Closed").map(l => ({
       key: `l_${l.id}`, when: l.nextActionDate as string, icon: "📅", title: l.name,
       what: l.nextAction || "Follow-up", phone: l.phone, text: `Halo ${l.contact || l.name}, `,
+      kind: "Follow-up", action: "Buka lead", wa: false,
       open: () => openLead(l),
     })),
     ...hunts.filter(h => h.status === "Tertarik" && !h.leadId).map(h => ({
       key: `h_${h.id}`, when: h.date, icon: "🎯", title: h.target || "Tanpa nama",
       what: `Tertarik via ${h.platform} — jadiin lead`, phone: "", text: "",
+      kind: "Tertarik di Hunting", action: "Jadiin lead", wa: false,
       open: () => setActiveTab("Hunting"),
     })),
     ...quotes.filter(q => q.status === "Terkirim" && q.sentAt && daysBetween(q.sentAt, now) >= 3).map(q => ({
       key: `q_${q.id}`, when: addDays(q.sentAt as string, 3), icon: "📝", title: q.leadName,
       what: `Penawaran ${q.number} belum dijawab ${daysBetween(q.sentAt as string, now)} hari`, phone: q.phone,
       text: `Halo ${q.contact || q.leadName}, mau follow up penawaran ${q.number} kemarin. Ada yang bisa aku bantu jelasin?`,
+      kind: "Penawaran nunggu", action: q.phone ? "Follow up via WA" : "Lihat penawaran", wa: Boolean(q.phone),
       open: () => setActiveTab("Penawaran"),
     })),
     ...stuck.map(s => ({
       key: `s_${s.key}`, when: addDays(s.lastMove, STALL_DAYS), icon: "⏸️", title: s.deal.contactName,
       what: stalledWhat(s), phone: s.deal.phone || "", text: `Halo ${s.deal.contactName}, `,
+      kind: "Deal macet", action: "Geser deal", wa: false,
       open: () => setActiveTab(s.where === "guild" ? "Guild" : "Report Klien"),
     })),
     ...rejections.filter(r => r.followUpDate && r.followUpDate <= soon && r.followUpDate >= addDays(now, -14)).map(r => ({
       key: `r_${r.id}`, when: r.followUpDate, icon: "↩️", title: r.leadName,
       what: `Coba lagi setelah ditolak (${r.reason || r.channel})`, phone: "", text: "",
+      kind: "Coba lagi", action: "Lihat catatan", wa: false,
       open: () => setActiveTab("Rejection Log"),
     })),
     ...invoices.filter(i => balance(i) > 0 && i.dueDate && i.dueDate <= soon).map(i => ({
       key: `i_${i.id}`, when: i.dueDate, icon: "🧾", title: i.leadName,
       what: `${invoiceState(i, now) === "Telat" ? "Telat bayar" : "Jatuh tempo"} ${i.number} · sisa ${rupiah(balance(i))}`, phone: i.phone,
       text: `Halo ${i.contact || i.leadName}, reminder invoice ${i.number} jatuh tempo ${longDate(i.dueDate)}, sisa ${rupiah(balance(i))}. Terima kasih!`,
+      kind: invoiceState(i, now) === "Telat" ? "Invoice telat" : "Invoice jatuh tempo", action: i.phone ? "Kirim pengingat" : "Lihat invoice", wa: Boolean(i.phone),
       open: () => setActiveTab("Invoice"),
     })),
   ].sort((a, b) => a.when.localeCompare(b.when));
+
+  // Beranda's four numbers and the lead map (PRD-008 §1).
+  const active = leads.filter(l => inPlay(l.status));
+  const weekAgo = Date.now() - 7 * 86400000;
+  const month = now.slice(0, 7);
+  const paidThisMonth = invoices.reduce((a, i) => a + (i.payments || []).filter(p => (p.date || "").startsWith(month)).reduce((b, p) => b + (p.amount || 0), 0), 0);
+  const numbers = {
+    active: active.length,
+    newThisWeek: active.filter(l => Number(l.id.match(/_(\d{13})/)?.[1] || 0) > weekAgo).length,
+    high: highPotential,
+    closedThisMonth: invoices.filter(i => (i.date || "").startsWith(month)).length,
+    paidThisMonth: paidThisMonth ? `${rupiah(paidThisMonth)} masuk bulan ini` : "invoice dibuat bulan ini",
+    pipeline: active.reduce((a, l) => a + (Number(l.value) || 0), 0),
+    pipelineHigh: active.filter(l => sc(l).level === "tinggi").reduce((a, l) => a + (Number(l.value) || 0), 0),
+  };
+  const mapLeads = active.map(l => ({
+    id: l.id, name: l.name, score: sc(l).total, value: Number(l.value) || 0,
+    why: l.nextActionDate ? `${l.nextAction || "Follow-up"} ${longDate(l.nextActionDate)}` : sc(l).tip ? `Biar naik: ${sc(l).tip}` : "",
+  }));
 
   return (
     <div style={{ background: "var(--app-bg)", minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, color: "var(--app-text)" }}>
@@ -715,96 +734,18 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
         {/* DASHBOARD */}
         {activeTab === "Dashboard" && (
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <div style={{ marginBottom: 20, order: -2 }}>
-              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Sales Command Center</div>
-              <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 4 }}>{space.kind === "guild" ? `Ruang guild ${space.name} — ${showOwner ? "angka seluruh tim" : "angka kamu di guild ini"}` : "Overview pipeline & performance real-time lo"}</div>
-            </div>
+          <Beranda now={now} todo={todo} numbers={numbers} mapLeads={mapLeads}
+            onOpenLead={id => { const l = leads.find(x => x.id === id); if (l) openLead(l); }}
+            onImport={() => setShowImport(true)} onAdd={() => setShowAddLead(true)}>
+            {space.kind === "guild" && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: -16 }}>Ruang guild {space.name} — {showOwner ? "angka seluruh tim" : "angka kamu di guild ini"}.</div>}
             {seedCount > 0 && (
-              <div role="status" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 10, padding: "12px 14px", marginBottom: 16, fontSize: 12.5 }}>
+              <div role="status" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 10, padding: "12px 14px", fontSize: 12.5 }}>
                 <span>Ada <b>{seedCount} data contoh</b> (PT Maju Jaya dkk.) dari versi lama yang ikut kehitung di angka lo.</span>
                 <button onClick={removeSeedData} style={{ background: "#005eb0", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Hapus data contoh</button>
               </div>
             )}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 24 }}>
-              {[
-                { label: "Total Leads", value: leads.length, sub: `${hotLeads.length} hot leads`, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", icon: "👥" },
-                { label: "Pipeline Value", value: `${(totalValue / 1000000).toFixed(1)}M`, sub: "estimasi total", color: "var(--ok)", icon: "💰" },
-                { label: "Conversion Rate", value: `${conversionRate}%`, sub: `${closedLeads.length} closed`, color: "color-mix(in srgb, #a78bfa 55%, var(--app-text))", icon: "📈" },
-                { label: "Reply Rate", value: `${replyRate}%`, sub: `${repliedOutreach}/${outreach.length} outreach`, color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))", icon: "📬" },
-                { label: "Potensi Tinggi", value: highPotential, sub: "skor 70 ke atas", color: "var(--brand-text)", icon: "⭐" },
-                { label: "Belum Tertagih", value: `${(receivable / 1000000).toFixed(1)}M`, sub: `${invoices.filter(i => balance(i) > 0).length} invoice terbuka`, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", icon: "🧾" },
-                { label: "Rejections", value: rejections.length, sub: "perlu follow up", color: "color-mix(in srgb, #ff6b35 55%, var(--app-text))", icon: "❌" },
-              ].map(s => (
-                <div key={s.label} className="stat-card-dash" style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "14px 14px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--app-text)", fontWeight: 600 }}><span aria-hidden="true">{s.icon}</span>{s.label}</div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: `color-mix(in srgb, ${s.color} 55%, var(--app-text))`, fontFamily: "'Plus Jakarta Sans', sans-serif", marginTop: 6, fontVariantNumeric: "tabular-nums" }}>{s.value}</div>
-                  <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{s.sub}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 20, marginBottom: 20, order: -1 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>✅ Perlu Ditindak</div>
-              {todo.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Aman. Nggak ada follow-up, penawaran, deal macet, atau tagihan yang nunggu. Pasang jadwal follow-up dari detail lead.</div>}
-              {todo.map(t => {
-                const late = t.when < now;
-                const isToday = t.when === now;
-                return (
-                  <div key={t.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--app-inner)" }}>
-                    <button onClick={t.open} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", color: "inherit", fontFamily: "inherit" }}>
-                      <div style={{ fontSize: 18, flexShrink: 0 }}>{t.icon}</div>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
-                        <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{t.what}</div>
-                      </div>
-                    </button>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: late ? "#ff4444" : isToday ? "#ff9900" : "var(--app-muted)" }}>{late ? `telat ${daysBetween(t.when, now)}h` : isToday ? "hari ini" : longDate(t.when)}</span>
-                      {t.phone && <a href={waLink(t.phone, t.text)} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${t.title}`} style={{ background: "#25D366", color: "#fff", borderRadius: 6, padding: "6px 10px", fontSize: 11, fontWeight: 700, textDecoration: "none" }}>WA</a>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
             <LeadSources leads={leads} invoices={invoices} />
-            <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 24, marginBottom: 24 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Sales Pipeline</div>
-              {["Cold", "Warm", "Hot", "Closed"].map(s => {
-                const count = leads.filter(l => l.status === s).length;
-                const pct = leads.length ? (count / leads.length) * 100 : 0;
-                return (
-                  <div key={s} style={{ marginBottom: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, color: `color-mix(in srgb, ${statusColor[s]} 55%, var(--app-text))`, fontWeight: 600 }}>{s}</span>
-                      <span style={{ fontSize: 11, color: "var(--app-muted)" }}>{count} leads · {pct.toFixed(0)}%</span>
-                    </div>
-                    <div style={{ background: "var(--app-inner)", borderRadius: 4, height: 8 }}>
-                      <div style={{ background: statusColor[s], width: `${pct}%`, height: "100%", borderRadius: 4, transition: "width 0.6s ease" }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 24 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>🔥 Hot Leads - Prioritas Sekarang</div>
-              {hotLeads.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Belum ada hot leads.</div>}
-              {hotLeads.map(l => (
-                <div key={l.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid var(--app-inner)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 8, background: "#ff44441a", border: "1px solid #ff444430", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🔥</div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{l.name}</div>
-                      <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{l.contact} · {l.category}</div>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ok)" }}>Rp {(l.value / 1000000).toFixed(1)}M</div>
-                    <div style={{ fontSize: 11, color: "var(--app-muted)" }}>Skor {sc(l).total}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          </Beranda>
         )}
 
         {/* LEADS */}
