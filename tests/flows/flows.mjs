@@ -356,6 +356,31 @@ export const flows = [
         await page.getByRole("button", { name: "Bekukan report tim" }).click();
         await expectText(page, "Dibekukan");
       });
+      await t.step("the leader prints the team report", async () => {
+        await page.getByRole("button", { name: "Cetak / PDF" }).click();
+        await expectText(page, "REPORT SALES TIM");
+        await page.getByRole("button", { name: "TUTUP" }).click();
+      });
+      await t.step("the activity log shows who did what", async () => {
+        await page.getByRole("tab", { name: "Aktivitas" }).click();
+        await page.getByText("gabung guild").first().waitFor({ timeout: 10000 });
+        await page.getByText("closing lunas").first().waitFor();
+        await p2.getByRole("tab", { name: "Aktivitas" }).click();
+        await p2.getByText("nyatet chat").first().waitFor({ timeout: 10000 });
+        await p2.getByText("Yang kamu lakuin").waitFor();
+      });
+      await t.step("the leader hands the member's deal to themself", async () => {
+        await page.getByRole("tab", { name: "Pipeline" }).click();
+        await page.getByRole("button", { name: "semua", exact: true }).click();
+        await page.getByRole("button", { name: "Pindah pemilik" }).first().click();
+        const sel = modal(page).locator("#ra-to");
+        const now = await sel.inputValue();
+        const other = await sel.locator("option").evaluateAll((os, v) => os.map(o => o.value).find(x => x !== v), now);
+        await sel.selectOption(other);
+        await modal(page).getByRole("button", { name: "Pindahin" }).click();
+        await page.getByRole("tab", { name: "Aktivitas" }).click();
+        await page.getByText("pindah pemilik deal").first().waitFor({ timeout: 10000 });
+      });
       await t.step("the leader promotes the member to officer", async () => {
         await page.getByRole("tab", { name: /^Anggota/ }).click();
         await page.locator("select[id^='role-']").first().selectOption("officer");

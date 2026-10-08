@@ -8,9 +8,10 @@
 //   guilds/{g}/deals/{id}      a Deal (lib/funnel.ts) + ownerUid, ownerName
 //   guilds/{g}/targets/{m_uid} { uid, month, revenue, deals }
 //   guilds/{g}/reports/{m}     a frozen team month
+//   guilds/{g}/activities/{id} who did what, append-only
 //   users/{uid}/guilds/{g}     { name, joinedAt } — the user's own list of guilds
 
-import { deleteDoc, doc, getDoc, setDoc, writeBatch } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, getDoc, setDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Baseline, Deal, MonthNumbers, baseline, computeMonth } from "@/lib/funnel";
 
@@ -26,7 +27,7 @@ export const ROLE_HINT: Record<Role, string> = {
 
 export interface Guild { id: string; name: string; leaderUid: string; titles?: Partial<Record<Role, string>>; createdAt: number }
 export interface Member { uid: string; name: string; email: string; role: Role; joinedAt: number; inviteCode?: string }
-export interface Invite { id: string; role: Role; guildName: string; createdBy: string; createdAt: number; expiresAt: number }
+export interface Invite { id: string; role: Role; roleTitle?: string; guildName: string; createdBy: string; createdAt: number; expiresAt: number }
 export interface Target { id: string; uid: string; month: string; revenue: number; deals: number }
 export interface GuildRef { id: string; name: string; joinedAt: number }
 
@@ -66,7 +67,7 @@ export async function createInvite(g: Guild, by: string, role: Role): Promise<st
   const c = code();
   const now = Date.now();
   await setDoc(doc(db, "guilds", g.id, "invites", c), {
-    role, guildName: g.name, createdBy: by, createdAt: now, expiresAt: now + INVITE_DAYS * 86400000,
+    role, roleTitle: titleOf(g, role).slice(0, 30), guildName: g.name, createdBy: by, createdAt: now, expiresAt: now + INVITE_DAYS * 86400000,
   });
   return c;
 }
@@ -153,4 +154,31 @@ export function teamMonth(month: string, deals: Deal[], members: Member[], targe
     };
   }).sort((a, b) => b.revenue - a.revenue || b.paid - a.paid || b.leads - a.leads);
   return { month, total, base, rows };
+}
+
+// ---------- activity log ----------
+// Append-only (firestore.rules): who did what, when. `about` is the member an
+// entry concerns besides its author (a reassigned deal's new owner, a promoted
+// member), so they see it too. Never blocks the action it records.
+
+export type ActivityWhat =
+  | "deal_created" | "deal_moved" | "deal_paid" | "deal_lost" | "deal_deleted" | "deal_reassigned"
+  | "joined" | "left" | "role_changed" | "removed" | "invited" | "target_set" | "report_frozen" | "handover";
+
+export interface Activity {
+  id: string; who: string; whoName: string; what: ActivityWhat;
+  ref?: string; refName?: string; detail?: string; about?: string; at: number;
+}
+
+export const ACTIVITY_TEXT: Record<ActivityWhat, string> = {
+  deal_created: "nyatet chat", deal_moved: "geser deal", deal_paid: "closing lunas", deal_lost: "deal gugur",
+  deal_deleted: "hapus deal", deal_reassigned: "pindah pemilik deal", joined: "gabung guild", left: "keluar dari guild",
+  role_changed: "ganti peran", removed: "ngeluarin anggota", invited: "bikin undangan", target_set: "atur target",
+  report_frozen: "bekukan report", handover: "serahin Leader",
+};
+
+export function logActivity(g: string, by: { uid: string; name: string }, what: ActivityWhat, f: { ref?: string; refName?: string; detail?: string; about?: string } = {}) {
+  const entry = Object.fromEntries(Object.entries({ who: by.uid, whoName: by.name, what, ...f, at: Date.now() })
+    .filter(([, v]) => v !== undefined && v !== ""));
+  return addDoc(collection(db, "guilds", g, "activities"), entry).catch(() => { /* the action itself already happened */ });
 }

@@ -40,10 +40,20 @@ Semua aturan peran ditegakkan di `firestore.rules` (bukan cuma di UI), termasuk:
 
 **Perlu deploy rules:** `firebase deploy --only firestore:rules --project sales-pal` — tanpa itu, guild ditolak di produksi (koleksi `guilds` belum ada aturannya di live).
 
-## Belum ada (berikutnya)
+## Fase 2 — dikerjakan 2026-10-08
 
-- Pindahin Leads / Hunting / Jualan / Report Klien ke dalam guild (opsional per fitur).
-- Officer/Leader bikin deal atas nama orang lain dari UI (rules udah izinin), dan pindah pemilik deal.
-- Log aktivitas, pengingat follow-up, notifikasi (PRD-006 P2).
-- Nama peran custom di halaman gabung (sekarang nampil nama default).
-- Cetak/PDF report tim.
+Diminta user: "catet ke PRD terus lakuin semuanya". Urutan eksekusi = dari yang kecil & aman ke yang paling lebar.
+
+| # | Item | Keputusan desain | Status |
+|---|---|---|---|
+| 2.1 | **Nama peran custom di halaman gabung** | undangan nyimpen judul peran saat dibuat (`roleTitle`), halaman `/join` nampilin itu | ✅ rilis |
+| 2.2 | **Deal atas nama orang lain + pindah pemilik** | Leader/Officer pilih "Pemilik" pas bikin deal dan bisa pindahin deal ke anggota lain (rules udah izinin; Member tetap cuma bisa atas nama sendiri) | ✅ rilis |
+| 2.3 | **Cetak/PDF report tim** | lembar A4 hitam-putih kayak report klien: total tim, tabel per sales, target & capaian, definisi | ✅ rilis |
+| 2.4 | **Log aktivitas** | `guilds/{g}/activities/{id}` { who, whoName, what, ref, refName, at }: bikin deal, geser tahap, lunas, gugur, pindah pemilik, gabung, ganti peran, keluar, target. Ditulis bareng aksinya, ga bisa diedit/dihapus (rules), dibaca Leader/Officer semua & Member yang menyangkut dirinya. Tab **Aktivitas** | ✅ rilis |
+| 2.5 | **Mode ruang kerja (fitur pindah ke guild)** | pemilih **Pribadi / nama guild** di header. Leads, Outreach, Rejection, Hunting, Jualan (Paket, Penawaran, Invoice), Report Klien, Quick Pitch & Insights baca/tulis ke ruang yang dipilih. Di guild: data jualan punya **pemilik** (Member lihat miliknya, Leader/Officer semua, Viewer ga lihat); katalog bersama (Paket, template pitch, info bisnis, target harian) diatur Leader/Officer. **Tetap pribadi:** Threads Radar (token per orang) & lead website (pipeline owner). Data pribadi ga dipindah otomatis | dikerjain |
+| 2.6 | **Pengingat & notifikasi** | (a) panel **Perlu Ditindak** di Dashboard: penawaran > 3 hari belum gerak, deal aktif macet > 7 hari, follow-up jatuh tempo, invoice lewat tempo; (b) **push notif** PWA tiap pagi (Web Push, VAPID) lewat cron Vercel — iPhone butuh app di-install ke home screen (iOS 16.4+). Butuh env `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`CRON_SECRET` + service account | dikerjain |
+
+## Belum ada (sesudah Fase 2)
+
+- Salin/pindah data pribadi lama ke guild secara massal.
+- Notifikasi lewat email / WhatsApp template (butuh layanan email / WABA).
