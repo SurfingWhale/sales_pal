@@ -1,6 +1,6 @@
 // Server side of the Threads Radar: talks to graph.threads.net. The app
-// secret stays here (THREADS_APP_SECRET); the owner's token comes with each
-// request and is only ever used to read their own account.
+// secret stays here (THREADS_APP_SECRET); the owner's token is read from the
+// server's vault (lib/serverAuth.ts) and only used to read their own account.
 
 import { NextResponse } from "next/server";
 import type { RadarItem } from "@/lib/threads";
@@ -9,12 +9,6 @@ export const GRAPH = "https://graph.threads.net";
 
 export function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store, max-age=0" } });
-}
-
-// A Threads token is one long opaque word; anything else is refused before
-// it reaches Meta.
-export function validToken(t: unknown): t is string {
-  return typeof t === "string" && /^[A-Za-z0-9_\-|.]{20,1024}$/.test(t);
 }
 
 export async function graph<T>(path: string, params: Record<string, string>): Promise<T> {

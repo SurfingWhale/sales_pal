@@ -60,6 +60,13 @@ await t("unverified owner email cannot read", assertFails(getDocs(collection(own
 await t("deletes a lead", assertSucceeds(deleteDoc(doc(owner, "inbound_leads", ref.id))));
 await t("uses own SalesPal tree", assertSucceeds(setDoc(doc(owner, "users", "owner1", "leads", "l1"), { name: "PT X" })));
 
+console.log("server-only collections:");
+await t("owner cannot read the token vault", assertFails(getDoc(doc(owner, "connections", "owner1_threads"))));
+await t("owner cannot write a token", assertFails(setDoc(doc(owner, "connections", "owner1_threads"), { token: "x" })));
+await t("another account cannot read the vault", assertFails(getDocs(collection(other, "connections"))));
+await t("nobody reads usage quotas", assertFails(getDoc(doc(owner, "usage", "owner1_scan_2026-10-08"))));
+await t("nobody resets their quota", assertFails(setDoc(doc(other, "usage", "u9_scan_2026-10-08"), { count: 0 })));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 await env.cleanup();
 process.exit(fail ? 1 : 0);

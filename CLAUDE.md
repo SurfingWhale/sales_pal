@@ -10,7 +10,9 @@ then here.
   collection the app reads or writes must stay covered. Today that is
   `users/{uid}/{leads,outreach,rejections,pitchTemplates,hunts,radarSeen,services,quotes,invoices,settings}`,
   `users/{uid}/clients/{c}/{deals,posts,reports}` (Report Klien, PRD-005)
-  plus `inbound_leads`.
+  plus `inbound_leads`, and the server-only `connections` (token vault) and
+  `usage` (quotas), which deny every browser and are reached only through
+  `lib/serverAuth.ts`.
   Run `tests/firestore.rules.test.mjs` (see its header) before
   `firebase deploy --only firestore:rules --project sales-pal`.
 - This repository is public: the rules hold the owner's sign-in email and no

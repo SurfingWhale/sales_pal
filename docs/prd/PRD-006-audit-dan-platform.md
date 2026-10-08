@@ -1,6 +1,6 @@
 # PRD-006 — Audit Flow & Backend: dari Login sampai Sales Reporting
 
-- **Status:** Draft → menunggu keputusan (lihat §8)
+- **Status:** P0 selesai 2026-10-08 (lihat §7). P1–P3 menunggu keputusan (§8).
 - **Tanggal:** 2026-10-08
 - **Visi user:** *tiap user bisa login → isi preferensi bisnisnya → app nyesuain kebutuhannya → fiturnya jalan sampai tim sales bisa reporting sales.*
 - **Terkait:** PRD-001…005, `firestore.rules`, `CLAUDE.md`.
@@ -165,7 +165,7 @@ Aturan `CLAUDE.md` tetap berlaku: rules di-deploy utuh, tiap koleksi baru masuk 
 
 | Fase | Isi | Kenapa duluan |
 |---|---|---|
-| **P0 — sebelum ada user kedua** (± 1 minggu) | Admin SDK, kunci API routes + kuota, brankas token, hapus seed otomatis | nutup 3 masalah Kritis; fondasi semua langkah berikut |
+| **P0 — sebelum ada user kedua** ✅ selesai | Admin SDK (`lib/serverAuth.ts`), semua API route wajib login (`lib/authFetch.ts`) + kuota scan harian, token Threads pindah ke brankas `connections/` (deny-all), data contoh ga diisi otomatis lagi + tombol hapus data contoh lama. **Butuh env `FIREBASE_SERVICE_ACCOUNT` di Vercel** buat brankas & kuota permanen | nutup 3 masalah Kritis; fondasi semua langkah berikut |
 | **P1 — jadi produk multi-user** (± 3–4 minggu) | workspace + peran + undangan, rules baru + test per peran, migrasi data lo, onboarding + feature flag, log aktivitas | syarat buat tim sales & user lain |
 | **P2 — sales reporting & otomatis** (± 4 minggu) | report sales per orang + target + dashboard manager, cron, notifikasi push/email, link report publik, export/hapus data, monitoring | visi "sampe sales bisa reporting sales" |
 | **P3 — integrasi & bisnis** | PRD-005 Fase 2–3 (API Meta/TikTok, klik iklan WA), langganan berbayar | butuh approval platform & keputusan bisnis |

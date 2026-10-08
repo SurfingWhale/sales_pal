@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireUser, takeQuota } from "@/lib/serverAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,6 +37,16 @@ function extractLeads(content: string): ScanLead[] {
 }
 
 export async function POST(req: Request) {
+  // Only signed-in SalesPal users, and only so many scans a day each: every
+  // scan spends the xAI key.
+  const caller = await requireUser(req);
+  if (caller instanceof NextResponse) return caller;
+  const limit = parseInt(process.env.SCAN_DAILY_LIMIT || "", 10) || 40;
+  const quota = await takeQuota(caller.uid, "scan", limit);
+  if (!quota.ok) {
+    return NextResponse.json({ error: `Batas scan hari ini (${limit}) udah habis. Coba lagi besok.` }, { status: 429 });
+  }
+
   const key = process.env.XAI_API_KEY || process.env.GROK_API_KEY;
   if (!key) {
     return NextResponse.json(
