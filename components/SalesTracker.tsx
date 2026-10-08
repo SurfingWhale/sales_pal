@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { signOut, User } from "firebase/auth";
 import { STALL_DAYS, stalledWhat, useStalledDeals } from "@/lib/stalled";
+import { LEVEL_COLOR, Level, inPlay, scoreLead } from "@/lib/score";
+import LeadScore from "@/components/LeadScore";
 import { Space, SpaceContext, seesEveryone, spaceDoc, spaceQuery, stamp } from "@/lib/space";
 import { SpaceOption, useSpaceChoice } from "@/lib/spaceChoice";
 import { disablePush, restorePush } from "@/lib/push";
@@ -42,11 +44,12 @@ const sectionOf = (tab: string) => SECTIONS.find(x => x.tabs.includes(tab)) || S
 
 interface Lead {
   id: string; name: string; contact: string; source: string; status: string;
-  score: number; email: string; phone: string; category: string; notes: string;
+  score?: number; email: string; phone: string; category: string; notes: string;
   lastContact: string; value: number;
   nextAction?: string; nextActionDate?: string;
   accountUid?: string;
   ownerUid?: string; ownerName?: string;   // in a guild space
+  lastReplyAt?: string;                    // when they last answered (PRD-008 §2)
 }
 interface Outreach {
   id: string; leadName: string; type: string; date: string; subject: string;
@@ -238,6 +241,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [outreach, setOutreach] = useState<Outreach[]>([]);
   const [rejections, setRejections] = useState<Rejection[]>([]);
   const [filterStatus, setFilterStatus] = useState("All");
+  const [filterLevel, setFilterLevel] = useState<Level | "">("");
   const [showAddLead, setShowAddLead] = useState(false);
   const [showAddOutreach, setShowAddOutreach] = useState(false);
   const [showAddRejection, setShowAddRejection] = useState(false);
@@ -437,7 +441,6 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           status: normStatus(colMap.status ? r[colMap.status] : ""),
           value: parseValue(colMap.value ? r[colMap.value] : ""),
           notes: get("notes"),
-          score: Math.floor(50 + Math.random() * 40),
           lastContact: new Date().toISOString().split("T")[0],
         }));
       });
@@ -458,10 +461,9 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
   async function addLead() {
     if (!newLead.name) return;
-    const score = Math.floor(50 + Math.random() * 40);
     const id = `lead_${Date.now()}`;
     await setDoc(spaceDoc(space, "leads", id), stamp(space, {
-      ...newLead, score, lastContact: new Date().toISOString().split("T")[0],
+      ...newLead, lastContact: new Date().toISOString().split("T")[0],
       value: parseInt(newLead.value) || 5000000,
     }));
     setNewLead({ name: "", contact: "", source: "GMaps", status: "Cold", email: "", phone: "", category: "F&B", notes: "", value: "" });
@@ -507,6 +509,11 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   async function doneFollowUp(id: string) {
     await updateDoc(spaceDoc(space, "leads", id), { nextAction: "", nextActionDate: "", lastContact: today() });
     setFu({ action: "", date: "" });
+  }
+
+  // They answered: the strongest sign a lead is alive (PRD-008 §2, Respons).
+  async function markReplied(id: string) {
+    await updateDoc(spaceDoc(space, "leads", id), { lastReplyAt: today(), lastContact: today() });
   }
 
   function startQuote(lead: Lead) {
@@ -558,10 +565,15 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const closedLeads = leads.filter(l => l.status === "Closed");
   const hotLeads = leads.filter(l => l.status === "Hot");
   const conversionRate = leads.length ? ((closedLeads.length / leads.length) * 100).toFixed(0) : "0";
-  const avgScore = leads.length ? (leads.reduce((a, b) => a + b.score, 0) / leads.length).toFixed(0) : "0";
+  // Skor potensi, computed from the lead itself (lib/score.ts), never stored.
+  const scores = new Map(leads.map(l => [l.id, scoreLead(l, today())]));
+  const sc = (l: Lead) => scores.get(l.id) || scoreLead(l, today());
+  const highPotential = leads.filter(l => inPlay(l.status) && sc(l).level === "tinggi").length;
   const repliedOutreach = outreach.filter(o => o.status === "Replied").length;
   const replyRate = outreach.length ? ((repliedOutreach / outreach.length) * 100).toFixed(0) : "0";
-  const filteredLeads = filterStatus === "All" ? leads : leads.filter(l => l.status === filterStatus);
+  const filteredLeads = (filterStatus === "All" ? leads : leads.filter(l => l.status === filterStatus))
+    .filter(l => !filterLevel || sc(l).level === filterLevel)
+    .sort((a, b) => sc(b).total - sc(a).total);
   const receivable = invoices.reduce((a, i) => a + balance(i), 0);
   const liveLead = selectedLead ? leads.find(l => l.id === selectedLead.id) || selectedLead : null;
 
@@ -720,7 +732,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                 { label: "Pipeline Value", value: `${(totalValue / 1000000).toFixed(1)}M`, sub: "estimasi total", color: "var(--ok)", icon: "💰" },
                 { label: "Conversion Rate", value: `${conversionRate}%`, sub: `${closedLeads.length} closed`, color: "color-mix(in srgb, #a78bfa 55%, var(--app-text))", icon: "📈" },
                 { label: "Reply Rate", value: `${replyRate}%`, sub: `${repliedOutreach}/${outreach.length} outreach`, color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))", icon: "📬" },
-                { label: "Avg Lead Score", value: avgScore, sub: "dari 100", color: "var(--brand-text)", icon: "⭐" },
+                { label: "Potensi Tinggi", value: highPotential, sub: "skor 70 ke atas", color: "var(--brand-text)", icon: "⭐" },
                 { label: "Belum Tertagih", value: `${(receivable / 1000000).toFixed(1)}M`, sub: `${invoices.filter(i => balance(i) > 0).length} invoice terbuka`, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", icon: "🧾" },
                 { label: "Rejections", value: rejections.length, sub: "perlu follow up", color: "color-mix(in srgb, #ff6b35 55%, var(--app-text))", icon: "❌" },
               ].map(s => (
@@ -787,7 +799,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ok)" }}>Rp {(l.value / 1000000).toFixed(1)}M</div>
-                    <div style={{ fontSize: 11, color: "var(--app-muted)" }}>Score: {l.score}</div>
+                    <div style={{ fontSize: 11, color: "var(--app-muted)" }}>Skor {sc(l).total}</div>
                   </div>
                 </div>
               ))}
@@ -814,18 +826,33 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                 <button onClick={() => setShowAddLead(true)} style={btnPrimary}>+ Tambah lead</button>
               </div>
             </div>
+            {leads.length > 0 && (
+              <div role="group" aria-label="Filter potensi" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: -8, marginBottom: 16 }}>
+                <span style={{ fontSize: 12, color: "var(--app-muted)", marginRight: 4 }}>Potensi</span>
+                {(["", "tinggi", "sedang", "rendah"] as (Level | "")[]).map(lv => {
+                  const n = lv ? leads.filter(l => sc(l).level === lv).length : leads.length;
+                  const on = filterLevel === lv;
+                  return (
+                    <button key={lv || "all"} onClick={() => setFilterLevel(lv)} aria-pressed={on}
+                      style={{ background: on ? "#005eb0" : "var(--app-card)", color: on ? "#fff" : "var(--app-muted)", border: `1px solid ${on ? "#005eb0" : "var(--app-border)"}`, borderRadius: 18, padding: "0 12px", minHeight: 34, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                      {lv ? lv[0].toUpperCase() + lv.slice(1) : "Semua"} <span style={{ opacity: 0.75, fontVariantNumeric: "tabular-nums" }}>{n}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {filteredLeads.length === 0 ? (
               <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "56px 24px", textAlign: "center" }}>
                 <div style={{ fontSize: 34, marginBottom: 12 }}>{leads.length === 0 ? "📇" : "🔍"}</div>
                 <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{leads.length === 0 ? "Belum ada lead" : "Ga ada lead yang cocok"}</div>
-                <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>{leads.length === 0 ? "Mulai dengan import Excel/CSV, atau tambah manual." : `Ga ada lead berstatus "${filterStatus}". Coba filter lain.`}</div>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>{leads.length === 0 ? "Mulai dengan import Excel/CSV, atau tambah manual." : `Ga ada lead${filterStatus !== "All" ? ` berstatus "${filterStatus}"` : ""}${filterLevel ? ` berpotensi ${filterLevel}` : ""}. Coba filter lain.`}</div>
                 {leads.length === 0 ? (
                   <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
                     <button onClick={() => setShowImport(true)} style={{ ...btnPrimary, background: "transparent", color: "var(--brand-text)", border: "1px solid #005eb0" }}>⬆ Import Excel/CSV</button>
                     <button onClick={() => setShowAddLead(true)} style={btnPrimary}>+ Lead pertama</button>
                   </div>
                 ) : (
-                  <button onClick={() => setFilterStatus("All")} style={btnPrimary}>Reset filter</button>
+                  <button onClick={() => { setFilterStatus("All"); setFilterLevel(""); }} style={btnPrimary}>Reset filter</button>
                 )}
               </div>
             ) : isNarrow ? (
@@ -843,9 +870,9 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, gap: 8 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                         <div style={{ width: 44, height: 4, background: "var(--app-inner)", borderRadius: 2, flexShrink: 0 }}>
-                          <div style={{ width: `${lead.score}%`, height: "100%", background: lead.score > 80 ? "#00a862" : lead.score > 60 ? "#f59e0b" : "#ff4444", borderRadius: 2 }} />
+                          <div style={{ width: `${sc(lead).total}%`, height: "100%", background: LEVEL_COLOR[sc(lead).level], borderRadius: 2 }} />
                         </div>
-                        <span style={{ fontSize: 11, fontWeight: 700 }}>{lead.score}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700 }} aria-label={`Skor potensi ${sc(lead).total}, ${sc(lead).level}`}>{sc(lead).total}</span>
                         <span style={{ fontSize: 11, color: "var(--app-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>· {lead.source}</span>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
@@ -861,7 +888,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
                 <thead>
                   <tr style={{ background: "var(--app-inner)", borderBottom: "1px solid var(--app-border)" }}>
-                    {["PERUSAHAAN", "KONTAK", "SOURCE", "STATUS", "SCORE", "VALUE", "LAST CONTACT", ""].map(h => (
+                    {["PERUSAHAAN", "KONTAK", "SOURCE", "STATUS", "POTENSI", "VALUE", "LAST CONTACT", ""].map(h => (
                       <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", fontWeight: 600 }}>{h}</th>
                     ))}
                   </tr>
@@ -884,9 +911,9 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                       <td style={{ padding: "14px 16px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <div style={{ width: 40, height: 4, background: "var(--app-inner)", borderRadius: 2 }}>
-                            <div style={{ width: `${lead.score}%`, height: "100%", background: lead.score > 80 ? "#00a862" : lead.score > 60 ? "#f59e0b" : "#ff4444", borderRadius: 2 }} />
+                            <div style={{ width: `${sc(lead).total}%`, height: "100%", background: LEVEL_COLOR[sc(lead).level], borderRadius: 2 }} />
                           </div>
-                          <span style={{ fontSize: 12, fontWeight: 700 }}>{lead.score}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700 }} aria-label={`Skor potensi ${sc(lead).total}, ${sc(lead).level}`}>{sc(lead).total}</span>
                         </div>
                       </td>
                       <td style={{ padding: "14px 16px", fontSize: 13, fontWeight: 700, color: "var(--ok)" }}>Rp {(lead.value / 1000000).toFixed(1)}M</td>
@@ -1192,13 +1219,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 6 }}>NOTES</div>
               <div style={{ fontSize: 12 }}>{liveLead.notes || "—"}</div>
             </div>
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 8 }}>LEAD SCORE</div>
-              <div style={{ background: "var(--app-inner)", borderRadius: 6, height: 10 }}>
-                <div style={{ width: `${liveLead.score}%`, height: "100%", background: liveLead.score > 80 ? "#00a862" : liveLead.score > 60 ? "#f59e0b" : "#ff4444", borderRadius: 6, transition: "width 0.6s" }} />
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 700, marginTop: 6, color: liveLead.score > 80 ? "#00a862" : liveLead.score > 60 ? "#f59e0b" : "#ff4444" }}>{liveLead.score} / 100</div>
-            </div>
+            <LeadScore score={sc(liveLead)} onReplied={() => markReplied(liveLead.id)} />
             <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12, marginTop: 16 }}>
               <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 8 }}>FOLLOW-UP BERIKUTNYA</div>
               <input value={fu.action} onChange={e => setFu({ ...fu, action: e.target.value })} style={{ ...inputStyle, marginBottom: 8 }} placeholder="mis. Kirim portfolio, telpon owner" aria-label="Tindakan berikutnya" />

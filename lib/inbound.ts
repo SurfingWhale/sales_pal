@@ -21,7 +21,7 @@ export interface InboundLead {
 // import leaves alone.
 export interface LeadFields {
   name: string; contact: string; source: string; status: string; score: number;
-  email: string; phone: string; category: string; notes: string; lastContact: string; value: number;
+  email: string; phone: string; category: string; notes: string; lastContact: string; value: number; lastReplyAt?: string;
   accountUid?: string;
 }
 
@@ -77,6 +77,7 @@ export function leadFromInbound(l: InboundLead): LeadFields {
     name: l.contact.business || l.contact.name,
     source: `Web · ${l.site}${tag}`,
     status: soon ? "Hot" : "Warm",
+    lastReplyAt: today(),   // they wrote in: as good as a reply (PRD-008 §2)
     score: Math.min(98, 55 + (soon ? 25 : later ? 12 : 0) + (l.contact.whatsapp ? 10 : 0) + (l.contact.business ? 5 : 0)),
     notes: [
       a.need && `Need: ${a.need}`,
