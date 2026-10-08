@@ -8,6 +8,9 @@ import { readFileSync } from "node:fs";
 const OWNER_EMAIL = readFileSync(new URL("../../firestore.rules", import.meta.url), "utf8").match(/email in \['([^']+)'\]/)?.[1];
 
 // ---------- helpers ----------
+// One DM in Hunting's log: the row that holds this target and its delete button.
+const huntRow = (page, target) => page.locator("div").filter({ has: page.getByText(target, { exact: true }) }).filter({ has: page.getByRole("button", { name: /^Hapus DM/ }) }).last();
+
 async function signup(t) {
   const { page, base } = t;
   await page.goto(`${base}/login`);
@@ -203,10 +206,21 @@ export const flows = [
         await page.locator("#hunt-target").fill("@rotiflow");
         await page.getByRole("button", { name: "Copy" }).nth(1).click();
         await page.getByRole("button", { name: "📤 Catat terkirim" }).click();
-        await page.getByRole("button", { name: "Tandai Ditolak" }).first().click();
+        await huntRow(page, "@rotiflow").getByRole("button", { name: "Tandai Ditolak" }).click();
         await page.getByLabel("Alasan ditolak").fill("udah punya fotografer");
         await page.getByRole("button", { name: "Simpan", exact: true }).click();
         await expectText(page, "“udah punya fotografer”");
+      });
+      await t.step("Balas cepat picks 'Sudah Punya' from the reason and copies a reply", async () => {
+        await huntRow(page, "@rotiflow").getByRole("button", { name: "💡 Balas" }).click();
+        await page.getByRole("button", { name: "✋ Sudah Punya", pressed: true }).waitFor();
+        const panel = page.getByRole("region", { name: /Saran balasan/ });
+        await panel.getByRole("button", { name: "Copy" }).first().click();
+        const clip = await page.evaluate(() => navigator.clipboard.readText());
+        if (clip.length < 20) throw new Error(`clipboard: "${clip}"`);
+        await panel.getByRole("button", { name: "Formal" }).click();
+        await panel.getByRole("button", { name: "👍 Lanjut ngobrol" }).click();
+        await panel.getByText(/Terima kasih atas balasannya, rotiflow/).waitFor();
       });
       await t.step("change the daily goal to 25", async () => {
         await page.getByRole("button", { name: /Ubah target harian/ }).click();
