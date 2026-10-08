@@ -153,11 +153,61 @@ export const flows = [
         await t.page.keyboard.press("Escape");
         await modal(t.page).click({ position: { x: 5, y: 5 } }).catch(() => {});
       });
+      await t.step("pull a WhatsApp chat export into the profile, keep only the summary", async () => {
+        const d = (n) => { const x = new Date(Date.now() - n * 86400000); return `${String(x.getDate()).padStart(2, "0")}/${String(x.getMonth() + 1).padStart(2, "0")}/${String(x.getFullYear()).slice(2)}`; };
+        const chat = [
+          `${d(12)} 10.01 - Aku: Halo kak, aku fotografer makanan. Boleh kirim portfolio?`,
+          `${d(12)} 10.15 - Kopi Flow: Boleh. Berapa harganya? langsung aja`,
+          `${d(12)} 10.20 - Aku: Paket mulai 1,5 jt kak`,
+          `${d(2)} 11.40 - Kopi Flow: Bisa sekalian foto 2 cabang?`,
+          `${d(1)} 09.00 - Kopi Flow: Boleh kirim pricelist-nya, Kak?`,
+        ].join("\n");
+        await go(t.page, "Leads");
+        await t.page.locator(".lead-row", { hasText: "Kopi Flow" }).first().click();
+        await t.page.getByRole("button", { name: "Tarik dari WA" }).click();
+        await t.page.getByLabel("File ekspor chat").setInputFiles({ name: "Chat WhatsApp dengan Kopi Flow.txt", mimeType: "text/plain", buffer: Buffer.from(chat) });
+        await expectText(t.page, "Ketemu dari 5 pesan");
+        await t.page.getByRole("switch", { name: /^Terakhir bales/ }).click();
+        await t.page.getByRole("button", { name: /^Simpan \d bagian ke Kopi Flow$/ }).click();
+        await expectText(t.page, "Pola chat");
+        await expectText(t.page, "“Boleh kirim pricelist-nya, Kak?”");
+        await expectText(t.page, "belum dijawab");
+        await t.page.keyboard.press("Escape");
+        await modal(t.page).click({ position: { x: 5, y: 5 } }).catch(() => {});
+      });
       await t.step("the follow-up shows in Perlu Ditindak", async () => { await go(t.page, "Beranda"); await expectText(t.page, "Kirim portfolio"); });
       await t.step("delete asks first, then removes it", async () => {
         await go(t.page, "Leads");
         await t.page.getByRole("button", { name: "Hapus lead Kopi Flow" }).first().click();
         await t.page.getByText("Kopi Flow").first().waitFor({ state: "detached", timeout: 8000 });
+      });
+    },
+  },
+  {
+    name: "whatsapp: a chat shared from Android becomes a new lead's profile",
+    async run(t) {
+      const { page, base } = t;
+      await t.step("sign up", () => signup(t));
+      await t.step("share a chat export the way Android's share sheet does", async () => {
+        await page.evaluate(async () => {
+          await navigator.serviceWorker.ready;
+          for (let i = 0; i < 50 && !navigator.serviceWorker.controller; i++) await new Promise(r => setTimeout(r, 100));
+        });
+        const chat = ["01/10/26 10.01 - Aku: Halo kak, boleh kirim portfolio?", "01/10/26 10.30 - Kopi Share: Boleh, berapa harganya?", "02/10/26 09.00 - Kopi Share: Bisa minggu depan?"].join("\n");
+        await page.evaluate(async (txt) => {
+          const fd = new FormData();
+          fd.append("file", new File([txt], "Chat WhatsApp dengan Kopi Share.txt", { type: "text/plain" }));
+          await fetch("/share-target", { method: "POST", body: fd });
+        }, chat);
+        await page.goto(`${base}/dashboard?share`);
+        await page.getByText("Chat ini buat lead mana?").waitFor({ timeout: 15000 });
+      });
+      await t.step("make it a new lead and keep the summary", async () => {
+        await page.getByRole("button", { name: "+ Lead baru: Kopi Share" }).click();
+        await expectText(page, "Ketemu dari 3 pesan");
+        await page.getByRole("button", { name: /^Simpan \d bagian ke Kopi Share$/ }).click();
+        await expectText(page, "Pola chat");
+        await expectText(page, "“Bisa minggu depan?”");
       });
     },
   },

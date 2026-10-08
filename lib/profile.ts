@@ -11,11 +11,17 @@ export interface LeadProfile {
   objectionType?: string;   // lib/salespal-data objections[].id
   archetype?: string;       // lib/salespal-data archetypes[].id
   brief?: string;
+  // From a WhatsApp export (PRD-008 §5): a summary only, never the chat.
+  chat?: { messages: number; since: string; until: string; mine: number; theirs: number;
+    avgReplyMin: number | null; activeHours: string | null; perWeek: { week: string; n: number }[] };
+  cues?: { word: string; n: number }[];
+  questions?: { text: string; at: string; answered: boolean }[];
+  wa?: { name?: string; category?: string; notes?: string };
   source?: "manual" | "wa-export";
   at?: string;              // YYYY-MM-DD
 }
 
-export const hasProfile = (p?: LeadProfile | null) => Boolean(p && (p.need || p.pain || p.objection || p.archetype));
+export const hasProfile = (p?: LeadProfile | null) => Boolean(p && (p.need || p.pain || p.objection || p.archetype || p.brief || p.chat));
 
 // The customer type whose trigger words show up most in what was written.
 export function guessArchetype(text: string): string | null {

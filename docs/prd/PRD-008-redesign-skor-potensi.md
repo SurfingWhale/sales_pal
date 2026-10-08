@@ -1,6 +1,6 @@
 # PRD-008 — Arah desain baru: Beranda yang nyuruh, skor potensi, profil customer dari WhatsApp
 
-- **Status:** desain disetujui di canvas **SalesPal Redesign** (artifact, 5 artboard, 2026-10-08). 8.1–8.3 rilis.
+- **Status:** desain disetujui di canvas **SalesPal Redesign** (artifact, 5 artboard, 2026-10-08). 8.1–8.6 rilis (8.5: Share Target ✅, brief via model ditunda — brief dibuat lokal).
 - **Sumber:** artboard *Beranda — desktop*, *Leads + skor potensi*, *Beranda — HP*, *Profil customer — HP*, *Tarik dari WhatsApp — HP*. Nama & angka di mockup itu contoh, bukan data.
 - **Lanjutan dari:** PRD-001 (brand), PRD-004 (audit tampilan), PRD-006 (Perlu Ditindak), PRD-002 §8 (Balas cepat).
 
@@ -98,11 +98,13 @@ Masuk ke `leads` yang udah dicakup rules (pribadi & ruang guild) — ga perlu ko
 | **8.1** ✅ | `lib/score.ts` (5 sinyal, level, "biar naik") + tes; skor acak dihapus; Leads nampilin skor, level, filter | flow: lead dengan follow-up & nomor naik skornya |
 | **8.2** ✅ | Beranda baru: sapaan, 4 angka, kartu Perlu ditindak dengan aksi, Peta lead + kuadran (desktop & HP) | flow: lead "kejar sekarang" muncul di peta & daftar |
 | **8.3** ✅ | Panel detail Leads + Profil (isi manual), QuickPitch/Balas cepat baca arketipe dari profil | flow: isi profil manual, tampil di panel |
-| **8.4** | Tarik dari WhatsApp: parser ekspor lokal (pola chat, kata pemicu, pertanyaan), vCard, screenshot profil bisnis; layar pilih bagian | flow: unggah file ekspor contoh → simpan 3 bagian |
-| **8.5** | Brief/kebutuhan/keberatan via model (opt-in, potongan tanpa nomor) + Web Share Target Android | tes server: tanpa login 401, kuota jalan |
-| **8.6** | Profil customer HP lengkap (pola chat, grafik mingguan, pertanyaan + Balas) | flow HP |
+| **8.4** ✅ | Tarik dari WhatsApp: parser ekspor lokal (pola chat, kata pemicu, pertanyaan), vCard, screenshot profil bisnis; layar pilih bagian | flow: unggah file ekspor contoh → simpan 3 bagian |
+| **8.5** ½ | Web Share Target Android ✅ (`public/sw.js` + `/share-target`, pilih lead / lead baru). Brief/kebutuhan via model **ditunda**: brief, tipe, keberatan, pertanyaan udah kebaca lokal tanpa ngirim chat ke server | flow: share POST → lead baru → profil |
+| **8.6** ✅ | Profil customer HP lengkap (pola chat, grafik mingguan, pertanyaan + Balas) | flow HP |
 
 ## Belum / di luar
 
 - Baca chat WA otomatis (ga ada API buat akun pribadi; WABA beda urusan).
 - Kalibrasi bobot skor dari data closing beneran — sesudah ada ≥ 3 bulan data.
+- Ringkasan kebutuhan / pain point otomatis pakai model bahasa (opt-in, potongan tanpa nomor) — kalau brief lokal ternyata kurang.
+- Panel Leads dua kolom di desktop (daftar kiri, detail kanan) — sekarang detail masih dialog.

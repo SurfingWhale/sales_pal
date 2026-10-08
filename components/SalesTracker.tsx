@@ -6,6 +6,8 @@ import { STALL_DAYS, stalledWhat, useStalledDeals } from "@/lib/stalled";
 import { LEVEL_COLOR, Level, inPlay, scoreLead } from "@/lib/score";
 import LeadScore from "@/components/LeadScore";
 import Beranda from "@/components/Beranda";
+import { downscaleImage } from "@/lib/image";
+import { registerWorker, takeSharedFile } from "@/lib/share";
 import LeadProfileCard from "@/components/LeadProfileCard";
 import type { LeadProfile } from "@/lib/profile";
 import { Space, SpaceContext, seesEveryone, spaceDoc, spaceQuery, stamp } from "@/lib/space";
@@ -166,31 +168,6 @@ function parseValue(v: unknown): number {
   return digits ? parseInt(digits, 10) : 0;
 }
 
-// Downscale an image file client-side before sending to the scan API (keeps payload small).
-function downscaleImage(file: File, maxDim = 1600, quality = 0.82): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new window.Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      let { width, height } = img;
-      const longest = Math.max(width, height);
-      if (longest > maxDim) {
-        const scale = maxDim / longest;
-        width = Math.round(width * scale);
-        height = Math.round(height * scale);
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = width; canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("Canvas tidak didukung")); return; }
-      ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL("image/jpeg", quality));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Gambar tidak bisa dibaca")); };
-    img.src = url;
-  });
-}
 
 function useIsNarrow(bp = 640) {
   const [narrow, setNarrow] = useState(false);
@@ -278,7 +255,20 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const hunts = useSpaceCollection<Hunt>(space, "hunts");
   const huntGoal = useHuntGoal(space);
   const stuck = useStalledDeals(uid);
-  useEffect(() => { restorePush(); }, []);
+  useEffect(() => { restorePush(); registerWorker(); }, []);
+
+  // A WhatsApp export shared from Android (PRD-008 §5): ask which lead it's for.
+  const [shared, setShared] = useState<File | null>(null);
+  const [shareFor, setShareFor] = useState<{ leadId: string; file: File } | null>(null);
+  const [shareMsg, setShareMsg] = useState("");
+  const [shareQ, setShareQ] = useState("");
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (!q.has("share")) return;
+    history.replaceState(null, "", "/dashboard");
+    if (q.get("share")) { setShareMsg("File-nya ga kebawa. Buka SalesPal sekali dari ikon di layar utama, terus bagikan ulang dari WhatsApp."); return; }
+    takeSharedFile().then(f => f ? setShared(f) : setShareMsg("File-nya ga ketemu. Coba bagikan ulang dari WhatsApp."));
+  }, []);
   const [quoteFor, setQuoteFor] = useState<LeadRef | null>(null);
   const [fu, setFu] = useState({ action: "", date: "" });
   const clearQuoteFor = useCallback(() => setQuoteFor(null), []);
@@ -1163,8 +1153,17 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 6 }}>NOTES</div>
               <div style={{ fontSize: 12 }}>{liveLead.notes || "—"}</div>
             </div>
-            <LeadProfileCard profile={liveLead.profile} name={liveLead.contact || liveLead.name} phone={liveLead.phone}
-              onSave={profile => updateDoc(spaceDoc(space, "leads", liveLead.id), { profile })} />
+            <LeadProfileCard key={liveLead.id + (shareFor?.leadId === liveLead.id ? "_share" : "")} profile={liveLead.profile} name={liveLead.contact || liveLead.name} phone={liveLead.phone}
+              shareFile={shareFor?.leadId === liveLead.id ? shareFor.file : null}
+              onSave={profile => updateDoc(spaceDoc(space, "leads", liveLead.id), { profile })}
+              onImport={patch => {
+                const { lastReplyAt, ...rest } = patch;
+                const newer = lastReplyAt && (!liveLead.lastReplyAt || lastReplyAt > liveLead.lastReplyAt);
+                setShareFor(null);
+                return updateDoc(spaceDoc(space, "leads", liveLead.id), {
+                  ...rest, ...(newer ? { lastReplyAt, ...(lastReplyAt > (liveLead.lastContact || "") ? { lastContact: lastReplyAt } : {}) } : {}),
+                });
+              }} />
             <LeadScore score={sc(liveLead)} onReplied={() => markReplied(liveLead.id)} />
             <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12, marginTop: 16 }}>
               <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 8 }}>FOLLOW-UP BERIKUTNYA</div>
@@ -1249,6 +1248,45 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             </button>
           </div>
         </div>
+      )}
+
+      {shared && (
+        <div className="modal-overlay" onClick={() => setShared(null)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="share-h" onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 22, width: "100%", maxWidth: 440, maxHeight: "86vh", display: "flex", flexDirection: "column" }}>
+            <div id="share-h" style={{ fontSize: 16, fontWeight: 700 }}>Chat ini buat lead mana?</div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", margin: "4px 0 12px" }}>{shared.name}</div>
+            <label htmlFor="share-q" style={{ position: "absolute", left: -9999 }}>Cari lead</label>
+            <input id="share-q" value={shareQ} onChange={e => setShareQ(e.target.value)} placeholder="Cari nama lead" style={{ ...inputStyle, fontSize: 16 }} />
+            <div style={{ overflowY: "auto", marginTop: 8, flex: 1 }}>
+              {(() => {
+                const guess = shared.name.replace(/\.(txt|zip|vcf)$/i, "").replace(/^(Chat WhatsApp dengan|WhatsApp Chat with|WhatsApp Chat -)\s*/i, "").trim();
+                const q = (shareQ || "").toLowerCase();
+                const list = leads.filter(l => !q || l.name.toLowerCase().includes(q))
+                  .sort((a, b) => Number(b.name.toLowerCase().includes(guess.toLowerCase())) - Number(a.name.toLowerCase().includes(guess.toLowerCase())) || a.name.localeCompare(b.name)).slice(0, 30);
+                return (
+                  <>
+                    {list.map(l => (
+                      <button key={l.id} onClick={() => { setShareFor({ leadId: l.id, file: shared }); setShared(null); openLead(l); }}
+                        style={{ width: "100%", textAlign: "left", padding: "11px 4px", border: "none", borderBottom: "1px solid var(--app-inner)", background: "transparent", color: "inherit", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 600 }}>
+                        {l.name} <span style={{ fontWeight: 400, color: "var(--app-muted)", fontSize: 12 }}>· {l.category}</span>
+                      </button>
+                    ))}
+                    <button onClick={async () => {
+                      const id = `lead_${Date.now()}`;
+                      const lead = stamp(space, { name: guess || "Lead dari WhatsApp", contact: "", source: "WhatsApp", status: "Warm", email: "", phone: "", category: "F&B", notes: "", value: 0, lastContact: today() });
+                      await setDoc(spaceDoc(space, "leads", id), lead);
+                      setShareFor({ leadId: id, file: shared }); setShared(null); setActiveTab("Leads");
+                      openLead({ id, ...lead } as Lead);
+                    }} style={{ ...btnPrimary, width: "100%", marginTop: 10 }}>+ Lead baru: {guess || "dari WhatsApp"}</button>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+      {shareMsg && (
+        <div role="alert" onClick={() => setShareMsg("")} style={{ position: "fixed", left: 16, right: 16, bottom: 90, zIndex: 120, maxWidth: 480, margin: "0 auto", background: "var(--app-text)", color: "var(--app-bg)", borderRadius: 12, padding: "12px 14px", fontSize: 13 }}>{shareMsg}</div>
       )}
 
       {/* Import Leads Modal */}
