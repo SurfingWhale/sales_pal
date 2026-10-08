@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { deleteDoc, doc, onSnapshot, setDoc } from "firebase/firestore";
+import { deleteDoc, deleteField, doc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { authFetch } from "@/lib/authFetch";
 import { today, useUserCollection } from "@/lib/billing";
 import type { Hunt } from "@/lib/hunting";
 import { RadarItem, RadarPerson, THREADS_SCOPES, ThreadsConnection, groupRadar, needsRefresh, profileUrl } from "@/lib/threads";
@@ -28,18 +29,22 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
   const ref = doc(db, "users", uid, "settings", "threads");
 
   useEffect(() => onSnapshot(doc(db, "users", uid, "settings", "threads"), snap => {
-    setConn(snap.exists() ? (snap.data() as ThreadsConnection) : null);
+    const c = snap.exists() ? (snap.data() as ThreadsConnection) : null;
+    // A token stored here by the old version must not stay readable: wipe it.
+    // That connection then has to be made again, this time into the vault.
+    if (c?.token) { updateDoc(snap.ref, { token: deleteField() }).catch(() => {}); }
+    setConn(c);
   }), [uid]);
 
   // Keep the token alive: another 60 days whenever it is under 30 days from running out.
   useEffect(() => {
     if (!conn || !needsRefresh(conn)) return;
-    fetch("/api/threads/refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: conn.token }) })
+    authFetch("/api/threads/refresh", { method: "POST" })
       .then(r => r.ok ? r.json() : null)
       .then(r => r && setDoc(ref, r, { merge: true }))
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conn?.token]);
+  }, [conn?.refreshedAt]);
 
   function connect() {
     const state = Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -55,7 +60,7 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
     if (!conn) return;
     setLoading(true); setError(""); setWarnings([]);
     try {
-      const res = await fetch("/api/threads/radar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: conn.token }) });
+      const res = await authFetch("/api/threads/radar", { method: "POST" });
       const body = await res.json();
       if (!res.ok) {
         setError(body.expired ? "Sambungan Threads kedaluwarsa. Hubungkan lagi." : body.error || "Radar gagal.");
@@ -87,6 +92,7 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
 
   async function disconnect() {
     if (!confirm("Putuskan Threads dari SalesPal?")) return;
+    await authFetch("/api/threads/token", { method: "DELETE" }).catch(() => {});
     await deleteDoc(ref);
     setPeople(null);
   }
