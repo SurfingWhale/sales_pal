@@ -12,8 +12,8 @@ then here.
   `users/{uid}/clients/{c}/{deals,posts,reports}` (Report Klien, PRD-005)
   `users/{uid}/guilds`, `guilds/{g}` with `{members,invites,deals,targets,reports,activities}`
   (Guild, PRD-007 — role rules live in firestore.rules and are tested per role)
-  plus `inbound_leads`, and the server-only `connections` (token vault) and
-  `usage` (quotas), which deny every browser and are reached only through
+  plus `inbound_leads`, and the server-only `connections` (token vault),
+  `usage` (quotas) and `pushSubs` (Web Push subscriptions), which deny every browser and are reached only through
   `lib/serverAuth.ts`.
   Run `tests/firestore.rules.test.mjs` (see its header) before
   `firebase deploy --only firestore:rules --project sales-pal`.

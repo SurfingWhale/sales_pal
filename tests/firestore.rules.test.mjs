@@ -64,6 +64,8 @@ console.log("server-only collections:");
 await t("owner cannot read the token vault", assertFails(getDoc(doc(owner, "connections", "owner1_threads"))));
 await t("owner cannot write a token", assertFails(setDoc(doc(owner, "connections", "owner1_threads"), { token: "x" })));
 await t("another account cannot read the vault", assertFails(getDocs(collection(other, "connections"))));
+await t("no browser reads or writes push subscriptions", assertFails(getDocs(collection(owner, "pushSubs"))));
+await t("no browser stores a push subscription", assertFails(setDoc(doc(other, "pushSubs", "x"), { uid: "u9", endpoint: "https://push.example/1" })));
 await t("nobody reads usage quotas", assertFails(getDoc(doc(owner, "usage", "owner1_scan_2026-10-08"))));
 await t("nobody resets their quota", assertFails(setDoc(doc(other, "usage", "u9_scan_2026-10-08"), { count: 0 })));
 

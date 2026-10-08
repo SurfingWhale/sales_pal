@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { signOut, User } from "firebase/auth";
+import { STALL_DAYS, stalledWhat, useStalledDeals } from "@/lib/stalled";
+import { disablePush, restorePush } from "@/lib/push";
+import PushToggle from "@/components/PushToggle";
 import { collection, doc, getDoc, setDoc, onSnapshot, deleteDoc, writeBatch, query, where, updateDoc, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
@@ -248,6 +251,8 @@ export default function SalesTracker({ user }: { user: User }) {
   const business = useBusiness(uid);
   const hunts = useUserCollection<Hunt>(uid, "hunts");
   const huntGoal = useHuntGoal(uid);
+  const stuck = useStalledDeals(uid);
+  useEffect(() => { restorePush(); }, []);
   const [quoteFor, setQuoteFor] = useState<LeadRef | null>(null);
   const [fu, setFu] = useState({ action: "", date: "" });
   const clearQuoteFor = useCallback(() => setQuoteFor(null), []);
@@ -496,7 +501,9 @@ export default function SalesTracker({ user }: { user: User }) {
     await batch.commit();
   }
 
-  function handleLogout() {
+  async function handleLogout() {
+    // A signed-out device gets no more reminders meant for this account.
+    await disablePush().catch(() => undefined);
     signOut(auth);
     router.replace("/login");
   }
@@ -552,6 +559,16 @@ export default function SalesTracker({ user }: { user: User }) {
       what: `Penawaran ${q.number} belum dijawab ${daysBetween(q.sentAt as string, now)} hari`, phone: q.phone,
       text: `Halo ${q.contact || q.leadName}, mau follow up penawaran ${q.number} kemarin. Ada yang bisa aku bantu jelasin?`,
       open: () => setActiveTab("Penawaran"),
+    })),
+    ...stuck.map(s => ({
+      key: `s_${s.key}`, when: addDays(s.lastMove, STALL_DAYS), icon: "⏸️", title: s.deal.contactName,
+      what: stalledWhat(s), phone: s.deal.phone || "", text: `Halo ${s.deal.contactName}, `,
+      open: () => setActiveTab(s.where === "guild" ? "Guild" : "Report Klien"),
+    })),
+    ...rejections.filter(r => r.followUpDate && r.followUpDate <= soon && r.followUpDate >= addDays(now, -14)).map(r => ({
+      key: `r_${r.id}`, when: r.followUpDate, icon: "↩️", title: r.leadName,
+      what: `Coba lagi setelah ditolak (${r.reason || r.channel})`, phone: "", text: "",
+      open: () => setActiveTab("Rejection Log"),
     })),
     ...invoices.filter(i => balance(i) > 0 && i.dueDate && i.dueDate <= soon).map(i => ({
       key: `i_${i.id}`, when: i.dueDate, icon: "🧾", title: i.leadName,
@@ -678,7 +695,7 @@ export default function SalesTracker({ user }: { user: User }) {
             </div>
             <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 20, marginBottom: 20, order: -1 }}>
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>✅ Perlu Ditindak</div>
-              {todo.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Aman. Nggak ada follow-up, penawaran, atau tagihan yang nunggu. Pasang jadwal follow-up dari detail lead.</div>}
+              {todo.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Aman. Nggak ada follow-up, penawaran, deal macet, atau tagihan yang nunggu. Pasang jadwal follow-up dari detail lead.</div>}
               {todo.map(t => {
                 const late = t.when < now;
                 const isToday = t.when === now;
@@ -1212,6 +1229,8 @@ export default function SalesTracker({ user }: { user: User }) {
                 </div>
               )}
             </div>
+
+            <PushToggle />
 
             {/* Clear cache */}
             <button onClick={clearCacheAndReload} disabled={clearing} style={{ width: "100%", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 16, textAlign: "left", cursor: "pointer", fontFamily: "inherit", marginBottom: 12, opacity: clearing ? 0.6 : 1 }}>
