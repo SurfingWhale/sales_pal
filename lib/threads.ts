@@ -9,8 +9,11 @@
 
 export const THREADS_SCOPES = ["threads_basic", "threads_read_replies", "threads_manage_mentions"];
 
+// What the app keeps in users/{uid}/settings/threads. The token itself lives in
+// the server's vault (lib/serverAuth.ts); `token` here only marks an old
+// connection made before that, which is wiped on sight.
 export interface ThreadsConnection {
-  token: string;
+  token?: string;
   userId: string;
   username?: string;
   expiresAt: number;   // ms

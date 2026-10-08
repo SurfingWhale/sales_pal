@@ -282,6 +282,39 @@ export const flows = [
     },
   },
   {
+    name: "server: API needs sign-in, a new account starts empty",
+    async run(t) {
+      const { page, base } = t;
+      const post = (path, token) => fetch(`${base}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ image: "data:image/png;base64,AAAA" }),
+      });
+      await t.step("scan and Threads refuse a caller who isn't signed in", async () => {
+        for (const path of ["/api/scan", "/api/threads/radar", "/api/threads/refresh"]) {
+          const r = await post(path);
+          if (r.status !== 401) throw new Error(`${path} answered ${r.status} without sign-in`);
+        }
+        const forged = await post("/api/scan", "not-a-real-token");
+        if (forged.status !== 401) throw new Error(`forged token answered ${forged.status}`);
+      });
+      await t.step("a signed-in caller gets past the gate", async () => {
+        const A = "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1";
+        const { idToken } = await (await fetch(`${A}/accounts:signUp?key=fake`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: `api${Date.now()}@contoh.id`, password: "rahasia123", returnSecureToken: true }) })).json();
+        const scan = await post("/api/scan", idToken);
+        if (scan.status === 401) throw new Error("scan refused a signed-in user");
+        const radar = await post("/api/threads/radar", idToken);
+        if (radar.status !== 404) throw new Error(`radar with no stored connection answered ${radar.status}`);
+      });
+      await t.step("sign up: no example leads are written into the account", async () => {
+        await signup(t);
+        await go(page, "Leads");
+        await expectText(page, "Belum ada lead");
+        if (await page.getByText("PT Maju Jaya").count()) throw new Error("example lead found");
+      });
+    },
+  },
+  {
     name: "report klien: chat with source to lunas, content, frozen report",
     async run(t) {
       const { page } = t;

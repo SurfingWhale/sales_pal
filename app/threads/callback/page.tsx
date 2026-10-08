@@ -6,9 +6,10 @@ import { useEffect, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
+import { authFetch } from "@/lib/authFetch";
 
-// Back from Threads with a code: trade it for a token (server side, where the
-// app secret is), keep the token with the owner's settings, then go to Hunting.
+// Back from Threads with a code: the server trades it for a token and keeps the
+// token in its vault; the app only records who is connected, then goes to Hunting.
 export default function ThreadsCallback() {
   const [msg, setMsg] = useState("Menghubungkan Threads…");
   const [bad, setBad] = useState(false);
@@ -33,7 +34,7 @@ export default function ThreadsCallback() {
       stop();
       if (!user) return fail("Login SalesPal dulu di browser ini, lalu hubungkan Threads lagi dari tab Hunting.");
       try {
-        const res = await fetch("/api/threads/token", {
+        const res = await authFetch("/api/threads/token", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ code, redirectUri: `${window.location.origin}/threads/callback` }),

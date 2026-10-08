@@ -20,6 +20,7 @@ import ModalA11y from "@/components/ModalA11y";
 import { Hunt, useHuntGoal } from "@/lib/hunting";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { parseVCards } from "@/lib/vcard";
+import { authFetch } from "@/lib/authFetch";
 import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, longDate, rupiah, today, useBusiness, useUserCollection, waLink } from "@/lib/billing";
 
 // Five places, so a phone never scrolls sideways to find one. Jualan and
@@ -49,23 +50,8 @@ interface Rejection {
   followUpDate: string; lesson: string;
 }
 
-const SEED_LEADS: Omit<Lead, "id">[] = [
-  { name: "PT Maju Jaya", contact: "Budi Santoso", source: "GMaps", status: "Hot", score: 92, email: "budi@majujaya.com", phone: "0812-3456-7890", category: "F&B", notes: "Interested in digital menu", lastContact: "2025-04-20", value: 15000000 },
-  { name: "Toko Elektronik Sinar", contact: "Dewi Rahayu", source: "DM IG", status: "Warm", score: 74, email: "dewi@sinar.co.id", phone: "0813-9876-5432", category: "Retail", notes: "Follow up minggu depan", lastContact: "2025-04-18", value: 8500000 },
-  { name: "Klinik Sehat Prima", contact: "Dr. Andi", source: "Cold Email", status: "Cold", score: 45, email: "andi@kliniksehat.com", phone: "0877-1234-5678", category: "Health", notes: "Belum respon email ke-2", lastContact: "2025-04-10", value: 22000000 },
-  { name: "Rumah Makan Padang Sederhana", contact: "Pak Rusdi", source: "GMaps", status: "Closed", score: 100, email: "rusdi@sederhana.id", phone: "0811-2233-4455", category: "F&B", notes: "Deal signed!", lastContact: "2025-04-22", value: 12000000 },
-];
-const SEED_OUTREACH: Omit<Outreach, "id">[] = [
-  { leadName: "PT Maju Jaya", type: "Email", date: "2025-04-20", subject: "Solusi Digital untuk Bisnis Anda", status: "Replied", opens: 3, clicks: 2 },
-  { leadName: "Toko Elektronik Sinar", type: "DM Instagram", date: "2025-04-18", subject: "Halo kak, ada penawaran spesial!", status: "Seen", opens: 1, clicks: 0 },
-  { leadName: "Klinik Sehat Prima", type: "Email", date: "2025-04-10", subject: "Tingkatkan Pasien dengan Strategi Digital", status: "No Response", opens: 0, clicks: 0 },
-  { leadName: "CV Berkah Motor", type: "WhatsApp", date: "2025-04-19", subject: "Perkenalan layanan kami", status: "Rejected", opens: 1, clicks: 0 },
-];
-const SEED_REJECTIONS: Omit<Rejection, "id">[] = [
-  { leadName: "CV Berkah Motor", date: "2025-04-19", reason: "Tidak butuh sekarang", channel: "WhatsApp", followUpDate: "2025-07-19", lesson: "Timing salah, coba 3 bulan lagi saat mereka renewal" },
-  { leadName: "Salon Cantik Abadi", date: "2025-04-15", reason: "Budget tidak ada", channel: "Email", followUpDate: "2025-06-15", lesson: "Tawarkan paket starter yang lebih affordable" },
-  { leadName: "Apotek Sehat Selalu", date: "2025-04-12", reason: "Sudah pakai kompetitor", channel: "DM IG", followUpDate: "2025-10-12", lesson: "Highlight differentiator kita vs kompetitor saat follow up" },
-];
+// New accounts start empty. Earlier versions wrote example rows (ids seed_…)
+// into every new account; the dashboard offers to remove any still there.
 
 const AI_PLAYBOOK = [
   {
@@ -227,7 +213,6 @@ export default function SalesTracker({ user }: { user: User }) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [outreach, setOutreach] = useState<Outreach[]>([]);
   const [rejections, setRejections] = useState<Rejection[]>([]);
-  const [seeded, setSeeded] = useState(false);
   const [filterStatus, setFilterStatus] = useState("All");
   const [showAddLead, setShowAddLead] = useState(false);
   const [showAddOutreach, setShowAddOutreach] = useState(false);
@@ -268,33 +253,14 @@ export default function SalesTracker({ user }: { user: User }) {
       onSnapshot(collection(db, "users", uid, "leads"), (snap) => {
         const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Lead));
         setLeads(docs);
-        if (!seeded && docs.length === 0) {
-          setSeeded(true);
-          SEED_LEADS.forEach((l) => {
-            const id = `seed_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-            setDoc(doc(db, "users", uid, "leads", id), { ...l });
-          });
-        }
       }),
       onSnapshot(collection(db, "users", uid, "outreach"), (snap) => {
         const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Outreach));
         setOutreach(docs);
-        if (!seeded && docs.length === 0) {
-          SEED_OUTREACH.forEach((o) => {
-            const id = `seed_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-            setDoc(doc(db, "users", uid, "outreach", id), { ...o });
-          });
-        }
       }),
       onSnapshot(collection(db, "users", uid, "rejections"), (snap) => {
         const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Rejection));
         setRejections(docs);
-        if (!seeded && docs.length === 0) {
-          SEED_REJECTIONS.forEach((r) => {
-            const id = `seed_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-            setDoc(doc(db, "users", uid, "rejections", id), { ...r });
-          });
-        }
       }),
     ];
     // Website leads. Only the owner may read them (firestore.rules); for
@@ -320,7 +286,7 @@ export default function SalesTracker({ user }: { user: User }) {
       )
     );
     return () => unsubs.forEach(u => u());
-  }, [uid, seeded]);
+  }, [uid]);
 
   function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -373,7 +339,7 @@ export default function SalesTracker({ user }: { user: User }) {
     setImportHeaders([]); setImportRows([]); setColMap({});
     try {
       const dataUrl = await downscaleImage(file);
-      const res = await fetch("/api/scan", {
+      const res = await authFetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: dataUrl }),
@@ -511,6 +477,18 @@ export default function SalesTracker({ user }: { user: User }) {
     setQuoteFor({ id: lead.id, name: lead.name, contact: lead.contact, phone: lead.phone });
     setSelectedLead(null);
     setActiveTab("Penawaran");
+  }
+
+  const isSeed = (id: string) => id.startsWith("seed_");
+  const seedCount = leads.filter(l => isSeed(l.id)).length + outreach.filter(o => isSeed(o.id)).length + rejections.filter(r => isSeed(r.id)).length;
+
+  async function removeSeedData() {
+    if (!confirm(`Hapus ${seedCount} data contoh? Data yang lo isi sendiri ga kesentuh.`)) return;
+    const batch = writeBatch(db);
+    leads.filter(l => isSeed(l.id)).forEach(l => batch.delete(doc(db, "users", uid, "leads", l.id)));
+    outreach.filter(o => isSeed(o.id)).forEach(o => batch.delete(doc(db, "users", uid, "outreach", o.id)));
+    rejections.filter(r => isSeed(r.id)).forEach(r => batch.delete(doc(db, "users", uid, "rejections", r.id)));
+    await batch.commit();
   }
 
   function handleLogout() {
@@ -670,6 +648,12 @@ export default function SalesTracker({ user }: { user: User }) {
               <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Sales Command Center</div>
               <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 4 }}>Overview pipeline & performance real-time lo</div>
             </div>
+            {seedCount > 0 && (
+              <div role="status" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 10, padding: "12px 14px", marginBottom: 16, fontSize: 12.5 }}>
+                <span>Ada <b>{seedCount} data contoh</b> (PT Maju Jaya dkk.) dari versi lama yang ikut kehitung di angka lo.</span>
+                <button onClick={removeSeedData} style={{ background: "#005eb0", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Hapus data contoh</button>
+              </div>
+            )}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 24 }}>
               {[
                 { label: "Total Leads", value: leads.length, sub: `${hotLeads.length} hot leads`, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", icon: "👥" },
@@ -778,7 +762,7 @@ export default function SalesTracker({ user }: { user: User }) {
                 {leads.length === 0 ? (
                   <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
                     <button onClick={() => setShowImport(true)} style={{ ...btnPrimary, background: "transparent", color: "var(--brand-text)", border: "1px solid #005eb0" }}>⬆ Import Excel/CSV</button>
-                    <button onClick={() => setShowAddLead(true)} style={btnPrimary}>+ Tambah Lead</button>
+                    <button onClick={() => setShowAddLead(true)} style={btnPrimary}>+ Lead pertama</button>
                   </div>
                 ) : (
                   <button onClick={() => setFilterStatus("All")} style={btnPrimary}>Reset filter</button>
