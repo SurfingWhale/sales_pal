@@ -281,4 +281,75 @@ export const flows = [
       });
     },
   },
+  {
+    name: "report klien: chat with source to lunas, content, frozen report",
+    async run(t) {
+      const { page } = t;
+      const month = new Date().toISOString().slice(0, 7);
+      await t.step("sign up", () => signup(t));
+      await t.step("add a client", async () => {
+        await go(page, "Lainnya", "Report Klien");
+        await page.getByRole("button", { name: "+ Tambah klien" }).click();
+        await modal(page).locator("#cl-name").fill("Toko Aksesoris Uji");
+        await modal(page).getByRole("button", { name: "Simpan klien" }).click();
+        await expectText(page, "Belum ada chat");
+      });
+      await t.step("log a chat from TikTok with what the customer said", async () => {
+        await page.getByRole("button", { name: "+ Chat masuk" }).click();
+        await modal(page).locator("#ch-name").fill("Pak Andri");
+        await modal(page).getByRole("radio", { name: "TikTok" }).click();
+        await modal(page).locator("#ch-heard").fill("liat video pasang lampu");
+        await modal(page).getByRole("button", { name: "Simpan chat" }).click();
+        await expectText(page, "Pak Andri");
+      });
+      await t.step("move it qualified → penawaran → won → lunas", async () => {
+        await page.getByRole("button", { name: "→ Qualified" }).click();
+        await modal(page).getByRole("button", { name: "Simpan" }).click();
+        await page.getByRole("button", { name: "→ Kirim penawaran" }).click();
+        await modal(page).locator("#mv-amt").fill("17.000.000");
+        await modal(page).getByRole("button", { name: "Simpan" }).click();
+        await page.getByRole("button", { name: "→ Won" }).click();
+        await modal(page).getByRole("button", { name: "Simpan" }).click();
+        await page.getByRole("button", { name: "→ Lunas" }).click();
+        await modal(page).getByRole("button", { name: "Simpan" }).click();
+        await page.getByRole("button", { name: "lunas", exact: true }).click();
+        await expectText(page, "Lunas Rp 17 Jt");
+      });
+      await t.step("a lunas deal with an unknown source asks for it", async () => {
+        await page.getByRole("button", { name: "aktif", exact: true }).click();
+        await page.getByRole("button", { name: "+ Chat masuk" }).click();
+        await modal(page).locator("#ch-name").fill("Bu Rina");
+        await modal(page).getByRole("button", { name: "Simpan chat" }).click();
+        await page.getByRole("button", { name: "Langsung lunas" }).click();
+        await expectText(page, "Sumber customer ini belum ketahuan");
+        await modal(page).locator("#mv-amt").fill("1.500.000");
+        await modal(page).getByRole("button", { name: "Simpan" }).click();
+      });
+      await t.step("add this month's content numbers", async () => {
+        await page.getByRole("tab", { name: "Konten", exact: true }).click();
+        await page.getByRole("button", { name: "+ Post" }).click();
+        await modal(page).locator("#po-pl").selectOption("TikTok");
+        await modal(page).locator("#po-title").fill("Video pasang lampu");
+        await modal(page).locator("#po-views").fill("2000");
+        await modal(page).locator("#po-likes").fill("50");
+        await modal(page).getByRole("button", { name: "Simpan post" }).click();
+        await expectText(page, "Video pasang lampu");
+      });
+      await t.step("the report joins them: baseline month, source, unknown row", async () => {
+        await page.getByRole("tab", { name: "Report", exact: true }).click();
+        await page.locator("#rp-month").selectOption(month);
+        await expectText(page, "Rp 18,5 Jt");
+        await expectText(page, "— bulan dasar");
+        await expectText(page, "Belum ketahuan sumbernya · 1 deal");
+        const v = await page.locator("#rp-text").inputValue();
+        if (!/Sumber omzet terbesar: TikTok/.test(v)) throw new Error(`narrative: ${v.slice(0, 160)}`);
+      });
+      await t.step("freeze it and get a WhatsApp link", async () => {
+        await page.getByRole("button", { name: "Bekukan report" }).click();
+        await expectText(page, "Dibekukan");
+        const href = await page.getByRole("link", { name: "Kirim via WA" }).getAttribute("href");
+        if (!href || !href.startsWith("https://wa.me/?text=")) throw new Error(`href ${href}`);
+      });
+    },
+  },
 ];
