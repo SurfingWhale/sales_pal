@@ -18,6 +18,7 @@ import LeadSources from "@/components/LeadSources";
 import ModalA11y from "@/components/ModalA11y";
 import { Hunt, useHuntGoal } from "@/lib/hunting";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
+import { parseVCards } from "@/lib/vcard";
 import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, longDate, rupiah, today, useBusiness, useUserCollection, waLink } from "@/lib/billing";
 
 // Five places, so a phone never scrolls sideways to find one. Jualan and
@@ -325,6 +326,20 @@ export default function SalesTracker({ user }: { user: User }) {
     if (!file) return;
     setImportFileName(file.name);
     setImportDone(null);
+    // Phone contacts exported as vCard (iPhone Contacts / iCloud.com).
+    if (/\.vcf$/i.test(file.name) || file.type === "text/vcard" || file.type === "text/x-vcard") {
+      file.text().then((text) => {
+        const rows = parseVCards(text) as unknown as Record<string, unknown>[];
+        if (!rows.length) { setImportHeaders([]); setImportRows([]); setColMap({}); return; }
+        const headers = IMPORT_FIELDS.map(f => f.key).filter(k => rows.some(r => String(r[k] ?? "").trim()));
+        const map: Record<string, string> = {};
+        headers.forEach(k => { map[k] = k; });
+        setImportHeaders(headers);
+        setImportRows(rows);
+        setColMap(map);
+      }).catch(() => { setImportHeaders([]); setImportRows([]); setColMap({}); });
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
@@ -1237,7 +1252,7 @@ export default function SalesTracker({ user }: { user: User }) {
               <>
                 {/* Mode switcher */}
                 <div style={{ display: "flex", gap: 4, marginBottom: 18, background: "var(--app-inner)", padding: 4, borderRadius: 10 }}>
-                  {([["file", "📄 Excel / CSV"], ["scan", "📷 Scan Gambar"]] as const).map(([m, label]) => (
+                  {([["file", "📄 Excel / CSV / Kontak"], ["scan", "📷 Scan Gambar"]] as const).map(([m, label]) => (
                     <button key={m} onClick={() => { setImportMode(m); resetParsed(); }}
                       style={{ flex: 1, padding: "9px 8px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit",
                         background: importMode === m ? "var(--app-card)" : "transparent",
@@ -1250,10 +1265,10 @@ export default function SalesTracker({ user }: { user: User }) {
 
                 {importMode === "file" ? (
                   <label style={{ display: "block", border: "1.5px dashed var(--app-border)", borderRadius: 12, padding: 24, textAlign: "center", cursor: "pointer", marginBottom: 20, background: "var(--app-inner)" }}>
-                    <input type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} style={{ display: "none" }} />
+                    <input type="file" accept=".xlsx,.xls,.csv,.vcf,text/vcard" onChange={handleImportFile} style={{ display: "none" }} />
                     <div style={{ fontSize: 24, marginBottom: 8 }}>📄</div>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{importFileName || "Klik buat pilih file"}</div>
-                    <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>.xlsx, .xls, atau .csv</div>
+                    <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>.xlsx, .xls, .csv, atau kontak HP (.vcf)</div>
                   </label>
                 ) : (
                   <>
