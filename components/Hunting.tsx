@@ -132,6 +132,7 @@ export default function Hunting({ hunts, goal }: { hunts: Hunt[]; goal: number }
     await setDoc(spaceDoc(space, "leads", leadId), stamp(space, {
       name: h.target || "Tanpa nama", contact: "", source: platformSource[h.platform], status: "Warm", score: 70,
       email: "", phone: "", category: "F&B", notes: note, lastContact: now, value: 0,
+      ...(responded(h) ? { lastReplyAt: now } : {}),
     }, h as { ownerUid?: string; ownerName?: string }));
     await updateDoc(spaceDoc(space, "hunts", h.id), { leadId });
   }

@@ -112,12 +112,23 @@ export const flows = [
       await t.step("open it and schedule a follow-up tomorrow", async () => {
         await t.page.getByRole("button", { name: "All", exact: true }).click();
         await t.page.locator(".lead-row", { hasText: "Kopi Flow" }).first().click();
+        // Skor potensi (PRD-008 §2): contacted today + Rp 5 jt = 25, rendah.
+        await expectText(t.page, "Kenapa 25");
+        await t.page.getByRole("button", { name: "💬 Mereka bales hari ini" }).click();
+        await expectText(t.page, "Kenapa 55");
         await t.page.getByPlaceholder(/Kirim portfolio/).fill("Kirim portfolio");
         await t.page.getByRole("button", { name: "Besok" }).click();
         await t.page.getByRole("button", { name: "Simpan jadwal" }).click();
         await t.page.getByRole("button", { name: "✓ Selesai" }).waitFor();
+        await expectText(t.page, "Kenapa 75");
+        await expectText(t.page, "Potensi tinggi");
         await t.page.keyboard.press("Escape");
         await modal(t.page).click({ position: { x: 5, y: 5 } }).catch(() => {});
+      });
+      await t.step("the Tinggi filter finds it", async () => {
+        await t.page.getByRole("button", { name: /^Tinggi/ }).click();
+        await expectText(t.page, "Kopi Flow");
+        await t.page.getByRole("button", { name: /^Semua/ }).click();
       });
       await t.step("the follow-up shows in Perlu Ditindak", async () => { await go(t.page, "Beranda"); await expectText(t.page, "Kirim portfolio"); });
       await t.step("delete asks first, then removes it", async () => {

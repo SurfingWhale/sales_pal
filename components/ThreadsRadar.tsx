@@ -85,7 +85,7 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
     await setDoc(doc(db, "users", uid, "leads", id), {
       name: `@${p.username}`, contact: "", source: "Threads", status: "Warm", score: 65,
       email: "", phone: "", category: "F&B", notes: `${where}: "${p.latest.text.slice(0, 200)}" · ${profileUrl(p.username)}`,
-      lastContact: today(), value: 0,
+      lastContact: today(), lastReplyAt: today(), value: 0,
     }, { merge: true });
     await markDone(p);
   }
