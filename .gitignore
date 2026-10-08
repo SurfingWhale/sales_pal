@@ -40,3 +40,7 @@ next-env.d.ts
 /tests/flows/out/
 firestore-debug.log
 firebase-debug.log
+
+# Local deep-research working files (may contain client figures; repo is public)
+/research_notes/
+/reports/
