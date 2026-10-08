@@ -381,6 +381,22 @@ export const flows = [
         await page.getByRole("tab", { name: "Aktivitas" }).click();
         await page.getByText("pindah pemilik deal").first().waitFor({ timeout: 10000 });
       });
+      await t.step("the guild as a workspace: a member's lead reaches the leader, not Pribadi", async () => {
+        await p2.locator("#space-pick").selectOption({ label: "🛡️ Tim Uji" });
+        await addLead(p2, "Warung Tim");
+        await go(p2, "Jualan", "Paket");
+        if (await p2.getByRole("button", { name: "+ Paket" }).count()) throw new Error("a member can edit the team's packages");
+        await p2.locator("#space-pick").selectOption({ label: "👤 Pribadi" });
+        await go(p2, "Leads");
+        await p2.getByText("Belum ada lead").waitFor({ timeout: 8000 });
+        await page.locator("#space-pick").selectOption({ label: "🛡️ Tim Uji" });
+        await go(page, "Leads");
+        await expectText(page, "Warung Tim");
+        await expectText(page, `👤 ${memberName}`);
+        await page.locator("#space-pick").selectOption({ label: "👤 Pribadi" });
+        await go(page, "Lainnya", "Guild");
+        await go(p2, "Lainnya", "Guild");
+      });
       await t.step("the leader promotes the member to officer", async () => {
         await page.getByRole("tab", { name: /^Anggota/ }).click();
         await page.locator("select[id^='role-']").first().selectOption("officer");

@@ -11,6 +11,9 @@ then here.
   `users/{uid}/{leads,outreach,rejections,pitchTemplates,hunts,radarSeen,services,quotes,invoices,settings}`,
   `users/{uid}/clients/{c}/{deals,posts,reports}` (Report Klien, PRD-005)
   `users/{uid}/guilds`, `guilds/{g}` with `{members,invites,deals,targets,reports,activities}`
+  plus the guild workspace (PRD-007 §2.5, `lib/space.ts`): owned
+  `{leads,outreach,rejections,hunts,quotes,invoices,clients/{c}/{deals,posts,reports}}`
+  and the shared catalogs `{services,pitchTemplates,settings}`
   (Guild, PRD-007 — role rules live in firestore.rules and are tested per role)
   plus `inbound_leads`, and the server-only `connections` (token vault),
   `usage` (quotas) and `pushSubs` (Web Push subscriptions), which deny every browser and are reached only through

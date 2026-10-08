@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { doc, deleteDoc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { deleteDoc, updateDoc } from "firebase/firestore";
+import { spaceDoc, useSpace } from "@/lib/space";
 import {
   Business, Invoice, InvoiceState, balance, daysBetween, dpAmount, invoiceColor, invoiceState, invoiceText,
   longDate, paid, rupiah, today, total, waLink,
@@ -12,7 +12,8 @@ import { badge, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, lab
 
 const FILTERS = ["All", "Belum bayar", "DP masuk", "Telat", "Lunas"] as const;
 
-export default function Invoices({ uid, invoices, business }: { uid: string; invoices: Invoice[]; business: Business }) {
+export default function Invoices({ invoices, business }: { invoices: Invoice[]; business: Business }) {
+  const space = useSpace();
   const [paying, setPaying] = useState<{ inv: Invoice; amount: string; date: string; note: string } | null>(null);
   const [printing, setPrinting] = useState<Invoice | null>(null);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
@@ -36,17 +37,17 @@ export default function Invoices({ uid, invoices, business }: { uid: string; inv
     const amount = parseInt(paying.amount.replace(/\D/g, ""), 10) || 0;
     if (!amount) return;
     const payments = [...(paying.inv.payments || []), { date: paying.date, amount, note: paying.note.trim() }];
-    await updateDoc(doc(db, "users", uid, "invoices", paying.inv.id), { payments });
+    await updateDoc(spaceDoc(space, "invoices", paying.inv.id), { payments });
     setPaying(null);
   }
 
   async function undoPayment(inv: Invoice, n: number) {
     if (!confirm("Hapus catatan pembayaran ini?")) return;
-    await updateDoc(doc(db, "users", uid, "invoices", inv.id), { payments: inv.payments.filter((_, i) => i !== n) });
+    await updateDoc(spaceDoc(space, "invoices", inv.id), { payments: inv.payments.filter((_, i) => i !== n) });
   }
 
   async function setDue(inv: Invoice, dueDate: string) {
-    await updateDoc(doc(db, "users", uid, "invoices", inv.id), { dueDate });
+    await updateDoc(spaceDoc(space, "invoices", inv.id), { dueDate });
   }
 
   async function copy(inv: Invoice) {
@@ -57,7 +58,7 @@ export default function Invoices({ uid, invoices, business }: { uid: string; inv
 
   async function remove(inv: Invoice) {
     if (!confirm(`Hapus invoice ${inv.number}?`)) return;
-    await deleteDoc(doc(db, "users", uid, "invoices", inv.id));
+    await deleteDoc(spaceDoc(space, "invoices", inv.id));
   }
 
   return (
