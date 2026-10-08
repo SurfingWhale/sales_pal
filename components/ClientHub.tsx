@@ -9,7 +9,8 @@ import { useEffect, useMemo, useState } from "react";
 import { collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import * as XLSX from "xlsx";
 import { db } from "@/lib/firebase";
-import { today } from "@/lib/billing";
+import { today, useBusiness } from "@/lib/billing";
+import ReportSheet from "@/components/ReportSheet";
 import {
   CHANNELS, Channel, Client, Deal, FirstTouch, MonthNumbers, Baseline, PLATFORMS, Platform, Post, STAGE_LABEL, Stage,
   UNKNOWN, advance, baseline, computeMonth, delta, juta, monthName, monthOf, narrative, postsFromRows, shareText, shiftMonth, wilson,
@@ -585,6 +586,8 @@ function Report({ uid, client, deals, posts, reports }: { uid: string; client: C
   const b = frozen?.base || liveBase;
   const [text, setText] = useState("");
   const [copied, setCopied] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const business = useBusiness(uid);
   useEffect(() => { setText(frozen?.narrative || narrative(live, liveBase, client.name)); },
     // re-seed the narrative when the month, client or frozen state changes, not on every keystroke
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -729,6 +732,7 @@ function Report({ uid, client, deals, posts, reports }: { uid: string; client: C
                 ? <button onClick={freeze} style={btnPrimary}>Bekukan report</button>
                 : <button onClick={unfreeze} style={btnMuted}>Buka lagi</button>}
               <a href={`https://wa.me/?text=${encodeURIComponent(share)}`} target="_blank" rel="noreferrer" style={{ ...btnWA, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Kirim via WA</a>
+              <button onClick={() => setPrinting(true)} style={btnGhost}>Cetak / PDF</button>
               <button onClick={copy} style={btnGhost}>{copied ? "✓ Tersalin" : "Salin teks"}</button>
             </div>
           </div>
@@ -738,6 +742,7 @@ function Report({ uid, client, deals, posts, reports }: { uid: string; client: C
           </div>
         </div>
       )}
+      {printing && <ReportSheet clientName={client.name} business={business} m={m} b={b} narrative={text} threshold={threshold} frozenAt={frozen?.frozenAt} onClose={() => setPrinting(false)} />}
     </div>
   );
 }
