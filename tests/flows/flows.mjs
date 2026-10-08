@@ -350,6 +350,12 @@ export const flows = [
         const href = await page.getByRole("link", { name: "Kirim via WA" }).getAttribute("href");
         if (!href || !href.startsWith("https://wa.me/?text=")) throw new Error(`href ${href}`);
       });
+      await t.step("open the printable monthly report", async () => {
+        await page.getByRole("button", { name: "Cetak / PDF" }).click();
+        await expectText(page, "LAPORAN BULANAN");
+        await expectText(page, "OMZET PER SUMBER");
+        await page.getByRole("button", { name: "TUTUP" }).click();
+      });
     },
   },
 ];
