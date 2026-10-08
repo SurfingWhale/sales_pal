@@ -23,6 +23,7 @@ import ClientHub from "@/components/ClientHub";
 import GuildHub from "@/components/GuildHub";
 import LeadSources from "@/components/LeadSources";
 import ModalA11y from "@/components/ModalA11y";
+import { WA_INK } from "@/components/ui";
 import { Hunt, useHuntGoal } from "@/lib/hunting";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { parseVCards } from "@/lib/vcard";
@@ -275,6 +276,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [fu, setFu] = useState({ action: "", date: "" });
   const clearQuoteFor = useCallback(() => setQuoteFor(null), []);
   const gotoInvoices = useCallback(() => setActiveTab("Invoice"), []);
+  const gotoScripts = useCallback(() => { setActiveTab("Script Library"); window.scrollTo({ top: 0 }); }, []);
 
   useEffect(() => {
     // A different space: start from empty rather than show the last one's rows.
@@ -748,7 +750,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                     </button>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: late ? "#ff4444" : isToday ? "#ff9900" : "var(--app-muted)" }}>{late ? `telat ${daysBetween(t.when, now)}h` : isToday ? "hari ini" : longDate(t.when)}</span>
-                      {t.phone && <a href={waLink(t.phone, t.text)} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${t.title}`} style={{ background: "#25D366", color: "#fff", borderRadius: 6, padding: "6px 10px", fontSize: 11, fontWeight: 700, textDecoration: "none" }}>WA</a>}
+                      {t.phone && <a href={waLink(t.phone, t.text)} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${t.title}`} style={{ background: "#25D366", color: WA_INK, borderRadius: 6, padding: "6px 10px", fontSize: 11, fontWeight: 700, textDecoration: "none" }}>WA</a>}
                     </div>
                   </div>
                 );
@@ -903,7 +905,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           </div>
         )}
 
-        {activeTab === "Hunting" && <Hunting hunts={hunts} goal={huntGoal} />}
+        {activeTab === "Hunting" && <Hunting hunts={hunts} goal={huntGoal} onOpenScripts={gotoScripts} />}
 
         {/* REPORT KLIEN (PRD-005) */}
         {activeTab === "Report Klien" && <ClientHub />}
@@ -1215,7 +1217,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
               <button onClick={() => startQuote(liveLead)} style={{ ...btnPrimary, flex: 1 }}>Buat penawaran</button>
-              {liveLead.phone && <a href={waLink(liveLead.phone, `Halo ${liveLead.contact || liveLead.name}, `)} target="_blank" rel="noreferrer" style={{ ...btnPrimary, background: "#25D366", textDecoration: "none", textAlign: "center" }}>WA</a>}
+              {liveLead.phone && <a href={waLink(liveLead.phone, `Halo ${liveLead.contact || liveLead.name}, `)} target="_blank" rel="noreferrer" style={{ ...btnPrimary, background: "#25D366", color: WA_INK, textDecoration: "none", textAlign: "center" }}>WA</a>}
             </div>
             <button onClick={() => setSelectedLead(null)} style={{ ...btnPrimary, width: "100%", marginTop: 8, background: "var(--app-border)", color: "var(--app-text)" }}>TUTUP</button>
           </div>

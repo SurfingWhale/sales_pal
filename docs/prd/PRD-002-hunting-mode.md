@@ -88,7 +88,8 @@ Tambahan di luar draft: target DM harian (default 20, `settings/hunting.dailyGoa
 Begitu DM dapat jawaban, tombol **💡 Balas** di baris log membuka saran balasan:
 - **Dibales / Tertarik** → *Lanjut ngobrol*: tanya kebutuhan, kirim contoh + paket, ajak jadwal.
 - **Ditolak** → keberatan ditebak dari alasan yang dicatat ("mahal" → Harga Mahal, "udah punya fotografer" → Sudah Punya, "nanti" → Nanti Dulu, "sibuk" → Lagi Sibuk, lainnya → Belum Yakin), lalu skrip dari Script Library, satu per tipe pelanggan.
-- **Ghosting** → skrip Di-ghosting.
-- Santai / Formal, `{nama}` terisi, Copy; di WA langsung **Kirim WA** ke nomornya, di Threads/IG **Buka chat ↗** ke profilnya.
+- **Ghosting** → tiga pesan untuk cold DM yang tetap diam setelah follow-up: contoh hasil, satu pertanyaan ringan, pesan penutup. Skrip Di-ghosting di Script Library tidak dipakai karena mengandaikan obrolan yang sudah jalan ("PDF-nya udah nyampe?").
+- Santai / Formal, `{nama}` terisi, `Bapak/Ibu` jadi `Kak`/`Kakak`, skrip dengan isian `[…]` tidak ditampilkan. Copy bilang "Tersalin" hanya kalau clipboard berhasil; kalau gagal, minta salin manual. Di WA langsung **Kirim WA** ke nomornya, di Threads/IG **Buka profil ↗** (DM dibuka dari profilnya). Topik keberatan punya tombol **Buka Script Library →**.
+- Di HP chip topik yang ditebak digulir ke tampilan. Status diubah → topik ikut berubah; balik ke Terkirim → panel tertutup.
 
 Logika di `lib/replies.ts`; flow test `hunting` mengecek tebakan keberatan, Copy, gaya, dan topik.

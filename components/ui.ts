@@ -25,8 +25,11 @@ export const btnMuted: CSSProperties = {
   ...btnPrimary, background: "var(--app-border)", color: "var(--app-text)",
 };
 
+// White on WhatsApp green is 2.0:1; WhatsApp's own dark ink is 9.4:1.
+export const WA_INK = "#0b141a";
+
 export const btnWA: CSSProperties = {
-  ...btnPrimary, background: "#25D366",
+  ...btnPrimary, background: "#25D366", color: WA_INK,
 };
 
 export const chip: CSSProperties = {

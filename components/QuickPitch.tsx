@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { onSnapshot, setDoc, deleteDoc } from "firebase/firestore";
 import { canEditCatalog, spaceCol, spaceDoc, useSpace } from "@/lib/space";
+import { WA_INK } from "@/components/ui";
 
 interface Template {
   id: string;
@@ -130,7 +131,7 @@ export default function QuickPitch({ hideButton = false }: { hideButton?: boolea
                         <button onClick={() => copyTpl(t)} style={{ ...chipBtn, flex: 1, color: copiedId === t.id ? "var(--ok)" : "var(--app-text)", borderColor: copiedId === t.id ? "var(--ok)" : "var(--app-border)", padding: "8px" }}>
                           {copiedId === t.id ? "✓ Tersalin" : "Copy"}
                         </button>
-                        <button onClick={() => sendWA(t)} style={{ flex: 1, background: "#25D366", color: "#fff", border: "none", borderRadius: 6, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                        <button onClick={() => sendWA(t)} style={{ flex: 1, background: "#25D366", color: WA_INK, border: "none", borderRadius: 6, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                           Kirim WA
                         </button>
                       </div>

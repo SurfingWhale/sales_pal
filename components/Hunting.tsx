@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { deleteDoc, setDoc, updateDoc } from "firebase/firestore";
 import { addDays, daysBetween, longDate, today, useSpaceCollection } from "@/lib/billing";
 import { canEditCatalog, spaceDoc, stamp, useSpace } from "@/lib/space";
@@ -9,14 +9,14 @@ import {
   fill, waLinkFor, huntColor, huntIcon, isStale, parseProfile, pct, platformSource, responded, scoreTemplates, verdict,
 } from "@/lib/hunting";
 import ThreadsRadar from "@/components/ThreadsRadar";
-import { NEXT_STEP, TOPICS, Tone, defaultTopic, repliesFor } from "@/lib/replies";
+import { TOPICS, Tone, defaultTopic, fromLibrary, repliesFor } from "@/lib/replies";
 import { profileUrl } from "@/lib/threads";
 import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
 type Filter = "Semua" | "Follow-up" | "Tertarik";
 const PAGE = 30;
 
-export default function Hunting({ hunts, goal }: { hunts: Hunt[]; goal: number }) {
+export default function Hunting({ hunts, goal, onOpenScripts }: { hunts: Hunt[]; goal: number; onOpenScripts?: () => void }) {
   const space = useSpace();
   const canEdit = canEditCatalog(space);
   const templates = useSpaceCollection<PitchTemplate>(space, "pitchTemplates").slice().sort((a, b) => a.title.localeCompare(b.title));
@@ -28,11 +28,13 @@ export default function Hunting({ hunts, goal }: { hunts: Hunt[]; goal: number }
   const [noting, setNoting] = useState<{ id: string; note: string } | null>(null);
   const [replyFor, setReplyFor] = useState<{ id: string; topic: string; tone: Tone } | null>(null);
   const [copiedReply, setCopiedReply] = useState<string | null>(null);
+  const [copyFail, setCopyFail] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("Semua");
   const [limit, setLimit] = useState(PAGE);
   const [url, setUrl] = useState("");
   const [pasteMsg, setPasteMsg] = useState("");
   const targetRef = useRef<HTMLInputElement>(null);
+  const topicsRef = useRef<HTMLDivElement>(null);
 
   function apply(text: string) {
     const p = parseProfile(text);
@@ -54,6 +56,15 @@ export default function Hunting({ hunts, goal }: { hunts: Hunt[]; goal: number }
     window.history.replaceState(null, "", window.location.pathname);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Balas cepat: on a phone the guessed topic can sit past the edge of the chip row.
+  useLayoutEffect(() => {
+    const row = topicsRef.current;
+    const chip = row?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!row || !chip) return;
+    const r = row.getBoundingClientRect(), c = chip.getBoundingClientRect();
+    if (c.left < r.left || c.right > r.right) row.scrollLeft += c.left - r.left - (r.width - c.width) / 2;
+  }, [replyFor?.id, replyFor?.topic]);
 
   // From the Radar: this person, on Threads, ready for a message.
   function targetFromRadar(username: string) {
@@ -89,12 +100,19 @@ export default function Hunting({ hunts, goal }: { hunts: Hunt[]; goal: number }
   const advice = verdict(scores);
   const reasons = sorted.filter(h => h.status === "Ditolak" && h.note.trim()).slice(0, 5);
 
+  // "Tersalin" only once the clipboard has it; otherwise say how to copy by hand.
+  function copy(text: string, key: string, setCopied: Dispatch<SetStateAction<string | null>>) {
+    setCopyFail(null);
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(
+      () => { setCopied(key); setTimeout(() => setCopied(c => (c === key ? null : c)), 1800); },
+      () => setCopyFail(key),
+    );
+  }
+
   function pick(t: PitchTemplate, how: "copy" | "wa") {
     const text = fill(t.body, target);
     if (how === "copy") {
-      navigator.clipboard?.writeText(text).catch(() => {});
-      setCopiedId(t.id);
-      setTimeout(() => setCopiedId(c => (c === t.id ? null : c)), 1800);
+      copy(text, t.id, setCopiedId);
     } else {
       window.open(waLinkFor(target, text), "_blank");
     }
@@ -117,11 +135,15 @@ export default function Hunting({ hunts, goal }: { hunts: Hunt[]; goal: number }
 
   async function setStatus(h: Hunt, status: HuntStatus) {
     if (status === "Ditolak") setNoting({ id: h.id, note: h.note });
+    // An open Balas cepat follows the new status; back at Terkirim there is nothing to answer.
+    setReplyFor(r => (r?.id !== h.id ? r : status === "Terkirim" ? null : { ...r, topic: defaultTopic(status, h.note) }));
     await updateDoc(spaceDoc(space, "hunts", h.id), { status });
   }
 
   async function saveNote() {
     if (!noting) return;
+    // A reason is only asked for on Ditolak; a new one can change the guessed objection.
+    setReplyFor(r => (r?.id === noting.id ? { ...r, topic: defaultTopic("Ditolak", noting.note) } : r));
     await updateDoc(spaceDoc(space, "hunts", noting.id), { note: noting.note.trim() });
     setNoting(null);
   }
@@ -239,6 +261,7 @@ export default function Hunting({ hunts, goal }: { hunts: Hunt[]; goal: number }
                   </button>
                   <button onClick={() => pick(t, "wa")} style={{ ...btnWA, flex: 1, minHeight: 40, padding: "8px", fontSize: 12 }}>Kirim WA</button>
                 </div>
+                {copyFail === t.id && <div role="status" style={{ fontSize: 11, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 8 }}>Gagal menyalin. Pilih teks di atas, lalu salin manual.</div>}
               </div>
             );
           })}
@@ -296,7 +319,7 @@ export default function Hunting({ hunts, goal }: { hunts: Hunt[]; goal: number }
                     style={{ ...chip, minWidth: 40, minHeight: 36, fontSize: 14, padding: "4px 8px" }}>{huntIcon[s]}</button>
                 ))}
                 {isStale(h, now) && <button onClick={() => followUp(h)} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", border: "1px solid #ff990060" }}>↻ Follow-up</button>}
-                {h.status === "Tertarik" && !h.leadId && <button onClick={() => makeLead(h)} style={{ ...chip, minHeight: 36, background: "#00a862", color: "#fff", border: "none", fontWeight: 700 }}>Jadiin Lead →</button>}
+                {h.status === "Tertarik" && !h.leadId && <button onClick={() => makeLead(h)} style={{ ...chip, minHeight: 36, background: "#00a862", color: "#1c2128", border: "none", fontWeight: 700 }}>Jadiin Lead →</button>}
                 {h.leadId && <span style={{ fontSize: 11, color: "var(--ok)", fontWeight: 700 }}>✓ Sudah jadi lead</span>}
                 {h.url && <a href={h.url} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Profil ↗</a>}
                 {h.status !== "Terkirim" && (
@@ -307,9 +330,9 @@ export default function Hunting({ hunts, goal }: { hunts: Hunt[]; goal: number }
                 {h.status === "Ditolak" && noting?.id !== h.id && <button onClick={() => setNoting({ id: h.id, note: h.note })} style={chip}>{h.note ? "Ubah alasan" : "+ Alasan"}</button>}
                 <button onClick={() => remove(h)} aria-label={`Hapus DM ke ${h.target || "target"}`} style={{ ...chip, minHeight: 36, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🗑</button>
               </div>
-              {replyFor?.id === h.id && (
+              {replyFor?.id === h.id && h.status !== "Terkirim" && (
                 <div role="region" aria-label={`Saran balasan untuk ${h.target || "target"}`} style={{ marginTop: 10, padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)" }}>
-                  <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, scrollbarWidth: "none" }}>
+                  <div ref={topicsRef} role="group" aria-label="Jenis balasan" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8 }}>
                     {TOPICS.map(tp => (
                       <button key={tp.id} onClick={() => setReplyFor({ ...replyFor, topic: tp.id })} aria-pressed={replyFor.topic === tp.id}
                         style={{ ...chip, flexShrink: 0, minHeight: 34, fontWeight: 600, ...(replyFor.topic === tp.id ? { background: "#005eb0", color: "#fff", border: "1px solid #005eb0" } : {}) }}>{tp.label}</button>
@@ -329,18 +352,24 @@ export default function Hunting({ hunts, goal }: { hunts: Hunt[]; goal: number }
                         <div style={{ fontSize: 13, lineHeight: 1.55, color: "var(--app-text)" }}>{text}</div>
                         <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>{r.hint}</div>
                         <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                          <button onClick={() => { navigator.clipboard?.writeText(text).catch(() => {}); setCopiedReply(key); setTimeout(() => setCopiedReply(c => (c === key ? null : c)), 1800); }}
-                            style={{ ...chip, minHeight: 36, fontWeight: 700, color: copiedReply === key ? "var(--ok)" : "var(--app-text)", border: `1px solid ${copiedReply === key ? "var(--ok)" : "var(--app-border)"}` }}>
+                          <button onClick={() => copy(text, key, setCopiedReply)}
+                            style={{ ...chip, minHeight: 36, minWidth: 80, fontWeight: 700, color: copiedReply === key ? "var(--ok)" : "var(--app-text)", border: `1px solid ${copiedReply === key ? "var(--ok)" : "var(--app-border)"}` }}>
                             {copiedReply === key ? "✓ Tersalin" : "Copy"}
                           </button>
                           {h.platform === "WA"
-                            ? <a href={waLinkFor(h.target, text)} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", fontWeight: 700, background: "#25D366", color: "#fff", border: "none" }}>Kirim WA</a>
-                            : h.url && <a href={h.url} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Buka chat ↗</a>}
+                            ? <a href={waLinkFor(h.target, text)} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", fontWeight: 700, background: btnWA.background, color: btnWA.color, border: "none" }}>Kirim WA</a>
+                            : h.url && <a href={h.url} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Buka profil ↗</a>}
                         </div>
+                        {copyFail === key && <div role="status" style={{ fontSize: 11, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 6 }}>Gagal menyalin. Pilih teks di atas, lalu salin manual.</div>}
                       </div>
                     );
                   })}
-                  {replyFor.topic !== NEXT_STEP && <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 6 }}>Pilih yang paling mirip gaya orangnya. Lengkapnya di Lainnya → Script Library.</div>}
+                  {fromLibrary(replyFor.topic) && (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+                      <div style={{ fontSize: 11, color: "var(--app-muted)" }}>Pilih yang paling mirip gaya orangnya.</div>
+                      {onOpenScripts && <button onClick={onOpenScripts} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)" }}>Buka Script Library →</button>}
+                    </div>
+                  )}
                 </div>
               )}
               {noting?.id === h.id && (

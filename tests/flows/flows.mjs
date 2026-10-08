@@ -214,6 +214,12 @@ export const flows = [
       await t.step("Balas cepat picks 'Sudah Punya' from the reason and copies a reply", async () => {
         await huntRow(page, "@rotiflow").getByRole("button", { name: "💡 Balas" }).click();
         await page.getByRole("button", { name: "✋ Sudah Punya", pressed: true }).waitFor();
+        const inView = await page.evaluate(() => {
+          const b = document.querySelector('[role="region"][aria-label^="Saran balasan"] button[aria-pressed="true"]');
+          const r = b.parentElement.getBoundingClientRect(), c = b.getBoundingClientRect();
+          return c.left >= r.left - 1 && c.right <= r.right + 1;
+        });
+        if (!inView) throw new Error("the guessed topic is scrolled out of view");
         const panel = page.getByRole("region", { name: /Saran balasan/ });
         await panel.getByRole("button", { name: "Copy" }).first().click();
         const clip = await page.evaluate(() => navigator.clipboard.readText());
@@ -221,6 +227,10 @@ export const flows = [
         await panel.getByRole("button", { name: "Formal" }).click();
         await panel.getByRole("button", { name: "👍 Lanjut ngobrol" }).click();
         await panel.getByText(/Terima kasih atas balasannya, rotiflow/).waitFor();
+      });
+      await t.step("back to Terkirim, Balas cepat closes with its button", async () => {
+        await huntRow(page, "@rotiflow").getByRole("button", { name: "Tandai Terkirim" }).click();
+        await page.getByRole("region", { name: /Saran balasan/ }).waitFor({ state: "detached" });
       });
       await t.step("change the daily goal to 25", async () => {
         await page.getByRole("button", { name: /Ubah target harian/ }).click();
