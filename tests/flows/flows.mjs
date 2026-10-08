@@ -400,12 +400,14 @@ export const flows = [
         body: JSON.stringify({ image: "data:image/png;base64,AAAA" }),
       });
       await t.step("scan and Threads refuse a caller who isn't signed in", async () => {
-        for (const path of ["/api/scan", "/api/threads/radar", "/api/threads/refresh"]) {
+        for (const path of ["/api/scan", "/api/threads/radar", "/api/threads/refresh", "/api/push"]) {
           const r = await post(path);
           if (r.status !== 401) throw new Error(`${path} answered ${r.status} without sign-in`);
         }
         const forged = await post("/api/scan", "not-a-real-token");
         if (forged.status !== 401) throw new Error(`forged token answered ${forged.status}`);
+        const cron = await fetch(`${base}/api/cron/digest`, { headers: { Authorization: "Bearer guess" } });
+        if (cron.status !== 401) throw new Error(`cron answered ${cron.status} to a stranger`);
       });
       await t.step("a signed-in caller gets past the gate", async () => {
         const A = "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1";
@@ -497,6 +499,19 @@ export const flows = [
         await expectText(page, "LAPORAN BULANAN");
         await expectText(page, "OMZET PER SUMBER");
         await page.getByRole("button", { name: "TUTUP" }).click();
+      });
+      await t.step("a chat untouched for 10 days shows up in Perlu Ditindak", async () => {
+        await page.getByRole("tab", { name: "Chat & Deal" }).click();
+        await page.getByRole("button", { name: "+ Chat masuk" }).click();
+        const d = new Date(Date.now() - 10 * 86400000);
+        const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        await modal(page).locator("#ch-name").fill("Bu Lama");
+        await modal(page).locator("#ch-date").fill(ymd);
+        await modal(page).getByRole("button", { name: "Simpan chat" }).click();
+        await page.locator(".modal-overlay").waitFor({ state: "detached" });
+        await go(page, "Beranda");
+        await expectText(page, "Bu Lama");
+        await expectText(page, "10 hari ga gerak");
       });
     },
   },

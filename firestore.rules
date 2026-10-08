@@ -3,7 +3,8 @@ rules_version = '2';
 // SalesPal's Firestore — and the one place every website's leads flow into.
 //
 //   users/{uid}/...        SalesPal's own data. Each account sees only its own.
-//   connections/, usage/   Server only: platform tokens and quotas.
+//   connections/, usage/, pushSubs/   Server only: platform tokens, quotas,
+//                          and notification subscriptions.
 //   inbound_leads/{id}     Leads sent by the websites (Visufavor, BeUntamed,
 //                          UNTMD Sports). Anyone may ADD one, in exactly the
 //                          shape below; only the owner may read them, mark them
@@ -142,6 +143,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /usage/{id} {
+      allow read, write: if false;
+    }
+    // Web Push subscriptions (lib/pushServer.ts), one per device.
+    match /pushSubs/{id} {
       allow read, write: if false;
     }
 
