@@ -19,7 +19,7 @@ async function signup(t) {
   await page.locator('input[type="password"]').fill("rahasia123");
   await page.locator('form button[type="submit"]').click();
   await page.waitForURL("**/dashboard", { timeout: 20000 });
-  await page.getByText("Sales Command Center").waitFor();
+  await page.getByRole("heading", { name: /^Perlu ditindak/ }).waitFor();
 }
 
 async function go(page, place, tab) {
@@ -76,9 +76,11 @@ export const flows = [
         await t.page.getByRole("button", { name: "Lanjutkan dengan Google" }).waitFor();
       });
       await t.step("create an account with email", () => signup(t));
-      await t.step("Perlu Ditindak is the first card", async () => {
-        const first = await t.page.evaluate(() => [...document.querySelectorAll(".sp-main *")].find(e => /Perlu Ditindak|Total Leads/.test(e.textContent || "") && e.children.length === 0)?.textContent);
-        if (!/Perlu Ditindak/.test(first || "")) throw new Error(`first card is "${first}"`);
+      await t.step("Beranda says what to do before the lead map", async () => {
+        await t.page.getByRole("heading", { level: 1, name: /Selamat (pagi|siang|sore|malam)/ }).waitFor();
+        const order = await t.page.evaluate(() => [...document.querySelectorAll(".sp-main h2")].map(h => h.textContent || ""));
+        const todo = order.findIndex(x => /^Perlu ditindak/.test(x)), map = order.findIndex(x => /^Peta lead/.test(x));
+        if (todo < 0 || map < 0 || todo > map) throw new Error(`headings: ${order.join(" | ")}`);
       });
     },
   },
@@ -86,7 +88,7 @@ export const flows = [
     name: "navigation reaches every place and tab",
     async run(t) {
       await t.step("sign up", () => signup(t));
-      const places = [["Beranda", null, "Sales Command Center"], ["Hunting", null, "Hunting Mode"], ["Leads", null, "Lead Database"],
+      const places = [["Beranda", null, "Perlu ditindak"], ["Hunting", null, "Hunting Mode"], ["Leads", null, "Lead Database"],
         ["Jualan", "Penawaran", "Susun dari paket"], ["Jualan", "Invoice", "Invoice & Pembayaran"], ["Jualan", "Paket", "Paket & Harga"],
         ["Lainnya", "Outreach", "Outreach Tracker"], ["Lainnya", "Rejection Log", "Rejection"], ["Lainnya", "Simulator", "Simulator"],
         ["Lainnya", "Script Library", "Script Library"], ["Lainnya", "AI Playbook", "Playbook"]];
@@ -129,6 +131,14 @@ export const flows = [
         await t.page.getByRole("button", { name: /^Tinggi/ }).click();
         await expectText(t.page, "Kopi Flow");
         await t.page.getByRole("button", { name: /^Semua/ }).click();
+      });
+      await t.step("it sits on the lead map as Cepat closing, and opens from there", async () => {
+        await go(t.page, "Beranda");
+        await t.page.getByRole("button", { name: "Kopi Flow, skor 75, Rp 5 jt, Cepat closing" }).click();
+        await t.page.locator("[role=status]", { hasText: "Cepat closing" }).getByRole("button", { name: "Buka lead" }).click();
+        await expectText(t.page, "Kenapa 75");
+        await t.page.keyboard.press("Escape");
+        await modal(t.page).click({ position: { x: 5, y: 5 } }).catch(() => {});
       });
       await t.step("the follow-up shows in Perlu Ditindak", async () => { await go(t.page, "Beranda"); await expectText(t.page, "Kirim portfolio"); });
       await t.step("delete asks first, then removes it", async () => {
