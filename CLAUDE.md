@@ -10,7 +10,7 @@ then here.
   collection the app reads or writes must stay covered. Today that is
   `users/{uid}/{leads,outreach,rejections,pitchTemplates,hunts,radarSeen,services,quotes,invoices,settings}`,
   `users/{uid}/clients/{c}/{deals,posts,reports}` (Report Klien, PRD-005)
-  `users/{uid}/guilds`, `guilds/{g}` with `{members,invites,deals,targets,reports}`
+  `users/{uid}/guilds`, `guilds/{g}` with `{members,invites,deals,targets,reports,activities}`
   (Guild, PRD-007 — role rules live in firestore.rules and are tested per role)
   plus `inbound_leads`, and the server-only `connections` (token vault) and
   `usage` (quotas), which deny every browser and are reached only through
