@@ -6,6 +6,8 @@ import { STALL_DAYS, stalledWhat, useStalledDeals } from "@/lib/stalled";
 import { LEVEL_COLOR, Level, inPlay, scoreLead } from "@/lib/score";
 import LeadScore from "@/components/LeadScore";
 import Beranda from "@/components/Beranda";
+import LeadProfileCard from "@/components/LeadProfileCard";
+import type { LeadProfile } from "@/lib/profile";
 import { Space, SpaceContext, seesEveryone, spaceDoc, spaceQuery, stamp } from "@/lib/space";
 import { SpaceOption, useSpaceChoice } from "@/lib/spaceChoice";
 import { disablePush, restorePush } from "@/lib/push";
@@ -51,6 +53,7 @@ interface Lead {
   accountUid?: string;
   ownerUid?: string; ownerName?: string;   // in a guild space
   lastReplyAt?: string;                    // when they last answered (PRD-008 §2)
+  profile?: LeadProfile;                   // need, pain, objection, type (PRD-008 §3)
 }
 interface Outreach {
   id: string; leadName: string; type: string; date: string; subject: string;
@@ -1160,6 +1163,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 6 }}>NOTES</div>
               <div style={{ fontSize: 12 }}>{liveLead.notes || "—"}</div>
             </div>
+            <LeadProfileCard profile={liveLead.profile} name={liveLead.contact || liveLead.name} phone={liveLead.phone}
+              onSave={profile => updateDoc(spaceDoc(space, "leads", liveLead.id), { profile })} />
             <LeadScore score={sc(liveLead)} onReplied={() => markReplied(liveLead.id)} />
             <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12, marginTop: 16 }}>
               <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 8 }}>FOLLOW-UP BERIKUTNYA</div>

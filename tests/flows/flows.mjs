@@ -140,6 +140,19 @@ export const flows = [
         await t.page.keyboard.press("Escape");
         await modal(t.page).click({ position: { x: 5, y: 5 } }).catch(() => {});
       });
+      await t.step("fill the profile by hand and get the script for that customer", async () => {
+        await go(t.page, "Leads");
+        await t.page.locator(".lead-row", { hasText: "Kopi Flow" }).first().click();
+        await t.page.getByRole("button", { name: "Isi profil" }).click();
+        await t.page.locator("#pf-need").fill("Foto menu baru buat 2 cabang");
+        await t.page.locator("#pf-obj").fill("Harganya kemahalan");
+        await t.page.getByRole("button", { name: "🦁 Singa" }).click();
+        await t.page.getByRole("button", { name: "Simpan profil" }).click();
+        await expectText(t.page, "Script: 💸 Harga Mahal");
+        await expectText(t.page, "Foto menu baru buat 2 cabang");
+        await t.page.keyboard.press("Escape");
+        await modal(t.page).click({ position: { x: 5, y: 5 } }).catch(() => {});
+      });
       await t.step("the follow-up shows in Perlu Ditindak", async () => { await go(t.page, "Beranda"); await expectText(t.page, "Kirim portfolio"); });
       await t.step("delete asks first, then removes it", async () => {
         await go(t.page, "Leads");
