@@ -5,18 +5,19 @@
 // reports. Every rule here is also enforced by firestore.rules.
 
 import { useEffect, useMemo, useState } from "react";
-import { collection, deleteDoc, doc, getDoc, onSnapshot, query, setDoc, updateDoc, where } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, limit, onSnapshot, orderBy, query, setDoc, updateDoc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { today } from "@/lib/billing";
 import { Deal, delta, juta, monthName, monthOf, shiftMonth } from "@/lib/funnel";
 import {
-  Guild, GuildRef, Invite, Member, ROLES, ROLE_HINT, Role, Target, createInvite, foundGuild, invitable, inviteLink,
-  isManager, isSeller, leaveGuild, removeMember, setRole, teamMonth, titleOf, transferLeadership,
+  ACTIVITY_TEXT, Activity, Guild, GuildRef, Invite, Member, ROLES, ROLE_HINT, Role, Target, createInvite, foundGuild, invitable, inviteLink,
+  isManager, isSeller, leaveGuild, logActivity, removeMember, setRole, teamMonth, titleOf, transferLeadership,
 } from "@/lib/guild";
+import TeamReportSheet from "@/components/TeamReportSheet";
 import { Pipeline } from "@/components/ClientHub";
 import { badge, btnGhost, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
-type View = "pipeline" | "report" | "anggota";
+type View = "pipeline" | "report" | "aktivitas" | "anggota";
 const ROLE_COLOR: Record<Role, string> = { leader: "#b45309", officer: "#7c3aed", member: "#005eb0", viewer: "#64748b" };
 const fmtN = (n: number) => Math.round(n).toLocaleString("id-ID");
 const n0 = (s: string) => parseInt(s.replace(/\D/g, ""), 10) || 0;
@@ -156,8 +157,8 @@ export default function GuildHub({ uid, name, email }: { uid: string; name: stri
       ) : (
         <>
           <div role="tablist" aria-label="Bagian guild" style={{ display: "flex", gap: 4, background: "var(--app-inner)", padding: 4, borderRadius: 10, marginBottom: 18 }}>
-            {([["pipeline", "Pipeline"], ["report", "Report Tim"], ["anggota", `Anggota · ${members.length}`]] as const)
-              .filter(([v]) => v !== "pipeline" || isSeller(role))
+            {([["pipeline", "Pipeline"], ["report", "Report Tim"], ["aktivitas", "Aktivitas"], ["anggota", `Anggota · ${members.length}`]] as const)
+              .filter(([v]) => (v !== "pipeline" && v !== "aktivitas") || isSeller(role))
               .map(([v, l]) => (
                 <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)}
                   style={{ flex: 1, padding: "9px 6px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 700, fontFamily: font,
@@ -172,10 +173,13 @@ export default function GuildHub({ uid, name, email }: { uid: string; name: stri
               <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>
                 {isManager(role) ? "Semua deal tim. Deal baru tercatat atas nama kamu." : "Deal milik kamu. Leader & Officer bisa lihat semuanya."}
               </div>
-              <Pipeline path={["guilds", gid, "deals"]} deals={deals} extra={{ ownerUid: uid, ownerName: me.name }} showOwner={isManager(role)} />
+              <Pipeline path={["guilds", gid, "deals"]} deals={deals} extra={{ ownerUid: uid, ownerName: me.name }} showOwner={isManager(role)}
+                owners={isManager(role) ? members.filter(m => isSeller(m.role)).map(m => ({ uid: m.uid, name: m.name })) : undefined}
+                onEvent={e => logActivity(gid, { uid, name: me.name }, e.what, { ref: e.ref, refName: e.refName, detail: e.detail, about: e.about })} />
             </>
           )}
           {view === "report" && <TeamReport gid={gid} guild={guild} me={me} members={members} deals={deals} targets={targets} reports={reports} />}
+          {view === "aktivitas" && isSeller(role) && <Activities gid={gid} me={me} />}
           {view === "anggota" && <Members gid={gid} guild={guild} me={me} members={members} invites={invites} uid={uid} />}
         </>
       )}
@@ -190,6 +194,7 @@ function TeamReport({ gid, guild, me, members, deals, targets, reports }: { gid:
   const now = monthOf(today());
   const [month, setMonth] = useState(new Date().getDate() <= 7 ? shiftMonth(now, -1) : now);
   const [editing, setEditing] = useState<{ uid: string; name: string; revenue: string; deals: string } | null>(null);
+  const [printing, setPrinting] = useState(false);
   const manager = isManager(me.role);
   const live = useMemo(() => teamMonth(month, deals, members, targets), [month, deals, members, targets]);
   const frozen = reports.find(r => r.month === month);
@@ -203,12 +208,14 @@ function TeamReport({ gid, guild, me, members, deals, targets, reports }: { gid:
   async function saveTarget() {
     if (!editing) return;
     await setDoc(doc(db, "guilds", gid, "targets", `${month}_${editing.uid}`), { uid: editing.uid, month, revenue: n0(editing.revenue), deals: n0(editing.deals) });
+    logActivity(gid, { uid: me.uid, name: me.name }, "target_set", { refName: editing.name, about: editing.uid, detail: `${monthName(month)}: ${juta(n0(editing.revenue))}${n0(editing.deals) ? ` · ${n0(editing.deals)} deal` : ""}` });
     setEditing(null);
   }
   async function freeze() {
     await setDoc(doc(db, "guilds", gid, "reports", month), JSON.parse(JSON.stringify({
       month, rows: live.rows, revenue: live.total.revenue, paidCount: live.total.paidCount, leads: live.total.leads, frozenAt: Date.now(),
     })));
+    logActivity(gid, { uid: me.uid, name: me.name }, "report_frozen", { detail: monthName(month) });
   }
   async function unfreeze() {
     if (!confirm("Buka lagi report ini? Angkanya dihitung ulang dari deal sekarang.")) return;
@@ -291,11 +298,20 @@ function TeamReport({ gid, guild, me, members, deals, targets, reports }: { gid:
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {manager && (!frozen ? <button onClick={freeze} style={btnPrimary}>Bekukan report tim</button> : <button onClick={unfreeze} style={btnMuted}>Buka lagi</button>)}
               <a href={`https://wa.me/?text=${encodeURIComponent(share)}`} target="_blank" rel="noreferrer" style={{ ...btnWA, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Kirim via WA</a>
+              <button onClick={() => setPrinting(true)} style={btnGhost}>Cetak / PDF</button>
             </div>
+          )}
+          {!manager && !frozen && rows.length > 0 && (
+            <div><button onClick={() => setPrinting(true)} style={btnGhost}>Cetak / PDF</button></div>
           )}
         </div>
       )}
 
+      {printing && (
+        <TeamReportSheet guildName={guild.name} month={month} rows={rows} revenue={revenue} paidCount={paidCount} leads={leads}
+          compare={showLive && manager ? { revenue: delta(revenue, live.base.revenue, "money").text, paidCount: delta(paidCount, live.base.paidCount, "count").text, leads: delta(leads, live.base.leads, "count").text } : undefined}
+          frozenAt={frozen?.frozenAt} scope={manager || frozen ? "team" : "self"} onClose={() => setPrinting(false)} />
+      )}
       {editing && (
         <div className="modal-overlay" onClick={() => setEditing(null)}>
           <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 400 }}>
@@ -337,8 +353,19 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
   }
   const canRemove = (m: Member) => m.uid !== me.uid && (leader || (me.role === "officer" && (m.role === "member" || m.role === "viewer")));
 
+  const by = { uid, name: me.name };
+  async function changeRole(m: Member, r: Role) {
+    await setRole(gid, m.uid, r);
+    logActivity(gid, by, "role_changed", { refName: m.name, about: m.uid, detail: `${titleOf(guild, m.role)} → ${titleOf(guild, r)}` });
+  }
+  async function kick(m: Member) {
+    if (!confirm(`Keluarkan ${m.name} dari guild?`)) return;
+    await removeMember(gid, m.uid);
+    logActivity(gid, by, "removed", { refName: m.name, about: m.uid });
+  }
   async function makeInvite() {
     const c = await createInvite(guild, uid, inviteRole);
+    logActivity(gid, by, "invited", { detail: titleOf(guild, inviteRole) });
     setLink(inviteLink(window.location.origin, gid, c));
     setCopied(false);
   }
@@ -354,11 +381,14 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
   }
   async function leave() {
     if (!confirm(`Keluar dari ${guild.name}? Deal milik kamu tetap ada di guild.`)) return;
+    await logActivity(gid, by, "left");
     await leaveGuild(gid, uid);
   }
   async function doHandover() {
     if (!handover) return;
     await transferLeadership(gid, uid, handover);
+    const to = members.find(m => m.uid === handover);
+    logActivity(gid, by, "handover", { refName: to?.name, about: handover });
     setHandover(null);
   }
 
@@ -376,13 +406,13 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
               {options.length ? (
                 <>
                   <label htmlFor={`role-${m.uid}`} style={{ position: "absolute", left: -9999 }}>Peran {m.name}</label>
-                  <select id={`role-${m.uid}`} value={m.role} onChange={e => setRole(gid, m.uid, e.target.value as Role)} style={{ ...inputStyle, width: "auto", padding: "6px 10px", fontSize: 12 }}>
+                  <select id={`role-${m.uid}`} value={m.role} onChange={e => changeRole(m, e.target.value as Role)} style={{ ...inputStyle, width: "auto", padding: "6px 10px", fontSize: 12 }}>
                     {Array.from(new Set([m.role, ...options])).map(r => <option key={r} value={r}>{titleOf(guild, r)}</option>)}
                   </select>
                 </>
               ) : <span style={badge(ROLE_COLOR[m.role])}>{titleOf(guild, m.role)}</span>}
               {canRemove(m) && (
-                <button onClick={() => { if (confirm(`Keluarkan ${m.name} dari guild?`)) removeMember(gid, m.uid); }} aria-label={`Keluarkan ${m.name}`} style={{ ...chip, color: "#dc2626", borderColor: "#dc262640" }}>Keluarkan</button>
+                <button onClick={() => kick(m)} aria-label={`Keluarkan ${m.name}`} style={{ ...chip, color: "#dc2626", borderColor: "#dc262640" }}>Keluarkan</button>
               )}
             </div>
           );
@@ -470,6 +500,59 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ======================= Aktivitas =======================
+
+function ago(at: number): string {
+  const m = Math.floor((Date.now() - at) / 60000);
+  if (m < 1) return "barusan";
+  if (m < 60) return `${m} mnt lalu`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} jam lalu`;
+  return new Date(at).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+}
+
+function Activities({ gid, me }: { gid: string; me: Member }) {
+  const [items, setItems] = useState<Activity[] | null>(null);
+  useEffect(() => {
+    const col = collection(db, "guilds", gid, "activities");
+    const rows = new Map<string, Activity>();
+    const push = (docs: { id: string; data: () => unknown }[]) => {
+      docs.forEach(d => rows.set(d.id, { id: d.id, ...(d.data() as Omit<Activity, "id">) }));
+      setItems(Array.from(rows.values()).sort((a, b) => b.at - a.at).slice(0, 150));
+    };
+    // Leader & officer see everything; others what they did or what concerns them.
+    const qs = isManager(me.role)
+      ? [query(col, orderBy("at", "desc"), limit(150))]
+      : [query(col, where("who", "==", me.uid)), query(col, where("about", "==", me.uid))];
+    const unsubs = qs.map(q => onSnapshot(q, s => push(s.docs), () => setItems(cur => cur || [])));
+    return () => unsubs.forEach(u => u());
+  }, [gid, me.uid, me.role]);
+
+  if (!items) return <div style={{ fontSize: 13, color: "var(--app-muted)" }}>Memuat aktivitas…</div>;
+  if (!items.length) {
+    return <div style={{ ...card, padding: "32px 20px", textAlign: "center", fontSize: 12.5, color: "var(--app-muted)" }}>Belum ada aktivitas. Tiap chat, geser deal, closing, dan perubahan anggota tercatat di sini.</div>;
+  }
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 10 }}>
+        {isManager(me.role) ? "Semua yang terjadi di guild, terbaru di atas." : "Yang kamu lakuin dan yang menyangkut kamu."} Catatan ini ga bisa diubah atau dihapus.
+      </div>
+      <div style={{ ...card, padding: "4px 14px" }}>
+        {items.map(a => (
+          <div key={a.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "10px 0", borderBottom: "1px solid var(--app-inner)", fontSize: 12.5 }}>
+            <div style={{ minWidth: 0 }}>
+              <b>{a.who === me.uid ? "Kamu" : a.whoName}</b> {ACTIVITY_TEXT[a.what] || a.what}
+              {a.refName && <> · <b>{a.refName}</b></>}
+              {a.detail && <span style={{ color: "var(--app-muted)" }}> · {a.detail}</span>}
+            </div>
+            <span style={{ color: "var(--app-muted)", whiteSpace: "nowrap", fontSize: 11.5 }}>{ago(a.at)}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

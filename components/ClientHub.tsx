@@ -155,13 +155,21 @@ function SourcePicker({ value, onChange, id }: { value: Channel; onChange: (c: C
   );
 }
 
-interface ChatDraft { name: string; phone: string; channel: Channel; code: string; heardFrom: string; date: string; note: string; paidNow: boolean; amount: string; paidDate: string }
-const blankChat = (): ChatDraft => ({ name: "", phone: "", channel: UNKNOWN, code: "", heardFrom: "", date: today(), note: "", paidNow: false, amount: "", paidDate: today() });
+interface ChatDraft { name: string; phone: string; channel: Channel; code: string; heardFrom: string; date: string; note: string; paidNow: boolean; amount: string; paidDate: string; owner: string }
+const blankChat = (owner = ""): ChatDraft => ({ name: "", phone: "", channel: UNKNOWN, code: "", heardFrom: "", date: today(), note: "", paidNow: false, amount: "", paidDate: today(), owner });
+
+// What happened in a pipeline, for a guild's activity log.
+export interface PipelineEvent { what: "deal_created" | "deal_moved" | "deal_paid" | "deal_lost" | "deal_deleted" | "deal_reassigned"; ref: string; refName: string; detail?: string; about?: string }
 
 // The chat → lunas pipeline over any deals collection: a client's (Report
-// Klien) or a guild's, where `extra` stamps the owner on new deals.
-export function Pipeline({ path, deals, extra, showOwner }: { path: string[]; deals: Deal[]; extra?: Partial<Deal>; showOwner?: boolean }) {
+// Klien) or a guild's, where `extra` stamps the owner on new deals. Given
+// `owners`, the user may pick a deal's owner and move deals between them.
+export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
+  path: string[]; deals: Deal[]; extra?: Partial<Deal>; showOwner?: boolean;
+  owners?: { uid: string; name: string }[]; onEvent?: (e: PipelineEvent) => void;
+}) {
   const [draft, setDraft] = useState<ChatDraft | null>(null);
+  const [reassign, setReassign] = useState<{ deal: Deal; to: string } | null>(null);
   const [move, setMove] = useState<{ deal: Deal; to: Stage; amount: string; date: string; reason: string; channel: Channel } | null>(null);
   const [filter, setFilter] = useState<"aktif" | "lunas" | "gugur" | "semua">("aktif");
   const col = (id: string) => doc(db, path.join("/"), id);
@@ -192,8 +200,22 @@ export function Pipeline({ path, deals, extra, showOwner }: { path: string[]; de
     if (draft.paidNow && n0(draft.amount)) {
       deal = { ...deal, ...advance({ id: "", ...deal }, "paid", draft.paidDate, n0(draft.amount)) };
     }
-    await setDoc(col(`deal_${Date.now()}`), clean({ ...deal, ...extra }));
+    const chosen = owners?.find(o => o.uid === draft.owner);
+    const owner = chosen ? { ownerUid: chosen.uid, ownerName: chosen.name } : {};
+    const id = `deal_${Date.now()}`;
+    await setDoc(col(id), clean({ ...deal, ...extra, ...owner }));
+    onEvent?.({ what: deal.paidAt ? "deal_paid" : "deal_created", ref: id, refName: deal.contactName, about: chosen?.uid,
+      detail: [chosen && chosen.uid !== extra?.ownerUid ? `untuk ${chosen.name}` : "", deal.paidAmount ? juta(deal.paidAmount) : "", draft.channel].filter(Boolean).join(" · ") });
     setDraft(null);
+  }
+
+  async function doReassign() {
+    if (!reassign) return;
+    const o = owners?.find(x => x.uid === reassign.to);
+    if (!o) return;
+    await updateDoc(col(reassign.deal.id), { ownerUid: o.uid, ownerName: o.name });
+    onEvent?.({ what: "deal_reassigned", ref: reassign.deal.id, refName: reassign.deal.contactName, detail: `${reassign.deal.ownerName || "?"} → ${o.name}`, about: o.uid });
+    setReassign(null);
   }
 
   function startMove(deal: Deal, to: Stage) {
@@ -205,6 +227,7 @@ export function Pipeline({ path, deals, extra, showOwner }: { path: string[]; de
     const { deal, to } = move;
     if (to === "lost") {
       await updateDoc(col(deal.id), clean({ ...advance(deal, "lost", move.date), lostReason: move.reason.trim() || undefined }));
+      onEvent?.({ what: "deal_lost", ref: deal.id, refName: deal.contactName, detail: move.reason.trim() || undefined });
     } else {
       const amount = to === "quoted" || to === "paid" ? n0(move.amount) : undefined;
       const upd: Partial<Deal> = advance(deal, to, move.date, amount);
@@ -213,6 +236,9 @@ export function Pipeline({ path, deals, extra, showOwner }: { path: string[]; de
         upd.firstTouch = { ...deal.firstTouch, channel: move.channel, method: "seller_guess" };
       }
       await updateDoc(col(deal.id), clean(upd));
+      onEvent?.(to === "paid"
+        ? { what: "deal_paid", ref: deal.id, refName: deal.contactName, detail: amount ? juta(amount) : undefined }
+        : { what: "deal_moved", ref: deal.id, refName: deal.contactName, detail: `→ ${STAGE_LABEL[to]}${to === "quoted" && amount ? ` ${juta(amount)}` : ""}` });
     }
     setMove(null);
   }
@@ -220,6 +246,7 @@ export function Pipeline({ path, deals, extra, showOwner }: { path: string[]; de
   async function remove(d: Deal) {
     if (!confirm(`Hapus ${d.contactName}? Angkanya ikut hilang dari report.`)) return;
     await deleteDoc(col(d.id));
+    onEvent?.({ what: "deal_deleted", ref: d.id, refName: d.contactName });
   }
 
   return (
@@ -246,7 +273,7 @@ export function Pipeline({ path, deals, extra, showOwner }: { path: string[]; de
             </button>
           ))}
         </div>
-        <button onClick={() => setDraft(blankChat())} style={btnPrimary}>+ Chat masuk</button>
+        <button onClick={() => setDraft(blankChat(extra?.ownerUid || ""))} style={btnPrimary}>+ Chat masuk</button>
       </div>
 
       {shown.length === 0 ? (
@@ -284,6 +311,7 @@ export function Pipeline({ path, deals, extra, showOwner }: { path: string[]; de
                   {nx && <button onClick={() => startMove(d, nx)} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 12 }}>→ {NEXT_LABEL[d.stage]}</button>}
                   {d.stage !== "paid" && d.stage !== "won" && d.stage !== "lost" && <button onClick={() => startMove(d, "paid")} style={{ ...chip, fontSize: 12 }}>Langsung lunas</button>}
                   {d.stage !== "paid" && d.stage !== "lost" && <button onClick={() => startMove(d, "lost")} style={{ ...chip, fontSize: 12 }}>Gugur</button>}
+                  {owners && owners.length > 1 && <button onClick={() => setReassign({ deal: d, to: d.ownerUid || "" })} style={{ ...chip, fontSize: 12 }}>Pindah pemilik</button>}
                   <button onClick={() => remove(d)} aria-label={`Hapus ${d.contactName}`} style={{ ...chip, fontSize: 12, marginLeft: "auto", color: "#dc2626", borderColor: "#dc262640" }}>Hapus</button>
                 </div>
               </div>
@@ -300,6 +328,14 @@ export function Pipeline({ path, deals, extra, showOwner }: { path: string[]; de
             <input id="ch-name" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="mis. Pak Andri" style={{ ...inputStyle, marginBottom: 12 }} />
             <label htmlFor="ch-phone" style={label}>No. WhatsApp (opsional)</label>
             <input id="ch-phone" type="tel" value={draft.phone} onChange={e => setDraft({ ...draft, phone: e.target.value })} placeholder="08…" style={{ ...inputStyle, marginBottom: 12 }} />
+            {owners && owners.length > 1 && (
+              <>
+                <label htmlFor="ch-owner" style={label}>Pemilik deal</label>
+                <select id="ch-owner" value={draft.owner} onChange={e => setDraft({ ...draft, owner: e.target.value })} style={{ ...inputStyle, marginBottom: 12 }}>
+                  {owners.map(o => <option key={o.uid} value={o.uid}>{o.name}</option>)}
+                </select>
+              </>
+            )}
             <div id="ch-src" style={label}>Dari mana dia datang?</div>
             <SourcePicker id="ch-src" value={draft.channel} onChange={c => setDraft({ ...draft, channel: c })} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
@@ -368,6 +404,22 @@ export function Pipeline({ path, deals, extra, showOwner }: { path: string[]; de
             <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
               <button onClick={doMove} disabled={move.to === "paid" && !n0(move.amount)} style={{ ...btnPrimary, opacity: move.to === "paid" && !n0(move.amount) ? 0.5 : 1 }}>Simpan</button>
               <button onClick={() => setMove(null)} style={btnMuted}>Batal</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {reassign && (
+        <div className="modal-overlay" onClick={() => setReassign(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 400 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 4 }}>Pindah pemilik</div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 14 }}>{reassign.deal.contactName} · sekarang {reassign.deal.ownerName || "—"}</div>
+            <label htmlFor="ra-to" style={label}>Ke</label>
+            <select id="ra-to" value={reassign.to} onChange={e => setReassign({ ...reassign, to: e.target.value })} style={inputStyle}>
+              {(owners || []).map(o => <option key={o.uid} value={o.uid}>{o.name}</option>)}
+            </select>
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button onClick={doReassign} disabled={reassign.to === reassign.deal.ownerUid} style={{ ...btnPrimary, opacity: reassign.to === reassign.deal.ownerUid ? 0.5 : 1 }}>Pindahin</button>
+              <button onClick={() => setReassign(null)} style={btnMuted}>Batal</button>
             </div>
           </div>
         </div>
