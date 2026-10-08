@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { doc, setDoc, deleteDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { setDoc, deleteDoc } from "firebase/firestore";
+import { canEditCatalog, spaceDoc, useSpace } from "@/lib/space";
 import { Business, Service, rupiah } from "@/lib/billing";
 import { btnGhost, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
@@ -12,7 +12,10 @@ const UNITS = ["per project", "per sesi", "per foto", "per menu", "per bulan", "
 type Draft = Omit<Service, "price"> & { price: string };
 const BLANK: Draft = { id: "", name: "", category: "F&B", price: "", unit: "per project", description: "" };
 
-export default function Services({ uid, services, business }: { uid: string; services: Service[]; business: Business }) {
+export default function Services({ services, business }: { services: Service[]; business: Business }) {
+  const space = useSpace();
+  // In a guild the catalog is the team's: Leader and Officer keep it.
+  const canEdit = canEditCatalog(space);
   const [editing, setEditing] = useState<Draft | null>(null);
   const [profile, setProfile] = useState<Business | null>(null);
   const [filter, setFilter] = useState("All");
@@ -24,7 +27,7 @@ export default function Services({ uid, services, business }: { uid: string; ser
   async function save() {
     if (!editing || !editing.name.trim()) return;
     const id = editing.id || `svc_${Date.now()}`;
-    await setDoc(doc(db, "users", uid, "services", id), {
+    await setDoc(spaceDoc(space, "services", id), {
       name: editing.name.trim(),
       category: editing.category,
       price: parseInt(editing.price.replace(/\D/g, ""), 10) || 0,
@@ -36,12 +39,12 @@ export default function Services({ uid, services, business }: { uid: string; ser
 
   async function remove(id: string) {
     if (!confirm("Hapus paket ini? Penawaran yang udah dibuat nggak ikut berubah.")) return;
-    await deleteDoc(doc(db, "users", uid, "services", id));
+    await deleteDoc(spaceDoc(space, "services", id));
   }
 
   async function saveProfile() {
     if (!profile) return;
-    await setDoc(doc(db, "users", uid, "settings", "business"), profile);
+    await setDoc(spaceDoc(space, "settings", "business"), profile);
     setProfile(null);
   }
 
@@ -55,15 +58,15 @@ export default function Services({ uid, services, business }: { uid: string; ser
           <div style={subheading}>Daftar jasa yang lo jual. Dipakai buat nyusun penawaran.</div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => setProfile(business)} style={btnGhost}>Info bisnis</button>
-          <button onClick={() => setEditing(BLANK)} style={btnPrimary}>+ Paket</button>
+          {canEdit && <button onClick={() => setProfile(business)} style={btnGhost}>Info bisnis</button>}
+          {canEdit && <button onClick={() => setEditing(BLANK)} style={btnPrimary}>+ Paket</button>}
         </div>
       </div>
 
       {!profileReady && (
         <div style={{ background: "#ff99000d", border: "1px solid #ff990040", borderRadius: 10, padding: 14, marginBottom: 20, fontSize: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <span><b>Lengkapi info bisnis</b> — nama, WA, dan rekening muncul di penawaran & invoice.</span>
-          <button onClick={() => setProfile(business)} style={{ ...chip, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", borderColor: "#ff990060" }}>Isi sekarang</button>
+          {canEdit && <button onClick={() => setProfile(business)} style={{ ...chip, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", borderColor: "#ff990060" }}>Isi sekarang</button>}
         </div>
       )}
 
@@ -82,8 +85,8 @@ export default function Services({ uid, services, business }: { uid: string; ser
         <div style={{ ...card, padding: "56px 24px", textAlign: "center" }}>
           <div style={{ fontSize: 34, marginBottom: 12 }}>🏷️</div>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ada paket</div>
-          <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Tulis paket jasa lo sekali, pakai terus di tiap penawaran.</div>
-          <button onClick={() => setEditing(BLANK)} style={btnPrimary}>+ Tambah paket pertama</button>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>{canEdit ? "Tulis paket jasa lo sekali, pakai terus di tiap penawaran." : "Paket tim diatur Leader atau Officer guild."}</div>
+          {canEdit && <button onClick={() => setEditing(BLANK)} style={btnPrimary}>+ Tambah paket pertama</button>}
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
@@ -91,10 +94,10 @@ export default function Services({ uid, services, business }: { uid: string; ser
             <div key={s.id} style={{ ...card, padding: 18, display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                 <span style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", fontWeight: 600 }}>{s.category.toUpperCase()}</span>
-                <div style={{ display: "flex", gap: 6 }}>
+                {canEdit && <div style={{ display: "flex", gap: 6 }}>
                   <button onClick={() => setEditing({ ...s, price: String(s.price) })} aria-label={`Edit ${s.name}`} style={chip}>✎</button>
                   <button onClick={() => remove(s.id)} aria-label={`Hapus ${s.name}`} style={{ ...chip, borderColor: "#ff444440", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}>🗑</button>
-                </div>
+                </div>}
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, fontFamily: font }}>{s.name}</div>
               <div>

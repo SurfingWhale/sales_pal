@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { collection, doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { Space, SpaceCollection, spaceDoc, spaceQuery } from "@/lib/space";
 
 // Selling a service, after the lead: the packages on offer, the quote sent,
 // the invoice that follows it, and the money that comes in against it.
@@ -244,12 +245,29 @@ export function useUserCollection<T extends { id: string }>(uid: string, name: s
   return rows;
 }
 
-export function useBusiness(uid: string): Business {
+export function useBusiness(space: Space): Business {
   const [b, setB] = useState<Business>(EMPTY_BUSINESS);
+  const key = `${space.kind}:${space.id}`;
   useEffect(() => {
-    return onSnapshot(doc(db, "users", uid, "settings", "business"), snap => {
+    setB(EMPTY_BUSINESS);
+    return onSnapshot(spaceDoc(space, "settings", "business"), snap => {
       setB({ ...EMPTY_BUSINESS, ...(snap.data() as Partial<Business> | undefined) });
-    });
-  }, [uid]);
+    }, () => setB(EMPTY_BUSINESS));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
   return b;
+}
+
+// A collection in the current workspace — in a guild, a Member's own rows.
+export function useSpaceCollection<T extends { id: string }>(space: Space, name: SpaceCollection): T[] {
+  const [rows, setRows] = useState<T[]>([]);
+  const key = `${space.kind}:${space.id}:${space.role || ""}:${name}`;
+  useEffect(() => {
+    setRows([]);
+    return onSnapshot(spaceQuery(space, name), snap => {
+      setRows(snap.docs.map(d => ({ id: d.id, ...d.data() } as T)));
+    }, () => setRows([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return rows;
 }

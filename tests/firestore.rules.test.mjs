@@ -143,6 +143,37 @@ await t("member reads what they did", assertSucceeds(getDocs(query(collection(M,
 await t("member reads what concerns them", assertSucceeds(getDocs(query(collection(M2, "guilds", G, "activities"), where("about", "==", "memb2")))));
 await t("member cannot read another's entry", assertFails(getDoc(doc(M2, "guilds", G, "activities", "a1"))));
 await t("viewer cannot read the log", assertFails(getDocs(collection(V, "guilds", G, "activities"))));
+// Guild as a workspace (PRD-007 §2.5)
+const lead = (owner, extra = {}) => ({ name: "Warung Uji", status: "Warm", ownerUid: owner, ownerName: owner, ...extra });
+await t("member logs a lead of their own in the guild", assertSucceeds(setDoc(doc(M, "guilds", G, "leads", "l1"), lead("memb"))));
+await t("member cannot log a lead for someone else", assertFails(setDoc(doc(M, "guilds", G, "leads", "l2"), lead("memb2"))));
+await t("a guild lead needs an owner", assertFails(setDoc(doc(M, "guilds", G, "leads", "l3"), { name: "x" })));
+await t("member lists their own leads", assertSucceeds(getDocs(query(collection(M, "guilds", G, "leads"), where("ownerUid", "==", "memb")))));
+await t("member cannot list every lead", assertFails(getDocs(collection(M, "guilds", G, "leads"))));
+await t("another member cannot read it", assertFails(getDoc(doc(M2, "guilds", G, "leads", "l1"))));
+await t("viewer cannot read guild leads", assertFails(getDocs(query(collection(V, "guilds", G, "leads"), where("ownerUid", "==", "view")))));
+await t("outsider cannot add a guild lead", assertFails(setDoc(doc(X, "guilds", G, "leads", "l4"), lead("outsider"))));
+await t("officer lists every lead", assertSucceeds(getDocs(collection(O, "guilds", G, "leads"))));
+await t("member works their lead", assertSucceeds(updateDoc(doc(M, "guilds", G, "leads", "l1"), { status: "Hot" })));
+await t("member cannot give their lead away", assertFails(updateDoc(doc(M, "guilds", G, "leads", "l1"), { ownerUid: "memb2" })));
+await t("officer hands a lead to another member", assertSucceeds(updateDoc(doc(O, "guilds", G, "leads", "l1"), { ownerUid: "memb2", ownerName: "memb2" })));
+await t("the new owner reads it", assertSucceeds(getDoc(doc(M2, "guilds", G, "leads", "l1"))));
+await t("the old owner no longer can", assertFails(getDoc(doc(M, "guilds", G, "leads", "l1"))));
+await t("member logs a quote and a hunt of their own", assertSucceeds(Promise.all([
+  setDoc(doc(M, "guilds", G, "quotes", "q1"), { number: "Q-1", ownerUid: "memb", ownerName: "memb" }),
+  setDoc(doc(M, "guilds", G, "hunts", "h1"), { target: "@x", ownerUid: "memb", ownerName: "memb" }),
+])));
+await t("member reads the team's packages", assertSucceeds(getDocs(collection(M, "guilds", G, "services"))));
+await t("member cannot change the packages", assertFails(setDoc(doc(M, "guilds", G, "services", "s1"), { name: "x", price: 1 })));
+await t("officer sets a package", assertSucceeds(setDoc(doc(O, "guilds", G, "services", "s1"), { name: "Foto Menu", price: 1500000 })));
+await t("leader sets the business info", assertSucceeds(setDoc(doc(L, "guilds", G, "settings", "business"), { name: "Tim Uji" })));
+await t("member cannot change the business info", assertFails(setDoc(doc(M, "guilds", G, "settings", "business"), { name: "x" })));
+await t("viewer cannot read the packages", assertFails(getDocs(collection(V, "guilds", G, "services"))));
+await t("no one writes an unknown guild collection", assertFails(setDoc(doc(L, "guilds", G, "secrets", "x"), { ownerUid: "lead" })));
+await t("member adds a client and logs a chat under it", assertSucceeds(setDoc(doc(M, "guilds", G, "clients", "c1"), { name: "Toko", ownerUid: "memb", ownerName: "memb" })
+  .then(() => setDoc(doc(M, "guilds", G, "clients", "c1", "deals", "cd1"), deal("memb")))));
+await t("another member cannot read that client's chats", assertFails(getDocs(collection(M2, "guilds", G, "clients", "c1", "deals"))));
+await t("officer reads that client's chats", assertSucceeds(getDocs(collection(O, "guilds", G, "clients", "c1", "deals"))));
 await t("member cannot freeze a report",assertFails(setDoc(doc(M, "guilds", G, "reports", "2026-10"), { x: 1 })));
 await t("leader cannot leave without handing over", assertFails(deleteDoc(doc(L, "guilds", G, "members", "lead"))));
 await t("officer cannot remove the leader", assertFails(deleteDoc(doc(O, "guilds", G, "members", "lead"))));

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, setDoc, deleteDoc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { setDoc, deleteDoc, updateDoc } from "firebase/firestore";
+import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import {
   Business, Invoice, LineItem, QUOTE_STATUS, Quote, QuoteStatus, Service,
   addDays, daysBetween, longDate, nextNumber, quoteColor, quoteText, rupiah, subtotal, today, total, waLink, waNumber,
@@ -23,8 +23,7 @@ function blank(lead?: LeadRef): Draft {
   };
 }
 
-export default function Quotes({ uid, quotes, invoices, leads, services, business, startFor, onStarted, onInvoiceCreated }: {
-  uid: string;
+export default function Quotes({ quotes, invoices, leads, services, business, startFor, onStarted, onInvoiceCreated }: {
   quotes: Quote[];
   invoices: Invoice[];
   leads: LeadRef[];
@@ -34,6 +33,7 @@ export default function Quotes({ uid, quotes, invoices, leads, services, busines
   onStarted: () => void;
   onInvoiceCreated: () => void;
 }) {
+  const space = useSpace();
   const [editing, setEditing] = useState<Draft | null>(null);
   const [printing, setPrinting] = useState<Quote | null>(null);
   const [copied, setCopied] = useState("");
@@ -55,22 +55,22 @@ export default function Quotes({ uid, quotes, invoices, leads, services, busines
     const id = editing.id || `q_${Date.now()}`;
     const number = editing.number || nextNumber("Q", quotes.map(q => q.number));
     const { id: _id, ...rest } = editing; // eslint-disable-line @typescript-eslint/no-unused-vars
-    await setDoc(doc(db, "users", uid, "quotes", id), {
+    await setDoc(spaceDoc(space, "quotes", id), stamp(space, {
       ...rest,
       number,
       leadName: rest.leadName.trim(),
       items: rest.items.filter(i => i.name.trim()).map(i => ({ name: i.name.trim(), qty: i.qty || 1, price: i.price || 0 })),
-    });
+    }, rest as { ownerUid?: string; ownerName?: string }));
     setEditing(null);
   }
 
   async function setStatus(q: Quote, status: QuoteStatus) {
     const patch: Partial<Quote> = { status };
     if (status === "Terkirim" && !q.sentAt) patch.sentAt = today();
-    await updateDoc(doc(db, "users", uid, "quotes", q.id), patch);
+    await updateDoc(spaceDoc(space, "quotes", q.id), patch);
     // A yes closes the lead, at the value actually agreed.
     if (status === "Disetujui" && q.leadId) {
-      await updateDoc(doc(db, "users", uid, "leads", q.leadId), { status: "Closed", value: total(q), lastContact: today() }).catch(() => {});
+      await updateDoc(spaceDoc(space, "leads", q.leadId), { status: "Closed", value: total(q), lastContact: today() }).catch(() => {});
     }
   }
 
@@ -87,7 +87,7 @@ export default function Quotes({ uid, quotes, invoices, leads, services, busines
 
   async function remove(q: Quote) {
     if (!confirm(`Hapus penawaran ${q.number}?`)) return;
-    await deleteDoc(doc(db, "users", uid, "quotes", q.id));
+    await deleteDoc(spaceDoc(space, "quotes", q.id));
   }
 
   async function makeInvoice(q: Quote) {
@@ -99,8 +99,8 @@ export default function Quotes({ uid, quotes, invoices, leads, services, busines
       items: q.items, discount: q.discount, dpPercent: q.dpPercent, notes: q.notes,
       date: d, dueDate: addDays(d, 7), payments: [],
     };
-    await setDoc(doc(db, "users", uid, "invoices", id), inv);
-    await updateDoc(doc(db, "users", uid, "quotes", q.id), { invoiceId: id });
+    await setDoc(spaceDoc(space, "invoices", id), stamp(space, inv, q as { ownerUid?: string; ownerName?: string }));
+    await updateDoc(spaceDoc(space, "quotes", q.id), { invoiceId: id });
     onInvoiceCreated();
   }
 

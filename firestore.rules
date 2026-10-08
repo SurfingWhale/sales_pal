@@ -45,6 +45,8 @@ service cloud.firestore {
       return d.keys().hasOnly(['name', 'leaderUid', 'titles', 'createdAt'])
         && d.name is string && d.name.size() > 0 && d.name.size() <= 80;
     }
+    function ownedData(c) { return c in ['leads', 'outreach', 'rejections', 'hunts', 'quotes', 'invoices', 'clients']; }
+    function catalog(c) { return c in ['services', 'pitchTemplates', 'settings']; }
     function memberShape(d) {
       return d.keys().hasOnly(['uid', 'name', 'email', 'role', 'inviteCode', 'joinedAt'])
         && d.role in ['leader', 'officer', 'member', 'viewer'];
@@ -123,6 +125,30 @@ service cloud.firestore {
       match /reports/{id} {
         allow read: if inGuild(g);
         allow write: if manager(g);
+      }
+
+      // ---- The guild as a workspace (PRD-007 §2.5) ----------------------
+      // Sales data has an owner: a member works their own rows, leader and
+      // officer all of them and may hand a row to someone else. Catalogs are
+      // the team's: every seller reads them, leader and officer change them.
+      match /{coll}/{id} {
+        allow read: if (ownedData(coll) && (manager(g) || (seller(g) && resource.data.ownerUid == request.auth.uid)))
+          || (catalog(coll) && seller(g));
+        allow create: if (ownedData(coll) && seller(g) && request.resource.data.ownerUid is string
+              && (request.resource.data.ownerUid == request.auth.uid || manager(g)))
+          || (catalog(coll) && manager(g));
+        allow update: if (ownedData(coll) && (manager(g)
+              || (seller(g) && resource.data.ownerUid == request.auth.uid
+                  && request.resource.data.ownerUid == resource.data.ownerUid)))
+          || (catalog(coll) && manager(g));
+        allow delete: if (ownedData(coll) && (manager(g) || (seller(g) && resource.data.ownerUid == request.auth.uid)))
+          || (catalog(coll) && manager(g));
+      }
+      // A client's chats, content and reports go with the client's owner.
+      match /clients/{c}/{sub}/{id} {
+        allow read, write: if sub in ['deals', 'posts', 'reports']
+          && (manager(g) || (seller(g)
+              && get(/databases/$(database)/documents/guilds/$(g)/clients/$(c)).data.ownerUid == request.auth.uid));
       }
 
       // Activity log: append-only, written by the member who acted. Leader and
