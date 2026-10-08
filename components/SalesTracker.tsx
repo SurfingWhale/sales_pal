@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { signOut, User } from "firebase/auth";
 import { STALL_DAYS, stalledWhat, useStalledDeals } from "@/lib/stalled";
+import { Space, SpaceContext, seesEveryone, spaceDoc, spaceQuery, stamp } from "@/lib/space";
+import { SpaceOption, useSpaceChoice } from "@/lib/spaceChoice";
 import { disablePush, restorePush } from "@/lib/push";
 import PushToggle from "@/components/PushToggle";
 import { collection, doc, getDoc, setDoc, onSnapshot, deleteDoc, writeBatch, query, where, updateDoc, serverTimestamp } from "firebase/firestore";
@@ -25,7 +27,7 @@ import { Hunt, useHuntGoal } from "@/lib/hunting";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { parseVCards } from "@/lib/vcard";
 import { authFetch } from "@/lib/authFetch";
-import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, longDate, rupiah, today, useBusiness, useUserCollection, waLink } from "@/lib/billing";
+import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, longDate, rupiah, today, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
 
 // Five places, so a phone never scrolls sideways to find one. Jualan and
 // Lainnya hold several tabs, picked from a second row.
@@ -44,6 +46,7 @@ interface Lead {
   lastContact: string; value: number;
   nextAction?: string; nextActionDate?: string;
   accountUid?: string;
+  ownerUid?: string; ownerName?: string;   // in a guild space
 }
 interface Outreach {
   id: string; leadName: string; type: string; date: string; subject: string;
@@ -195,6 +198,19 @@ function useIsNarrow(bp = 640) {
 }
 
 export default function SalesTracker({ user }: { user: User }) {
+  const myName = user.displayName || (user.email || "").split("@")[0];
+  const { space, options, choose } = useSpaceChoice(user.uid, myName);
+  if (!space) {
+    return <div role="status" style={{ background: "var(--app-bg)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--app-muted)", fontSize: 13, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Membuka ruang kerja…</div>;
+  }
+  return (
+    <SpaceContext.Provider value={space}>
+      <Tracker user={user} space={space} spaces={options} chooseSpace={choose} />
+    </SpaceContext.Provider>
+  );
+}
+
+function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Space; spaces: SpaceOption[]; chooseSpace: (id: string) => void }) {
   const router = useRouter();
   const isNarrow = useIsNarrow();
   // A share or bookmarklet opens straight into Hunting (/dashboard?hunt&target=…);
@@ -245,12 +261,14 @@ export default function SalesTracker({ user }: { user: User }) {
   const [clearing, setClearing] = useState(false);
 
   const uid = user.uid;
-  const services = useUserCollection<Service>(uid, "services");
-  const quotes = useUserCollection<Quote>(uid, "quotes");
-  const invoices = useUserCollection<Invoice>(uid, "invoices");
-  const business = useBusiness(uid);
-  const hunts = useUserCollection<Hunt>(uid, "hunts");
-  const huntGoal = useHuntGoal(uid);
+  const spaceKey = `${space.kind}:${space.id}:${space.role || ""}`;
+  const showOwner = seesEveryone(space);
+  const services = useSpaceCollection<Service>(space, "services");
+  const quotes = useSpaceCollection<Quote>(space, "quotes");
+  const invoices = useSpaceCollection<Invoice>(space, "invoices");
+  const business = useBusiness(space);
+  const hunts = useSpaceCollection<Hunt>(space, "hunts");
+  const huntGoal = useHuntGoal(space);
   const stuck = useStalledDeals(uid);
   useEffect(() => { restorePush(); }, []);
   const [quoteFor, setQuoteFor] = useState<LeadRef | null>(null);
@@ -259,21 +277,29 @@ export default function SalesTracker({ user }: { user: User }) {
   const gotoInvoices = useCallback(() => setActiveTab("Invoice"), []);
 
   useEffect(() => {
+    // A different space: start from empty rather than show the last one's rows.
+    setLeads([]); setOutreach([]); setRejections([]); setSelectedLead(null);
     const unsubs = [
-      onSnapshot(collection(db, "users", uid, "leads"), (snap) => {
+      onSnapshot(spaceQuery(space, "leads"), (snap) => {
         const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Lead));
         setLeads(docs);
       }),
-      onSnapshot(collection(db, "users", uid, "outreach"), (snap) => {
+      onSnapshot(spaceQuery(space, "outreach"), (snap) => {
         const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Outreach));
         setOutreach(docs);
       }),
-      onSnapshot(collection(db, "users", uid, "rejections"), (snap) => {
+      onSnapshot(spaceQuery(space, "rejections"), (snap) => {
         const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Rejection));
         setRejections(docs);
       }),
     ];
-    // Website leads. Only the owner may read them (firestore.rules); for
+    return () => unsubs.forEach(u => u());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spaceKey]);
+
+  useEffect(() => {
+    const unsubs: (() => void)[] = [];
+    // Website leads (always into the owner's own space). Only the owner may read them (firestore.rules); for
     // anyone else this listener is refused and simply stays quiet.
     unsubs.push(
       onSnapshot(
@@ -401,7 +427,7 @@ export default function SalesTracker({ user }: { user: User }) {
       slice.forEach((r, j) => {
         const id = `imp_${Date.now()}_${i + j}`;
         const get = (k: string) => (colMap[k] ? String(r[colMap[k]] ?? "").trim() : "");
-        batch.set(doc(db, "users", uid, "leads", id), {
+        batch.set(spaceDoc(space, "leads", id), stamp(space, {
           name: get("name"),
           contact: get("contact"),
           email: get("email"),
@@ -413,7 +439,7 @@ export default function SalesTracker({ user }: { user: User }) {
           notes: get("notes"),
           score: Math.floor(50 + Math.random() * 40),
           lastContact: new Date().toISOString().split("T")[0],
-        });
+        }));
       });
       await batch.commit();
       written += slice.length;
@@ -434,10 +460,10 @@ export default function SalesTracker({ user }: { user: User }) {
     if (!newLead.name) return;
     const score = Math.floor(50 + Math.random() * 40);
     const id = `lead_${Date.now()}`;
-    await setDoc(doc(db, "users", uid, "leads", id), {
+    await setDoc(spaceDoc(space, "leads", id), stamp(space, {
       ...newLead, score, lastContact: new Date().toISOString().split("T")[0],
       value: parseInt(newLead.value) || 5000000,
-    });
+    }));
     setNewLead({ name: "", contact: "", source: "GMaps", status: "Cold", email: "", phone: "", category: "F&B", notes: "", value: "" });
     setShowAddLead(false);
   }
@@ -445,9 +471,9 @@ export default function SalesTracker({ user }: { user: User }) {
   async function addOutreach() {
     if (!newOutreach.leadName) return;
     const id = `out_${Date.now()}`;
-    await setDoc(doc(db, "users", uid, "outreach", id), {
+    await setDoc(spaceDoc(space, "outreach", id), stamp(space, {
       ...newOutreach, date: new Date().toISOString().split("T")[0], opens: 0, clicks: 0,
-    });
+    }));
     setNewOutreach({ leadName: "", type: "Email", subject: "", status: "Sent" });
     setShowAddOutreach(false);
   }
@@ -455,9 +481,9 @@ export default function SalesTracker({ user }: { user: User }) {
   async function addRejection() {
     if (!newRejection.leadName) return;
     const id = `rej_${Date.now()}`;
-    await setDoc(doc(db, "users", uid, "rejections", id), {
+    await setDoc(spaceDoc(space, "rejections", id), stamp(space, {
       ...newRejection, date: new Date().toISOString().split("T")[0],
-    });
+    }));
     setNewRejection({ leadName: "", reason: "", channel: "Email", followUpDate: "", lesson: "" });
     setShowAddRejection(false);
   }
@@ -465,7 +491,7 @@ export default function SalesTracker({ user }: { user: User }) {
   async function deleteLead(id: string) {
     const name = leads.find(l => l.id === id)?.name || "lead ini";
     if (!confirm(`Hapus ${name}? Nggak bisa dibatalkan.`)) return;
-    await deleteDoc(doc(db, "users", uid, "leads", id));
+    await deleteDoc(spaceDoc(space, "leads", id));
   }
 
   function openLead(lead: Lead) {
@@ -474,12 +500,12 @@ export default function SalesTracker({ user }: { user: User }) {
   }
 
   async function saveFollowUp(id: string) {
-    await updateDoc(doc(db, "users", uid, "leads", id), { nextAction: fu.action.trim(), nextActionDate: fu.date });
+    await updateDoc(spaceDoc(space, "leads", id), { nextAction: fu.action.trim(), nextActionDate: fu.date });
   }
 
   // Done: log today as the last contact and clear the reminder.
   async function doneFollowUp(id: string) {
-    await updateDoc(doc(db, "users", uid, "leads", id), { nextAction: "", nextActionDate: "", lastContact: today() });
+    await updateDoc(spaceDoc(space, "leads", id), { nextAction: "", nextActionDate: "", lastContact: today() });
     setFu({ action: "", date: "" });
   }
 
@@ -495,9 +521,9 @@ export default function SalesTracker({ user }: { user: User }) {
   async function removeSeedData() {
     if (!confirm(`Hapus ${seedCount} data contoh? Data yang lo isi sendiri ga kesentuh.`)) return;
     const batch = writeBatch(db);
-    leads.filter(l => isSeed(l.id)).forEach(l => batch.delete(doc(db, "users", uid, "leads", l.id)));
-    outreach.filter(o => isSeed(o.id)).forEach(o => batch.delete(doc(db, "users", uid, "outreach", o.id)));
-    rejections.filter(r => isSeed(r.id)).forEach(r => batch.delete(doc(db, "users", uid, "rejections", r.id)));
+    leads.filter(l => isSeed(l.id)).forEach(l => batch.delete(spaceDoc(space, "leads", l.id)));
+    outreach.filter(o => isSeed(o.id)).forEach(o => batch.delete(spaceDoc(space, "outreach", o.id)));
+    rejections.filter(r => isSeed(r.id)).forEach(r => batch.delete(spaceDoc(space, "rejections", r.id)));
     await batch.commit();
   }
 
@@ -617,10 +643,22 @@ export default function SalesTracker({ user }: { user: User }) {
           <div style={{ fontSize: 22, fontWeight: 400, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "3px", color: "var(--app-text)", lineHeight: 1 }}>SALES<span style={{ color: "var(--brand-text)" }}>PAL</span></div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <span style={{ color: "#00cc6a", fontSize: 10, flexShrink: 0 }}>●</span>
-          <span style={{ fontSize: 11, color: "var(--app-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-            {(user.displayName || user.email || "").split("@")[0]}
-          </span>
+          {spaces.length > 0 ? (
+            // Workspace: your own data, or a guild's (PRD-007 §2.5).
+            <select id="space-pick" aria-label="Ruang kerja" value={space.kind === "me" ? uid : space.id}
+              onChange={e => { chooseSpace(e.target.value); setSelectedLead(null); }}
+              style={{ minWidth: 0, maxWidth: 160, background: space.kind === "guild" ? "#005eb01a" : "var(--app-inner)", border: `1px solid ${space.kind === "guild" ? "#005eb0" : "var(--app-border)"}`, borderRadius: 8, color: "var(--app-text)", padding: "7px 8px", fontSize: 12, fontWeight: 700, fontFamily: "inherit", textOverflow: "ellipsis" }}>
+              <option value={uid}>👤 Pribadi</option>
+              {spaces.map(o => <option key={o.id} value={o.id}>🛡️ {o.name}</option>)}
+            </select>
+          ) : (
+            <>
+              <span style={{ color: "#00cc6a", fontSize: 10, flexShrink: 0 }}>●</span>
+              <span style={{ fontSize: 11, color: "var(--app-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+                {(user.displayName || user.email || "").split("@")[0]}
+              </span>
+            </>
+          )}
           <button
             onClick={toggleTheme}
             title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
@@ -668,7 +706,7 @@ export default function SalesTracker({ user }: { user: User }) {
           <div style={{ display: "flex", flexDirection: "column" }}>
             <div style={{ marginBottom: 20, order: -2 }}>
               <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Sales Command Center</div>
-              <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 4 }}>Overview pipeline & performance real-time lo</div>
+              <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 4 }}>{space.kind === "guild" ? `Ruang guild ${space.name} — ${showOwner ? "angka seluruh tim" : "angka kamu di guild ini"}` : "Overview pipeline & performance real-time lo"}</div>
             </div>
             {seedCount > 0 && (
               <div role="status" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 10, padding: "12px 14px", marginBottom: 16, fontSize: 12.5 }}>
@@ -797,7 +835,7 @@ export default function SalesTracker({ user }: { user: User }) {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lead.name}</div>
-                        <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{lead.contact || "—"} · {lead.category}</div>
+                        <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{lead.contact || "—"} · {lead.category}{showOwner && lead.ownerName ? ` · 👤 ${lead.ownerName}` : ""}</div>
                         {lead.nextActionDate && <div style={{ fontSize: 11, marginTop: 4, color: lead.nextActionDate < now ? "#ff4444" : lead.nextActionDate === now ? "#ff9900" : "var(--app-muted)" }}>📅 {lead.nextAction || "Follow-up"} · {longDate(lead.nextActionDate)}</div>}
                       </div>
                       <span className="badge" style={{ background: statusBg[lead.status], color: `color-mix(in srgb, ${statusColor[lead.status]} 55%, var(--app-text))`, border: `1px solid ${statusColor[lead.status]}30`, flexShrink: 0 }}>{lead.status}</span>
@@ -833,7 +871,7 @@ export default function SalesTracker({ user }: { user: User }) {
                     <tr key={lead.id} className="lead-row" tabIndex={0} aria-label={`Buka lead ${lead.name}`} onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openLead(lead); } }} onClick={() => openLead(lead)} style={{ borderBottom: "1px solid var(--app-inner)" }}>
                       <td style={{ padding: "14px 16px" }}>
                         <div style={{ fontSize: 13, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{lead.name}</div>
-                        <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{lead.category}</div>
+                        <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{lead.category}{showOwner && lead.ownerName ? ` · 👤 ${lead.ownerName}` : ""}</div>
                         {lead.nextActionDate && <div style={{ fontSize: 11, marginTop: 2, color: lead.nextActionDate < now ? "#ff4444" : lead.nextActionDate === now ? "#ff9900" : "var(--app-muted)" }}>📅 {lead.nextAction || "Follow-up"} · {longDate(lead.nextActionDate)}</div>}
                       </td>
                       <td style={{ padding: "14px 16px", fontSize: 12, color: "var(--app-muted)" }}>{lead.contact}</td>
@@ -865,21 +903,21 @@ export default function SalesTracker({ user }: { user: User }) {
           </div>
         )}
 
-        {activeTab === "Hunting" && <Hunting uid={uid} hunts={hunts} goal={huntGoal} />}
+        {activeTab === "Hunting" && <Hunting hunts={hunts} goal={huntGoal} />}
 
         {/* REPORT KLIEN (PRD-005) */}
-        {activeTab === "Report Klien" && <ClientHub uid={uid} />}
+        {activeTab === "Report Klien" && <ClientHub />}
 
         {/* GUILD (PRD-007) */}
         {activeTab === "Guild" && <GuildHub uid={uid} name={user.displayName || (user.email || "").split("@")[0]} email={user.email || ""} />}
 
         {activeTab === "Penawaran" && (
-          <Quotes uid={uid} quotes={quotes} invoices={invoices} services={services} business={business}
+          <Quotes quotes={quotes} invoices={invoices} services={services} business={business}
             leads={leads.map(l => ({ id: l.id, name: l.name, contact: l.contact, phone: l.phone }))}
             startFor={quoteFor} onStarted={clearQuoteFor} onInvoiceCreated={gotoInvoices} />
         )}
-        {activeTab === "Invoice" && <Invoices uid={uid} invoices={invoices} business={business} />}
-        {activeTab === "Paket" && <Services uid={uid} services={services} business={business} />}
+        {activeTab === "Invoice" && <Invoices invoices={invoices} business={business} />}
+        {activeTab === "Paket" && <Services services={services} business={business} />}
 
         {/* OUTREACH */}
         {activeTab === "Outreach" && (
@@ -1362,7 +1400,7 @@ export default function SalesTracker({ user }: { user: User }) {
       {/* Global Quick Pitch floating button */}
       {/* Always mounted: it seeds the starter templates Hunting shows too. On
           Hunting the templates are on the page, and the button would sit on Kirim WA. */}
-      <QuickPitch uid={uid} hideButton={activeTab === "Hunting"} />
+      <QuickPitch hideButton={activeTab === "Hunting"} />
       <ModalA11y />
     </div>
   );

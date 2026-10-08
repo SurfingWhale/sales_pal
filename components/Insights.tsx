@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { collection, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { onSnapshot } from "firebase/firestore";
+import { spaceQuery, useSpace } from "@/lib/space";
 
 interface Lead { id: string; source?: string; status?: string; value?: number; }
 interface Hunt { id: string; templateTitle?: string; status?: string; }
@@ -15,20 +15,22 @@ const RESPONDED = new Set(["Dibales", "Tertarik", "Ditolak"]);
 const rp = (v: number) => `Rp ${(v / 1000000).toFixed(1)}Jt`;
 const pct = (n: number, d: number) => (d ? Math.round((n / d) * 100) : 0);
 
-export default function Insights({ uid }: { uid: string }) {
+export default function Insights() {
+  const space = useSpace();
+  const spaceKey = `${space.kind}:${space.id}:${space.role || ""}`;
   const [leads, setLeads] = useState<Lead[]>([]);
   const [hunts, setHunts] = useState<Hunt[]>([]);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const u1 = onSnapshot(collection(db, "users", uid, "leads"), (s) => {
+    const u1 = onSnapshot(spaceQuery(space, "leads"), (s) => {
       setLeads(s.docs.map(d => ({ id: d.id, ...d.data() } as Lead))); setReady(true);
     });
-    const u2 = onSnapshot(collection(db, "users", uid, "hunts"), (s) => {
+    const u2 = onSnapshot(spaceQuery(space, "hunts"), (s) => {
       setHunts(s.docs.map(d => ({ id: d.id, ...d.data() } as Hunt)));
     });
     return () => { u1(); u2(); };
-  }, [uid]);
+  }, [spaceKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const m = useMemo(() => {
     const val = (l: Lead) => Number(l.value) || 0;
@@ -90,7 +92,7 @@ export default function Insights({ uid }: { uid: string }) {
 
       <div style={{ padding: 20, maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>Insights</div>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>Insights{space.kind === "guild" ? ` · ${space.name}` : ""}</div>
           <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>Evaluasi menyeluruh — funnel, sumber lead, dan performa pitch. Bukan cuma nyatet, tapi ngeliat apa yang works.</div>
         </div>
 

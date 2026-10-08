@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, doc, onSnapshot, setDoc, deleteDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { onSnapshot, setDoc, deleteDoc } from "firebase/firestore";
+import { canEditCatalog, spaceCol, spaceDoc, useSpace } from "@/lib/space";
 
 interface Template {
   id: string;
@@ -16,7 +16,10 @@ const SEED: Omit<Template, "id">[] = [
   { title: "Follow-up", body: "Hai {nama}, mau follow up penawaran foto menu kemarin. Minggu ini ada slot promo kalau tertarik 😊" },
 ];
 
-export default function QuickPitch({ uid, hideButton = false }: { uid: string; hideButton?: boolean }) {
+export default function QuickPitch({ hideButton = false }: { hideButton?: boolean }) {
+  const space = useSpace();
+  const canEdit = canEditCatalog(space);
+  const spaceKey = `${space.kind}:${space.id}`;
   const [open, setOpen] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [target, setTarget] = useState("");
@@ -25,16 +28,17 @@ export default function QuickPitch({ uid, hideButton = false }: { uid: string; h
   const [seeded, setSeeded] = useState(false);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "users", uid, "pitchTemplates"), (snap) => {
+    const unsub = onSnapshot(spaceCol(space, "pitchTemplates"), (snap) => {
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Template));
       setTemplates(docs);
-      if (!seeded && docs.length === 0) {
+      // Starters only in the user's own space; a guild's set is its leaders' call.
+      if (!seeded && docs.length === 0 && space.kind === "me") {
         setSeeded(true);
-        SEED.forEach((t, i) => setDoc(doc(db, "users", uid, "pitchTemplates", `seed_${Date.now()}_${i}`), t));
+        SEED.forEach((t, i) => setDoc(spaceDoc(space, "pitchTemplates", `seed_${Date.now()}_${i}`), t));
       }
-    });
+    }, () => setTemplates([]));
     return unsub;
-  }, [uid, seeded]);
+  }, [spaceKey, seeded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function render(body: string) {
     return body.replace(/\{nama\}/gi, target.trim() || "kak");
@@ -48,13 +52,13 @@ export default function QuickPitch({ uid, hideButton = false }: { uid: string; h
     window.open("https://wa.me/?text=" + encodeURIComponent(render(t.body)), "_blank");
   }
   async function save() {
-    if (!editing || !editing.title.trim() || !editing.body.trim()) return;
+    if (!editing || !editing.title.trim() || !editing.body.trim() || !canEdit) return;
     const id = editing.id || `tpl_${Date.now()}`;
-    await setDoc(doc(db, "users", uid, "pitchTemplates", id), { title: editing.title.trim(), body: editing.body.trim() });
+    await setDoc(spaceDoc(space, "pitchTemplates", id), { title: editing.title.trim(), body: editing.body.trim() });
     setEditing(null);
   }
   async function remove(id: string) {
-    await deleteDoc(doc(db, "users", uid, "pitchTemplates", id));
+    await deleteDoc(spaceDoc(space, "pitchTemplates", id));
   }
 
   const inputStyle: React.CSSProperties = {
@@ -117,8 +121,8 @@ export default function QuickPitch({ uid, hideButton = false }: { uid: string; h
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}>
                         <div style={{ fontSize: 13, fontWeight: 700 }}>{t.title}</div>
                         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                          <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} style={chipBtn}>✎</button>
-                          <button onClick={() => remove(t.id)} aria-label={`Hapus ${t.title}`} style={{ ...chipBtn, borderColor: "#ff444440", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}>🗑</button>
+                          {canEdit && <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} style={chipBtn}>✎</button>}
+                          {canEdit && <button onClick={() => remove(t.id)} aria-label={`Hapus ${t.title}`} style={{ ...chipBtn, borderColor: "#ff444440", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}>🗑</button>}
                         </div>
                       </div>
                       <div style={{ fontSize: 12, color: "var(--app-sub)", lineHeight: 1.6, marginBottom: 12, whiteSpace: "pre-wrap" }}>{render(t.body)}</div>
@@ -134,9 +138,9 @@ export default function QuickPitch({ uid, hideButton = false }: { uid: string; h
                   ))}
                 </div>
 
-                <button onClick={() => setEditing({ id: "", title: "", body: "" })} style={{ width: "100%", marginTop: 14, background: "transparent", color: "var(--brand-text)", border: "1px dashed #005eb0", borderRadius: 10, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                {canEdit && <button onClick={() => setEditing({ id: "", title: "", body: "" })} style={{ width: "100%", marginTop: 14, background: "transparent", color: "var(--brand-text)", border: "1px dashed #005eb0", borderRadius: 10, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                   + Template baru
-                </button>
+                </button>}
               </>
             )}
           </div>

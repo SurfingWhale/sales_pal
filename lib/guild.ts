@@ -9,6 +9,7 @@
 //   guilds/{g}/targets/{m_uid} { uid, month, revenue, deals }
 //   guilds/{g}/reports/{m}     a frozen team month
 //   guilds/{g}/activities/{id} who did what, append-only
+//   guilds/{g}/{leads,quotes,…}  the guild as a workspace (lib/space.ts)
 //   users/{uid}/guilds/{g}     { name, joinedAt } — the user's own list of guilds
 
 import { addDoc, collection, deleteDoc, doc, getDoc, setDoc, writeBatch } from "firebase/firestore";

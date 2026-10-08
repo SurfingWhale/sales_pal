@@ -10,6 +10,7 @@ import { collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc } from "fireb
 import * as XLSX from "xlsx";
 import { db } from "@/lib/firebase";
 import { today, useBusiness } from "@/lib/billing";
+import { spaceCol, spaceDoc, spacePath, spaceQuery, stamp, useSpace } from "@/lib/space";
 import ReportSheet from "@/components/ReportSheet";
 import {
   CHANNELS, Channel, Client, Deal, FirstTouch, MonthNumbers, Baseline, PLATFORMS, Platform, Post, STAGE_LABEL, Stage,
@@ -36,7 +37,9 @@ const clean = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).f
 function rememberClient(id: string) { try { localStorage.setItem("sp-client", id); } catch { /* private mode */ } }
 function recalledClient(): string { try { return localStorage.getItem("sp-client") || ""; } catch { return ""; } }
 
-export default function ClientHub({ uid }: { uid: string }) {
+export default function ClientHub() {
+  const space = useSpace();
+  const spaceKey = `${space.kind}:${space.id}:${space.role || ""}`;
   const [clients, setClients] = useState<Client[]>([]);
   const [clientId, setClientId] = useState("");
   const [view, setView] = useState<View>("pipeline");
@@ -45,30 +48,29 @@ export default function ClientHub({ uid }: { uid: string }) {
   const [reports, setReports] = useState<Frozen[]>([]);
   const [editClient, setEditClient] = useState<{ id: string; name: string; threshold: string } | null>(null);
 
-  useEffect(() => onSnapshot(collection(db, "users", uid, "clients"), s => {
+  useEffect(() => onSnapshot(spaceQuery(space, "clients"), s => {
     const rows = s.docs.map(d => ({ id: d.id, ...d.data() } as Client)).sort((a, b) => a.name.localeCompare(b.name));
     setClients(rows);
     setClientId(cur => cur && rows.some(r => r.id === cur) ? cur : (rows.find(r => r.id === recalledClient())?.id || rows[0]?.id || ""));
-  }), [uid]);
+  }, () => setClients([])), [spaceKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!clientId) { setDeals([]); setPosts([]); setReports([]); return; }
-    const base = ["users", uid, "clients", clientId] as const;
-    const u1 = onSnapshot(collection(db, ...base, "deals"), s => setDeals(s.docs.map(d => ({ id: d.id, ...d.data() } as Deal))));
-    const u2 = onSnapshot(collection(db, ...base, "posts"), s => setPosts(s.docs.map(d => ({ id: d.id, ...d.data() } as Post))));
-    const u3 = onSnapshot(collection(db, ...base, "reports"), s => setReports(s.docs.map(d => d.data() as Frozen)));
+    const u1 = onSnapshot(spaceCol(space, "clients", clientId, "deals"), s => setDeals(s.docs.map(d => ({ id: d.id, ...d.data() } as Deal))));
+    const u2 = onSnapshot(spaceCol(space, "clients", clientId, "posts"), s => setPosts(s.docs.map(d => ({ id: d.id, ...d.data() } as Post))));
+    const u3 = onSnapshot(spaceCol(space, "clients", clientId, "reports"), s => setReports(s.docs.map(d => d.data() as Frozen)));
     return () => { u1(); u2(); u3(); };
-  }, [uid, clientId]);
+  }, [spaceKey, clientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const client = clients.find(c => c.id === clientId);
 
   async function saveClient() {
     if (!editClient || !editClient.name.trim()) return;
     const id = editClient.id || `cl_${Date.now()}`;
-    await setDoc(doc(db, "users", uid, "clients", id), {
+    await setDoc(spaceDoc(space, "clients", id), {
       name: editClient.name.trim(),
       segmentThreshold: n0(editClient.threshold) || 5_000_000,
-      ...(editClient.id ? {} : { createdAt: Date.now() }),
+      ...(editClient.id ? {} : stamp(space, { createdAt: Date.now() })),
     }, { merge: true });
     setClientId(id); rememberClient(id);
     setEditClient(null);
@@ -113,9 +115,9 @@ export default function ClientHub({ uid }: { uid: string }) {
               </button>
             ))}
           </div>
-          {view === "pipeline" && <Pipeline path={["users", uid, "clients", client.id, "deals"]} deals={deals} />}
-          {view === "konten" && <Content uid={uid} clientId={client.id} posts={posts} />}
-          {view === "report" && <Report uid={uid} client={client} deals={deals} posts={posts} reports={reports} />}
+          {view === "pipeline" && <Pipeline path={spacePath(space, "clients", client.id, "deals")} deals={deals} />}
+          {view === "konten" && <Content clientId={client.id} posts={posts} />}
+          {view === "report" && <Report client={client} deals={deals} posts={posts} reports={reports} />}
         </>
       )}
 
@@ -435,11 +437,12 @@ const monthOptions = (center: string, back = 12) => Array.from({ length: back + 
 interface PostDraft { platform: Platform; title: string; format: string; views: string; likes: string; comments: string; shares: string; saves: string }
 const blankPost = (): PostDraft => ({ platform: "Instagram", title: "", format: "video", views: "", likes: "", comments: "", shares: "", saves: "" });
 
-function Content({ uid, clientId, posts }: { uid: string; clientId: string; posts: Post[] }) {
+function Content({ clientId, posts }: { clientId: string; posts: Post[] }) {
   const [month, setMonth] = useState(monthOf(today()));
   const [draft, setDraft] = useState<PostDraft | null>(null);
   const [imp, setImp] = useState<{ rows: Omit<Post, "id">[]; file: string; platform: Platform; raw: Record<string, unknown>[] } | null>(null);
-  const ref = (id: string) => doc(db, "users", uid, "clients", clientId, "posts", id);
+  const space = useSpace();
+  const ref = (id: string) => spaceDoc(space, "clients", clientId, "posts", id);
 
   const m = useMemo(() => computeMonth(month, [], posts), [month, posts]);
   const list = posts.filter(p => p.month === month).sort((a, b) => b.views - a.views);
@@ -630,7 +633,7 @@ function conv(k: number, n: number): string {
   return n < 10 ? `(${k}/${n})` : `${Math.round((k / n) * 100)}% (±${Math.round(lo * 100)}–${Math.round(hi * 100)}%)`;
 }
 
-function Report({ uid, client, deals, posts, reports }: { uid: string; client: Client; deals: Deal[]; posts: Post[]; reports: Frozen[] }) {
+function Report({ client, deals, posts, reports }: { client: Client; deals: Deal[]; posts: Post[]; reports: Frozen[] }) {
   const now = monthOf(today());
   const [month, setMonth] = useState(new Date().getDate() <= 7 ? shiftMonth(now, -1) : now);
   const frozen = reports.find(r => r.month === month);
@@ -642,12 +645,13 @@ function Report({ uid, client, deals, posts, reports }: { uid: string; client: C
   const [text, setText] = useState("");
   const [copied, setCopied] = useState(false);
   const [printing, setPrinting] = useState(false);
-  const business = useBusiness(uid);
+  const space = useSpace();
+  const business = useBusiness(space);
   useEffect(() => { setText(frozen?.narrative || narrative(live, liveBase, client.name)); },
     // re-seed the narrative when the month, client or frozen state changes, not on every keystroke
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [month, client.id, frozen?.frozenAt, deals.length, posts.length]);
-  const ref = doc(db, "users", uid, "clients", client.id, "reports", month);
+  const ref = spaceDoc(space, "clients", client.id, "reports", month);
 
   async function freeze() {
     await setDoc(ref, JSON.parse(JSON.stringify({ month, numbers: live, base: liveBase, narrative: text, frozenAt: Date.now() })));

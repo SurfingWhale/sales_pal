@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { deleteDoc, doc, setDoc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { addDays, daysBetween, longDate, today, useUserCollection } from "@/lib/billing";
+import { deleteDoc, setDoc, updateDoc } from "firebase/firestore";
+import { addDays, daysBetween, longDate, today, useSpaceCollection } from "@/lib/billing";
+import { canEditCatalog, spaceDoc, stamp, useSpace } from "@/lib/space";
 import {
   HUNT_STATUS, Hunt, HuntStatus, MIN_SAMPLE, PLATFORMS, STALE_DAYS, PitchTemplate, Platform,
   fill, waLinkFor, huntColor, huntIcon, isStale, parseProfile, pct, platformSource, responded, scoreTemplates, verdict,
@@ -15,8 +15,10 @@ import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputSty
 type Filter = "Semua" | "Follow-up" | "Tertarik";
 const PAGE = 30;
 
-export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt[]; goal: number }) {
-  const templates = useUserCollection<PitchTemplate>(uid, "pitchTemplates").slice().sort((a, b) => a.title.localeCompare(b.title));
+export default function Hunting({ hunts, goal }: { hunts: Hunt[]; goal: number }) {
+  const space = useSpace();
+  const canEdit = canEditCatalog(space);
+  const templates = useSpaceCollection<PitchTemplate>(space, "pitchTemplates").slice().sort((a, b) => a.title.localeCompare(b.title));
   const [target, setTarget] = useState("");
   const [platform, setPlatform] = useState<Platform>("IG");
   const [pending, setPending] = useState<PitchTemplate | null>(null);
@@ -107,33 +109,33 @@ export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt
     setTarget("");
     setUrl("");
     targetRef.current?.focus();
-    await setDoc(doc(db, "users", uid, "hunts", id), h);
+    await setDoc(spaceDoc(space, "hunts", id), stamp(space, h));
   }
 
   async function setStatus(h: Hunt, status: HuntStatus) {
     if (status === "Ditolak") setNoting({ id: h.id, note: h.note });
-    await updateDoc(doc(db, "users", uid, "hunts", h.id), { status });
+    await updateDoc(spaceDoc(space, "hunts", h.id), { status });
   }
 
   async function saveNote() {
     if (!noting) return;
-    await updateDoc(doc(db, "users", uid, "hunts", noting.id), { note: noting.note.trim() });
+    await updateDoc(spaceDoc(space, "hunts", noting.id), { note: noting.note.trim() });
     setNoting(null);
   }
 
   async function makeLead(h: Hunt) {
     const leadId = `lead_${Date.now()}`;
     const note = [`Dari Hunting (${h.platform}) · template "${h.templateTitle}"`, h.note].filter(Boolean).join(" — ");
-    await setDoc(doc(db, "users", uid, "leads", leadId), {
+    await setDoc(spaceDoc(space, "leads", leadId), stamp(space, {
       name: h.target || "Tanpa nama", contact: "", source: platformSource[h.platform], status: "Warm", score: 70,
       email: "", phone: "", category: "F&B", notes: note, lastContact: now, value: 0,
-    });
-    await updateDoc(doc(db, "users", uid, "hunts", h.id), { leadId });
+    }, h as { ownerUid?: string; ownerName?: string }));
+    await updateDoc(spaceDoc(space, "hunts", h.id), { leadId });
   }
 
   async function remove(h: Hunt) {
     if (!confirm(`Hapus catatan DM ke ${h.target || "target ini"}?`)) return;
-    await deleteDoc(doc(db, "users", uid, "hunts", h.id));
+    await deleteDoc(spaceDoc(space, "hunts", h.id));
   }
 
   function followUp(h: Hunt) {
@@ -144,16 +146,17 @@ export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt
   }
 
   async function changeGoal() {
+    if (!canEdit) return;
     const v = prompt("Target DM per hari?", String(goal));
     const n = parseInt(v || "", 10);
     if (!n || n < 1) return;
-    await setDoc(doc(db, "users", uid, "settings", "hunting"), { dailyGoal: n }, { merge: true });
+    await setDoc(spaceDoc(space, "settings", "hunting"), { dailyGoal: n }, { merge: true });
   }
 
   async function saveTemplate() {
-    if (!editing || !editing.title.trim() || !editing.body.trim()) return;
+    if (!editing || !editing.title.trim() || !editing.body.trim() || !canEdit) return;
     const id = editing.id || `tpl_${Date.now()}`;
-    await setDoc(doc(db, "users", uid, "pitchTemplates", id), { title: editing.title.trim(), body: editing.body.trim() });
+    await setDoc(spaceDoc(space, "pitchTemplates", id), { title: editing.title.trim(), body: editing.body.trim() });
     setEditing(null);
   }
 
@@ -188,7 +191,7 @@ export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt
         </div>
       </div>
 
-      <ThreadsRadar uid={uid} hunts={hunts} onTarget={targetFromRadar} />
+      <ThreadsRadar uid={space.me.uid} hunts={hunts} onTarget={targetFromRadar} />
 
       {/* The hunt itself: who, where, which message */}
       <div style={{ ...card, padding: 20, marginBottom: 20 }}>
@@ -212,7 +215,7 @@ export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
           <div style={{ fontSize: 13, fontWeight: 700 }}>Pilih pesan</div>
-          <button onClick={() => setEditing({ id: "", title: "", body: "" })} style={chip}>+ Template</button>
+          {canEdit && <button onClick={() => setEditing({ id: "", title: "", body: "" })} style={chip}>+ Template</button>}
         </div>
         {templates.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)", padding: "8px 0" }}>Belum ada template. Tambah satu dulu, pakai <code>{"{nama}"}</code> untuk nama target.</div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
@@ -223,7 +226,7 @@ export default function Hunting({ uid, hunts, goal }: { uid: string; hunts: Hunt
               <div key={t.id} style={{ background: "var(--app-inner)", border: `1px solid ${active ? "#005eb0" : "var(--app-border)"}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
                   <div style={{ fontSize: 13, fontWeight: 700 }}>{t.title}</div>
-                  <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} style={{ ...chip, padding: "2px 8px" }}>✎</button>
+                  {canEdit && <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} style={{ ...chip, padding: "2px 8px" }}>✎</button>}
                 </div>
                 {s && <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 6 }}>{s.sent} terkirim · dibales {pct(s.responseRate)} · tertarik {pct(s.winRate)}</div>}
                 <div style={{ fontSize: 12, color: "var(--app-sub)", lineHeight: 1.6, whiteSpace: "pre-wrap", marginBottom: 12, flex: 1 }}>{fill(t.body, target)}</div>

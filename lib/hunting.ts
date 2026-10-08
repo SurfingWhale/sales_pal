@@ -2,8 +2,8 @@
 // is logged against the template it used, so the numbers say which pitch works.
 
 import { useEffect, useState } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { onSnapshot } from "firebase/firestore";
+import { Space, spaceDoc } from "@/lib/space";
 import { daysBetween, today } from "@/lib/billing";
 
 export const PLATFORMS = ["Threads", "IG", "WA", "Lainnya"] as const;
@@ -41,13 +41,14 @@ export interface Hunt {
 
 export const DEFAULT_GOAL = 20;
 
-// DMs a day to aim for, from users/{uid}/settings/hunting.
-export function useHuntGoal(uid: string): number {
+// DMs a day to aim for, from the space's settings/hunting.
+export function useHuntGoal(space: Space): number {
   const [goal, setGoal] = useState(DEFAULT_GOAL);
-  useEffect(() => onSnapshot(doc(db, "users", uid, "settings", "hunting"), snap => {
+  const key = `${space.kind}:${space.id}`;
+  useEffect(() => onSnapshot(spaceDoc(space, "settings", "hunting"), snap => {
     const n = (snap.data() as { dailyGoal?: number } | undefined)?.dailyGoal;
     setGoal(n && n > 0 ? n : DEFAULT_GOAL);
-  }), [uid]);
+  }, () => setGoal(DEFAULT_GOAL)), [key]); // eslint-disable-line react-hooks/exhaustive-deps
   return goal;
 }
 

@@ -7,6 +7,8 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import Insights from "@/components/Insights";
+import { SpaceContext } from "@/lib/space";
+import { useSpaceChoice } from "@/lib/spaceChoice";
 
 export default function InsightsPage() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -34,5 +36,12 @@ export default function InsightsPage() {
 
   if (!user) return null;
 
-  return <Insights uid={user.uid} />;
+  return <InSpace user={user} />;
+}
+
+// Insights for the workspace picked in the dashboard header (PRD-007 §2.5).
+function InSpace({ user }: { user: User }) {
+  const { space } = useSpaceChoice(user.uid, user.displayName || (user.email || "").split("@")[0]);
+  if (!space) return null;
+  return <SpaceContext.Provider value={space}><Insights /></SpaceContext.Provider>;
 }
