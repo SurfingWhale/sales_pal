@@ -1,6 +1,6 @@
 # PRD-001 — Brand Unification (Logo Blue) & PWA Auth Persistence
 
-- **Status:** Draft → menunggu approval buat eksekusi
+- **Status:** Dibangun — logo cakar biru di header (#3), login Google di PWA pakai redirect biar sesi nempel (#10), warna & ikon diseragamin lagi di PRD-008 (#39).
 - **Tanggal:** 2026-08-01
 - **Sumber:** `docs/qa-reviews/2026-08-01-brand-and-auth.md` (QA-1, QA-2, QA-3), `docs/brand-identity.md`
 - **Owner:** —
