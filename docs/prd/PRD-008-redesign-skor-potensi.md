@@ -102,6 +102,17 @@ Masuk ke `leads` yang udah dicakup rules (pribadi & ruang guild) — ga perlu ko
 | **8.5** ½ | Web Share Target Android ✅ (`public/sw.js` + `/share-target`, pilih lead / lead baru). Brief/kebutuhan via model **ditunda**: brief, tipe, keberatan, pertanyaan udah kebaca lokal tanpa ngirim chat ke server | flow: share POST → lead baru → profil |
 | **8.6** ✅ | Profil customer HP lengkap (pola chat, grafik mingguan, pertanyaan + Balas) | flow HP |
 
+## Penyamaan visual dengan canvas (2026-10-09)
+
+Dicek artboard per artboard, pakai screenshot HP & desktop:
+- Token warna, kaca (`.glass`), frost, blur tepi, angka Bebas Neue (`.num`) di `app/globals.css`; ikon garis dari canvas di `components/Icon.tsx` (emoji di navigasi & kartu diganti).
+- Header: logo + SALESPAL, nav pil kaca di tengah, pemilih ruang, lonceng (notifikasi + jumlah yang perlu ditindak), avatar. HP: bar navigasi kaca melayang dengan ikon. Tema pindah ke Profil & pengaturan.
+- Beranda: KPI 64px, kartu tugas berikon dengan **Tunda**, target closing + bar, peta dengan glow/label kaca/kartu frosted/tooltip, Kejar sekarang dengan titik level, folder **Per kuadran**; HP: 3 KPI, rail kartu, peta kecil.
+- Potensi jadi **5 level** (sangat rendah … sangat tinggi) dengan 5 titik warna; "Biar naik" nyebut berapa skor naiknya.
+- Leads: judul + cari + status + chip potensi, kartu grid, **panel detail kanan** di desktop (Kenapa, Berikutnya + Jadwalkan, Profil, Chat WhatsApp / Buat penawaran).
+- **Profil customer** (HP penuh, desktop lewat "Profil lengkap"): aksi cepat Chat/Telepon/Penawaran/Jadwal, Brief frosted, skor + Kenapa, Kontak, Pola chat, Tipe customer + Buka script, Yang mereka tanya, bar bawah Chat di WhatsApp + Tarik ulang.
+- Sheet Tarik dari WhatsApp frosted dengan ikon.
+
 ## Belum / di luar
 
 - Baca chat WA otomatis (ga ada API buat akun pribadi; WABA beda urusan).
