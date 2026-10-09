@@ -40,7 +40,7 @@ export default function ThreadsCallback() {
           body: JSON.stringify({ code, redirectUri: `${window.location.origin}/threads/callback` }),
         });
         const body = await res.json();
-        if (!res.ok) return fail(body.error || "Gagal menukar kode.");
+        if (!res.ok) return fail(body.error || "Threads ga ngasih izin. Balik ke Hunting dan sambungkan Threads lagi.");
         await setDoc(doc(db, "users", user.uid, "settings", "threads"), body);
         try { sessionStorage.removeItem("threads.state"); } catch { /* private mode */ }
         setMsg(`Tersambung sebagai @${body.username || "threads"}. Membuka Hunting…`);

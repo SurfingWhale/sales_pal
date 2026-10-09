@@ -106,7 +106,7 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
         <div style={{ minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <span style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>Radar Threads</span>
-            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#005eb014", color: "var(--brand-text)", border: "1px solid #005eb040" }}>Segera hadir</span>
+            <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#005eb014", color: "var(--brand-text)", border: "1px solid #005eb040" }}>Segera hadir</span>
           </div>
           <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4, lineHeight: 1.5 }}>
             Daftar orang yang balas atau mention post Threads lo, sekali tap jadi target DM. Sementara: buka Aktivitas di Threads, Copy link profilnya, lalu 📋 Tempel link di bawah.
@@ -135,7 +135,7 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
           </div>
         )}
       </div>
-      <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>
         Orang yang balas atau mention post Threads lo. Mereka udah lihat karya lo: DM paling hangat.
       </div>
 
@@ -145,12 +145,12 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
         </button>
       )}
       {conn && !people && !loading && !error && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Tersambung sebagai @{conn.username}. Tap Pindai untuk lihat siapa yang nimbrung.</div>}
-      {error && <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", marginBottom: 8 }}>{error} {/kedaluwarsa/.test(error) && <button onClick={connect} style={{ ...chip, marginLeft: 6 }}>Hubungkan</button>}</div>}
-      {warnings.length > 0 && <div style={{ fontSize: 11, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginBottom: 8 }}>{warnings[0]}{warnings.length > 1 ? ` (+${warnings.length - 1})` : ""}</div>}
+      <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", marginBottom: error ? 8 : 0 }}>{error} {/kedaluwarsa/.test(error) && <button onClick={connect} style={{ ...chip, marginLeft: 6 }}>Hubungkan</button>}</div>
+      {warnings.length > 0 && <div style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginBottom: 8 }}>{warnings[0]}{warnings.length > 1 ? ` (+${warnings.length - 1})` : ""}</div>}
 
       {people && (
         <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "var(--app-muted)", marginBottom: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>
             <span>{fresh.length} baru · {people.length} orang dari 15 post terakhir</span>
             {people.length > fresh.length && <button onClick={() => setShowDone(!showDone)} style={chip}>{showDone ? "Sembunyikan yang beres" : "Tampilkan semua"}</button>}
           </div>
@@ -160,12 +160,12 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                 <div style={{ fontSize: 13, fontWeight: 700 }}>
                   @{p.username}
-                  {dmd.has(p.username.toLowerCase()) && <span style={{ fontSize: 10, color: "var(--ok)", marginLeft: 6 }}>✓ udah di-DM</span>}
+                  {dmd.has(p.username.toLowerCase()) && <span style={{ fontSize: 12, color: "var(--ok)", marginLeft: 6 }}>✓ udah di-DM</span>}
                 </div>
-                <div style={{ fontSize: 11, color: "var(--app-muted)", flexShrink: 0 }}>{p.latest.kind === "mention" ? "mention" : "balas"} · {ago(p.latest.timestamp)}{p.count > 1 ? ` · ${p.count}×` : ""}</div>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", flexShrink: 0 }}>{p.latest.kind === "mention" ? "mention" : "balas"} · {ago(p.latest.timestamp)}{p.count > 1 ? ` · ${p.count}×` : ""}</div>
               </div>
               <div style={{ fontSize: 12, color: "var(--app-sub)", marginTop: 4, lineHeight: 1.5 }}>“{p.latest.text || "(tanpa teks)"}”</div>
-              {p.latest.postText && <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>di post: {p.latest.postText}</div>}
+              {p.latest.postText && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>di post: {p.latest.postText}</div>}
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
                 <button onClick={() => onTarget(p.username)} style={{ ...chip, minHeight: 36, fontWeight: 700, background: "#005eb0", color: "#fff", border: "1px solid #005eb0" }}>DM dia →</button>
                 <a href={p.latest.permalink || profileUrl(p.username)} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Lihat ↗</a>

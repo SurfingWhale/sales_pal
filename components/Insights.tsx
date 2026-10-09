@@ -118,7 +118,7 @@ export default function Insights() {
                 <div key={s.label} style={card}>
                   <div style={{ fontSize: 24, fontWeight: 700, color: s.color || "var(--app-text)" }}>{s.value}</div>
                   <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{s.label}</div>
-                  <div style={{ fontSize: 10, color: "var(--app-muted)", marginTop: 2 }}>{s.sub}</div>
+                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{s.sub}</div>
                 </div>
               ))}
             </div>
@@ -142,17 +142,17 @@ export default function Insights() {
             {/* Source ROI */}
             <div style={card}>
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Sumber Lead & Uang</div>
-              <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 16 }}>Dari mana lead datang, dan mana yang benar-benar closing.</div>
+              <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 16 }}>Dari mana lead datang, dan mana yang benar-benar closing.</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {m.sources.map(s => (
                   <div key={s.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, paddingBottom: 10, borderBottom: "1px solid var(--app-inner)" }}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.key}</div>
-                      <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{s.count} lead · {s.closed} closed ({pct(s.closed, s.count)}%)</div>
+                      <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{s.count} lead · {s.closed} closed ({pct(s.closed, s.count)}%)</div>
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ok)" }}>{rp(s.closedValue)}</div>
-                      <div style={{ fontSize: 10, color: "var(--app-muted)" }}>dari {rp(s.value)} pipeline</div>
+                      <div style={{ fontSize: 12, color: "var(--app-muted)" }}>dari {rp(s.value)} pipeline</div>
                     </div>
                   </div>
                 ))}
@@ -163,17 +163,17 @@ export default function Insights() {
             {m.pitches.length > 0 && (
               <div style={card}>
                 <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Performa Pitch (Hunting)</div>
-                <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 16 }}>Pesan mana yang paling sering dibales & bikin tertarik.</div>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 16 }}>Pesan mana yang paling sering dibales & bikin tertarik.</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
                   {m.pitches.map(p => (
                     <div key={p.key} style={{ background: "var(--app-inner)", borderRadius: 10, padding: 14 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.key}</div>
                       <div style={{ display: "flex", gap: 14 }}>
-                        <div><div style={{ fontSize: 18, fontWeight: 700, color: p.resp >= 25 ? "#00a862" : p.resp >= 10 ? "#f59e0b" : "#ff4444" }}>{p.resp}%</div><div style={{ fontSize: 10, color: "var(--app-muted)" }}>Response</div></div>
-                        <div><div style={{ fontSize: 18, fontWeight: 700, color: "#005eb0" }}>{p.win}%</div><div style={{ fontSize: 10, color: "var(--app-muted)" }}>Tertarik</div></div>
-                        <div><div style={{ fontSize: 18, fontWeight: 700 }}>{p.sent}</div><div style={{ fontSize: 10, color: "var(--app-muted)" }}>Kirim</div></div>
+                        <div><div style={{ fontSize: 18, fontWeight: 700, color: p.resp >= 25 ? "#00a862" : p.resp >= 10 ? "#f59e0b" : "#ff4444" }}>{p.resp}%</div><div style={{ fontSize: 12, color: "var(--app-muted)" }}>Response</div></div>
+                        <div><div style={{ fontSize: 18, fontWeight: 700, color: "#005eb0" }}>{p.win}%</div><div style={{ fontSize: 12, color: "var(--app-muted)" }}>Tertarik</div></div>
+                        <div><div style={{ fontSize: 18, fontWeight: 700 }}>{p.sent}</div><div style={{ fontSize: 12, color: "var(--app-muted)" }}>Kirim</div></div>
                       </div>
-                      {p.sent >= 5 && p.resp < 10 && <div style={{ fontSize: 10, color: "#ff8888", marginTop: 8 }}>⚠️ Response rendah — revisi pesan ini.</div>}
+                      {p.sent >= 5 && p.resp < 10 && <div style={{ fontSize: 12, color: "#ff8888", marginTop: 8 }}>⚠️ Response rendah — revisi pesan ini.</div>}
                     </div>
                   ))}
                 </div>

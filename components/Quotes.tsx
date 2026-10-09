@@ -144,8 +144,8 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
         ].map(x => (
           <div key={x.l} style={{ ...card, padding: 16 }}>
             <div style={{ fontSize: 22, fontWeight: 700, color: x.c, fontFamily: font }}>{x.v}</div>
-            <div style={{ fontSize: 11, fontWeight: 600, marginTop: 2 }}>{x.l}</div>
-            <div style={{ fontSize: 10, color: "var(--app-muted)", marginTop: 2 }}>{x.s}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{x.l}</div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{x.s}</div>
           </div>
         ))}
       </div>
@@ -179,9 +179,9 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
               <div key={q.id} style={{ ...card, padding: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 11, color: "var(--app-muted)", fontFamily: "monospace" }}>{q.number} · {longDate(q.date)}</div>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)", fontFamily: "monospace" }}>{q.number} · {longDate(q.date)}</div>
                     <div style={{ fontSize: 15, fontWeight: 700, fontFamily: font, marginTop: 2 }}>{q.leadName}</div>
-                    <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>
                       {q.items.map(i => i.name).join(", ")}
                     </div>
                   </div>
@@ -214,7 +214,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                   {q.invoiceId && <span style={{ ...chip, cursor: "default", color: "var(--ok)" }}>Invoice dibuat</span>}
                   <button onClick={() => remove(q)} aria-label={`Hapus ${q.number}`} style={{ ...chip, marginLeft: "auto", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}>🗑</button>
                 </div>
-                {!waNumber(q.phone) && <div style={{ fontSize: 11, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 8 }}>Belum ada nomor WA — Kirim WA akan minta pilih kontak.</div>}
+                {!waNumber(q.phone) && <div style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 8 }}>Belum ada nomor WA — Kirim WA akan minta pilih kontak.</div>}
               </div>
             );
           })}

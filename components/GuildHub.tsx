@@ -134,7 +134,7 @@ export default function GuildHub({ uid, name, email }: { uid: string; name: stri
             Bikin guild buat tim lo (atau tim sales klien), terus undang orangnya lewat link. Leader & Officer lihat semua deal dan report tiap orang; Member kerjain deal-nya sendiri; Viewer cuma lihat report.
           </div>
           <button onClick={() => setFounding("")} style={btnPrimary}>+ Bikin guild</button>
-          <div style={{ fontSize: 11.5, color: "var(--app-muted)", marginTop: 14 }}>Diundang orang? Buka link undangannya di HP ini.</div>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 14 }}>Diundang orang? Buka link undangannya di HP ini.</div>
         </div>
         {foundModal}
       </div>
@@ -253,9 +253,9 @@ function TeamReport({ gid, guild, me, members, deals, targets, reports }: { gid:
               ["Chat masuk", fmtN(leads), showLive && manager ? delta(leads, live.base.leads, "count").text : ""],
             ].map(([k, v, d]) => (
               <div key={k} style={{ ...card, padding: "12px 14px" }}>
-                <div style={{ fontSize: 11.5, color: "var(--app-muted)", fontWeight: 600 }}>{k}{!manager && !frozen ? " (kamu)" : ""}</div>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", fontWeight: 600 }}>{k}{!manager && !frozen ? " (kamu)" : ""}</div>
                 <div style={{ fontSize: 20, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{v}</div>
-                {d && <div style={{ fontSize: 11.5, color: "var(--app-muted)" }}>{d}</div>}
+                {d && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{d}</div>}
               </div>
             ))}
           </div>
@@ -264,7 +264,7 @@ function TeamReport({ gid, guild, me, members, deals, targets, reports }: { gid:
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 560 }}>
               <thead>
                 <tr style={{ background: "var(--app-inner)", textAlign: "left" }}>
-                  {["#", "Sales", "Chat", "Penawaran", "Lunas", "Omzet", "Target", "Capaian", ""].map(h => <th key={h} style={{ padding: "9px 10px", fontSize: 11, color: "var(--app-muted)", fontWeight: 700 }}>{h}</th>)}
+                  {["#", "Sales", "Chat", "Penawaran", "Lunas", "Omzet", "Target", "Capaian", ""].map(h => <th key={h} style={{ padding: "9px 10px", fontSize: 12, color: "var(--app-muted)", fontWeight: 700 }}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -282,7 +282,7 @@ function TeamReport({ gid, guild, me, members, deals, targets, reports }: { gid:
                       <td style={{ padding: "9px 10px", color: "var(--app-muted)" }}>{r.targetRevenue ? `${juta(r.targetRevenue)}${r.targetDeals ? ` · ${r.targetDeals} deal` : ""}` : "—"}</td>
                       <td style={{ padding: "9px 10px", fontWeight: 700, color: pct == null ? "var(--app-muted)" : pct >= 100 ? "var(--ok)" : undefined }}>{pct == null ? "—" : `${pct}%`}</td>
                       <td style={{ padding: "9px 10px" }}>
-                        {manager && !frozen && <button onClick={() => setEditing({ uid: r.uid, name: r.name, revenue: r.targetRevenue ? fmtN(r.targetRevenue) : "", deals: r.targetDeals ? String(r.targetDeals) : "" })} aria-label={`Atur target ${r.name}`} style={{ ...chip, fontSize: 11 }}>Target</button>}
+                        {manager && !frozen && <button onClick={() => setEditing({ uid: r.uid, name: r.name, revenue: r.targetRevenue ? fmtN(r.targetRevenue) : "", deals: r.targetDeals ? String(r.targetDeals) : "" })} aria-label={`Atur target ${r.name}`} style={{ ...chip, fontSize: 12 }}>Target</button>}
                       </td>
                     </tr>
                   );
@@ -290,7 +290,7 @@ function TeamReport({ gid, guild, me, members, deals, targets, reports }: { gid:
               </tbody>
             </table>
           </div>
-          <div style={{ fontSize: 11, color: "var(--app-muted)" }}>
+          <div style={{ fontSize: 12, color: "var(--app-muted)" }}>
             Omzet & lunas dihitung dari tanggal lunas; chat & penawaran dari chat yang masuk bulan ini. Pembanding = rata-rata 3 bulan sebelumnya; di bawah 10 kejadian ditulis tanpa persen.
           </div>
 
@@ -401,7 +401,7 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
             <div key={m.uid} style={{ ...card, padding: "11px 14px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <div style={{ minWidth: 0, flex: "1 1 180px" }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}{m.uid === me.uid ? " (kamu)" : ""}</div>
-                <div style={{ fontSize: 11.5, color: "var(--app-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.email}</div>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.email}</div>
               </div>
               {options.length ? (
                 <>
@@ -430,7 +430,7 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
             </select>
             <button onClick={makeInvite} style={btnPrimary}>Bikin link undangan</button>
           </div>
-          <div style={{ fontSize: 11.5, color: "var(--app-muted)", marginTop: 8 }}>{ROLE_HINT[inviteRole]}</div>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 8 }}>{ROLE_HINT[inviteRole]}</div>
           {link && (
             <div style={{ marginTop: 12 }}>
               <label htmlFor="inv-link" style={label}>Link undangan</label>
@@ -468,7 +468,7 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
             <label htmlFor="gs-name" style={label}>Nama guild</label>
             <input id="gs-name" value={settings.name} onChange={e => setSettings({ ...settings, name: e.target.value })} maxLength={80} style={{ ...inputStyle, marginBottom: 14 }} />
             <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>Nama peran</div>
-            <div style={{ fontSize: 11.5, color: "var(--app-muted)", marginBottom: 10 }}>Ganti sesuai istilah tim lo (mis. Officer → Supervisor). Hak aksesnya tetap.</div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 10 }}>Ganti sesuai istilah tim lo (mis. Officer → Supervisor). Hak aksesnya tetap.</div>
             {ROLES.map(r => (
               <div key={r} style={{ marginBottom: 8 }}>
                 <label htmlFor={`gs-${r}`} style={label}>{r === "leader" ? "Leader" : r === "officer" ? "Officer" : r === "member" ? "Member" : "Viewer"} — {ROLE_HINT[r]}</label>
@@ -549,7 +549,7 @@ function Activities({ gid, me }: { gid: string; me: Member }) {
               {a.refName && <> · <b>{a.refName}</b></>}
               {a.detail && <span style={{ color: "var(--app-muted)" }}> · {a.detail}</span>}
             </div>
-            <span style={{ color: "var(--app-muted)", whiteSpace: "nowrap", fontSize: 11.5 }}>{ago(a.at)}</span>
+            <span style={{ color: "var(--app-muted)", whiteSpace: "nowrap", fontSize: 12 }}>{ago(a.at)}</span>
           </div>
         ))}
       </div>

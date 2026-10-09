@@ -28,16 +28,22 @@ const css = `
 .sp-folder { transition: transform .15s ease; }
 .sp-folder:active { transform: scale(0.97); }
 .sp-flap { transform-origin: 50% 100%; transform: rotateX(0deg); transition: transform .5s cubic-bezier(.2,0,0,1); }
-.sp-folder:hover .sp-flap, .sp-folder:focus-visible .sp-flap { transform: rotateX(-28deg); }
+.sp-folder:focus-visible .sp-flap { transform: rotateX(-28deg); }
 .sp-sheet { position: absolute; top: 17%; left: 50%; width: 44%; aspect-ratio: 4/5; border-radius: 8px; overflow: hidden; background: var(--sheet); box-shadow: 0 0 0 1px rgba(0,0,0,0.06), 0 3px 8px rgba(0,0,0,0.09); transform-origin: 50% 100%; transition: transform .5s cubic-bezier(.2,0,0,1); }
 .sp-sheet.s1 { transform: translateX(calc(-50% - 11%)) rotate(-4deg); transition-delay: 30ms; }
 .sp-sheet.s2 { transform: translateX(-50%); }
 .sp-sheet.s3 { transform: translateX(calc(-50% + 11%)) rotate(4deg); transition-delay: 30ms; }
-.sp-folder:hover .s1, .sp-folder:focus-visible .s1 { transform: translateX(-100%) translateY(-30%) rotate(-9deg); }
-.sp-folder:hover .s2, .sp-folder:focus-visible .s2 { transform: translateX(-50%) translateY(-30%); }
-.sp-folder:hover .s3, .sp-folder:focus-visible .s3 { transform: translateX(0%) translateY(-30%) rotate(9deg); }
+.sp-folder:focus-visible .s1 { transform: translateX(-100%) translateY(-30%) rotate(-9deg); }
+.sp-folder:focus-visible .s2 { transform: translateX(-50%) translateY(-30%); }
+.sp-folder:focus-visible .s3 { transform: translateX(0%) translateY(-30%) rotate(9deg); }
 .sp-folder .arrow { color: var(--app-muted); transition: transform .3s ease, color .3s ease; }
-.sp-folder:hover .arrow { transform: translate(1px, -1px); color: var(--app-text); }
+@media (hover: hover) {
+  .sp-folder:hover .sp-flap { transform: rotateX(-28deg); }
+  .sp-folder:hover .s1 { transform: translateX(-100%) translateY(-30%) rotate(-9deg); }
+  .sp-folder:hover .s2 { transform: translateX(-50%) translateY(-30%); }
+  .sp-folder:hover .s3 { transform: translateX(0%) translateY(-30%) rotate(9deg); }
+  .sp-folder:hover .arrow { transform: translate(1px, -1px); color: var(--app-text); }
+}
 @media (prefers-reduced-motion: reduce) { .sp-flap, .sp-sheet, .sp-folder, .sp-folder .arrow { transition: none; } }
 .sp-only-phone { display: none; }
 @media (max-width: 767px) { .sp-only-desk { display: none !important; } .sp-only-phone { display: block; } }
@@ -222,7 +228,7 @@ export default function LeadMap({ leads, onOpen, onAll }: { leads: MapLead[]; on
                   ))}
                 </span>
                 <span className="sp-flap frost" style={{ position: "absolute", left: 0, right: 0, bottom: 0, top: "24%", zIndex: 2, borderRadius: 20, boxShadow: "inset 0 0 0 1px var(--frost-ring), 0 -2px 7px -2px var(--frost-drop)" }}>
-                  {on && <span style={{ position: "absolute", top: 12, right: 12, height: 24, padding: "0 10px", borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center" }}>Di peta</span>}
+                  {on && <span style={{ position: "absolute", top: 12, right: 12, height: 24, padding: "0 10px", borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center" }}>Di peta</span>}
                   <span style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "14px 16px 16px", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
                     <span style={{ minWidth: 0, display: "flex", flexDirection: "column" }}>
                       <span style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em", color: q === "kejar" ? "var(--brand-text)" : "var(--app-text)" }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: BAND[q] }} />{QUADRANTS[q].label}</span>

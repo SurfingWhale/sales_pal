@@ -136,7 +136,7 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
         </div>
         {todo.length === 0 ? (
           <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 20, padding: 20, fontSize: 14, color: "var(--app-muted)" }}>
-            Aman. Nggak ada follow-up, penawaran, deal macet, atau tagihan yang nunggu. Pasang jadwal follow-up dari detail lead.
+            Aman. Ga ada follow-up, penawaran, deal macet, atau tagihan yang nunggu. Pasang jadwal follow-up dari detail lead.
           </div>
         ) : (
           <div className="sp-todo">

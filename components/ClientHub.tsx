@@ -129,7 +129,7 @@ export default function ClientHub() {
             <input id="cl-name" value={editClient.name} onChange={e => setEditClient({ ...editClient, name: e.target.value })} placeholder="mis. Toko Aksesoris Jaya" style={{ ...inputStyle, marginBottom: 12 }} />
             <label htmlFor="cl-th" style={label}>Batas deal besar (Rp)</label>
             <input id="cl-th" inputMode="numeric" value={editClient.threshold} onChange={e => setEditClient({ ...editClient, threshold: e.target.value })} style={inputStyle} />
-            <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 6 }}>Report misahin deal besar vs kecil, biar ketauan kalau omzet turun karena ukuran deal, bukan jumlahnya.</div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Report misahin deal besar vs kecil, biar ketauan kalau omzet turun karena ukuran deal, bukan jumlahnya.</div>
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
               <button onClick={saveClient} style={btnPrimary}>Simpan klien</button>
               <button onClick={() => setEditClient(null)} style={btnMuted}>Batal</button>
@@ -257,12 +257,12 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
         {(["lead", "qualified", "quoted", "won"] as Stage[]).map(s => (
           <div key={s} style={{ ...card, padding: "10px 12px" }}>
             <div style={{ fontSize: 18, fontWeight: 800, color: ink(STAGE_COLOR[s]) }}>{open(s)}</div>
-            <div style={{ fontSize: 11, color: "var(--app-muted)", fontWeight: 600 }}>{STAGE_LABEL[s]}</div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", fontWeight: 600 }}>{STAGE_LABEL[s]}</div>
           </div>
         ))}
         <div style={{ ...card, padding: "10px 12px" }}>
           <div style={{ fontSize: 18, fontWeight: 800, color: "var(--ok)" }}>{juta(paidThisMonth.reduce((a, d) => a + (d.paidAmount || 0), 0))}</div>
-          <div style={{ fontSize: 11, color: "var(--app-muted)", fontWeight: 600 }}>Lunas bulan ini · {paidThisMonth.length}</div>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", fontWeight: 600 }}>Lunas bulan ini · {paidThisMonth.length}</div>
         </div>
       </div>
 
@@ -294,10 +294,10 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {d.contactName}{d.isRepeat && <span style={{ fontSize: 11, color: "var(--app-muted)", fontWeight: 600 }}> · repeat</span>}
-                      {showOwner && d.ownerName && <span style={{ fontSize: 11, color: "var(--app-muted)", fontWeight: 600 }}> · {d.ownerName}</span>}
+                      {d.contactName}{d.isRepeat && <span style={{ fontSize: 12, color: "var(--app-muted)", fontWeight: 600 }}> · repeat</span>}
+                      {showOwner && d.ownerName && <span style={{ fontSize: 12, color: "var(--app-muted)", fontWeight: 600 }}> · {d.ownerName}</span>}
                     </div>
-                    <div style={{ fontSize: 11.5, color: "var(--app-muted)", marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>
                       Chat {d.leadAt}{d.firstTouch?.code ? ` · kode ${d.firstTouch.code}` : ""}{d.firstTouch?.heardFrom ? ` · "${d.firstTouch.heardFrom}"` : ""}
                     </div>
                   </div>
@@ -368,7 +368,7 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
                 </div>
               </div>
             )}
-            <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 10 }}>Sumber dikunci setelah disimpan. Kalau sekarang &quot;Ga tau&quot;, masih bisa diisi sekali pas deal lunas.</div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 10 }}>Sumber dikunci setelah disimpan. Kalau sekarang &quot;Ga tau&quot;, masih bisa diisi sekali pas deal lunas.</div>
             <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
               <button onClick={saveChat} disabled={!draft.name.trim() || (draft.paidNow && !n0(draft.amount))} style={{ ...btnPrimary, opacity: !draft.name.trim() || (draft.paidNow && !n0(draft.amount)) ? 0.5 : 1 }}>Simpan chat</button>
               <button onClick={() => setDraft(null)} style={btnMuted}>Batal</button>
@@ -400,7 +400,7 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
               <div style={{ background: "#b453090f", border: "1px solid #b4530940", borderRadius: 10, padding: 12, marginBottom: 12 }}>
                 <div id="mv-src" style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8, color: ink("#b45309") }}>Sumber customer ini belum ketahuan. Inget dia dateng dari mana?</div>
                 <SourcePicker id="mv-src" value={move.channel} onChange={c => setMove({ ...move, channel: c })} />
-                <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 8 }}>Boleh tetap &quot;Ga tau&quot; — tapi kehitung di baris &quot;belum ketahuan&quot; di report.</div>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 8 }}>Boleh tetap &quot;Ga tau&quot; — tapi kehitung di baris &quot;belum ketahuan&quot; di report.</div>
               </div>
             )}
             <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
@@ -495,7 +495,7 @@ function Content({ clientId, posts }: { clientId: string; posts: Post[] }) {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 460 }}>
             <thead>
               <tr style={{ background: "var(--app-inner)", textAlign: "left" }}>
-                {["Platform", "Post", "Views", "ER (eng ÷ views)", "Save/view", "Share/view"].map(h => <th key={h} style={{ padding: "9px 12px", fontSize: 11, color: "var(--app-muted)", fontWeight: 700 }}>{h}</th>)}
+                {["Platform", "Post", "Views", "ER (eng ÷ views)", "Save/view", "Share/view"].map(h => <th key={h} style={{ padding: "9px 12px", fontSize: 12, color: "var(--app-muted)", fontWeight: 700 }}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -524,7 +524,7 @@ function Content({ clientId, posts }: { clientId: string; posts: Post[] }) {
             <div key={p.id} style={{ ...card, padding: "10px 12px", display: "flex", gap: 10, alignItems: "center" }}>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>
-                <div style={{ fontSize: 11.5, color: "var(--app-muted)", fontVariantNumeric: "tabular-nums" }}>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", fontVariantNumeric: "tabular-nums" }}>
                   {p.platform}{p.format ? ` · ${p.format}` : ""} · {fmtN(p.views)} views · {fmtN(p.likes)} like · {fmtN(p.comments)} komen · {fmtN(p.shares)} share · {fmtN(p.saves)} save
                 </div>
               </div>
@@ -562,7 +562,7 @@ function Content({ clientId, posts }: { clientId: string; posts: Post[] }) {
                 </div>
               ))}
             </div>
-            <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 8 }}>Reach sengaja ga dicatat: dijumlah antar post hasilnya selalu salah.</div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 8 }}>Reach sengaja ga dicatat: dijumlah antar post hasilnya selalu salah.</div>
             <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
               <button onClick={savePost} disabled={!draft.title.trim()} style={{ ...btnPrimary, opacity: draft.title.trim() ? 1 : 0.5 }}>Simpan post</button>
               <button onClick={() => setDraft(null)} style={btnMuted}>Batal</button>
@@ -607,9 +607,9 @@ function Tile({ k, v, d }: { k: string; v: string; d: { text: string; tone: stri
   const color = d.tone === "up" ? "var(--ok)" : d.tone === "down" ? ink("#dc2626") : "var(--app-muted)";
   return (
     <div style={{ ...card, padding: "12px 14px", minWidth: 0 }}>
-      <div style={{ fontSize: 11.5, color: "var(--app-muted)", fontWeight: 600 }}>{k}</div>
+      <div style={{ fontSize: 12, color: "var(--app-muted)", fontWeight: 600 }}>{k}</div>
       <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{v}</div>
-      <div style={{ fontSize: 11.5, color, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{d.text}</div>
+      <div style={{ fontSize: 12, color, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{d.text}</div>
     </div>
   );
 }
@@ -708,7 +708,7 @@ function Report({ client, deals, posts, reports }: { client: Client; deals: Deal
             {m.views > 0 && <>
               <Bar label="Views" value={m.views} of={m.views} />
               <Bar label="Engagement" value={m.engagement} of={m.views} />
-              <div style={{ fontSize: 11, color: "var(--app-muted)", textAlign: "center", borderTop: "1px dashed var(--app-border)", borderBottom: "1px dashed var(--app-border)", padding: "3px 0", margin: "2px 0" }}>
+              <div style={{ fontSize: 12, color: "var(--app-muted)", textAlign: "center", borderTop: "1px dashed var(--app-border)", borderBottom: "1px dashed var(--app-border)", padding: "3px 0", margin: "2px 0" }}>
                 ↓ konten → orang (satuannya beda)
               </div>
             </>}
@@ -717,7 +717,7 @@ function Report({ client, deals, posts, reports }: { client: Client; deals: Deal
             <Bar label="Penawaran" value={m.quoted} of={funnelTop} note={conv(m.quoted, m.leads)} />
             <Bar label="Won" value={m.won} of={funnelTop} note={conv(m.won, m.leads)} />
             <Bar label="Lunas" value={m.paidFromCohort} of={funnelTop} note={conv(m.paidFromCohort, m.leads)} />
-            <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>
               Dihitung dari chat yang masuk bulan ini.{!m.cohortMature && " Masih berjalan: sebagian chat bulan ini belum sempat closing."} {m.lost > 0 && `${m.lost} gugur.`}
             </div>
           </div>
@@ -733,7 +733,7 @@ function Report({ client, deals, posts, reports }: { client: Client; deals: Deal
               ))}
             </div>
             {unknown && m.paidCount > 0 && (
-              <div style={{ fontSize: 11.5, color: "var(--app-muted)", marginTop: 10 }}>
+              <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 10 }}>
                 {Math.round(m.unknownPaidShare * 100)}% deal lunas belum ketahuan sumbernya. Makin kecil angka ini, makin bisa dipercaya report-nya.
               </div>
             )}
@@ -744,7 +744,7 @@ function Report({ client, deals, posts, reports }: { client: Client; deals: Deal
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 480 }}>
                 <thead>
                   <tr style={{ background: "var(--app-inner)", textAlign: "left" }}>
-                    {["Platform", "Post", "Views", "ER", "Chat", "Omzet"].map(h => <th key={h} style={{ padding: "9px 12px", fontSize: 11, color: "var(--app-muted)", fontWeight: 700 }}>{h}</th>)}
+                    {["Platform", "Post", "Views", "ER", "Chat", "Omzet"].map(h => <th key={h} style={{ padding: "9px 12px", fontSize: 12, color: "var(--app-muted)", fontWeight: 700 }}>{h}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -783,7 +783,7 @@ function Report({ client, deals, posts, reports }: { client: Client; deals: Deal
             <label htmlFor="rp-text" style={{ fontSize: 13.5, fontWeight: 700, display: "block", marginBottom: 8 }}>Ringkasan buat klien</label>
             <textarea id="rp-text" value={text} onChange={e => setText(e.target.value)} readOnly={Boolean(frozen)} rows={9}
               style={{ ...inputStyle, resize: "vertical", lineHeight: 1.55, fontSize: 13, opacity: frozen ? 0.9 : 1 }} />
-            <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 6 }}>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>
               Ditulisin dari angka di atas. Rapiin kalimatnya, terus bekukan biar angka bulan ini ga berubah lagi.
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
@@ -796,7 +796,7 @@ function Report({ client, deals, posts, reports }: { client: Client; deals: Deal
             </div>
           </div>
 
-          <div style={{ fontSize: 11, color: "var(--app-muted)", lineHeight: 1.6 }}>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", lineHeight: 1.6 }}>
             Pembanding = rata-rata 3 bulan sebelumnya yang ada datanya. Bulan pertama ditulis &quot;bulan dasar&quot;. Angka di bawah 10 ga dikasih persen. ER = (like + komen + share + save) ÷ views. Omzet dihitung dari tanggal lunas; funnel dari tanggal chat masuk. Reach ga dijumlah.
           </div>
         </div>

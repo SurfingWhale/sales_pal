@@ -76,8 +76,8 @@ export default function Invoices({ invoices, business }: { invoices: Invoice[]; 
         ].map(x => (
           <div key={x.l} style={{ ...card, padding: 16 }}>
             <div style={{ fontSize: 20, fontWeight: 700, color: x.c, fontFamily: font }}>{x.v}</div>
-            <div style={{ fontSize: 11, fontWeight: 600, marginTop: 2 }}>{x.l}</div>
-            <div style={{ fontSize: 10, color: "var(--app-muted)", marginTop: 2 }}>{x.s}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{x.l}</div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{x.s}</div>
           </div>
         ))}
       </div>
@@ -110,17 +110,17 @@ export default function Invoices({ invoices, business }: { invoices: Invoice[]; 
               <div key={inv.id} style={{ ...card, padding: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 11, color: "var(--app-muted)", fontFamily: "monospace" }}>{inv.number} · {longDate(inv.date)}</div>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)", fontFamily: "monospace" }}>{inv.number} · {longDate(inv.date)}</div>
                     <div style={{ fontSize: 15, fontWeight: 700, fontFamily: font, marginTop: 2 }}>{inv.leadName}</div>
-                    <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       Jatuh tempo
                       <input type="date" value={inv.dueDate} onChange={e => setDue(inv, e.target.value)} aria-label="Jatuh tempo"
-                        style={{ ...inputStyle, width: "auto", padding: "2px 6px", fontSize: 11 }} />
+                        style={{ ...inputStyle, width: "auto", padding: "2px 6px", fontSize: 12 }} />
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 16, fontWeight: 700 }}>{rupiah(t)}</div>
-                    <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>sisa <b style={{ color: balance(inv) ? "#ff9900" : "var(--ok)" }}>{rupiah(balance(inv))}</b></div>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>sisa <b style={{ color: balance(inv) ? "#ff9900" : "var(--ok)" }}>{rupiah(balance(inv))}</b></div>
                     <div style={{ marginTop: 6, display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       {overdue > 0 && <span style={badge("#ff4444")}>{overdue} hari</span>}
                       <span style={badge(invoiceColor[st])}>{st}</span>
@@ -135,7 +135,7 @@ export default function Invoices({ invoices, business }: { invoices: Invoice[]; 
                 {inv.payments?.length > 0 && (
                   <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
                     {inv.payments.map((pm, n) => (
-                      <div key={n} style={{ fontSize: 11, color: "var(--app-muted)", display: "flex", justifyContent: "space-between", gap: 8 }}>
+                      <div key={n} style={{ fontSize: 12, color: "var(--app-muted)", display: "flex", justifyContent: "space-between", gap: 8 }}>
                         <span>{longDate(pm.date)}{pm.note ? ` · ${pm.note}` : ""}</span>
                         <span>
                           <b style={{ color: "var(--ok)" }}>+{rupiah(pm.amount)}</b>

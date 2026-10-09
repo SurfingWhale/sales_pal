@@ -64,7 +64,7 @@ export async function disablePush(): Promise<void> {
 export async function testPush(): Promise<number> {
   const res = await authFetch("/api/push", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ test: true }) });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || "Gagal kirim tes.");
+  if (!res.ok) throw new Error(body.error || "Tes ga kekirim. Matikan lalu nyalain lagi notifikasinya, terus coba lagi.");
   return body.sent || 0;
 }
 

@@ -64,12 +64,11 @@ export default function QuickPitch({ hideButton = false }: { hideButton?: boolea
 
   const inputStyle: React.CSSProperties = {
     background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 8,
-    color: "var(--app-text)", padding: "10px 12px", fontSize: 13, width: "100%",
-    outline: "none", fontFamily: "'Plus Jakarta Sans', sans-serif",
+    color: "var(--app-text)", padding: "10px 12px", fontSize: 13, width: "100%", fontFamily: "'Plus Jakarta Sans', sans-serif",
   };
   const chipBtn: React.CSSProperties = {
     border: "1px solid var(--app-border)", background: "transparent", color: "var(--app-muted)",
-    borderRadius: 6, padding: "6px 10px", fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+    borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer", fontFamily: "inherit",
   };
 
   return (
@@ -101,9 +100,9 @@ export default function QuickPitch({ hideButton = false }: { hideButton?: boolea
             {editing ? (
               /* Editor */
               <div>
-                <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 4 }}>Judul template</label>
+                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 4 }}>Judul template</label>
                 <input value={editing.title} onChange={e => setEditing({ ...editing, title: e.target.value })} placeholder="mis. Cold DM Cafe" style={{ ...inputStyle, marginBottom: 12 }} />
-                <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 4 }}>Isi pesan</label>
+                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 4 }}>Isi pesan</label>
                 <textarea value={editing.body} onChange={e => setEditing({ ...editing, body: e.target.value })} placeholder="Halo {nama}! ..." style={{ ...inputStyle, height: 120, resize: "vertical", marginBottom: 16 }} />
                 <div style={{ display: "flex", gap: 10 }}>
                   <button onClick={save} disabled={!editing.title.trim() || !editing.body.trim()} style={{ background: "#005eb0", color: "#fff", border: "none", borderRadius: 8, padding: "11px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit", opacity: (!editing.title.trim() || !editing.body.trim()) ? 0.5 : 1 }}>Simpan</button>
@@ -131,7 +130,7 @@ export default function QuickPitch({ hideButton = false }: { hideButton?: boolea
                         <button onClick={() => copyTpl(t)} style={{ ...chipBtn, flex: 1, color: copiedId === t.id ? "var(--ok)" : "var(--app-text)", borderColor: copiedId === t.id ? "var(--ok)" : "var(--app-border)", padding: "8px" }}>
                           {copiedId === t.id ? "✓ Tersalin" : "Copy"}
                         </button>
-                        <button onClick={() => sendWA(t)} style={{ flex: 1, background: "#25D366", color: "#fff", border: "none", borderRadius: 6, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                        <button onClick={() => sendWA(t)} style={{ flex: 1, background: "#25D366", color: "#fff", border: "none", borderRadius: 6, padding: "8px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                           Kirim WA
                         </button>
                       </div>

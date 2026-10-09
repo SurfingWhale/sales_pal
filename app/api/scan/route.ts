@@ -98,6 +98,6 @@ export async function POST(req: Request) {
     const rows = extractLeads(content);
     return NextResponse.json({ rows });
   } catch {
-    return NextResponse.json({ error: "Gagal menghubungi layanan scan." }, { status: 500 });
+    return NextResponse.json({ error: "Layanan scan lagi ga bisa dihubungi. Coba lagi sebentar, atau import pakai Excel/CSV." }, { status: 500 });
   }
 }

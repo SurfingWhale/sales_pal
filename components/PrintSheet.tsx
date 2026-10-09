@@ -30,8 +30,8 @@ export default function PrintSheet(props: Props) {
     <div className="modal-overlay print-overlay" onClick={onClose}>
       <div onClick={e => e.stopPropagation()} className="print-frame" style={{ width: "100%", maxWidth: 720, maxHeight: "92vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
         <div className="no-print" style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button onClick={() => window.print()} style={btnPrimary}>CETAK / PDF</button>
-          <button onClick={onClose} style={btnMuted}>TUTUP</button>
+          <button onClick={() => window.print()} style={btnPrimary}>Cetak / PDF</button>
+          <button onClick={onClose} style={btnMuted}>Tutup</button>
         </div>
 
         <div className="print-root" style={{ background: "#fff", color: ink, borderRadius: 8, padding: "40px 36px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>

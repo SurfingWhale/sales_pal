@@ -58,8 +58,7 @@ export default function ScriptLibrary() {
 
   const inputBase = {
     background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8,
-    color: "var(--app-text)", padding: "10px 14px", fontSize: 12,
-    outline: "none", fontFamily: "'Plus Jakarta Sans', sans-serif",
+    color: "var(--app-text)", padding: "10px 14px", fontSize: 12, fontFamily: "'Plus Jakarta Sans', sans-serif",
   } as React.CSSProperties;
 
   return (
@@ -124,7 +123,7 @@ export default function ScriptLibrary() {
           style={{
             background: filterArchetype === "all" ? "var(--app-border)" : "transparent",
             border: "1px solid var(--app-border)", borderRadius: 20, color: filterArchetype === "all" ? "var(--app-text)" : "var(--app-muted)",
-            padding: "4px 14px", fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+            padding: "4px 14px", fontSize: 12, cursor: "pointer", fontFamily: "inherit",
           }}
         >
           Semua
@@ -137,7 +136,7 @@ export default function ScriptLibrary() {
               background: filterArchetype === a.id ? `${a.color}20` : "transparent",
               border: `1px solid ${filterArchetype === a.id ? a.color : "var(--app-border)"}`,
               borderRadius: 20, color: filterArchetype === a.id ? a.color : "var(--app-muted)",
-              padding: "4px 14px", fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+              padding: "4px 14px", fontSize: 12, cursor: "pointer", fontFamily: "inherit",
             }}
           >
             {a.animal} {a.name}
@@ -163,19 +162,19 @@ export default function ScriptLibrary() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <span style={{
-                      fontSize: 11, background: `${arch.color}15`, color: arch.color,
+                      fontSize: 12, background: `${arch.color}15`, color: arch.color,
                       border: `1px solid ${arch.color}30`, borderRadius: 20, padding: "3px 10px",
                     }}>
                       {arch.animal} {arch.name}
                     </span>
                     <span style={{
-                      fontSize: 11, background: "var(--app-inner)", color: "var(--app-muted)",
+                      fontSize: 12, background: "var(--app-inner)", color: "var(--app-muted)",
                       border: "1px solid var(--app-border)", borderRadius: 20, padding: "3px 10px",
                     }}>
                       {obj.icon} {obj.label}
                     </span>
                     <span style={{
-                      fontSize: 11,
+                      fontSize: 12,
                       background: item.tone === "formal" ? "#a78bfa20" : "#00ccff20",
                       color: item.tone === "formal" ? "#a78bfa" : "#00ccff",
                       border: `1px solid ${item.tone === "formal" ? "#a78bfa40" : "#00ccff40"}`,
