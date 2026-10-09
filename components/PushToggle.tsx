@@ -32,7 +32,7 @@ export default function PushToggle() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 700 }}>🔔 Notifikasi pagi</div>
-          <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{state ? hint[state] : "Cek…"}</div>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{state ? hint[state] : "Cek…"}</div>
         </div>
         {(state === "off" || state === "on") && (
           <button
@@ -51,7 +51,7 @@ export default function PushToggle() {
           Kirim tes
         </button>
       )}
-      {msg && <div role="status" style={{ marginTop: 8, fontSize: 12, color: "var(--app-muted)" }}>{msg}</div>}
+      <div role="status" style={{ marginTop: msg ? 8 : 0, fontSize: 12, color: "var(--app-muted)" }}>{msg}</div>
     </div>
   );
 }

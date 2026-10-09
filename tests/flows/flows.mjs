@@ -121,9 +121,20 @@ export const flows = [
       for (const [place, tab, heading] of places) {
         await t.step(`${place}${tab ? ` → ${tab}` : ""} shows "${heading}"`, async () => { await go(t.page, place, tab); await expectText(t.page, heading); });
       }
-      await t.step("no sideways scroll on any of them", async () => {
-        const over = await t.page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-        if (over > 0) throw new Error(`page is ${over}px wider than the screen`);
+      // WCAG 1.4.10: every place reflows at 320px (= 200% zoom) without sideways scroll.
+      await t.step("no sideways scroll on any of them, also at 320px", async () => {
+        const size = t.page.viewportSize();
+        const wide = [];
+        for (const width of [size.width, 320]) {
+          await t.page.setViewportSize({ width, height: size.height });
+          for (const [place, tab] of places) {
+            await go(t.page, place, tab);
+            const over = await t.page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+            if (over > 0) wide.push(`${place}${tab ? `/${tab}` : ""} @${width}px +${over}px`);
+          }
+        }
+        await t.page.setViewportSize(size);
+        if (wide.length) throw new Error(`wider than the screen: ${wide.join(", ")}`);
       });
       await t.step("dark mode toggles", async () => {
         await t.page.getByRole("button", { name: "Profil dan pengaturan" }).click();
@@ -499,7 +510,7 @@ export const flows = [
       await t.step("the leader prints the team report", async () => {
         await page.getByRole("button", { name: "Cetak / PDF" }).click();
         await expectText(page, "REPORT SALES TIM");
-        await page.getByRole("button", { name: "TUTUP" }).click();
+        await modal(page).getByRole("button", { name: "Tutup", exact: true }).click();
       });
       await t.step("the activity log shows who did what", async () => {
         await page.getByRole("tab", { name: "Aktivitas" }).click();
@@ -654,7 +665,7 @@ export const flows = [
         await page.getByRole("button", { name: "Cetak / PDF" }).click();
         await expectText(page, "LAPORAN BULANAN");
         await expectText(page, "OMZET PER SUMBER");
-        await page.getByRole("button", { name: "TUTUP" }).click();
+        await modal(page).getByRole("button", { name: "Tutup", exact: true }).click();
       });
       await t.step("a chat untouched for 10 days shows up in Perlu Ditindak", async () => {
         await page.getByRole("tab", { name: "Chat & Deal" }).click();

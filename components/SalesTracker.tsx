@@ -120,8 +120,7 @@ const statusBg: Record<string, string> = { Hot: "#ff44441a", Warm: "#ff99001a", 
 
 const inputStyle = {
   background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8,
-  color: "var(--app-text)", padding: "10px 14px", fontSize: 13, width: "100%",
-  outline: "none", fontFamily: "'Plus Jakarta Sans', sans-serif",
+  color: "var(--app-text)", padding: "10px 14px", fontSize: 13, width: "100%", fontFamily: "'Plus Jakarta Sans', sans-serif",
 };
 const btnPrimary = {
   background: "#005eb0", color: "#fff",
@@ -386,7 +385,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         body: JSON.stringify({ image: dataUrl }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Gagal memproses gambar.");
+      if (!res.ok) throw new Error(json?.error || "Gambar ga kebaca. Coba foto yang lebih terang dan lurus, atau pakai Excel/CSV.");
       const leads: Record<string, unknown>[] = Array.isArray(json?.rows) ? json.rows : [];
       const rows = leads.map(l => {
         const o: Record<string, unknown> = {};
@@ -402,7 +401,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       IMPORT_FIELDS.forEach(f => { if (headers.includes(f.key)) map[f.key] = f.key; });
       setColMap(map);
     } catch (err) {
-      setScanError(err instanceof Error ? err.message : "Gagal memproses gambar.");
+      setScanError(err instanceof Error ? err.message : "Gambar ga kebaca. Coba foto yang lebih terang dan lurus, atau pakai Excel/CSV.");
     } finally {
       setScanning(false);
     }
@@ -493,7 +492,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
   async function deleteLead(id: string) {
     const name = leads.find(l => l.id === id)?.name || "lead ini";
-    if (!confirm(`Hapus ${name}? Nggak bisa dibatalkan.`)) return;
+    if (!confirm(`Hapus ${name}? Ga bisa dibatalkan.`)) return;
     await deleteDoc(spaceDoc(space, "leads", id));
   }
 
@@ -667,7 +666,6 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         .sp-top-in { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 0 32px; height: 68px; display: flex; align-items: center; gap: 24px; }
         .sp-nav { margin: 0 auto; display: flex; gap: 2px; padding: 3px; border-radius: 999px; }
         .sp-nav-btn { position: relative; height: 38px; padding: 0 16px; display: flex; align-items: center; gap: 6px; border: none; border-radius: 999px; background: transparent; color: var(--app-ink-2); font: 500 14px 'Plus Jakarta Sans', sans-serif; cursor: pointer; white-space: nowrap; }
-        .sp-nav-btn:hover { color: var(--app-text); }
         .sp-nav-btn.is-on { color: var(--app-text); font-weight: 600; background: var(--thumb); box-shadow: var(--thumb-shadow); }
         .sp-nav-icon { display: none; }
         .sp-iconbtn { width: 44px; height: 44px; border: 0; border-radius: 999px; color: var(--app-ink-2); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; flex-shrink: 0; font-family: inherit; }
@@ -690,10 +688,13 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           .sp-main { padding: 16px 16px calc(110px + env(safe-area-inset-bottom, 0px)) !important; }
           .sp-fab { bottom: calc(92px + env(safe-area-inset-bottom, 0px)) !important; }
         }
-        .tab-btn:hover { background: var(--app-inner) !important; }
-        .lead-row:hover { background: var(--app-inner) !important; cursor: pointer; }
-        .stat-card-dash { transition: transform 0.2s; } .stat-card-dash:hover { transform: translateY(-2px); }
-        .step-card:hover { border-color: var(--accent) !important; }
+        @media (hover: hover) {
+          .sp-nav-btn:hover { color: var(--app-text); }
+          .tab-btn:hover { background: var(--app-inner) !important; }
+          .lead-row:hover { background: var(--app-inner) !important; }
+          .step-card:hover { border-color: var(--accent) !important; }
+        }
+        .lead-row { cursor: pointer; }
         .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
         input:focus, select:focus, textarea:focus { border-color: #005eb0 !important; }
@@ -806,7 +807,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                 <div style={{ position: "relative", flex: wide ? "0 0 auto" : "1 1 100%" }}>
                   <label htmlFor="lead-search" className="vh">Cari lead</label>
                   <Icon name="search" style={{ position: "absolute", left: 14, top: 13, color: "var(--app-muted)" }} />
-                  <input id="lead-search" type="search" value={leadQ} onChange={e => setLeadQ(e.target.value)} placeholder="Cari nama atau kategori" style={{ width: wide ? 260 : "100%", height: 44, padding: "0 16px 0 42px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "var(--app-card)", color: "var(--app-text)", fontSize: 14, outline: "none", fontFamily: "inherit" }} />
+                  <input id="lead-search" type="search" value={leadQ} onChange={e => setLeadQ(e.target.value)} placeholder="Cari nama atau kategori" style={{ width: wide ? 260 : "100%", height: 44, padding: "0 16px 0 42px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "var(--app-card)", color: "var(--app-text)", fontSize: 14, fontFamily: "inherit" }} />
                 </div>
                 <label className="vh" htmlFor="status-filter">Status</label>
                 <select id="status-filter" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ height: 44, padding: "0 14px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "var(--app-card)", color: "var(--app-text)", fontSize: 14, fontFamily: "inherit" }}>
@@ -864,7 +865,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                               <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lead.name}</span>
                               <span style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lead.category} · {lead.source}{showOwner && lead.ownerName ? ` · 👤 ${lead.ownerName}` : ""}</span>
                             </span>
-                            <span style={{ flexShrink: 0, alignSelf: "flex-start", padding: "3px 9px", borderRadius: 999, background: "var(--app-inner)", color: ({ Hot: "var(--hot)", Warm: "var(--warm)", Cold: "var(--cold)", Closed: "var(--ok)" } as Record<string, string>)[lead.status] || "var(--app-ink-2)", fontSize: 11.5, fontWeight: 600 }}>{lead.status}</span>
+                            <span style={{ flexShrink: 0, alignSelf: "flex-start", padding: "3px 9px", borderRadius: 999, background: "var(--app-inner)", color: ({ Hot: "var(--hot)", Warm: "var(--warm)", Cold: "var(--cold)", Closed: "var(--ok)" } as Record<string, string>)[lead.status] || "var(--app-ink-2)", fontSize: 12, fontWeight: 600 }}>{lead.status}</span>
                           </span>
                           <span style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
                             <HeatDots level={s.level} />
@@ -934,7 +935,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               ].map(s => (
                 <div key={s.label} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 10, padding: 16 }}>
                   <div style={{ fontSize: 22, fontWeight: 700, color: `color-mix(in srgb, ${s.color} 55%, var(--app-text))`, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{s.value}</div>
-                  <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>{s.label}</div>
+                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>{s.label}</div>
                 </div>
               ))}
             </div>
@@ -955,13 +956,13 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                       <div style={{ fontSize: 20 }}>{o.type === "Email" ? "📧" : o.type === "DM Instagram" ? "📸" : "💬"}</div>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{o.leadName}</div>
-                        <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{o.subject}</div>
-                        <div style={{ fontSize: 10, color: "var(--app-muted)", marginTop: 2 }}>{o.type} · {o.date}</div>
+                        <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{o.subject}</div>
+                        <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{o.type} · {o.date}</div>
                       </div>
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <span className="badge" style={{ background: `${statusColors[o.status]}20`, color: statusColors[o.status], border: `1px solid ${statusColors[o.status]}40` }}>{o.status}</span>
-                      <div style={{ fontSize: 10, color: "var(--app-muted)", marginTop: 6 }}>Opens: {o.opens} · Clicks: {o.clicks}</div>
+                      <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Opens: {o.opens} · Clicks: {o.clicks}</div>
                     </div>
                   </div>
                 );
@@ -997,22 +998,22 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{r.leadName}</div>
-                      <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{r.channel} · {r.date}</div>
+                      <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{r.channel} · {r.date}</div>
                     </div>
                     <span className="badge" style={{ background: "#ff44441a", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444430" }}>REJECTED</span>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12 }}>
-                      <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 4 }}>ALASAN REJECTION</div>
+                      <div style={{ fontSize: 12, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 4 }}>ALASAN REJECTION</div>
                       <div style={{ fontSize: 12, color: "#ff8888" }}>{r.reason}</div>
                     </div>
                     <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12 }}>
-                      <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 4 }}>FOLLOW-UP DATE</div>
+                      <div style={{ fontSize: 12, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 4 }}>FOLLOW-UP DATE</div>
                       <div style={{ fontSize: 12, color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))" }}>{r.followUpDate || "Belum dijadwal"}</div>
                     </div>
                   </div>
                   <div style={{ background: "#00ff881a", borderRadius: 8, padding: 12, marginTop: 12, border: "1px solid #00ff8820" }}>
-                    <div style={{ fontSize: 10, color: "var(--ok)", letterSpacing: "1px", marginBottom: 4 }}>💡 LESSON LEARNED</div>
+                    <div style={{ fontSize: 12, color: "var(--ok)", letterSpacing: "1px", marginBottom: 4 }}>💡 LESSON LEARNED</div>
                     <div style={{ fontSize: 12 }}>{r.lesson}</div>
                   </div>
                 </div>
@@ -1042,7 +1043,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                     {section.steps.map((step, i) => (
                       <div key={i} className="step-card" style={{ ["--accent" as string]: section.color, background: "var(--app-inner)", borderRadius: 10, padding: 16, border: "1px solid var(--app-border)", transition: "border-color 0.2s" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                          <div style={{ width: 22, height: 22, borderRadius: 6, background: `${section.color}20`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: section.color, border: `1px solid ${section.color}40` }}>{i + 1}</div>
+                          <div style={{ width: 22, height: 22, borderRadius: 6, background: `${section.color}20`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: section.color, border: `1px solid ${section.color}40` }}>{i + 1}</div>
                           <div style={{ fontSize: 12, fontWeight: 700, color: section.color }}>{step.title}</div>
                         </div>
                         <div style={{ fontSize: 12, color: "var(--app-sub)", lineHeight: 1.6 }}>{step.desc}</div>
@@ -1064,9 +1065,9 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                   { metric: "Avg Deal Cycle", target: "< 14 hari", world: "> 30 hari", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" },
                 ].map(m => (
                   <div key={m.metric} style={{ background: "var(--app-inner)", borderRadius: 10, padding: 14 }}>
-                    <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 6 }}>{m.metric}</div>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>{m.metric}</div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: m.color, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{m.target}</div>
-                    <div style={{ fontSize: 10, color: "var(--app-muted)", marginTop: 4 }}>Rata-rata industri: {m.world}</div>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>Rata-rata industri: {m.world}</div>
                   </div>
                 ))}
               </div>
@@ -1083,20 +1084,20 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {([["name", "Nama Perusahaan"], ["contact", "Nama Kontak"], ["email", "Email"], ["phone", "No. HP"], ["value", "Estimasi Value (Rp)"]] as [string, string][]).map(([k, label]) => (
                 <div key={k} style={{ gridColumn: k === "name" || k === "value" ? "1/-1" : "auto" }}>
-                  <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
+                  <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
                   <input value={(newLead as Record<string, string>)[k]} onChange={e => setNewLead({ ...newLead, [k]: e.target.value })} style={inputStyle} placeholder={label} />
                 </div>
               ))}
               {([["source", "Source", ["GMaps", "DM IG", "Threads", "Cold Email", "Referral", "WhatsApp", "LinkedIn", "Lainnya"]], ["status", "Status", ["Cold", "Warm", "Hot", "Closed"]], ["category", "Kategori", ["F&B", "Retail", "Health", "Property", "Service", "Tech", "Education"]]] as [string, string, string[]][]).map(([k, label, opts]) => (
                 <div key={k}>
-                  <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
+                  <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
                   <select value={(newLead as Record<string, string>)[k]} onChange={e => setNewLead({ ...newLead, [k]: e.target.value })} style={inputStyle}>
                     {opts.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
               ))}
               <div style={{ gridColumn: "1/-1" }}>
-                <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Notes</label>
+                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Notes</label>
                 <textarea value={newLead.notes} onChange={e => setNewLead({ ...newLead, notes: e.target.value })} style={{ ...inputStyle, resize: "none", height: 70 }} placeholder="Catatan tentang lead ini..." />
               </div>
             </div>
@@ -1115,13 +1116,13 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20 }}>+ Log Outreach</div>
             {([["leadName", "Nama Lead/Perusahaan"], ["subject", "Subject / Pesan Pembuka"]] as [string, string][]).map(([k, label]) => (
               <div key={k} style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
+                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
                 <input value={(newOutreach as Record<string, string>)[k]} onChange={e => setNewOutreach({ ...newOutreach, [k]: e.target.value })} style={inputStyle} placeholder={label} />
               </div>
             ))}
             {([["type", "Tipe", ["Email", "DM Instagram", "WhatsApp", "LinkedIn", "Telepon"]], ["status", "Status", ["Sent", "Seen", "Replied", "No Response", "Rejected"]]] as [string, string, string[]][]).map(([k, label, opts]) => (
               <div key={k} style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
+                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
                 <select value={(newOutreach as Record<string, string>)[k]} onChange={e => setNewOutreach({ ...newOutreach, [k]: e.target.value })} style={inputStyle}>
                   {opts.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
@@ -1142,20 +1143,20 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20 }}>+ Log Rejection</div>
             {([["leadName", "Nama Lead/Perusahaan"], ["reason", "Alasan Rejection"], ["lesson", "Lesson Learned"]] as [string, string][]).map(([k, label]) => (
               <div key={k} style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
+                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
                 {k === "lesson"
                   ? <textarea value={(newRejection as Record<string, string>)[k]} onChange={e => setNewRejection({ ...newRejection, [k]: e.target.value })} style={{ ...inputStyle, resize: "none", height: 70 }} placeholder={label} />
                   : <input value={(newRejection as Record<string, string>)[k]} onChange={e => setNewRejection({ ...newRejection, [k]: e.target.value })} style={inputStyle} placeholder={label} />}
               </div>
             ))}
             <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Channel</label>
+              <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Channel</label>
               <select value={newRejection.channel} onChange={e => setNewRejection({ ...newRejection, channel: e.target.value })} style={inputStyle}>
                 {["Email", "DM Instagram", "WhatsApp", "LinkedIn", "Telepon"].map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Jadwal Follow-Up</label>
+              <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Jadwal Follow-Up</label>
               <input type="date" value={newRejection.followUpDate} onChange={e => setNewRejection({ ...newRejection, followUpDate: e.target.value })} style={inputStyle} />
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
@@ -1227,7 +1228,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             {/* Clear cache */}
             <button onClick={clearCacheAndReload} disabled={clearing} style={{ width: "100%", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 16, textAlign: "left", cursor: "pointer", fontFamily: "inherit", marginBottom: 12, opacity: clearing ? 0.6 : 1 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "var(--app-text)" }}>🧹 {clearing ? "Membersihkan..." : "Clear cache & muat ulang"}</div>
-              <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>Hapus cache app & load versi terbaru. Login kamu tetap aman.</div>
+              <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>Hapus cache app & load versi terbaru. Login kamu tetap aman.</div>
             </button>
 
             {/* Logout */}
@@ -1290,7 +1291,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             {importDone !== null ? (
               <div style={{ textAlign: "center", padding: "32px 16px" }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-                <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{importDone} lead berhasil diimport</div>
+                <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{importDone} lead masuk</div>
                 <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Data udah masuk ke Lead Database lo.</div>
                 <button onClick={closeImport} style={btnPrimary}>Selesai</button>
               </div>
@@ -1314,7 +1315,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                     <input type="file" accept=".xlsx,.xls,.csv,.vcf,text/vcard" onChange={handleImportFile} style={{ display: "none" }} />
                     <div style={{ fontSize: 24, marginBottom: 8 }}>📄</div>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{importFileName || "Klik buat pilih file"}</div>
-                    <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>.xlsx, .xls, .csv, atau kontak HP (.vcf)</div>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>.xlsx, .xls, .csv, atau kontak HP (.vcf)</div>
                   </label>
                 ) : (
                   <>
@@ -1322,7 +1323,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                       <input type="file" accept="image/*" onChange={handleScanImage} disabled={scanning} style={{ display: "none" }} />
                       <div style={{ fontSize: 24, marginBottom: 8 }}>{scanning ? "🤖" : "📷"}</div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{scanning ? "Membaca gambar dengan AI..." : (importFileName || "Klik buat pilih / foto data")}</div>
-                      <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>Screenshot chat, tabel, atau kartu nama · JPG/PNG</div>
+                      <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>Screenshot chat, tabel, atau kartu nama · JPG/PNG</div>
                     </label>
                     {scanError && (
                       <div style={{ fontSize: 12, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", background: "#ff44440d", border: "1px solid #ff444430", borderRadius: 8, padding: "10px 14px", marginBottom: 16 }}>{scanError}</div>
@@ -1336,7 +1337,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, marginBottom: 20 }}>
                       {IMPORT_FIELDS.map(f => (
                         <div key={f.key}>
-                          <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 4 }}>
+                          <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 4 }}>
                             {f.label}{f.required && <span style={{ color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}> *</span>}
                           </label>
                           <select value={colMap[f.key] || ""} onChange={e => setColMap({ ...colMap, [f.key]: e.target.value })} style={inputStyle} aria-label={`Kolom untuk ${f.label}`}>
@@ -1349,7 +1350,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
                     <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Preview (3 baris pertama)</div>
                     <div style={{ overflowX: "auto", border: "1px solid var(--app-border)", borderRadius: 8, marginBottom: 20 }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 480 }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 480 }}>
                         <thead>
                           <tr style={{ background: "var(--app-inner)" }}>
                             {IMPORT_FIELDS.filter(f => colMap[f.key]).map(f => (

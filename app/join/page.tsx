@@ -82,7 +82,7 @@ export default function JoinPage() {
             <div style={{ display: "inline-block", background: "#005eb01a", color: "#005eb0", borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 700, marginBottom: 10 }}>sebagai {inv.roleTitle || DEFAULT_TITLES[inv.role]}</div>
             <div style={{ fontSize: 12.5, color: "var(--app-muted)", marginBottom: 20 }}>{ROLE_HINT[inv.role]}</div>
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 16 }}>Login sebagai <b>{user.email}</b></div>
-            {error && <div role="alert" style={{ fontSize: 12.5, color: "#dc2626", marginBottom: 12 }}>{error}</div>}
+            <div role="alert" style={{ fontSize: 13, color: "#dc2626", marginBottom: error ? 12 : 0 }}>{error}</div>
             <button onClick={join} disabled={busy} style={{ background: "#005eb0", color: "#fff", border: "none", borderRadius: 10, padding: "12px 26px", fontWeight: 700, fontSize: 14, cursor: "pointer", opacity: busy ? 0.6 : 1, fontFamily: "inherit" }}>
               {busy ? "Bergabung…" : "Gabung guild"}
             </button>

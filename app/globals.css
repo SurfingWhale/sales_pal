@@ -123,9 +123,13 @@ html, body {
 .pb.b > span:nth-child(5) { -webkit-mask: linear-gradient(to bottom, transparent 66%, #000 83%, #000 100%); mask: linear-gradient(to bottom, transparent 66%, #000 83%, #000 100%); }
 .pb.b > span:nth-child(6) { -webkit-mask: linear-gradient(to bottom, transparent 83%, #000 100%); mask: linear-gradient(to bottom, transparent 83%, #000 100%); }
 .lift { transition: border-color .15s ease; }
-.lift:hover { border-color: var(--app-line-strong) !important; }
 .rowhover { transition: background-color .15s ease; }
-.rowhover:hover { background: var(--app-inner) !important; }
+@media (hover: hover) {
+  .lift:hover { border-color: var(--app-line-strong) !important; }
+  .rowhover:hover { background: var(--app-inner) !important; }
+}
+/* The app header is sticky: keep focused or anchored items clear of it. */
+html { scroll-padding-top: 96px; }
 
 /* ---- Accessibility foundations (better-accessibility) ---- */
 
