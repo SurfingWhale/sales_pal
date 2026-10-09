@@ -1,6 +1,6 @@
 # PRD-007 — Guild (mode tim / enterprise)
 
-- **Status:** v1 dibangun 2026-10-08 — tab **Lainnya → Guild** (`components/GuildHub.tsx`, `lib/guild.ts`, `app/join/page.tsx`)
+- **Status:** v1 dibangun 2026-10-08 (#30); Fase 2 rilis 2026-10-08 — 2.1–2.4 (#31), 2.6 notifikasi pagi (#32), 2.5 ruang kerja Pribadi/Guild (#33). Tab **Lainnya → Guild** (`components/GuildHub.tsx`, `lib/guild.ts`, `app/join/page.tsx`)
 - **Keputusan user:** SalesPal = **alat internal**; "sales" = **tim sendiri dan tim sales klien**; modelnya **guild** kayak di game — siapa pun yang login (Gmail) bisa bikin/gabung guild, guild yang nentuin peran.
 - **Lanjutan dari:** PRD-006 (P1: workspace + peran).
 
