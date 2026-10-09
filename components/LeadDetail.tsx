@@ -387,7 +387,7 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
                 <div role="img" aria-label={`Pesan dari mereka per minggu: ${chat.perWeek.map(w => w.n).join(", ")}`} style={{ display: "flex", alignItems: "flex-end", gap: 10, height: 84, borderBottom: "1px solid var(--app-border)" }}>
                   {chat.perWeek.map((w, i) => <span key={w.week} title={`${w.n} pesan`} style={{ flex: 1, height: `${Math.max(4, (w.n / max) * 100)}%`, borderRadius: "4px 4px 0 0", background: i === chat.perWeek.length - 1 ? "#005eb0" : "color-mix(in srgb, #005eb0 45%, var(--app-card))" }} />)}
                 </div>
-                <div style={{ display: "flex", gap: 10, marginTop: 6 }}>{chat.perWeek.map(w => <span key={w.week} className="tabnum" style={{ flex: 1, textAlign: "center", fontSize: 11, color: "var(--app-muted)" }}>{w.week}</span>)}</div>
+                <div style={{ display: "flex", gap: 10, marginTop: 6 }}>{chat.perWeek.map(w => <span key={w.week} className="tabnum" style={{ flex: 1, textAlign: "center", fontSize: 12, color: "var(--app-muted)" }}>{w.week}</span>)}</div>
                 <p style={{ margin: "20px 0 8px", fontSize: 12, fontWeight: 500, color: "var(--app-muted)" }}>Siapa yang lebih banyak ngechat</p>
                 <div role="img" aria-label={`Kamu ${chat.mine} pesan, mereka ${chat.theirs} pesan`} style={{ display: "flex", gap: 2, height: 8 }}>
                   <span style={{ width: `${(chat.mine / total) * 100}%`, borderRadius: "4px 0 0 4px", background: "var(--app-ink-2)" }} />

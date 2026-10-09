@@ -214,7 +214,7 @@ export default function LoginPage() {
 
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
           <div style={{ flex: 1, height: 1, background: "var(--app-border)" }} />
-          <span style={{ fontSize: 11, color: "var(--app-muted)" }}>atau dengan email</span>
+          <span style={{ fontSize: 12, color: "var(--app-muted)" }}>atau dengan email</span>
           <div style={{ flex: 1, height: 1, background: "var(--app-border)" }} />
         </div>
 
@@ -230,8 +230,7 @@ export default function LoginPage() {
             required
             style={{
               background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 10,
-              color: "var(--app-text)", padding: "13px 16px", fontSize: 14,
-              outline: "none", fontFamily: "inherit",
+              color: "var(--app-text)", padding: "13px 16px", fontSize: 14, fontFamily: "inherit",
             }}
           />
           <input
@@ -245,8 +244,7 @@ export default function LoginPage() {
             minLength={6}
             style={{
               background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 10,
-              color: "var(--app-text)", padding: "13px 16px", fontSize: 14,
-              outline: "none", fontFamily: "inherit",
+              color: "var(--app-text)", padding: "13px 16px", fontSize: 14, fontFamily: "inherit",
             }}
           />
 

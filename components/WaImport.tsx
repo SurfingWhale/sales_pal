@@ -66,7 +66,7 @@ export default function WaImport({ leadName, profile, onSave, onClose, initialFi
     try {
       const res = await authFetch("/api/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: await downscaleImage(f) }) });
       const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Gagal baca screenshot.");
+      if (!res.ok) throw new Error(json?.error || "Screenshot ga kebaca. Coba lagi, atau isi nomor & kategorinya manual.");
       const r = (json.rows || [])[0] || {};
       if (!r.phone && !r.category && !r.notes) throw new Error("Ga ada info bisnis yang kebaca dari screenshot ini.");
       setExtra({ phone: r.phone, contact: r.contact, category: r.category, notes: r.notes, source: "screenshot" }); setMsgs(null); setOff({}); setStep("result");
@@ -138,7 +138,7 @@ export default function WaImport({ leadName, profile, onSave, onClose, initialFi
               <button onClick={() => chatRef.current?.click()} disabled={busy} style={row}>
                 <span aria-hidden="true" style={{ ...icon, background: "#005eb0", color: "#fff" }}><Icon name="chatLines" size={21} /></span>
                 <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: "block", fontSize: 15, fontWeight: 700 }}>Ekspor chat <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, background: "color-mix(in srgb, #005eb0 10%, transparent)", color: "var(--brand-text)" }}>Paling lengkap</span></span>
+                  <span style={{ display: "block", fontSize: 15, fontWeight: 700 }}>Ekspor chat <span style={{ fontSize: 12, padding: "2px 8px", borderRadius: 999, background: "color-mix(in srgb, #005eb0 10%, transparent)", color: "var(--brand-text)" }}>Paling lengkap</span></span>
                   <span style={{ display: "block", fontSize: 12.5, color: "var(--app-muted)", marginTop: 2 }}>Brief, pola chat, tipe customer, pertanyaan</span>
                 </span>
               </button>
@@ -154,8 +154,8 @@ export default function WaImport({ leadName, profile, onSave, onClose, initialFi
             <input ref={chatRef} type="file" accept=".txt,.zip,text/plain,application/zip" aria-label="File ekspor chat" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) readChat(f); e.target.value = ""; }} />
             <input ref={vcfRef} type="file" accept=".vcf,text/vcard,text/x-vcard" aria-label="File kontak" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) readContact(f); e.target.value = ""; }} />
             <input ref={shotRef} type="file" accept="image/*" aria-label="Screenshot profil bisnis" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) readShot(f); e.target.value = ""; }} />
-            {busy && <p role="status" style={{ margin: "12px 0 0", fontSize: 13, color: "var(--app-muted)" }}>Membaca…</p>}
-            {error && <p role="alert" style={{ margin: "12px 0 0", fontSize: 13, color: "color-mix(in srgb, #dc2626 80%, var(--app-text))" }}>{error}</p>}
+            <p role="status" style={{ margin: busy ? "12px 0 0" : 0, fontSize: 13, color: "var(--app-muted)" }}>{busy ? "Membaca…" : ""}</p>
+            <p role="alert" style={{ margin: error ? "12px 0 0" : 0, fontSize: 13, color: "color-mix(in srgb, #dc2626 80%, var(--app-text))" }}>{error}</p>
             <h3 style={{ margin: "18px 0 8px", fontSize: 13, fontWeight: 700, color: "var(--app-muted)" }}>Cara ekspor chat</h3>
             <ol style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6, fontSize: 13, lineHeight: 1.45 }}>
               <li>Buka chat {leadName} di WhatsApp.</li>
@@ -180,7 +180,7 @@ export default function WaImport({ leadName, profile, onSave, onClose, initialFi
                 </select>
               </div>
             )}
-            <p style={{ margin: "12px 0 0", fontSize: 13.5, color: "var(--app-muted)" }}>Matikan yang nggak mau disimpan.</p>
+            <p style={{ margin: "12px 0 0", fontSize: 13.5, color: "var(--app-muted)" }}>Matikan yang ga mau disimpan.</p>
             <div style={{ marginTop: 10, border: "1px solid var(--app-border)", borderRadius: 20, overflow: "hidden" }}>
               {parts.map((pt, i) => {
                 const on = !off[pt.key];
@@ -202,7 +202,7 @@ export default function WaImport({ leadName, profile, onSave, onClose, initialFi
               style={{ marginTop: 16, width: "100%", minHeight: 52, borderRadius: 999, border: "none", background: kept.length ? "#005eb0" : "var(--app-border)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: kept.length ? "pointer" : "default", fontFamily: "inherit" }}>
               {kept.length ? `Simpan ${kept.length} bagian ke ${leadName}` : "Pilih minimal satu"}
             </button>
-            <p style={{ margin: "10px 0 0", textAlign: "center", fontSize: 12, color: "var(--app-muted)" }}>{sum ? "Isi chat nggak disimpan, cuma ringkasan yang kamu pilih." : "Cuma bagian yang nyala yang disimpan."}</p>
+            <p style={{ margin: "10px 0 0", textAlign: "center", fontSize: 12, color: "var(--app-muted)" }}>{sum ? "Isi chat ga disimpan, cuma ringkasan yang kamu pilih." : "Cuma bagian yang nyala yang disimpan."}</p>
           </>
         )}
       </section>

@@ -23,7 +23,7 @@ export default function LeadSources({ leads, invoices }: { leads: SourcedLead[];
           ))}
         </div>
       </div>
-      <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 14 }}>
+      <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 14 }}>
         {mode === "channel"
           ? "Lead per sumber, berapa yang closing, dan uang yang sudah masuk dari invoice-nya. Member = baru daftar di situs."
           : "Lead dari link ber-UTM (iklan, boost, bio). Pakai link bertag supaya kampanye kelihatan di sini."}
@@ -43,7 +43,7 @@ export default function LeadSources({ leads, invoices }: { leads: SourcedLead[];
                 {money ? rupiah(money) : "Rp 0"}
               </div>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 11, color: "var(--app-muted)", marginTop: 3 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12, color: "var(--app-muted)", marginTop: 3 }}>
               <span>{r.leads} lead · {r.hot} panas · {r.closed} closing{r.leads ? ` (${Math.round((r.closed / r.leads) * 100)}%)` : ""}</span>
               <span style={{ flexShrink: 0 }}>{r.collected ? "sudah masuk" : r.closedValue ? "nilai closing" : ""}</span>
             </div>
