@@ -12,8 +12,9 @@ export interface ScoreInput {
 }
 
 export interface Signal { key: string; label: string; pts: number; max: number; detail: string; tip: string }
-export type Level = "tinggi" | "sedang" | "rendah";
-export interface Score { total: number; level: Level; signals: Signal[]; tip: string }
+// Five levels, shown as five heat dots (canvas): 1 = sangat rendah … 5 = sangat tinggi.
+export type Level = 1 | 2 | 3 | 4 | 5;
+export interface Score { total: number; level: Level; word: string; signals: Signal[]; tip: string }
 
 // Where "nilai besar" starts (PRD-008 §1, the map's horizontal line).
 export const VALUE_LINE = 10_000_000;
@@ -24,8 +25,11 @@ const ago = (iso: string | undefined, on: string) => (iso ? Math.round((day(on) 
 const agoText = (d: number) => (d <= 0 ? "hari ini" : d === 1 ? "kemarin" : `${d} hari lalu`);
 const jt = (n: number) => `Rp ${(n / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`;
 
-export const levelOf = (total: number): Level => (total >= 70 ? "tinggi" : total >= 40 ? "sedang" : "rendah");
-export const LEVEL_COLOR: Record<Level, string> = { tinggi: "#00a862", sedang: "#b45309", rendah: "#64748b" };
+export const levelOf = (total: number): Level => (total >= 85 ? 5 : total >= 70 ? 4 : total >= 50 ? 3 : total >= 30 ? 2 : 1);
+export const LEVEL_WORD: Record<Level, string> = { 5: "Sangat tinggi", 4: "Tinggi", 3: "Sedang", 2: "Rendah", 1: "Sangat rendah" };
+// "Potensi tinggi" on Beranda = level 4 and up (skor 70+).
+export const isHigh = (total: number) => total >= 70;
+export const HEAT = ["#22a06b", "#8cc63f", "#f5b72f", "#f2792b", "#e5402f"];
 
 export function scoreLead(l: ScoreInput, on: string, valueLine = VALUE_LINE): Score {
   const reply = ago(l.lastReplyAt, on);
@@ -68,7 +72,9 @@ export function scoreLead(l: ScoreInput, on: string, valueLine = VALUE_LINE): Sc
   const total = signals.reduce((a, s) => a + s.pts, 0);
   // The one move that would add the most.
   const gap = signals.slice().sort((a, b) => (b.max - b.pts) - (a.max - a.pts))[0];
-  return { total, level: levelOf(total), signals, tip: gap.max - gap.pts > 0 ? gap.tip : "" };
+  const lv = levelOf(total);
+  const room = gap.max - gap.pts;
+  return { total, level: lv, word: LEVEL_WORD[lv], signals, tip: room > 0 ? `${gap.tip}, skor naik ${room}` : "" };
 }
 
 // The lead map's quadrant (PRD-008 §1).

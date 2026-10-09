@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { onSnapshot, setDoc, deleteDoc } from "firebase/firestore";
+import Icon from "@/components/Icon";
 import { canEditCatalog, spaceCol, spaceDoc, useSpace } from "@/lib/space";
 
 interface Template {
@@ -81,11 +82,11 @@ export default function QuickPitch({ hideButton = false }: { hideButton?: boolea
         style={{
           position: "fixed", right: 18, bottom: "calc(18px + env(safe-area-inset-bottom, 0px))",
           width: 56, height: 56, borderRadius: "50%", background: "#005eb0", color: "#fff",
-          border: "none", boxShadow: "0 6px 20px rgba(0,94,176,0.45)", fontSize: 24, cursor: "pointer",
+          border: "none", boxShadow: "0 1px 2px rgba(0,94,176,0.2), 0 10px 26px rgba(0,94,176,0.35)", fontSize: 24, cursor: "pointer",
           zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center",
         }}
       >
-        💬
+        <Icon name="chatLines" size={24} />
       </button>}
 
       {open && (
