@@ -113,6 +113,12 @@ Dicek artboard per artboard, pakai screenshot HP & desktop:
 - **Profil customer** (HP penuh, desktop lewat "Profil lengkap"): aksi cepat Chat/Telepon/Penawaran/Jadwal, Brief frosted, skor + Kenapa, Kontak, Pola chat, Tipe customer + Buka script, Yang mereka tanya, bar bawah Chat di WhatsApp + Tarik ulang.
 - Sheet Tarik dari WhatsApp frosted dengan ikon.
 
+## Audit antarmuka & uji tiap deploy (2026-10-09)
+
+- **Audit `better-*`** (accessibility, layout, writing, typography, colors, UI) atas seluruh app, #40: fokus input yang hilang, pesan error tanpa jalan keluar, live region, hover nyangkut di layar sentuh, teks < 12px, satu gaya bahasa. Flow navigasi sekarang cek tiap tempat di lebar 320px.
+- **Spesifikasi di canvas**: peta layar & alur, relasi data (baca/tulis per layar), mekanisme skor potensi, dan lembar tiap tombol per layar.
+- **Uji tiap deploy**: skill `salespal-uat` di repo claude-config — 78 baris tes (HP & desktop), smoke S1–S6 wajib, peta file → baris yang dites ulang.
+
 ## Belum / di luar
 
 - Baca chat WA otomatis (ga ada API buat akun pribadi; WABA beda urusan).
