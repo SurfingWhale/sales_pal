@@ -493,6 +493,46 @@ export const flows = [
     },
   },
   {
+    name: "beranda: three modes — jualan, report & closing, belajar",
+    async run(t) {
+      const { page } = t;
+      const tab = (name) => page.getByRole("tablist", { name: "Mode Beranda" }).getByRole("tab", { name });
+      await t.step("sign up: Beranda opens on Jualan", async () => {
+        await signup(t);
+        await tab("Jualan").and(page.locator('[aria-selected="true"]')).waitFor();
+        await page.getByRole("region", { name: "Hunting hari ini" }).getByText(/DM hari ini/).waitFor();
+      });
+      await t.step("Report & closing: the month, both funnels, and the full reports", async () => {
+        await tab("Report & closing").click();
+        await page.getByRole("heading", { level: 1, name: /closing/ }).waitFor();
+        await page.getByRole("region", { name: "Hunting, 30 hari" }).waitFor();
+        await page.getByRole("region", { name: "Pipeline lead, sekarang" }).waitFor();
+        await page.getByRole("button", { name: /^Report Klien →/ }).click();
+        await page.locator(".sp-sub-btn.is-on", { hasText: "Report Klien" }).waitFor();
+      });
+      await t.step("the mode is remembered when coming back", async () => {
+        await go(page, "Beranda");
+        await tab("Report & closing").and(page.locator('[aria-selected="true"]')).waitFor();
+      });
+      await t.step("Belajar: what works, the no's, practice, tips per stage", async () => {
+        await tab("Belajar").click();
+        await page.getByRole("heading", { name: "Pesan yang paling dibales" }).waitFor();
+        await page.getByRole("heading", { name: "Keberatan paling sering" }).waitFor();
+        await page.getByRole("heading", { name: "Pesan yang pas per tahap" }).waitFor();
+        await page.getByRole("button", { name: "Buka Simulator" }).click();
+        await page.locator(".sp-sub-btn.is-on", { hasText: "Simulator" }).waitFor();
+      });
+      await t.step("back to Jualan: start hunting from the strip", async () => {
+        await go(page, "Beranda");
+        await tab("Jualan").click();
+        await page.getByRole("heading", { name: /^Perlu ditindak/ }).waitFor();
+        await page.getByRole("region", { name: "Hunting hari ini" }).getByRole("button", { name: "▶ Mulai hunting" }).click();
+        await page.getByRole("region", { name: "Sesi hunting" }).waitFor();
+        await expectText(page, "Hunting Mode");
+      });
+    },
+  },
+  {
     name: "website leads: member, then claim, become one lead",
     async run(t) {
       const { page, project } = t;

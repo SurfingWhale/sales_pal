@@ -8,6 +8,20 @@ import { longDate, waLink } from "@/lib/billing";
 // Beranda (PRD-008 §1, canvas "Beranda — desktop" / "Beranda — HP"): what to
 // do today first, then the numbers, then the lead map. Every card has one
 // main action.
+//
+// Three modes (PRD-008 §6), because the day isn't one flow: Jualan (what to
+// move today), Report & closing (how the month is going, to the money in),
+// Belajar (what the numbers teach, and practice). The last one picked is
+// remembered on this device.
+
+export type BerandaMode = "jualan" | "report" | "belajar";
+const MODES: [BerandaMode, string][] = [["jualan", "Jualan"], ["report", "Report & closing"], ["belajar", "Belajar"]];
+const MODE_KEY = "sp-beranda-mode";
+function savedMode(): BerandaMode {
+  try { const m = localStorage.getItem(MODE_KEY); return m === "report" || m === "belajar" ? m : "jualan"; } catch { return "jualan"; }
+}
+
+export interface HuntingStrip { live: boolean; sentToday: number; goal: number; queued: number; onStart: () => void; onOpen: () => void }
 
 export interface Todo {
   key: string; when: string; icon: IconName; title: string; what: string;
@@ -62,20 +76,46 @@ const css = `
 }
 `;
 
-export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onImport, onAdd, onAllLeads, onSetTarget, children }: {
+export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onImport, onAdd, onAllLeads, onSetTarget, hunting, report, learn, children }: {
   now: string; todo: Todo[]; numbers: Numbers; mapLeads: MapLead[];
   onOpenLead: (id: string) => void; onImport: () => void; onAdd: () => void; onAllLeads: () => void; onSetTarget: () => void;
+  hunting?: HuntingStrip; report?: React.ReactNode; learn?: React.ReactNode;
   children?: React.ReactNode;
 }) {
+  const [mode, setModeState] = useState<BerandaMode>(savedMode);
+  const setMode = (m: BerandaMode) => { setModeState(m); try { localStorage.setItem(MODE_KEY, m); } catch { /* private mode */ } };
   const [all, setAll] = useState(false);
   const due = todo.filter(t => t.when <= now).length;
   const shown = all ? todo : todo.slice(0, 4);
   const day = new Date(now + "T00:00:00").toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long" });
   const pct = numbers.closingTarget ? Math.min(100, (numbers.closedThisMonth / numbers.closingTarget) * 100) : 0;
 
+  const tabs = (
+    <div role="tablist" aria-label="Mode Beranda" style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", marginBottom: "clamp(16px, 3vw, 28px)" }}>
+      {MODES.map(([m, l]) => (
+        <button key={m} role="tab" id={`bm-${m}`} aria-selected={mode === m} aria-controls="beranda-panel" onClick={() => setMode(m)}
+          style={{ flexShrink: 0, height: 40, padding: "0 16px", borderRadius: 999, border: `1px solid ${mode === m ? "var(--app-text)" : "var(--app-line-strong)"}`, background: mode === m ? "var(--app-text)" : "transparent", color: mode === m ? "var(--app-card)" : "var(--app-ink-2)", font: "500 14px 'Plus Jakarta Sans', sans-serif", cursor: "pointer", whiteSpace: "nowrap" }}>
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (mode !== "jualan") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        <style>{css}</style>
+        {tabs}
+        <div id="beranda-panel" role="tabpanel" aria-labelledby={`bm-${mode}`}>{mode === "report" ? report : learn}</div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       <style>{css}</style>
+      {tabs}
+      <div id="beranda-panel" role="tabpanel" aria-labelledby="bm-jualan" style={{ display: "flex", flexDirection: "column" }}>
       <div className="sp-b-head">
         <div style={{ minWidth: 0 }}>
           <p style={{ margin: "0 0 10px", fontSize: 14, color: "var(--app-muted)", textTransform: "capitalize" }}>{day}</p>
@@ -92,6 +132,18 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
           <button onClick={onAdd} className="sp-pill" style={{ border: 0, background: "#005eb0", color: "#fff" }}><Icon name="plus" stroke={1.8} />Tambah lead</button>
         </div>
       </div>
+
+      {hunting && (
+        <section aria-label="Hunting hari ini" style={{ marginTop: 20, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: "12px 16px" }}>
+          <Icon name="target" size={18} />
+          <span style={{ fontSize: 14, minWidth: 0, flex: "1 1 200px" }}>
+            <b className="tabnum">{hunting.sentToday}/{hunting.goal}</b> DM hari ini · <b className="tabnum">{hunting.queued}</b> prospek di antrian
+          </span>
+          {hunting.live
+            ? <button onClick={hunting.onOpen} className="sp-pill" style={{ border: "1px solid var(--app-line-strong)", background: "transparent", color: "var(--app-text)", height: 40 }}>Sesi jalan · buka Hunting</button>
+            : <button onClick={hunting.onStart} className="sp-pill" style={{ border: 0, background: "#b93a06", color: "#fff", height: 40 }}>▶ Mulai hunting</button>}
+        </section>
+      )}
 
       <section aria-label="Ringkasan pipeline" className="sp-kpis">
         <div className="sp-kpi">
@@ -177,6 +229,7 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
       <div style={{ marginTop: "clamp(24px, 5vw, 56px)", display: "flex", flexDirection: "column", gap: 32 }}>
         <LeadMap leads={mapLeads} onOpen={onOpenLead} onAll={onAllLeads} />
         {children}
+      </div>
       </div>
     </div>
   );
