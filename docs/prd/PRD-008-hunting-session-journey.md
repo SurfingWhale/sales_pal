@@ -4,6 +4,7 @@
 - **Tanggal:** 2026-10-10
 - **Konteks:** Pas hunting, owner share post Threads orang yang lagi nyari jasa (contoh: *"ada yang open jasa foto katalog F&B buat UMKM?"*) → orang itu harus langsung masuk basis lead, CTA/intro siap di-copy, dan semua yang terjadi sesudahnya (intro, follow-up, kampanye, balasan, remarks) kecatat sebagai satu riwayat. Polanya dipinjam dari sales/telemarketing perbankan: tiap nasabah punya **disposisi** (terhubung atau belum → hasil → remarks), ada **contact strategy**, dan dari situ keluar metrik performa hunter-nya.
 - **Terkait:** PRD-002 (Hunting), PRD-003 (Radar Threads), PRD-005 §7 (aturan tampilan angka), PRD-007 §2.5–2.6 (ruang kerja, Perlu Ditindak, push), `lib/hunting.ts`, `lib/replies.ts`, `lib/space.ts`.
+- **Diagram & diskusi:** [Master Flow Hunting & Journey Prospek](https://claude.ai/code/artifact/67dd1690-74ec-4686-8179-7b2cf80fe9f5) (artifact private, buat diskusi). Kalau beda, **dokumen ini yang berlaku**.
 
 ---
 
@@ -18,6 +19,21 @@ Hunting sekarang = **log per DM** (`hunts`: target, template, status). Itu cukup
 5. **Ngetik ulang.** Buka post → salin username → tempel → pilih platform. Link share Threads (`/share/…`) malah kebaca "Lainnya" sama `parseProfile`.
 
 **Insight:** pisahin **orang** (prospek, satu journey) dari **pesan** (hunt, satu kiriman). Pesan tetap ngukur template; orang ngukur hunter-nya — contact rate, percobaan sampai respon, konversi NTB → ETB, biaya per konversi.
+
+### Alur sekarang (as-is, sebelum PRD ini)
+
+```mermaid
+flowchart LR
+  A["Copy link profil<br/>Threads, IG, WA"] --> B["Tempel link<br/>target + platform"]
+  B --> C["Pilih template<br/>Copy / Kirim WA"]
+  C --> D["Catat terkirim<br/>1 DM = 1 baris hunts"]
+  D --> E["Status 1-tap<br/>5 status per DM"]
+  E -- "belum dibales 2+ hari" --> F["Filter Follow-up"]
+  F -- "kirim lagi = baris baru" --> C
+  E -- "Dibales / Ditolak / Ghosting" --> G["Balas cepat"]
+  E -- "Tertarik" --> H["Jadiin Lead<br/>status Warm"]
+  H --> I["Leads"] --> J["Penawaran"] --> K["Invoice"] --> L["Lunas"]
+```
 
 ### Catatan istilah (biar angka ga salah baca)
 
@@ -59,6 +75,26 @@ Hunting sekarang = **log per DM** (`hunts`: target, template, status). Itu cukup
 7. **Kasih data** = konversi: isi minimal (nama bisnis, WA atau email) → jadi **Lead Hot** di Leads, prospek pindah **ETB**. Dari situ jalan di Jualan (penawaran → invoice → lunas) seperti biasa.
 8. 3 percobaan tanpa jawaban dalam 30 hari → otomatis **Tidak terhubung**, diparkir 60 hari. Tidak tertarik → diparkir 90 hari. Menolak dihubungi → **DNC selamanya**.
 9. **■ Akhiri** → ringkasan sesi: durasi, prospek masuk, intro, dibales, konversi, intro per jam.
+
+```mermaid
+flowchart TD
+  S["Mulai hunting<br/>sesi ON, bar di atas"] --> P["Share post / tempel link"]
+  P --> U["Buka link di server<br/>username + teks post"]
+  U --> N{"Ada di DNC?"}
+  N -- ya --> X["Peringatan, intro mati"]
+  N -- tidak --> R["Prospek NTB<br/>satu per orang"]
+  R --> I["Copy intro<br/>langsung dicatat, Batal 5 detik"]
+  I --> Q{"Dibales?"}
+  Q -- tidak --> F["Follow-up / kampanye<br/>percobaan +1"]
+  F --> Q
+  F -- "3 kali tanpa jawaban" --> T["Tidak terhubung<br/>parkir 60 hari"]
+  Q -- ya --> H["Terhubung<br/>hasil + remarks"]
+  H --> D1["Jangan dihubungi<br/>DNC, permanen"]
+  H --> D2["Tidak tertarik<br/>parkir 90 hari"]
+  H --> D3["Jadwal follow-up<br/>Tertarik, Pikir-pikir, Nanti"]
+  H --> D4["Kasih data<br/>Lead Hot + ETB"]
+  D4 --> J["Jualan"]
+```
 
 ---
 
@@ -139,6 +175,29 @@ Status `hunts` yang lama tetap jalan buat eval template dan dipetakan ke prospek
 - Prospek yang diparkir ga muncul di antrian & kampanye sampai `parkedUntil` lewat. Kebuka lagi otomatis kalau dia post lagi dan di-share ulang.
 - Jatuh tempo (follow-up, Pikir-pikir, Hubungi nanti) masuk panel **Perlu Ditindak** dan push pagi yang udah ada (PRD-007 §2.6).
 
+Garis "(otomatis)" dihitung dari tanggal saat dibaca, tanpa cron: ga ada tulisan ke database sampai lu ngelakuin sesuatu.
+
+```mermaid
+stateDiagram-v2
+  state "Baru" as Baru
+  state "Intro terkirim" as Intro
+  state "Belum respon" as Belum
+  state "Tidak terhubung (parkir 60 hari)" as Tidak
+  state "Terhubung (+ hasil, remarks)" as Terhubung
+  state "Jangan dihubungi (DNC)" as DNC
+  state "ETB (Lead Hot)" as ETB
+  [*] --> Baru: share / tempel post
+  Baru --> Intro: Copy intro
+  Intro --> Belum: H+2 tanpa jawaban (otomatis)
+  Belum --> Intro: follow-up / kampanye, percobaan +1
+  Belum --> Tidak: percobaan ke-3 habis (otomatis)
+  Tidak --> Belum: parkir lewat / post baru
+  Intro --> Terhubung: dia jawab
+  Belum --> Terhubung: dia jawab
+  Terhubung --> DNC: minta ga dihubungi
+  Terhubung --> ETB: kasih data
+```
+
 ### 6.4 DNC
 - Permanen. Ga muncul di antrian, kampanye, atau Radar (ditandai "minta ga dihubungi"). Share post orang yang sama → peringatan, tombol intro mati.
 - Riwayat percakapan **dihapus**; yang disimpan cuma platform + handle + tanggal + alasan (daftar suppression). Itu data minimal yang dibutuhin buat **menghormati** permintaannya (UU PDP 27/2022).
@@ -198,6 +257,24 @@ Bulan tanpa biaya tercatat tampil "Rp0 tercatat" + **jam hunting** bulan itu, bu
 ## 9. Data (Firestore)
 
 Semua di dalam ruang kerja (`lib/space.ts`): pribadi di `users/{uid}/…`, guild di `guilds/{g}/…` dengan `ownerUid`.
+
+```mermaid
+flowchart LR
+  subgraph PWA["PWA SalesPal (HP)"]
+    SH["Share masuk<br/>share_target, tombol tempel"] --> HU["Hunting + bar sesi<br/>kartu prospek, antrian"]
+    SW["Service worker<br/>notifikasi sesi + push"]
+  end
+  HU <-->|"link post / data post"| UN["/api/hunt/unfurl<br/>wajib login, ga nyimpen data"]
+  UN -- "maks 3 redirect" --> TH["threads.com<br/>302 ke post, meta tag teks"]
+  DG["/api/cron/digest<br/>+ follow-up prospek"] -- "push pagi" --> SW
+  subgraph FS["Firestore per ruang kerja (Pribadi / Guild)"]
+    direction TB
+    NEW["Baru: prospects · huntSessions · campaigns · costs/yyyy-mm"]
+    OLD["Diperluas: hunts · settings/hunting · leads · pitchTemplates"]
+  end
+  HU <-->|"baca / tulis lewat rules"| FS
+  DG -- "Admin SDK" --> FS
+```
 
 | Path | Isi |
 |---|---|
