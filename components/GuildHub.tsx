@@ -144,13 +144,15 @@ export default function GuildHub({ uid, name, email }: { uid: string; name: stri
   return (
     <div style={{ paddingBottom: 72 }}>
       {header}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
-        <label htmlFor="guild-pick" style={{ position: "absolute", left: -9999 }}>Pilih guild</label>
-        <select id="guild-pick" value={gid} onChange={e => { setGid(e.target.value); remember(e.target.value); }} style={{ ...inputStyle, width: "auto", minWidth: 160, fontWeight: 700 }}>
-          {refs.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-        </select>
-        {role && <span style={badge(ROLE_COLOR[role])}>{titleOf(guild, role)}</span>}
-      </div>
+      {refs.length > 1 && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+          <label htmlFor="guild-pick" style={{ position: "absolute", left: -9999 }}>Pilih guild</label>
+          <select id="guild-pick" value={gid} onChange={e => { setGid(e.target.value); remember(e.target.value); }} style={{ ...inputStyle, width: "auto", minWidth: 160, fontWeight: 700 }}>
+            {refs.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        </div>
+      )}
+      {guild && me && <GuildBanner guild={guild} me={me} members={members} deals={deals} targets={targets} />}
 
       {!guild || !me ? (
         <div style={{ ...card, padding: 24, fontSize: 12.5, color: "var(--app-muted)", textAlign: "center" }}>Memuat…</div>
@@ -184,6 +186,103 @@ export default function GuildHub({ uid, name, email }: { uid: string; name: stri
         </>
       )}
       {foundModal}
+    </div>
+  );
+}
+
+// ======================= Banner =======================
+// The guild at a glance, like a guild card in a game (PRD-007): its crest,
+// its people by role, its level from deals closed, and this month against
+// the target. A Viewer sees no deals, so no level or month for them.
+
+const CREST = ["#005eb0", "#b45309", "#7c3aed", "#0f766e", "#be123c", "#4d7c0f"];
+// Deals lunas, all time, to reach each level.
+const LEVELS = [0, 3, 10, 25, 50, 100, 200, 400];
+
+function crestColor(name: string): string {
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return CREST[h % CREST.length];
+}
+
+const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase() || "G";
+
+function Crest({ name }: { name: string }) {
+  const c = crestColor(name);
+  return (
+    <svg width="64" height="72" viewBox="0 0 64 72" role="img" aria-label={`Lambang ${name}`} style={{ flexShrink: 0 }}>
+      <path d="M32 3 L58 12 V34 C58 52 46 63 32 69 C18 63 6 52 6 34 V12 Z" fill={c} fillOpacity="0.14" stroke={c} strokeWidth="2.5" strokeLinejoin="round" />
+      <path d="M32 11 L50 17.5 V34 C50 47 42 55.5 32 60.5 C22 55.5 14 47 14 34 V17.5 Z" fill="none" stroke={c} strokeOpacity="0.45" strokeWidth="1.5" strokeLinejoin="round" />
+      <text x="32" y="42" textAnchor="middle" fontSize="19" fontWeight="800" fill={c} fontFamily="'Plus Jakarta Sans', sans-serif">{initials(name)}</text>
+    </svg>
+  );
+}
+
+function GuildBanner({ guild, me, members, deals, targets }: { guild: Guild; me: Member; members: Member[]; deals: Deal[]; targets: Target[] }) {
+  const month = monthOf(today());
+  const tm = useMemo(() => teamMonth(month, deals, members, targets), [month, deals, members, targets]);
+  const sees = isSeller(me.role);
+  const team = isManager(me.role);
+  const rows = team ? tm.rows : tm.rows.filter(r => r.uid === me.uid);
+  const target = rows.reduce((a, r) => a + r.targetRevenue, 0);
+  const done = team ? tm.total.revenue : rows.reduce((a, r) => a + r.revenue, 0);
+  const lunas = deals.filter(d => d.paidAt).length;
+  const lv = LEVELS.filter(x => lunas >= x).length;
+  const next = LEVELS[lv];
+  const prev = LEVELS[lv - 1];
+  const order: Role[] = ["leader", "officer", "member", "viewer"];
+  const people = members.slice().sort((a, b) => order.indexOf(a.role) - order.indexOf(b.role));
+  const shown = people.slice(0, 8);
+  const c = crestColor(guild.name);
+  return (
+    <div style={{ ...card, padding: 18, marginBottom: 16, background: `linear-gradient(135deg, ${c}14, var(--app-card) 55%)`, border: `1px solid ${c}40` }}>
+      <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+        <Crest name={guild.name} />
+        <div style={{ minWidth: 0, flex: "1 1 220px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 20, fontWeight: 800, fontFamily: font, overflowWrap: "anywhere" }}>{guild.name}</div>
+            <span style={badge(ROLE_COLOR[me.role])}>{titleOf(guild, me.role)}</span>
+          </div>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>
+            {members.length} anggota{sees ? ` · Level ${lv} · ${lunas} deal lunas${team ? "" : " (punya kamu)"}` : ""}
+          </div>
+          <div aria-label={`Anggota: ${people.map(m => `${m.name} (${titleOf(guild, m.role)})`).join(", ")}`} style={{ display: "flex", alignItems: "center", marginTop: 10 }}>
+            {shown.map((m, i) => (
+              <span key={m.uid} title={`${m.name} · ${titleOf(guild, m.role)}`} aria-hidden="true"
+                style={{ width: 30, height: 30, borderRadius: "50%", marginLeft: i ? -8 : 0, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff", background: ROLE_COLOR[m.role], border: "2px solid var(--app-card)" }}>
+                {(m.name || "?").trim()[0]?.toUpperCase()}
+              </span>
+            ))}
+            {people.length > shown.length && <span style={{ fontSize: 12, color: "var(--app-muted)", marginLeft: 8 }}>+{people.length - shown.length}</span>}
+          </div>
+        </div>
+      </div>
+      {sees && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginTop: 16 }}>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, marginBottom: 6 }}>
+              <span style={{ fontWeight: 700 }}>{monthName(month)}{team ? "" : " · kamu"}</span>
+              <span style={{ color: "var(--app-muted)" }}>{target ? `${juta(done)} dari ${juta(target)}` : `${juta(done)} lunas · belum ada target`}</span>
+            </div>
+            <div role="progressbar" aria-label="Omzet lunas bulan ini dibanding target" aria-valuemin={0} aria-valuemax={100} aria-valuenow={target ? Math.min(100, Math.round((done / target) * 100)) : 0}
+              style={{ height: 8, borderRadius: 4, background: "var(--app-inner)", overflow: "hidden" }}>
+              <div style={{ width: `${target ? Math.min(100, (done / target) * 100) : 0}%`, height: "100%", background: c }} />
+            </div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>{(team ? tm.total.paidCount : rows.reduce((a, r) => a + r.paid, 0))} deal lunas · {(team ? tm.total.leads : rows.reduce((a, r) => a + r.leads, 0))} chat masuk</div>
+          </div>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, marginBottom: 6 }}>
+              <span style={{ fontWeight: 700 }}>Level {lv}</span>
+              <span style={{ color: "var(--app-muted)" }}>{next ? `${lunas}/${next} deal lunas ke Level ${lv + 1}` : "Level tertinggi"}</span>
+            </div>
+            <div role="progressbar" aria-label="Menuju level berikutnya" aria-valuemin={0} aria-valuemax={100} aria-valuenow={next ? Math.round(((lunas - prev) / (next - prev)) * 100) : 100}
+              style={{ height: 8, borderRadius: 4, background: "var(--app-inner)", overflow: "hidden" }}>
+              <div style={{ width: `${next ? ((lunas - prev) / (next - prev)) * 100 : 100}%`, height: "100%", background: "#00a862" }} />
+            </div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Level naik tiap deal tim jadi lunas.</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

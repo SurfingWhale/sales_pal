@@ -38,7 +38,7 @@ users/{uid}/guilds/{g}     { name, joinedAt } — daftar guild milik user
 
 Semua aturan peran ditegakkan di `firestore.rules` (bukan cuma di UI), termasuk: gabung cuma dengan undangan yang masih berlaku dan **persis** buat peran itu, ga bisa ambil alih guild orang, Member ga bisa baca deal orang lain atau ngubah sumber yang udah tercatat, Viewer ga bisa baca deal, Leader ga bisa keluar sebelum serah-terima. **81 test rules** (`tests/firestore.rules.test.mjs`) + flow dua akun (`guild: found, invite, join by link, sell, team report with target`).
 
-**Perlu deploy rules:** `firebase deploy --only firestore:rules --project sales-pal` — tanpa itu, guild ditolak di produksi (koleksi `guilds` belum ada aturannya di live).
+**Rules di-deploy 2026-10-10** (`firebase deploy --only firestore:rules --project sales-pal`). Sebelumnya "Bikin guild" ditolak di produksi karena koleksi `guilds` belum ada aturannya di live, walau flow test di emulator lulus. Tiap PR yang ngubah `firestore.rules` perlu deploy rules sesudah merge.
 
 ## Fase 2 — dikerjakan 2026-10-08
 
@@ -52,6 +52,10 @@ Diminta user: "catet ke PRD terus lakuin semuanya". Urutan eksekusi = dari yang 
 | 2.4 | **Log aktivitas** | `guilds/{g}/activities/{id}` { who, whoName, what, ref, refName, at }: bikin deal, geser tahap, lunas, gugur, pindah pemilik, gabung, ganti peran, keluar, target. Ditulis bareng aksinya, ga bisa diedit/dihapus (rules), dibaca Leader/Officer semua & Member yang menyangkut dirinya. Tab **Aktivitas** | ✅ rilis |
 | 2.5 | **Mode ruang kerja (fitur pindah ke guild)** | pemilih **Pribadi / nama guild** di header. Leads, Outreach, Rejection, Hunting, Jualan (Paket, Penawaran, Invoice), Report Klien, Quick Pitch & Insights baca/tulis ke ruang yang dipilih. Di guild: data jualan punya **pemilik** (Member lihat miliknya, Leader/Officer semua, Viewer ga lihat); katalog bersama (Paket, template pitch, info bisnis, target harian) diatur Leader/Officer. **Tetap pribadi:** Threads Radar (token per orang) & lead website (pipeline owner). Data pribadi ga dipindah otomatis | ✅ rilis — `lib/space.ts`; data di `guilds/{g}/…` dengan `ownerUid`; pemilih ruang di header (muncul kalau ikut guild sebagai penjual) |
 | 2.6 | **Pengingat & notifikasi** | (a) panel **Perlu Ditindak** di Dashboard: penawaran > 3 hari belum gerak, deal aktif macet > 7 hari, follow-up jatuh tempo, invoice lewat tempo; (b) **push notif** PWA tiap pagi (Web Push, VAPID) lewat cron Vercel — iPhone butuh app di-install ke home screen (iOS 16.4+). Butuh env `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`CRON_SECRET` + service account | ✅ rilis — panel nambah deal macet (Report Klien + deal guild milik sendiri) & follow-up rejection; push 08.00 WIB (`/api/cron/digest`, `pushSubs/` server-only), tombol di Profil |
+
+## Banner guild (2026-10-10)
+
+Di atas tab: lambang (inisial nama guild dalam perisai, warnanya dari nama), nama + peran kamu, avatar anggota diwarnai per peran, **Level guild** (naik tiap deal tim lunas: 3, 10, 25, 50, 100, 200, 400), dan **bulan ini vs target** (tim buat Leader/Officer, punya sendiri buat Member). Viewer ga lihat deal, jadi cuma lambang, nama, dan anggota.
 
 ## Belum ada (sesudah Fase 2)
 
