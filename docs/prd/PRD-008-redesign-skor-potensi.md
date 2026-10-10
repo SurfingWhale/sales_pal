@@ -74,6 +74,18 @@ Langkah 2: "Ketemu dari N pesan · rentang tgl", tiap bagian (Brief, Kebutuhan, 
 
 **Privasi (wajib):** isi chat diproses di HP, ga diunggah mentah dan ga disimpan; yang disimpan cuma ringkasan yang dipilih. Pola chat, kata pemicu, dan pertanyaan bisa dihitung lokal (parser teks ekspor WA). Brief / kebutuhan / keberatan butuh model bahasa: kirim **potongan teks yang udah dipangkas** (tanpa nomor) ke server lewat `requireUser` + kuota, jangan simpan di server, dan bilang jelas ke user sebelum dikirim.
 
+## 6. Beranda tiga mode (2026-10-10)
+
+Masukan owner: alur kerjanya ga cuma satu — ada saat jualan, ada reporting aktivitas sampai closing, ada belajar. Menu bawah tetap; Beranda yang punya tiga mode (chip di atas, pilihan terakhir diingat di HP itu):
+
+| Mode | Isi |
+|---|---|
+| **Jualan** (default) | yang udah ada: Perlu ditindak, angka pipeline, peta lead — plus strip Hunting (DM hari ini vs target, prospek di antrian, ▶ Mulai hunting) |
+| **Report & closing** | closing bulan ini vs target, uang masuk, belum tertagih; corong hunting 30 hari (masuk → di-intro → dibales → kasih data) dan corong lead (Cold → Closed), aturan "X dari Y" di bawah 10; aktivitas 7 hari; pintasan ke Report Tim, Report Klien, Performa hunter, Outreach, Rejection Log |
+| **Belajar** | pesan yang paling dibales (+ saran dari angka template); keberatan paling sering dari semua catatan nolak (journey, log DM, Rejection Log) + dua script jawabannya; latihan di Simulator / AI Playbook; tips pesan per tahap |
+
+Flow `beranda: three modes — jualan, report & closing, belajar`.
+
 ## Gaya visual (dari canvas)
 
 - Plus Jakarta Sans, wordmark Bebas Neue "SALESPAL"; biru `#005eb0` satu-satunya aksen; abu netral (`#f4f5f7` latar, kartu putih, garis `#e3e6ea`); dark mode punya token sendiri (`brand-text #7ab5ef`).

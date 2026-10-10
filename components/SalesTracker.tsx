@@ -5,6 +5,8 @@ import { signOut, User } from "firebase/auth";
 import { STALL_DAYS, stalledWhat, useStalledDeals } from "@/lib/stalled";
 import { LEVEL_WORD, Level, inPlay, isHigh, scoreLead } from "@/lib/score";
 import Beranda from "@/components/Beranda";
+import BerandaReport from "@/components/BerandaReport";
+import BerandaLearn from "@/components/BerandaLearn";
 import HeatDots from "@/components/HeatDots";
 import { DetailActions, LeadPage, LeadPanel } from "@/components/LeadDetail";
 import Icon, { IconName } from "@/components/Icon";
@@ -654,6 +656,12 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     })),
   ].sort((a, b) => a.when.localeCompare(b.when));
 
+  async function setClosingTarget() {
+    const v = prompt("Target closing bulan ini (jumlah deal)?", String(closingTarget || ""));
+    const n = parseInt(v || "", 10);
+    if (n > 0) await setDoc(spaceDoc(space, "settings", "hunting"), { monthlyClosing: n }, { merge: true }).catch(() => alert("Target tim diatur Leader atau Officer."));
+  }
+
   // Beranda's four numbers and the lead map (PRD-008 §1).
   const active = leads.filter(l => inPlay(l.status));
   const weekAgo = Date.now() - 7 * 86400000;
@@ -799,13 +807,16 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         {/* DASHBOARD */}
         {activeTab === "Dashboard" && (
           <Beranda now={now} todo={todo} numbers={numbers} mapLeads={mapLeads}
+            hunting={{ live: Boolean(huntSession.live), sentToday: hunts.filter(h => h.date === now).length, goal: huntGoal, queued: queue(prospects, now, strategy).length,
+              onStart: async () => { await huntSession.start(); setActiveTab("Hunting"); }, onOpen: gotoHunting }}
+            report={<BerandaReport now={now} numbers={numbers} paid={paidThisMonth} receivable={invoices.reduce((a, i) => a + balance(i), 0)}
+              leadsByStatus={leads.reduce((m, l) => ({ ...m, [l.status]: (m[l.status] || 0) + 1 }), {} as Record<string, number>)}
+              prospects={prospects} hunts={hunts} sessions={huntSession.sessions} onGo={tab => { setActiveTab(tab); window.scrollTo({ top: 0 }); }}
+              onSetTarget={setClosingTarget} />}
+            learn={<BerandaLearn prospects={prospects} hunts={hunts} rejections={rejections} onGo={tab => { setActiveTab(tab); window.scrollTo({ top: 0 }); }} />}
             onOpenLead={id => { const l = leads.find(x => x.id === id); if (l) openLead(l); }}
             onImport={() => setShowImport(true)} onAdd={() => setShowAddLead(true)} onAllLeads={() => setActiveTab("Leads")}
-            onSetTarget={async () => {
-              const v = prompt("Target closing bulan ini (jumlah deal)?", String(closingTarget || ""));
-              const n = parseInt(v || "", 10);
-              if (n > 0) await setDoc(spaceDoc(space, "settings", "hunting"), { monthlyClosing: n }, { merge: true }).catch(() => alert("Target tim diatur Leader atau Officer."));
-            }}>
+            onSetTarget={setClosingTarget}>
             {space.kind === "guild" && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: -16 }}>Ruang guild {space.name} — {showOwner ? "angka seluruh tim" : "angka kamu di guild ini"}.</div>}
             {seedCount > 0 && (
               <div role="status" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 10, padding: "12px 14px", fontSize: 12.5 }}>
