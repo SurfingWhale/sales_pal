@@ -224,11 +224,11 @@ Prinsip: **jalur gratis jadi default**. Yang butuh bayar ditunda, dicatat, dan b
 |---|---|---|---|---|---|
 | 1 | Bar sesi, share target, journey, disposisi, kampanye, metrik | client + Firestore | — | **Rp0** | — |
 | 2 | Buka link Threads (§5) | Vercel function | — | **Rp0** | — |
-| 3 | **Hosting** | Vercel Hobby | Vercel Pro | **US$20/user/bln** | Hobby cuma buat **pemakaian pribadi non-komersial**. Dipakai buat cari klien bisnis sendiri udah area abu-abu; begitu ada user lain / guild klien → wajib Pro |
+| 3 | **Hosting** | Vercel Hobby | Vercel Pro | **US$20/bln per developer seat** | Hobby cuma buat **pemakaian pribadi non-komersial**. Dipakai buat cari klien bisnis sendiri udah area abu-abu; begitu ada user lain / guild klien → wajib Pro |
 | 4 | Database | Firestore Spark (50K baca, 20K tulis per hari, 1 GiB) | Blaze, bayar per pemakaian | ±Rp0 di skala sekarang | kalau query aktif (§9) tetap tembus limit |
 | 5a | Cari post otomatis | **manual share** (±10–20 detik/post) | — | Rp0 | default |
 | 5b | ″ | Threads keyword search API resmi | — | Rp0 | butuh Meta app review (PRD-003, macet di setup akun Meta) |
-| 5c | ″ | — | Apify Threads scraper | **US$1,5–8 per 1.000 hasil**, beda per actor | **Ditunda.** Risiko ToS Meta + data orang (UU PDP). Nyalain cuma kalau: jam hunting per konversi tinggi **dan** konversi dari post ≥ 5%. Hitung dulu: biaya per hasil ÷ % hasil yang relevan = biaya per prospek relevan, bandingin sama waktu manual |
+| 5c | ″ | — | Apify Threads scraper | **US$1,71–13 per 1.000 hasil** (US$13 di Free plan Apify), beda per actor — cek tab Pricing actor-nya | **Ditunda.** Risiko ToS Meta + data orang (UU PDP). Nyalain cuma kalau: jam hunting per konversi tinggi **dan** konversi dari post ≥ 5%. Hitung dulu: biaya per hasil ÷ % hasil yang relevan = biaya per prospek relevan, bandingin sama waktu manual |
 | 6 | Notifikasi sesi (Android) & pengingat pagi | service worker + Web Push VAPID (udah ada) | — | Rp0 | — |
 | 7 | Nebak hasil dari teks balasan / draft balasan | aturan di `lib/replies.ts` | LLM API, bayar per token | dihitung saat dinyalain | **Ditunda** |
 | 8 | Balasan ETB masuk otomatis | catat manual | WhatsApp Cloud API | tarif Meta per pesan | **Ditunda** (PRD-005 Fase 3) |
