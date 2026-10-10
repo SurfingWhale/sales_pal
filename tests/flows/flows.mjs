@@ -47,7 +47,7 @@ async function mockUnfurl(page) {
 const expectText = async (page, text, ms = 8000) => page.getByText(text).first().waitFor({ timeout: ms });
 
 async function addLead(page, name) {
-  await go(page, "Leads");
+  await go(page, "Jualan", "Leads");
   await page.getByRole("button", { name: /tambah lead/i }).click();
   await modal(page).locator("input").first().fill(name);
   await modal(page).getByRole("button", { name: "Simpan lead" }).click();
@@ -61,7 +61,7 @@ async function addLead(page, name) {
 const isWide = (page) => (page.viewportSize()?.width || 0) >= 1024;
 async function openLeadRow(page, name) {
   await closeAll(page);
-  await go(page, "Leads");
+  await go(page, "Jualan", "Leads");
   await page.locator(".lead-row", { hasText: name }).first().click();
   if (!isWide(page)) await page.getByRole("dialog", { name: new RegExp(`^Profil ${name}`) }).waitFor();
 }
@@ -129,13 +129,19 @@ export const flows = [
     name: "navigation reaches every place and tab",
     async run(t) {
       await t.step("sign up", () => signup(t));
-      const places = [["Beranda", null, "Perlu ditindak"], ["Hunting", null, "Hunting Mode"], ["Leads", null, "Belum ada lead"],
-        ["Jualan", "Penawaran", "Susun dari paket"], ["Jualan", "Invoice", "Invoice & Pembayaran"], ["Jualan", "Paket", "Paket & Harga"],
-        ["Lainnya", "Outreach", "Outreach Tracker"], ["Lainnya", "Rejection Log", "Rejection"], ["Lainnya", "Simulator", "Simulator"],
-        ["Lainnya", "Script Library", "Script Library"], ["Lainnya", "AI Playbook", "Playbook"]];
+      const places = [["Beranda", null, "Perlu ditindak"], ["Hunting", null, "Hunting Mode"],
+        ["Jualan", "Leads", "Belum ada lead"], ["Jualan", "Penawaran", "Susun dari paket"], ["Jualan", "Invoice", "Invoice & Pembayaran"], ["Jualan", "Paket", "Paket & Harga"],
+        ["Tim", "Guild", "Belum ikut guild"], ["Tim", "Report Klien", "Report Klien"], ["Tim", "Outreach", "Outreach Tracker"], ["Tim", "Rejection Log", "Rejection"],
+        ["Belajar", "Script Library", "Script Library"], ["Belajar", "Simulator", "Simulator"], ["Belajar", "AI Playbook", "Playbook"]];
       for (const [place, tab, heading] of places) {
         await t.step(`${place}${tab ? ` → ${tab}` : ""} shows "${heading}"`, async () => { await go(t.page, place, tab); await expectText(t.page, heading); });
       }
+      await t.step("each tab says in one line what it's for", async () => {
+        await go(t.page, "Tim", "Guild");
+        await expectText(t.page, "Tim kamu: anggota, peran");
+        await go(t.page, "Belajar", "Simulator");
+        await expectText(t.page, "Latihan jawab customer sebelum ketemu beneran.");
+      });
       // WCAG 1.4.10: every place reflows at 320px (= 200% zoom) without sideways scroll.
       await t.step("no sideways scroll on any of them, also at 320px", async () => {
         const size = t.page.viewportSize();
@@ -186,7 +192,7 @@ export const flows = [
         await closeAll(t.page);
       });
       await t.step("the Tinggi filter finds it", async () => {
-        await go(t.page, "Leads");
+        await go(t.page, "Jualan", "Leads");
         await t.page.getByRole("button", { name: /^Tinggi/ }).click();
         await expectText(t.page, "Kopi Flow");
         await t.page.getByRole("button", { name: /^Semua/ }).click();
@@ -306,7 +312,7 @@ export const flows = [
         await page.getByRole("button", { name: "✓ Disetujui" }).click();
         await page.getByRole("button", { name: "Buat invoice →" }).waitFor();
       });
-      await t.step("accepting closed the lead", async () => { await go(page, "Leads"); await page.locator(".lead-row", { hasText: "Bakso Flow" }).getByText("Closed").first().waitFor(); });
+      await t.step("accepting closed the lead", async () => { await go(page, "Jualan", "Leads"); await page.locator(".lead-row", { hasText: "Bakso Flow" }).getByText("Closed").first().waitFor(); });
       await t.step("raise the invoice", async () => {
         await go(page, "Jualan", "Penawaran");
         await page.getByRole("button", { name: "Buat invoice →" }).click();
@@ -380,7 +386,7 @@ export const flows = [
         await page.getByRole("button", { name: /Ubah target harian/ }).click();
         await page.getByRole("button", { name: /dari 25 DM/ }).waitFor();
       });
-      await t.step("the new lead is in Leads", async () => { await go(page, "Leads"); await expectText(page, "@kopiflow"); });
+      await t.step("the new lead is in Leads", async () => { await go(page, "Jualan", "Leads"); await expectText(page, "@kopiflow"); });
     },
   },
   {
@@ -489,7 +495,7 @@ export const flows = [
         await page.getByRole("button", { name: /Performa hunter/ }).click();
         await page.getByText("Konversi NTB → ETB").waitFor();
       });
-      await t.step("the Hot lead is in Leads", async () => { await go(page, "Leads"); await expectText(page, "Toko Kue"); });
+      await t.step("the Hot lead is in Leads", async () => { await go(page, "Jualan", "Leads"); await expectText(page, "Toko Kue"); });
     },
   },
   {
@@ -533,6 +539,58 @@ export const flows = [
     },
   },
   {
+    name: "guild: bring Pribadi data in under your name, and back",
+    async run(t) {
+      const { page } = t;
+      await t.step("a lead and a client with a chat in Pribadi, then a new guild", async () => {
+        await signup(t);
+        await addLead(page, "Lead Pindah");
+        await go(page, "Tim", "Report Klien");
+        await page.getByRole("button", { name: "+ Tambah klien" }).click();
+        await modal(page).locator("#cl-name").fill("Klien Pindah");
+        await modal(page).getByRole("button", { name: "Simpan klien" }).click();
+        await page.getByRole("button", { name: "+ Chat masuk" }).click();
+        await modal(page).locator("#ch-name").fill("Bu Sari");
+        await modal(page).getByRole("radio", { name: "TikTok" }).click();
+        await modal(page).getByRole("button", { name: "Simpan chat" }).click();
+        await expectText(page, "Bu Sari");
+        await go(page, "Tim", "Guild");
+        await page.getByRole("button", { name: "+ Bikin guild" }).click();
+        await modal(page).locator("#gd-name").fill("Tim Pindah");
+        await modal(page).getByRole("button", { name: "Bikin guild" }).click();
+        await expectText(page, "Undang orang");
+      });
+      await t.step("in the guild, Leads says a lead is still in Pribadi", async () => {
+        await page.locator("#space-pick").selectOption({ label: "🛡️ Tim Pindah" });
+        await go(page, "Jualan", "Leads");
+        await expectText(page, "di ruang Pribadi kamu");
+        await page.getByRole("button", { name: "Bawa ke Tim Pindah →" }).click();
+        await page.getByRole("region", { name: "Data pribadi kamu" }).getByText(/Masih di Pribadi: 1 lead & catatan, 1 klien/).waitFor();
+      });
+      await t.step("bring it in: it's in the guild and gone from Pribadi", async () => {
+        await page.getByRole("region", { name: "Data pribadi kamu" }).getByRole("button", { name: "Bawa ke Tim Pindah" }).click();
+        await page.getByRole("dialog", { name: "Bawa data ke Tim Pindah" }).getByRole("button", { name: "Pindahin" }).click();
+        await expectText(page, "3 data pindah ke Tim Pindah, atas nama kamu.", 20000);
+        await go(page, "Jualan", "Leads");
+        await expectText(page, "Lead Pindah");
+        await go(page, "Tim", "Report Klien");
+        await expectText(page, "Bu Sari");
+        await page.locator("#space-pick").selectOption({ label: "👤 Pribadi" });
+        await go(page, "Jualan", "Leads");
+        await expectText(page, "Belum ada lead");
+      });
+      await t.step("and back to Pribadi", async () => {
+        await go(page, "Tim", "Guild");
+        await page.getByRole("region", { name: "Data pribadi kamu" }).getByRole("button", { name: "Balikin ke Pribadi" }).click();
+        await expectText(page, "3 data balik ke Pribadi.", 20000);
+        await go(page, "Jualan", "Leads");
+        await expectText(page, "Lead Pindah");
+        await go(page, "Tim", "Report Klien");
+        await expectText(page, "Bu Sari");
+      });
+    },
+  },
+  {
     name: "website leads: member, then claim, become one lead",
     async run(t) {
       const { page, project } = t;
@@ -540,7 +598,7 @@ export const flows = [
       const acct = { provider: "google.com", uid: `flow${Date.now()}`, project: "visufavor" };
       await t.step("a member signs up on the site", () => sendInbound(project, { ...base, contact: { name: "Rina Flow", email: "rina@contoh.id" }, attribution: { utm_source: "threads", utm_campaign: "flow" }, account: acct }));
       await t.step("the owner signs in", () => ownerLogin(t));
-      await t.step("the member shows as a Cold lead", async () => { await go(page, "Leads"); await page.locator(".lead-row", { hasText: "Rina Flow" }).getByText("Cold").first().waitFor({ timeout: 15000 }); });
+      await t.step("the member shows as a Cold lead", async () => { await go(page, "Jualan", "Leads"); await page.locator(".lead-row", { hasText: "Rina Flow" }).getByText("Cold").first().waitFor({ timeout: 15000 }); });
       await t.step("the same person claims the offer", () => sendInbound(project, { ...base, contact: { name: "Rina Flow", email: "rina@contoh.id", whatsapp: "0812 3456 789", business: "Kopi Rina Flow" }, offer: { code: "VISU10-FLOWX", kind: "discount", value: 10 }, answers: { need: "Menu photos", timing: "This month", budget: "Rp 300.000" }, account: acct }));
       await t.step("it becomes one Hot lead, not two", async () => {
         await page.locator(".lead-row", { hasText: "Kopi Rina Flow" }).getByText("Hot").first().waitFor({ timeout: 15000 });
@@ -595,7 +653,7 @@ export const flows = [
       const { page } = t;
       await t.step("sign up", () => signup(t));
       await t.step("Script Library shows 8, then more", async () => {
-        await go(page, "Lainnya", "Script Library");
+        await go(page, "Belajar", "Script Library");
         const before = await page.getByRole("button", { name: "Copy" }).count();
         await page.getByRole("button", { name: /Tampilkan \d+ lagi/ }).click();
         const after = await page.getByRole("button", { name: "Copy" }).count();
@@ -618,7 +676,7 @@ export const flows = [
       let p2;
       await t.step("leader signs up and founds a guild", async () => {
         await signup(t);
-        await go(page, "Lainnya", "Guild");
+        await go(page, "Tim", "Guild");
         await page.getByRole("button", { name: "+ Bikin guild" }).click();
         await modal(page).locator("#gd-name").fill("Tim Uji");
         await modal(page).getByRole("button", { name: "Bikin guild" }).click();
@@ -711,15 +769,15 @@ export const flows = [
         await go(p2, "Jualan", "Paket");
         if (await p2.getByRole("button", { name: "+ Paket" }).count()) throw new Error("a member can edit the team's packages");
         await p2.locator("#space-pick").selectOption({ label: "👤 Pribadi" });
-        await go(p2, "Leads");
+        await go(p2, "Jualan", "Leads");
         await p2.getByText("Belum ada lead").waitFor({ timeout: 8000 });
         await page.locator("#space-pick").selectOption({ label: "🛡️ Tim Uji" });
-        await go(page, "Leads");
+        await go(page, "Jualan", "Leads");
         await expectText(page, "Warung Tim");
         await expectText(page, `👤 ${memberName}`);
         await page.locator("#space-pick").selectOption({ label: "👤 Pribadi" });
-        await go(page, "Lainnya", "Guild");
-        await go(p2, "Lainnya", "Guild");
+        await go(page, "Tim", "Guild");
+        await go(p2, "Tim", "Guild");
       });
       await t.step("the leader promotes the member to officer", async () => {
         await page.getByRole("tab", { name: /^Anggota/ }).click();
@@ -759,7 +817,7 @@ export const flows = [
       });
       await t.step("sign up: no example leads are written into the account", async () => {
         await signup(t);
-        await go(page, "Leads");
+        await go(page, "Jualan", "Leads");
         await expectText(page, "Belum ada lead");
         if (await page.getByText("PT Maju Jaya").count()) throw new Error("example lead found");
       });
@@ -772,7 +830,7 @@ export const flows = [
       const month = new Date().toISOString().slice(0, 7);
       await t.step("sign up", () => signup(t));
       await t.step("add a client", async () => {
-        await go(page, "Lainnya", "Report Klien");
+        await go(page, "Tim", "Report Klien");
         await page.getByRole("button", { name: "+ Tambah klien" }).click();
         await modal(page).locator("#cl-name").fill("Toko Aksesoris Uji");
         await modal(page).getByRole("button", { name: "Simpan klien" }).click();

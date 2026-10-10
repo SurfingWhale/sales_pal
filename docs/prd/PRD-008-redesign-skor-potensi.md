@@ -86,6 +86,20 @@ Masukan owner: alur kerjanya ga cuma satu — ada saat jualan, ada reporting akt
 
 Flow `beranda: three modes — jualan, report & closing, belajar`.
 
+## 7. Menu per alur (2026-10-10)
+
+Masukan owner: "Lainnya" nyembunyiin 7 fitur, owner sendiri bingung. Menu sekarang ngikutin urutan kerja, tanpa "Lainnya":
+
+| Menu | Isi |
+|---|---|
+| Beranda | 3 mode (§6) |
+| Hunting | prospek, sesi, kampanye |
+| Jualan | Leads → Penawaran → Invoice · Paket |
+| Tim & Report (di HP: "Tim") | Guild · Report Klien · Outreach · Rejection Log |
+| Belajar | Script Library · Simulator · AI Playbook |
+
+Di bawah sub-menu, tiap fitur ngasih **satu kalimat buat apa** (mis. Penawaran: "Susun penawaran dari paket, kirim, lalu catat yang disetujui."). Ikon baru `book` buat Belajar. Flow `navigation reaches every place and tab` ngecek semua tempat + kalimatnya + reflow 320px.
+
 ## Gaya visual (dari canvas)
 
 - Plus Jakarta Sans, wordmark Bebas Neue "SALESPAL"; biru `#005eb0` satu-satunya aksen; abu netral (`#f4f5f7` latar, kartu putih, garis `#e3e6ea`); dark mode punya token sendiri (`brand-text #7ab5ef`).
