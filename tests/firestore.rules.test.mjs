@@ -49,6 +49,13 @@ console.log("another SalesPal account:");
 await t("cannot read inbound leads", assertFails(getDocs(collection(other, "inbound_leads"))));
 await t("cannot read the owner's leads", assertFails(getDocs(collection(other, "users", "owner1", "leads"))));
 await t("can use its own tree", assertSucceeds(setDoc(doc(other, "users", "u9", "leads", "a"), { name: "mine" })));
+await t("keeps its prospects and sessions in its own tree", assertSucceeds(Promise.all([
+  setDoc(doc(other, "users", "u9", "prospects", "Threads_uji"), { handle: "@uji", closed: false }),
+  setDoc(doc(other, "users", "u9", "huntSessions", "hs1"), { startedAt: 1 }),
+  setDoc(doc(other, "users", "u9", "campaigns", "c1"), { name: "x" }),
+  setDoc(doc(other, "users", "u9", "costs", "2026-10"), { items: [] }),
+])));
+await t("cannot read the owner's prospects", assertFails(getDocs(collection(other, "users", "owner1", "prospects"))));
 
 console.log("owner:");
 const ref = await addDoc(collection(anon, "inbound_leads"), good());
@@ -163,6 +170,23 @@ await t("member logs a quote and a hunt of their own", assertSucceeds(Promise.al
   setDoc(doc(M, "guilds", G, "quotes", "q1"), { number: "Q-1", ownerUid: "memb", ownerName: "memb" }),
   setDoc(doc(M, "guilds", G, "hunts", "h1"), { target: "@x", ownerUid: "memb", ownerName: "memb" }),
 ])));
+// Hunting journeys (PRD-009): prospects and sessions are owned, campaigns and costs shared.
+const prospect = (owner, extra = {}) => ({ platform: "Threads", handle: "@uji", contact: "baru", closed: false, ownerUid: owner, ownerName: owner, ...extra });
+await t("member logs a prospect of their own", assertSucceeds(setDoc(doc(M, "guilds", G, "prospects", "Threads_uji"), prospect("memb"))));
+await t("member cannot log a prospect for someone else", assertFails(setDoc(doc(M, "guilds", G, "prospects", "Threads_lain"), prospect("memb2"))));
+await t("member lists their own open prospects", assertSucceeds(getDocs(query(collection(M, "guilds", G, "prospects"), where("closed", "==", false), where("ownerUid", "==", "memb")))));
+await t("member cannot list every prospect", assertFails(getDocs(query(collection(M, "guilds", G, "prospects"), where("closed", "==", false)))));
+await t("another member cannot read that prospect", assertFails(getDoc(doc(M2, "guilds", G, "prospects", "Threads_uji"))));
+await t("officer lists every open prospect", assertSucceeds(getDocs(query(collection(O, "guilds", G, "prospects"), where("closed", "==", false)))));
+await t("member records a reply on their prospect", assertSucceeds(updateDoc(doc(M, "guilds", G, "prospects", "Threads_uji"), { contact: "terhubung" })));
+await t("member keeps a hunting session of their own", assertSucceeds(setDoc(doc(M, "guilds", G, "huntSessions", "hs1"), { startedAt: 1, lastActionAt: 1, endedAt: null, ownerUid: "memb", ownerName: "memb" })));
+await t("viewer cannot read prospects", assertFails(getDocs(query(collection(V, "guilds", G, "prospects"), where("ownerUid", "==", "view")))));
+await t("member reads the team's campaigns", assertSucceeds(getDocs(collection(M, "guilds", G, "campaigns"))));
+await t("member cannot start a campaign", assertFails(setDoc(doc(M, "guilds", G, "campaigns", "c1"), { name: "x" })));
+await t("officer starts a campaign", assertSucceeds(setDoc(doc(O, "guilds", G, "campaigns", "c1"), { name: "Promo Oktober", templateId: "t1", segment: "all", groups: ["nunggu"], createdAt: 1 })));
+await t("member cannot change the running costs", assertFails(setDoc(doc(M, "guilds", G, "costs", "2026-10"), { items: [] })));
+await t("leader records the running costs", assertSucceeds(setDoc(doc(L, "guilds", G, "costs", "2026-10"), { items: [{ id: "c1", name: "Vercel Pro", category: "Hosting", amount: 330000 }] })));
+await t("viewer cannot read the campaigns", assertFails(getDocs(collection(V, "guilds", G, "campaigns"))));
 await t("member reads the team's packages", assertSucceeds(getDocs(collection(M, "guilds", G, "services"))));
 await t("member cannot change the packages", assertFails(setDoc(doc(M, "guilds", G, "services", "s1"), { name: "x", price: 1 })));
 await t("officer sets a package", assertSucceeds(setDoc(doc(O, "guilds", G, "services", "s1"), { name: "Foto Menu", price: 1500000 })));

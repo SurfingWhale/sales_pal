@@ -5,8 +5,9 @@
 //
 // In a guild, sales data has an owner: a Member reads and works only their
 // own rows, Leader and Officer all of them (firestore.rules). Catalogs —
-// packages, pitch templates, business info, the daily DM goal — are shared:
-// every seller reads them, Leader and Officer change them.
+// packages, pitch templates, business info, the daily DM goal, campaigns and
+// running costs — are shared: every seller reads them, Leader and Officer
+// change them.
 //
 // Stays personal whatever the space: Threads Radar (each person's own token)
 // and the website leads (the pipeline owner's).
@@ -24,8 +25,8 @@ export interface Space {
   me: { uid: string; name: string };
 }
 
-export const OWNED = ["leads", "outreach", "rejections", "hunts", "quotes", "invoices", "clients"] as const;
-export const SHARED = ["services", "pitchTemplates", "settings"] as const;
+export const OWNED = ["leads", "outreach", "rejections", "hunts", "prospects", "huntSessions", "quotes", "invoices", "clients"] as const;
+export const SHARED = ["services", "pitchTemplates", "settings", "campaigns", "costs"] as const;
 export type SpaceCollection = (typeof OWNED)[number] | (typeof SHARED)[number];
 
 export const personal = (uid: string, name: string): Space => ({ kind: "me", id: uid, name: "Pribadi", me: { uid, name } });
