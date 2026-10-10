@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
 
-// Opens a Threads post link for Hunting (docs/prd/PRD-008 §5): who wrote it
+// Opens a Threads post link for Hunting (docs/prd/PRD-009 §5): who wrote it
 // and what they wrote, read from the redirect and the page's preview tags,
 // the same ones a chat app shows as a link preview. One request per link the
 // user shares; nothing is stored here.
@@ -74,7 +74,7 @@ export async function POST(req: Request) {
   const title = meta(html, "og:title");                       // "Name (@user) on Threads"
   const fromTitle = title.match(/^(.*?)\s*\((@[A-Za-z0-9._]+)\)/);
   const handle = parts?.handle || fromTitle?.[2] || "";
-  if (!handle) return reply({ error: "Link-nya nggak kebaca. Isi username-nya manual." }, 422);
+  if (!handle) return reply({ error: "Link-nya ga kebaca. Isi username-nya manual." }, 422);
   const canonical = allowed(meta(html, "og:url"));
   const post = (canonical && postParts(canonical)) || parts;
   return reply({

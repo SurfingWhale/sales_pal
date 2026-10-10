@@ -14,7 +14,7 @@ import {
 import { Counter, bump, clean, ctx, loadClosed, removeProspect, saveProspect, syncHunt } from "@/lib/prospectStore";
 import { badge, btnPrimary, btnMuted, card, chip, font, inputStyle, label, modalBox } from "@/components/ui";
 
-// Every person hunted, one journey each (docs/prd/PRD-008 §6): where they
+// Every person hunted, one journey each (docs/prd/PRD-009 §6): where they
 // stand, what was said both ways, and the one-tap answer that moves them on.
 
 export const FILTERS = ["Antrian", "Baru", "Nunggu", "Terhubung", "Parkir", "ETB", "DNC"] as const;
@@ -33,15 +33,15 @@ function Bubble({ e }: { e: ProspectEvent }) {
   const theirs = e.kind === "post" || e.kind === "reply";
   const mine = e.kind === "sent";
   if (!theirs && !mine) {
-    return <div style={{ textAlign: "center", fontSize: 11, color: "var(--app-muted)", margin: "6px 0" }}>{e.text} · {when(e.at)}</div>;
+    return <div style={{ textAlign: "center", fontSize: 12, color: "var(--app-muted)", margin: "6px 0" }}>{e.text} · {when(e.at)}</div>;
   }
   const head = e.kind === "post" ? "Post" : e.kind === "reply" ? "Balasan" : `${e.channel === "post" ? "Balas di post" : "DM"}${e.campaign ? ` · kampanye ${e.campaign}` : e.template ? ` · ${e.template}` : ""}`;
   return (
     <div style={{ display: "flex", justifyContent: theirs ? "flex-start" : "flex-end", margin: "6px 0" }}>
       <div style={{ maxWidth: "85%", padding: "8px 12px", borderRadius: 12, background: mine ? "#005eb014" : "var(--app-inner)", border: `1px solid ${mine ? "#005eb040" : "var(--app-border)"}` }}>
-        <div style={{ fontSize: 10.5, color: "var(--app-muted)", marginBottom: 3 }}>{head} · {when(e.at)}</div>
-        <div style={{ fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{e.text || (e.kind === "reply" ? "(dibales)" : "(isi pesan nggak tercatat)")}</div>
-        {e.kind === "post" && e.url && <a href={e.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "var(--brand-text)" }}>Buka post ↗</a>}
+        <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 3 }}>{head} · {when(e.at)}</div>
+        <div style={{ fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{e.text || (e.kind === "reply" ? "(dibales)" : "(isi pesan ga tercatat)")}</div>
+        {e.kind === "post" && e.url && <a href={e.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "var(--brand-text)" }}>Buka post ↗</a>}
       </div>
     </div>
   );
@@ -169,9 +169,9 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
     <div id="journey-prospek" style={{ ...card, padding: 20, marginBottom: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>Journey prospek</div>
-        <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{prospects.length} orang aktif</div>
+        <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{prospects.length} orang aktif</div>
       </div>
-      <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>
         Satu orang satu journey. Belum dibales {strategy.gaps[0]} hari = Belum respon; {strategy.maxAttempts}× tanpa jawaban = Tidak terhubung, diparkir {strategy.parkDays} hari.
       </div>
 
@@ -181,7 +181,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
           <button onClick={backfill} disabled={busy} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 12 }}>Gabungin jadi journey</button>
         </div>
       )}
-      {msg && <div role="status" style={{ fontSize: 12, color: "var(--app-sub)", marginBottom: 10 }}>{msg}</div>}
+      <div role="status" style={{ fontSize: 12, color: "var(--app-sub)", marginBottom: msg ? 10 : 0 }}>{msg}</div>
 
       <div role="group" aria-label="Saring prospek" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6, marginBottom: 6 }}>
         {FILTERS.map(f => {
@@ -219,8 +219,8 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
               style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, width: "100%", background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", color: "inherit", fontFamily: "inherit" }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{who}</div>
-                <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{sub}</div>
-                {!open && post?.text && <div style={{ fontSize: 11, color: "var(--app-sub)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>“{post.text}”</div>}
+                <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{sub}</div>
+                {!open && post?.text && <div style={{ fontSize: 12, color: "var(--app-sub)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>“{post.text}”</div>}
               </div>
               <span style={badge(statusColor(p, v))}>{statusLabel(p, v)}</span>
             </button>
@@ -228,10 +228,10 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
             {open && (
               <div role="region" aria-label={`Riwayat ${who}`} style={{ marginTop: 10 }}>
                 <div style={{ maxHeight: 360, overflowY: "auto", padding: "4px 2px" }}>
-                  {(p.history || []).length === 0 && <div style={{ fontSize: 11, color: "var(--app-muted)" }}>Belum ada riwayat.</div>}
+                  {(p.history || []).length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Belum ada riwayat.</div>}
                   {(p.history || []).map((e, i) => <Bubble key={`${e.at}_${i}`} e={e} />)}
                 </div>
-                {p.result && v.status === "intro" && <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 6 }}>Hasil terakhir: {statusLabel({ ...p, contact: "terhubung" }, { ...v, status: "terhubung" })}{p.remark ? ` — ${p.remark}` : ""}</div>}
+                {p.result && v.status === "intro" && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Hasil terakhir: {statusLabel({ ...p, contact: "terhubung" }, { ...v, status: "terhubung" })}{p.remark ? ` — ${p.remark}` : ""}</div>}
 
                 {v.status === "dnc" ? (
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
@@ -247,7 +247,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                       <button onClick={() => setEditing({ id: p.id, kind: "note", text: "", date: "" })} style={{ ...chip, minHeight: 36 }}>📝 Catatan</button>
                       <button onClick={async () => { if (confirm(`Hapus journey ${who}? Log DM-nya tetap ada.`)) await removeProspect(space, p); }} aria-label={`Hapus journey ${who}`} style={{ ...chip, minHeight: 36, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🗑</button>
                     </div>
-                    <div style={{ fontSize: 11, color: "var(--app-muted)", margin: "10px 0 6px" }}>Hasil (otomatis dihitung dibales)</div>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)", margin: "10px 0 6px" }}>Hasil (otomatis dihitung dibales)</div>
                     <div role="group" aria-label={`Hasil untuk ${who}`} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       <button disabled={busy} onClick={() => mark(p, "tertarik")} aria-pressed={p.result === "tertarik"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>✅ Tertarik</button>
                       <button disabled={busy} onClick={() => mark(p, "pikir")} aria-pressed={p.result === "pikir"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>🤔 Pikir-pikir</button>
@@ -322,7 +322,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
               <button onClick={convert} disabled={busy || !(converting.phone.trim() || converting.email.trim())} style={{ ...btnPrimary, opacity: converting.phone.trim() || converting.email.trim() ? 1 : 0.5 }}>Simpan jadi Lead</button>
               <button onClick={() => setConverting(null)} style={btnMuted}>Batal</button>
             </div>
-            {!(converting.phone.trim() || converting.email.trim()) && <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 8 }}>Isi WhatsApp atau email — itu yang bikin dia dihitung konversi.</div>}
+            {!(converting.phone.trim() || converting.email.trim()) && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 8 }}>Isi WhatsApp atau email — itu yang bikin dia dihitung konversi.</div>}
           </div>
         </div>
       )}

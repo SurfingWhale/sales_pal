@@ -9,7 +9,7 @@ import { Campaign, GROUPS, GROUP_LABEL, Group, Prospect, Segment, Strategy, audi
 import { clean, recordSend } from "@/lib/prospectStore";
 import { btnMuted, btnPrimary, card, chip, font, inputStyle, label, modalBox } from "@/components/ui";
 
-// A campaign is one message for a group of prospects (docs/prd/PRD-008 §7).
+// A campaign is one message for a group of prospects (docs/prd/PRD-009 §7).
 // There is no sending in bulk — the platforms have no API for it — so it runs
 // as a queue: copy, send it yourself, next.
 
@@ -57,7 +57,7 @@ export default function Campaigns({ prospects, templates, strategy, sessionId }:
         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>Kampanye</div>
         {canEdit && <button onClick={() => setDraft({ name: "", templateId: templates[0]?.id || "", segment: "all", groups: ["nunggu", "terhubung"] })} style={chip}>+ Kampanye</button>}
       </div>
-      <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 12 }}>Satu pesan buat sekelompok prospek, dikirim satu-satu. Yang Jangan dihubungi dan yang lagi diparkir otomatis dilewati.</div>
+      <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>Satu pesan buat sekelompok prospek, dikirim satu-satu. Yang Jangan dihubungi dan yang lagi diparkir otomatis dilewati.</div>
       {campaigns.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Belum ada kampanye.</div>}
       {campaigns.map(c => {
         const t = templates.find(x => x.id === c.templateId);
@@ -75,10 +75,10 @@ export default function Campaigns({ prospects, templates, strategy, sessionId }:
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 700 }}>{c.name}</div>
-                <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>
                   {t?.title || "Template dihapus"} · {c.segment === "all" ? "NTB + ETB" : c.segment} · {c.groups.map(g => GROUP_LABEL[g].split(" (")[0]).join(", ")}
                 </div>
-                <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>
                   {reached.length} terkirim · dijawab {rate(replied.length, reached.length)} · {left.length} belum
                 </div>
               </div>
@@ -93,7 +93,7 @@ export default function Campaigns({ prospects, templates, strategy, sessionId }:
                   <div style={{ fontSize: 12 }}>Antrian habis {reached.length ? `· ${reached.length} terkirim` : ""}.</div>
                 ) : (
                   <>
-                    <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 6 }}>{reached.length + 1} dari {reached.length + queue.length}</div>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>{reached.length + 1} dari {reached.length + queue.length}</div>
                     <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{cur.name ? `${cur.name} (${cur.handle})` : cur.handle} · {cur.platform}</div>
                     <div style={{ fontSize: 12.5, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: 10 }}>{fill(t.body, cur.handle)}</div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -108,13 +108,13 @@ export default function Campaigns({ prospects, templates, strategy, sessionId }:
           </div>
         );
       })}
-      {undo && (
-        <div role="status" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 10, padding: "10px 12px", borderRadius: 10, background: "#005eb014", border: "1px solid #005eb050", fontSize: 12 }}>
+      <div role="status">{undo && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 10, padding: "10px 12px", borderRadius: 10, background: "#005eb014", border: "1px solid #005eb050", fontSize: 12 }}>
           <span>{undo.label}</span>
           <button onClick={async () => { const u = undo; setUndo(null); await u.run(); }} style={{ ...chip, minHeight: 32, fontWeight: 700 }}>Batal</button>
         </div>
-      )}
-      {msg && <div role="status" style={{ fontSize: 12, color: "var(--app-sub)", marginTop: 8 }}>{msg}</div>}
+      )}</div>
+      <div role="status" style={{ fontSize: 12, color: "var(--app-sub)", marginTop: msg ? 8 : 0 }}>{msg}</div>
 
       {draft && (
         <div className="modal-overlay" onClick={() => setDraft(null)}>

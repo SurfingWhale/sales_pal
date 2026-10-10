@@ -1,6 +1,6 @@
 "use client";
 
-// The Firestore side of prospect journeys (docs/prd/PRD-008). lib/prospects.ts
+// The Firestore side of prospect journeys (docs/prd/PRD-009). lib/prospects.ts
 // decides what each action changes; this file reads and writes it, inside the
 // current workspace (lib/space.ts).
 
@@ -33,7 +33,7 @@ export function ctx(sessionId?: string): Ctx {
 }
 
 // The journeys still open. DNC ones are closed and only loaded on request,
-// so the list stays cheap to read every time the app opens (PRD-008 §9).
+// so the list stays cheap to read every time the app opens (PRD-009 §9).
 export function useProspects(space: Space): { rows: Prospect[]; ready: boolean } {
   const [state, setState] = useState<{ rows: Prospect[]; ready: boolean }>({ rows: [], ready: false });
   const key = keyOf(space);
@@ -120,7 +120,7 @@ export function bump(space: Space, sessionId: string | undefined, what: Counter,
 }
 
 // Android keeps a quiet notification while a session runs, the nearest a web
-// app gets to a bar over other apps (PRD-008 §4.3). Only with permission
+// app gets to a bar over other apps (PRD-009 §4.3). Only with permission
 // already given for the morning push; never asks.
 export async function sessionNotice(body: string | null): Promise<void> {
   try {
@@ -163,9 +163,9 @@ export async function unfurl(url: string): Promise<Unfurled | { error: string }>
   try {
     const res = await authFetch("/api/hunt/unfurl", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) });
     const body = await res.json().catch(() => ({}));
-    return res.ok ? (body as Unfurled) : { error: body.error || "Link-nya nggak kebaca." };
+    return res.ok ? (body as Unfurled) : { error: body.error || "Link-nya ga kebaca." };
   } catch {
-    return { error: "Nggak nyambung ke server. Isi username-nya manual." };
+    return { error: "Ga nyambung ke server. Isi username-nya manual." };
   }
 }
 

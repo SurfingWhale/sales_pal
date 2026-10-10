@@ -3,6 +3,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { signOut, User } from "firebase/auth";
 import { STALL_DAYS, stalledWhat, useStalledDeals } from "@/lib/stalled";
+import { LEVEL_WORD, Level, inPlay, isHigh, scoreLead } from "@/lib/score";
+import Beranda from "@/components/Beranda";
+import HeatDots from "@/components/HeatDots";
+import { DetailActions, LeadPage, LeadPanel } from "@/components/LeadDetail";
+import Icon, { IconName } from "@/components/Icon";
+import { downscaleImage } from "@/lib/image";
+import { registerWorker, takeSharedFile } from "@/lib/share";
+import type { LeadProfile } from "@/lib/profile";
 import { Space, SpaceContext, seesEveryone, spaceDoc, spaceQuery, stamp } from "@/lib/space";
 import { SpaceOption, useSpaceChoice } from "@/lib/spaceChoice";
 import { disablePush, restorePush } from "@/lib/push";
@@ -19,13 +27,12 @@ import Services from "@/components/Services";
 import Quotes, { LeadRef } from "@/components/Quotes";
 import Invoices from "@/components/Invoices";
 import Hunting from "@/components/Hunting";
-import HuntBar, { BAR_HEIGHT } from "@/components/HuntBar";
+import HuntBar from "@/components/HuntBar";
 import ClientHub from "@/components/ClientHub";
 import GuildHub from "@/components/GuildHub";
 import LeadSources from "@/components/LeadSources";
 import ModalA11y from "@/components/ModalA11y";
-import { WA_INK } from "@/components/ui";
-import { Hunt, useHuntGoal } from "@/lib/hunting";
+import { Hunt, useClosingTarget, useHuntGoal } from "@/lib/hunting";
 import { queue, statusLabel, view } from "@/lib/prospects";
 import { useHuntSession, useProspects, useStrategy } from "@/lib/prospectStore";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
@@ -36,21 +43,23 @@ import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, l
 // Five places, so a phone never scrolls sideways to find one. Jualan and
 // Lainnya hold several tabs, picked from a second row.
 const SECTIONS: { id: string; label: string; icon: string; tabs: string[] }[] = [
-  { id: "home", label: "Beranda", icon: "🏠", tabs: ["Dashboard"] },
-  { id: "hunt", label: "Hunting", icon: "🎯", tabs: ["Hunting"] },
-  { id: "leads", label: "Leads", icon: "👥", tabs: ["Leads"] },
-  { id: "sell", label: "Jualan", icon: "💼", tabs: ["Penawaran", "Invoice", "Paket"] },
-  { id: "more", label: "Lainnya", icon: "☰", tabs: ["Guild", "Report Klien", "Outreach", "Rejection Log", "Simulator", "Script Library", "AI Playbook"] },
+  { id: "home", label: "Beranda", icon: "home" as IconName, tabs: ["Dashboard"] },
+  { id: "hunt", label: "Hunting", icon: "target" as IconName, tabs: ["Hunting"] },
+  { id: "leads", label: "Leads", icon: "users" as IconName, tabs: ["Leads"] },
+  { id: "sell", label: "Jualan", icon: "briefcase" as IconName, tabs: ["Penawaran", "Invoice", "Paket"] },
+  { id: "more", label: "Lainnya", icon: "grid" as IconName, tabs: ["Guild", "Report Klien", "Outreach", "Rejection Log", "Simulator", "Script Library", "AI Playbook"] },
 ];
 const sectionOf = (tab: string) => SECTIONS.find(x => x.tabs.includes(tab)) || SECTIONS[0];
 
 interface Lead {
   id: string; name: string; contact: string; source: string; status: string;
-  score: number; email: string; phone: string; category: string; notes: string;
+  score?: number; email: string; phone: string; category: string; notes: string;
   lastContact: string; value: number;
   nextAction?: string; nextActionDate?: string;
   accountUid?: string;
   ownerUid?: string; ownerName?: string;   // in a guild space
+  lastReplyAt?: string;                    // when they last answered (PRD-008 §2)
+  profile?: LeadProfile;                   // need, pain, objection, type (PRD-008 §3)
 }
 interface Outreach {
   id: string; leadName: string; type: string; date: string; subject: string;
@@ -114,8 +123,7 @@ const statusBg: Record<string, string> = { Hot: "#ff44441a", Warm: "#ff99001a", 
 
 const inputStyle = {
   background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8,
-  color: "var(--app-text)", padding: "10px 14px", fontSize: 13, width: "100%",
-  outline: "none", fontFamily: "'Plus Jakarta Sans', sans-serif",
+  color: "var(--app-text)", padding: "10px 14px", fontSize: 13, width: "100%", fontFamily: "'Plus Jakarta Sans', sans-serif",
 };
 const btnPrimary = {
   background: "#005eb0", color: "#fff",
@@ -163,31 +171,6 @@ function parseValue(v: unknown): number {
   return digits ? parseInt(digits, 10) : 0;
 }
 
-// Downscale an image file client-side before sending to the scan API (keeps payload small).
-function downscaleImage(file: File, maxDim = 1600, quality = 0.82): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new window.Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      let { width, height } = img;
-      const longest = Math.max(width, height);
-      if (longest > maxDim) {
-        const scale = maxDim / longest;
-        width = Math.round(width * scale);
-        height = Math.round(height * scale);
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = width; canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("Canvas tidak didukung")); return; }
-      ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL("image/jpeg", quality));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Gambar tidak bisa dibaca")); };
-    img.src = url;
-  });
-}
 
 function useIsNarrow(bp = 640) {
   const [narrow, setNarrow] = useState(false);
@@ -242,6 +225,11 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [outreach, setOutreach] = useState<Outreach[]>([]);
   const [rejections, setRejections] = useState<Rejection[]>([]);
   const [filterStatus, setFilterStatus] = useState("All");
+  const [filterLevel, setFilterLevel] = useState<0 | Level>(0);
+  const [leadQ, setLeadQ] = useState("");
+  const [leadLimit, setLeadLimit] = useState(20);
+  const [pageOpen, setPageOpen] = useState(false);
+  const wide = !useIsNarrow(1023);
   const [showAddLead, setShowAddLead] = useState(false);
   const [showAddOutreach, setShowAddOutreach] = useState(false);
   const [showAddRejection, setShowAddRejection] = useState(false);
@@ -260,6 +248,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
   const [showProfile, setShowProfile] = useState(false);
+  const [showBell, setShowBell] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<{ latest: string; hasUpdate: boolean; error?: boolean } | null>(null);
   const [clearing, setClearing] = useState(false);
@@ -273,18 +262,32 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const business = useBusiness(space);
   const hunts = useSpaceCollection<Hunt>(space, "hunts");
   const huntGoal = useHuntGoal(space);
-  // Prospect journeys and the hunting session (PRD-008), shared by the bar,
+  const closingTarget = useClosingTarget(space);
+  // Prospect journeys and the hunting session (PRD-009), shared by the bar,
   // Hunting and Perlu Ditindak.
   const { rows: prospects, ready: prospectsReady } = useProspects(space);
   const strategy = useStrategy(space);
   const huntSession = useHuntSession(space);
-  const gotoHunting = useCallback(() => setActiveTab("Hunting"), []);
   const stuck = useStalledDeals(uid);
-  useEffect(() => { restorePush(); }, []);
+  useEffect(() => { restorePush(); registerWorker(); }, []);
+
+  // A WhatsApp export shared from Android (PRD-008 §5): ask which lead it's for.
+  const [shared, setShared] = useState<File | null>(null);
+  const [shareFor, setShareFor] = useState<{ leadId: string; file: File } | null>(null);
+  const [shareMsg, setShareMsg] = useState("");
+  const [shareQ, setShareQ] = useState("");
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (!q.has("share")) return;
+    history.replaceState(null, "", "/dashboard");
+    if (q.get("share")) { setShareMsg("File-nya ga kebawa. Buka SalesPal sekali dari ikon di layar utama, terus bagikan ulang dari WhatsApp."); return; }
+    takeSharedFile().then(f => f ? setShared(f) : setShareMsg("File-nya ga ketemu. Coba bagikan ulang dari WhatsApp."));
+  }, []);
   const [quoteFor, setQuoteFor] = useState<LeadRef | null>(null);
   const [fu, setFu] = useState({ action: "", date: "" });
   const clearQuoteFor = useCallback(() => setQuoteFor(null), []);
   const gotoInvoices = useCallback(() => setActiveTab("Invoice"), []);
+  const gotoHunting = useCallback(() => setActiveTab("Hunting"), []);
   const gotoScripts = useCallback(() => { setActiveTab("Script Library"); window.scrollTo({ top: 0 }); }, []);
 
   useEffect(() => {
@@ -392,7 +395,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         body: JSON.stringify({ image: dataUrl }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Gagal memproses gambar.");
+      if (!res.ok) throw new Error(json?.error || "Gambar ga kebaca. Coba foto yang lebih terang dan lurus, atau pakai Excel/CSV.");
       const leads: Record<string, unknown>[] = Array.isArray(json?.rows) ? json.rows : [];
       const rows = leads.map(l => {
         const o: Record<string, unknown> = {};
@@ -408,7 +411,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       IMPORT_FIELDS.forEach(f => { if (headers.includes(f.key)) map[f.key] = f.key; });
       setColMap(map);
     } catch (err) {
-      setScanError(err instanceof Error ? err.message : "Gagal memproses gambar.");
+      setScanError(err instanceof Error ? err.message : "Gambar ga kebaca. Coba foto yang lebih terang dan lurus, atau pakai Excel/CSV.");
     } finally {
       setScanning(false);
     }
@@ -448,7 +451,6 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           status: normStatus(colMap.status ? r[colMap.status] : ""),
           value: parseValue(colMap.value ? r[colMap.value] : ""),
           notes: get("notes"),
-          score: Math.floor(50 + Math.random() * 40),
           lastContact: new Date().toISOString().split("T")[0],
         }));
       });
@@ -469,10 +471,9 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
   async function addLead() {
     if (!newLead.name) return;
-    const score = Math.floor(50 + Math.random() * 40);
     const id = `lead_${Date.now()}`;
     await setDoc(spaceDoc(space, "leads", id), stamp(space, {
-      ...newLead, score, lastContact: new Date().toISOString().split("T")[0],
+      ...newLead, lastContact: new Date().toISOString().split("T")[0],
       value: parseInt(newLead.value) || 5000000,
     }));
     setNewLead({ name: "", contact: "", source: "GMaps", status: "Cold", email: "", phone: "", category: "F&B", notes: "", value: "" });
@@ -501,13 +502,34 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
   async function deleteLead(id: string) {
     const name = leads.find(l => l.id === id)?.name || "lead ini";
-    if (!confirm(`Hapus ${name}? Nggak bisa dibatalkan.`)) return;
+    if (!confirm(`Hapus ${name}? Ga bisa dibatalkan.`)) return;
     await deleteDoc(spaceDoc(space, "leads", id));
   }
 
   function openLead(lead: Lead) {
     setSelectedLead(lead);
     setFu({ action: lead.nextAction || "", date: lead.nextActionDate || "" });
+    if (wide) { setActiveTab("Leads"); setPageOpen(false); } else setPageOpen(true);
+  }
+
+  // Everything a lead's panel or page can do (components/LeadDetail.tsx).
+  function leadActions(l: Lead): DetailActions {
+    return {
+      onSaveProfile: profile => updateDoc(spaceDoc(space, "leads", l.id), { profile }),
+      onImport: patch => {
+        const { lastReplyAt, ...rest } = patch;
+        const newer = lastReplyAt && (!l.lastReplyAt || lastReplyAt > l.lastReplyAt);
+        setShareFor(null);
+        return updateDoc(spaceDoc(space, "leads", l.id), {
+          ...rest, ...(newer ? { lastReplyAt, ...(lastReplyAt > (l.lastContact || "") ? { lastContact: lastReplyAt } : {}) } : {}),
+        });
+      },
+      onReplied: () => markReplied(l.id),
+      onSchedule: (action, date) => updateDoc(spaceDoc(space, "leads", l.id), { nextAction: action, nextActionDate: date }),
+      onDone: () => doneFollowUp(l.id),
+      onQuote: () => { setPageOpen(false); startQuote(l); },
+      onDelete: async () => { await deleteLead(l.id); setPageOpen(false); setSelectedLead(null); },
+    };
   }
 
   async function saveFollowUp(id: string) {
@@ -518,6 +540,11 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   async function doneFollowUp(id: string) {
     await updateDoc(spaceDoc(space, "leads", id), { nextAction: "", nextActionDate: "", lastContact: today() });
     setFu({ action: "", date: "" });
+  }
+
+  // They answered: the strongest sign a lead is alive (PRD-008 §2, Respons).
+  async function markReplied(id: string) {
+    await updateDoc(spaceDoc(space, "leads", id), { lastReplyAt: today(), lastContact: today() });
   }
 
   function startQuote(lead: Lead) {
@@ -565,15 +592,14 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     await resetAppCache();
   }
 
-  const totalValue = leads.reduce((a, b) => a + b.value, 0);
-  const closedLeads = leads.filter(l => l.status === "Closed");
-  const hotLeads = leads.filter(l => l.status === "Hot");
-  const conversionRate = leads.length ? ((closedLeads.length / leads.length) * 100).toFixed(0) : "0";
-  const avgScore = leads.length ? (leads.reduce((a, b) => a + b.score, 0) / leads.length).toFixed(0) : "0";
-  const repliedOutreach = outreach.filter(o => o.status === "Replied").length;
-  const replyRate = outreach.length ? ((repliedOutreach / outreach.length) * 100).toFixed(0) : "0";
-  const filteredLeads = filterStatus === "All" ? leads : leads.filter(l => l.status === filterStatus);
-  const receivable = invoices.reduce((a, i) => a + balance(i), 0);
+  // Skor potensi, computed from the lead itself (lib/score.ts), never stored.
+  const scores = new Map(leads.map(l => [l.id, scoreLead(l, today())]));
+  const sc = (l: Lead) => scores.get(l.id) || scoreLead(l, today());
+  const highPotential = leads.filter(l => inPlay(l.status) && isHigh(sc(l).total)).length;
+  const filteredLeads = (filterStatus === "All" ? leads : leads.filter(l => l.status === filterStatus))
+    .filter(l => !filterLevel || sc(l).level === filterLevel)
+    .filter(l => !leadQ.trim() || `${l.name} ${l.category} ${l.contact}`.toLowerCase().includes(leadQ.trim().toLowerCase()))
+    .sort((a, b) => sc(b).total - sc(a).total);
   const liveLead = selectedLead ? leads.find(l => l.id === selectedLead.id) || selectedLead : null;
 
   // Everything that needs a move today: reminders due, quotes left hanging,
@@ -582,351 +608,319 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const soon = addDays(now, 3);
   const todo = [
     ...leads.filter(l => l.nextActionDate && l.nextActionDate <= soon && l.status !== "Closed").map(l => ({
-      key: `l_${l.id}`, when: l.nextActionDate as string, icon: "📅", title: l.name,
+      key: `l_${l.id}`, when: l.nextActionDate as string, icon: "calendar" as IconName, title: l.name,
       what: l.nextAction || "Follow-up", phone: l.phone, text: `Halo ${l.contact || l.name}, `,
+      kind: "Follow-up", action: "Buka lead", wa: false,
+      snooze: () => { updateDoc(spaceDoc(space, "leads", l.id), { nextActionDate: addDays(today(), 1) }); },
       open: () => openLead(l),
     })),
     ...queue(prospects, now, strategy).map(p => ({
-      key: `p_${p.id}`, when: view(p, now, strategy).due as string, icon: "🎯", title: p.name ? `${p.name} (${p.handle})` : p.handle,
-      what: `${statusLabel(p, view(p, now, strategy))} via ${p.platform} — ${p.contact === "baru" ? "kirim intro" : "follow-up"}`, phone: "", text: "",
+      key: `p_${p.id}`, when: view(p, now, strategy).due as string, icon: "target" as IconName, title: p.name ? `${p.name} (${p.handle})` : p.handle,
+      what: `${statusLabel(p, view(p, now, strategy))} via ${p.platform}`, phone: "", text: "",
+      kind: "Hunting", action: p.contact === "baru" ? "Kirim intro" : "Follow-up", wa: false,
       open: () => setActiveTab("Hunting"),
     })),
     ...hunts.filter(h => h.status === "Tertarik" && !h.leadId && !h.prospectId).map(h => ({
-      key: `h_${h.id}`, when: h.date, icon: "🎯", title: h.target || "Tanpa nama",
+      key: `h_${h.id}`, when: h.date, icon: "target" as IconName, title: h.target || "Tanpa nama",
       what: `Tertarik via ${h.platform} — jadiin lead`, phone: "", text: "",
+      kind: "Tertarik di Hunting", action: "Jadiin lead", wa: false,
       open: () => setActiveTab("Hunting"),
     })),
     ...quotes.filter(q => q.status === "Terkirim" && q.sentAt && daysBetween(q.sentAt, now) >= 3).map(q => ({
-      key: `q_${q.id}`, when: addDays(q.sentAt as string, 3), icon: "📝", title: q.leadName,
+      key: `q_${q.id}`, when: addDays(q.sentAt as string, 3), icon: "doc" as IconName, title: q.leadName,
       what: `Penawaran ${q.number} belum dijawab ${daysBetween(q.sentAt as string, now)} hari`, phone: q.phone,
       text: `Halo ${q.contact || q.leadName}, mau follow up penawaran ${q.number} kemarin. Ada yang bisa aku bantu jelasin?`,
+      kind: "Penawaran nunggu", action: q.phone ? "Follow up via WA" : "Lihat penawaran", wa: Boolean(q.phone),
       open: () => setActiveTab("Penawaran"),
     })),
     ...stuck.map(s => ({
-      key: `s_${s.key}`, when: addDays(s.lastMove, STALL_DAYS), icon: "⏸️", title: s.deal.contactName,
+      key: `s_${s.key}`, when: addDays(s.lastMove, STALL_DAYS), icon: "pause" as IconName, title: s.deal.contactName,
       what: stalledWhat(s), phone: s.deal.phone || "", text: `Halo ${s.deal.contactName}, `,
+      kind: "Deal macet", action: "Geser deal", wa: false,
       open: () => setActiveTab(s.where === "guild" ? "Guild" : "Report Klien"),
     })),
     ...rejections.filter(r => r.followUpDate && r.followUpDate <= soon && r.followUpDate >= addDays(now, -14)).map(r => ({
-      key: `r_${r.id}`, when: r.followUpDate, icon: "↩️", title: r.leadName,
+      key: `r_${r.id}`, when: r.followUpDate, icon: "refresh" as IconName, title: r.leadName,
       what: `Coba lagi setelah ditolak (${r.reason || r.channel})`, phone: "", text: "",
+      kind: "Coba lagi", action: "Lihat catatan", wa: false,
       open: () => setActiveTab("Rejection Log"),
     })),
     ...invoices.filter(i => balance(i) > 0 && i.dueDate && i.dueDate <= soon).map(i => ({
-      key: `i_${i.id}`, when: i.dueDate, icon: "🧾", title: i.leadName,
+      key: `i_${i.id}`, when: i.dueDate, icon: "receipt" as IconName, title: i.leadName,
       what: `${invoiceState(i, now) === "Telat" ? "Telat bayar" : "Jatuh tempo"} ${i.number} · sisa ${rupiah(balance(i))}`, phone: i.phone,
       text: `Halo ${i.contact || i.leadName}, reminder invoice ${i.number} jatuh tempo ${longDate(i.dueDate)}, sisa ${rupiah(balance(i))}. Terima kasih!`,
+      kind: invoiceState(i, now) === "Telat" ? "Invoice telat" : "Invoice jatuh tempo", action: i.phone ? "Kirim pengingat" : "Lihat invoice", wa: Boolean(i.phone),
       open: () => setActiveTab("Invoice"),
     })),
   ].sort((a, b) => a.when.localeCompare(b.when));
 
+  // Beranda's four numbers and the lead map (PRD-008 §1).
+  const active = leads.filter(l => inPlay(l.status));
+  const weekAgo = Date.now() - 7 * 86400000;
+  const month = now.slice(0, 7);
+  const paidThisMonth = invoices.reduce((a, i) => a + (i.payments || []).filter(p => (p.date || "").startsWith(month)).reduce((b, p) => b + (p.amount || 0), 0), 0);
+  const numbers = {
+    active: active.length,
+    newThisWeek: active.filter(l => Number(l.id.match(/_(\d{13})/)?.[1] || 0) > weekAgo).length,
+    high: highPotential,
+    closedThisMonth: invoices.filter(i => (i.date || "").startsWith(month)).length,
+    closingTarget,
+    paidThisMonth: paidThisMonth ? `${rupiah(paidThisMonth)} masuk bulan ini` : "invoice dibuat bulan ini",
+    pipeline: active.reduce((a, l) => a + (Number(l.value) || 0), 0),
+    pipelineHigh: active.filter(l => isHigh(sc(l).total)).reduce((a, l) => a + (Number(l.value) || 0), 0),
+  };
+  const mapLeads = active.map(l => ({
+    id: l.id, name: l.name, score: sc(l).total, value: Number(l.value) || 0, phone: l.phone,
+    why: l.nextActionDate ? `${l.nextAction || "Follow-up"} ${longDate(l.nextActionDate)}` : sc(l).tip ? `Biar naik: ${sc(l).tip}` : "",
+  }));
+
   return (
-    <div style={{ background: "var(--app-bg)", minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, color: "var(--app-text)", ["--sp-top" as string]: `${57 + (huntSession.live ? BAR_HEIGHT : 0)}px` }}>
+    <div style={{ background: "var(--app-bg)", minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, color: "var(--app-text)" }}>
       <style>{`
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: var(--app-card); } ::-webkit-scrollbar-thumb { background: var(--app-border); border-radius: 4px; }
-        .sp-nav { display: flex; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--app-border); background: var(--app-card); }
-        .sp-nav-btn { display: flex; align-items: center; gap: 8px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--app-muted); padding: 12px 16px; font: 500 13px 'Plus Jakarta Sans', sans-serif; cursor: pointer; white-space: nowrap; }
-        .sp-nav-btn.is-on { color: var(--app-text); font-weight: 700; border-bottom-color: #005eb0; background: var(--app-inner); }
-        .sp-nav-btn:hover { background: var(--app-inner); }
-        .sp-nav-icon { font-size: 15px; line-height: 1; }
-        .sp-subnav { display: flex; gap: 6px; padding: 10px 24px; overflow-x: auto; background: var(--app-bg); border-bottom: 1px solid var(--app-border); scrollbar-width: none; }
+        .sp-top { position: sticky; top: 0; z-index: 50; }
+        .sp-top-in { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 0 32px; height: 68px; display: flex; align-items: center; gap: 24px; }
+        .sp-nav { margin: 0 auto; display: flex; gap: 2px; padding: 3px; border-radius: 999px; }
+        .sp-nav-btn { position: relative; height: 38px; padding: 0 16px; display: flex; align-items: center; gap: 6px; border: none; border-radius: 999px; background: transparent; color: var(--app-ink-2); font: 500 14px 'Plus Jakarta Sans', sans-serif; cursor: pointer; white-space: nowrap; }
+        .sp-nav-btn.is-on { color: var(--app-text); font-weight: 600; background: var(--thumb); box-shadow: var(--thumb-shadow); }
+        .sp-nav-icon { display: none; }
+        .sp-iconbtn { width: 44px; height: 44px; border: 0; border-radius: 999px; color: var(--app-ink-2); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; flex-shrink: 0; font-family: inherit; }
+        .sp-space { display: flex; align-items: center; height: 44px; border-radius: 999px; color: var(--app-ink-2); font-size: 13px; font-weight: 500; padding: 0 12px 0 16px; gap: 6px; }
+        .sp-space select { appearance: none; -webkit-appearance: none; background: transparent; border: none; color: inherit; font: inherit; max-width: 150px; text-overflow: ellipsis; cursor: pointer; outline: none; }
+        .sp-subnav { display: flex; gap: 8px; max-width: 1200px; margin: 0 auto; padding: 8px 32px 0; overflow-x: auto; scrollbar-width: none; }
         .sp-subnav::-webkit-scrollbar { display: none; }
-        .sp-sub-btn { flex-shrink: 0; min-height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--app-border); background: var(--app-card); color: var(--app-muted); font: 600 12px 'Plus Jakarta Sans', sans-serif; cursor: pointer; white-space: nowrap; }
-        .sp-sub-btn.is-on { background: #005eb0; border-color: #005eb0; color: #fff; }
+        .sp-sub-btn { flex-shrink: 0; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--app-line-strong); background: transparent; color: var(--app-ink-2); font: 500 13px 'Plus Jakarta Sans', sans-serif; cursor: pointer; white-space: nowrap; }
+        .sp-sub-btn.is-on { background: var(--app-text); border-color: var(--app-text); color: var(--app-card); }
         @media (max-width: 767px) {
-          .sp-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; padding: 0 0 env(safe-area-inset-bottom, 0px); gap: 0; border-bottom: none; border-top: 1px solid var(--app-border); background: var(--app-nav); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-          .sp-nav-btn { flex: 1; flex-direction: column; gap: 3px; padding: 8px 0 6px; min-height: 56px; font-size: 11px; border-bottom: none; border-top: 2px solid transparent; }
-          .sp-nav-btn.is-on { background: transparent; border-top-color: #005eb0; color: var(--brand-text); }
-          .sp-nav-icon { font-size: 19px; }
-          .sp-subnav { padding: 10px 16px; position: sticky; top: var(--sp-top, 57px); z-index: 40; }
-          .sp-main { padding: 16px 16px calc(96px + env(safe-area-inset-bottom, 0px)) !important; }
-          .sp-fab { bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important; }
+          .sp-top-in { padding: 0 14px 0 20px; height: 60px; gap: 8px; }
+          .sp-brand-word { font-size: 17px !important; }
+          .sp-nav { position: fixed; z-index: 60; left: 14px; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); height: 64px; padding: 4px; border-radius: 32px; margin: 0; gap: 0; }
+          .sp-nav-btn { flex: 1; height: auto; flex-direction: column; justify-content: center; gap: 3px; padding: 0; border-radius: 28px; font-size: 11px; }
+          .sp-nav-btn.is-on { background: var(--tab-on); box-shadow: none; color: var(--brand-text); }
+          .sp-nav-icon { display: block; }
+          .sp-space { padding: 0 10px 0 12px; font-size: 12px; }
+          .sp-space select { max-width: 96px; }
+          .sp-subnav { padding: 6px 16px 0; }
+          .sp-main { padding: 16px 16px calc(110px + env(safe-area-inset-bottom, 0px)) !important; }
+          .sp-fab { bottom: calc(92px + env(safe-area-inset-bottom, 0px)) !important; }
         }
-        .tab-btn:hover { background: var(--app-inner) !important; }
-        .lead-row:hover { background: var(--app-inner) !important; cursor: pointer; }
-        .stat-card-dash { transition: transform 0.2s; } .stat-card-dash:hover { transform: translateY(-2px); }
-        .step-card:hover { border-color: var(--accent) !important; }
+        @media (hover: hover) {
+          .sp-nav-btn:hover { color: var(--app-text); }
+          .tab-btn:hover { background: var(--app-inner) !important; }
+          .lead-row:hover { background: var(--app-inner) !important; }
+          .step-card:hover { border-color: var(--accent) !important; }
+        }
+        .lead-row { cursor: pointer; }
         .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
         input:focus, select:focus, textarea:focus { border-color: #005eb0 !important; }
       `}</style>
 
-      {/* Header, with the hunting bar over it while a session runs (PRD-008 §4) */}
-      <div style={{ position: "sticky", top: 0, zIndex: 50 }}>
-      {huntSession.live && (
-        <HuntBar session={huntSession.live} queued={queue(prospects, now, strategy).length}
-          sentToday={hunts.filter(h => h.date === now).length} goal={huntGoal}
-          onOpen={gotoHunting} onEnd={huntSession.end} />
-      )}
-      <div style={{ borderBottom: "1px solid var(--app-border)", padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--app-nav)", backdropFilter: "blur(12px)", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-mark.png" alt="SalesPal" width={32} height={32} style={{ display: "block", flexShrink: 0 }} />
-          <div style={{ fontSize: 22, fontWeight: 400, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "3px", color: "var(--app-text)", lineHeight: 1 }}>SALES<span style={{ color: "var(--brand-text)" }}>PAL</span></div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          {spaces.length > 0 ? (
-            // Workspace: your own data, or a guild's (PRD-007 §2.5).
-            <select id="space-pick" aria-label="Ruang kerja" value={space.kind === "me" ? uid : space.id}
-              onChange={e => { chooseSpace(e.target.value); setSelectedLead(null); }}
-              style={{ minWidth: 0, maxWidth: 160, background: space.kind === "guild" ? "#005eb01a" : "var(--app-inner)", border: `1px solid ${space.kind === "guild" ? "#005eb0" : "var(--app-border)"}`, borderRadius: 8, color: "var(--app-text)", padding: "7px 8px", fontSize: 12, fontWeight: 700, fontFamily: "inherit", textOverflow: "ellipsis" }}>
-              <option value={uid}>👤 Pribadi</option>
-              {spaces.map(o => <option key={o.id} value={o.id}>🛡️ {o.name}</option>)}
-            </select>
-          ) : (
-            <>
-              <span style={{ color: "#00cc6a", fontSize: 10, flexShrink: 0 }}>●</span>
-              <span style={{ fontSize: 11, color: "var(--app-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-                {(user.displayName || user.email || "").split("@")[0]}
-              </span>
-            </>
-          )}
-          <button
-            onClick={toggleTheme}
-            title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            style={{ background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 8, color: "var(--app-muted)", padding: "8px 12px", fontSize: 14, cursor: "pointer", lineHeight: 1, flexShrink: 0 }}
-          >
-            {isDark ? "☀️" : "🌙"}
+      {/* Header: glass over a soft edge blur, like the canvas */}
+      <header className="sp-top">
+        {/* The hunting session's bar over every tab (PRD-009 §4) */}
+        {huntSession.live && (
+          <HuntBar session={huntSession.live} queued={queue(prospects, now, strategy).length}
+            sentToday={hunts.filter(h => h.date === now).length} goal={huntGoal}
+            onOpen={gotoHunting} onEnd={huntSession.end} />
+        )}
+        <div className="pb t" aria-hidden="true" style={{ top: 0, height: 96 }}><span /><span /><span /><span /><span /><span /></div>
+        <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 96, background: "linear-gradient(to bottom, var(--bar-tint) 0%, var(--bar-tint) 40%, transparent 100%)", pointerEvents: "none" }} />
+        <div className="sp-top-in">
+          <button onClick={() => setActiveTab("Dashboard")} aria-label="SalesPal, ke Beranda" style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--app-text)", background: "none", border: "none", padding: 0, cursor: "pointer", flexShrink: 0 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-mark.png" alt="" width={18} height={18} style={{ width: 18, height: 18, objectFit: "contain" }} />
+            <span className="num sp-brand-word" style={{ fontSize: 19, letterSpacing: "0.06em", paddingTop: 3 }}>SALESPAL</span>
           </button>
-          <button
-            onClick={() => { setShowProfile(true); setUpdateInfo(null); }}
-            aria-label="Profil & pengaturan"
-            title="Profil & pengaturan"
-            style={{ width: 32, height: 32, borderRadius: "50%", background: "#005eb0", color: "#fff", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}
-          >
-            {(user.displayName || user.email || "U").charAt(0).toUpperCase()}
-          </button>
-        </div>
-      </div>
-
-      </div>
-
-      {/* Navigation: a top bar on wide screens, a bottom bar on phones */}
-      <nav className="sp-nav" aria-label="Menu utama">
-        {SECTIONS.map(sec => {
-          const on = sectionOf(activeTab).id === sec.id;
-          return (
-            <button key={sec.id} className={`tab-btn sp-nav-btn${on ? " is-on" : ""}`} aria-current={on ? "page" : undefined}
-              onClick={() => { if (!on) setActiveTab(sec.tabs[0]); }}>
-              <span className="sp-nav-icon" aria-hidden="true">{sec.icon}</span>
-              <span className="sp-nav-label">{sec.label}</span>
+          {/* Navigation: a pill in the header on wide screens, a floating bar on phones */}
+          <nav className="sp-nav glass" aria-label="Menu utama">
+            {SECTIONS.map(sec => {
+              const on = sectionOf(activeTab).id === sec.id;
+              return (
+                <button key={sec.id} className={`sp-nav-btn${on ? " is-on" : ""}`} aria-current={on ? "page" : undefined}
+                  onClick={() => { if (!on) setActiveTab(sec.tabs[0]); }}>
+                  <span className="sp-nav-icon"><Icon name={sec.icon} size={22} stroke={on ? 1.9 : 1.6} /></span>
+                  <span className="sp-nav-label">{sec.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
+            {spaces.length > 0 && (
+              // Workspace: your own data, or a guild's (PRD-007 §2.5).
+              <label className="sp-space glass" style={space.kind === "guild" ? { color: "var(--brand-text)" } : undefined}>
+                <span className="vh">Ruang kerja</span>
+                <select id="space-pick" aria-label="Ruang kerja" value={space.kind === "me" ? uid : space.id}
+                  onChange={e => { chooseSpace(e.target.value); setSelectedLead(null); }}>
+                  <option value={uid}>👤 Pribadi</option>
+                  {spaces.map(o => <option key={o.id} value={o.id}>🛡️ {o.name}</option>)}
+                </select>
+                <Icon name="chevronDown" size={14} stroke={1.8} />
+              </label>
+            )}
+            <button className="sp-iconbtn glass" aria-label={`Notifikasi${todo.length ? `, ${todo.length} perlu ditindak` : ""}`} aria-expanded={showBell} onClick={() => setShowBell(!showBell)}>
+              <Icon name="bell" size={19} stroke={1.6} />
+              {todo.some(t => t.when <= now) && <span aria-hidden="true" style={{ position: "absolute", top: 10, right: 11, width: 8, height: 8, borderRadius: "50%", background: "#005eb0", boxShadow: "0 0 0 2px var(--app-bg)" }} />}
             </button>
-          );
-        })}
-      </nav>
-      {sectionOf(activeTab).tabs.length > 1 && (
-        <div className="sp-subnav" role="tablist" aria-label={sectionOf(activeTab).label}>
-          {sectionOf(activeTab).tabs.map(tab => (
-            <button key={tab} role="tab" aria-selected={activeTab === tab} className={`sp-sub-btn${activeTab === tab ? " is-on" : ""}`} onClick={() => setActiveTab(tab)}>{tab}</button>
-          ))}
+            <button className="sp-iconbtn" onClick={() => { setShowProfile(true); setUpdateInfo(null); }} aria-label="Profil dan pengaturan" title="Profil & pengaturan">
+              <span style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--app-inner)", color: "var(--app-ink-2)", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {(user.displayName || user.email || "U").charAt(0).toUpperCase()}
+              </span>
+            </button>
+          </div>
         </div>
-      )}
+        {showBell && (
+          <div role="dialog" aria-label="Notifikasi" className="frost" style={{ position: "absolute", zIndex: 70, right: "max(16px, calc((100vw - 1200px) / 2 + 32px))", top: 64, width: "min(360px, calc(100vw - 32px))", borderRadius: 24, padding: 16, boxShadow: "inset 0 0 0 1px var(--frost-ring), 0 12px 32px var(--frost-float)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>Notifikasi</div>
+              <button className="sp-iconbtn" onClick={() => setShowBell(false)} aria-label="Tutup" style={{ width: 36, height: 36 }}>
+                <span style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--glass-btn)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={12} stroke={2.4} /></span>
+              </button>
+            </div>
+            <button onClick={() => { setShowBell(false); setActiveTab("Dashboard"); }} className="rowhover" style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, margin: "8px 0", padding: "10px 8px", border: "none", borderRadius: 14, background: "transparent", color: "inherit", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}>
+              <span style={{ width: 36, height: 36, borderRadius: "50%", background: "#005eb0", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="clock" size={18} /></span>
+              <span style={{ flex: 1, fontSize: 14 }}><b>{todo.filter(t => t.when <= now).length}</b> perlu ditindak hari ini<span style={{ display: "block", fontSize: 12, color: "var(--app-muted)" }}>{todo.length} total di Beranda</span></span>
+              <Icon name="chevronRight" size={16} />
+            </button>
+            <PushToggle />
+          </div>
+        )}
+        {sectionOf(activeTab).tabs.length > 1 && (
+          <div className="sp-subnav" role="tablist" aria-label={sectionOf(activeTab).label} style={{ position: "relative", zIndex: 1 }}>
+            {sectionOf(activeTab).tabs.map(tab => (
+              <button key={tab} role="tab" aria-selected={activeTab === tab} className={`sp-sub-btn${activeTab === tab ? " is-on" : ""}`} onClick={() => setActiveTab(tab)}>{tab}</button>
+            ))}
+          </div>
+        )}
+      </header>
 
-      <div className="sp-main" style={{ padding: "24px", maxWidth: 1200, margin: "0 auto" }}>
+      <div className="sp-main" style={{ padding: "32px 32px 96px", maxWidth: 1200, margin: "0 auto" }}>
 
         {/* DASHBOARD */}
         {activeTab === "Dashboard" && (
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <div style={{ marginBottom: 20, order: -2 }}>
-              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Sales Command Center</div>
-              <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 4 }}>{space.kind === "guild" ? `Ruang guild ${space.name} — ${showOwner ? "angka seluruh tim" : "angka kamu di guild ini"}` : "Overview pipeline & performance real-time lo"}</div>
-            </div>
+          <Beranda now={now} todo={todo} numbers={numbers} mapLeads={mapLeads}
+            onOpenLead={id => { const l = leads.find(x => x.id === id); if (l) openLead(l); }}
+            onImport={() => setShowImport(true)} onAdd={() => setShowAddLead(true)} onAllLeads={() => setActiveTab("Leads")}
+            onSetTarget={async () => {
+              const v = prompt("Target closing bulan ini (jumlah deal)?", String(closingTarget || ""));
+              const n = parseInt(v || "", 10);
+              if (n > 0) await setDoc(spaceDoc(space, "settings", "hunting"), { monthlyClosing: n }, { merge: true }).catch(() => alert("Target tim diatur Leader atau Officer."));
+            }}>
+            {space.kind === "guild" && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: -16 }}>Ruang guild {space.name} — {showOwner ? "angka seluruh tim" : "angka kamu di guild ini"}.</div>}
             {seedCount > 0 && (
-              <div role="status" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 10, padding: "12px 14px", marginBottom: 16, fontSize: 12.5 }}>
+              <div role="status" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 10, padding: "12px 14px", fontSize: 12.5 }}>
                 <span>Ada <b>{seedCount} data contoh</b> (PT Maju Jaya dkk.) dari versi lama yang ikut kehitung di angka lo.</span>
                 <button onClick={removeSeedData} style={{ background: "#005eb0", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Hapus data contoh</button>
               </div>
             )}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 24 }}>
-              {[
-                { label: "Total Leads", value: leads.length, sub: `${hotLeads.length} hot leads`, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", icon: "👥" },
-                { label: "Pipeline Value", value: `${(totalValue / 1000000).toFixed(1)}M`, sub: "estimasi total", color: "var(--ok)", icon: "💰" },
-                { label: "Conversion Rate", value: `${conversionRate}%`, sub: `${closedLeads.length} closed`, color: "color-mix(in srgb, #a78bfa 55%, var(--app-text))", icon: "📈" },
-                { label: "Reply Rate", value: `${replyRate}%`, sub: `${repliedOutreach}/${outreach.length} outreach`, color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))", icon: "📬" },
-                { label: "Avg Lead Score", value: avgScore, sub: "dari 100", color: "var(--brand-text)", icon: "⭐" },
-                { label: "Belum Tertagih", value: `${(receivable / 1000000).toFixed(1)}M`, sub: `${invoices.filter(i => balance(i) > 0).length} invoice terbuka`, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", icon: "🧾" },
-                { label: "Rejections", value: rejections.length, sub: "perlu follow up", color: "color-mix(in srgb, #ff6b35 55%, var(--app-text))", icon: "❌" },
-              ].map(s => (
-                <div key={s.label} className="stat-card-dash" style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "14px 14px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--app-text)", fontWeight: 600 }}><span aria-hidden="true">{s.icon}</span>{s.label}</div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: `color-mix(in srgb, ${s.color} 55%, var(--app-text))`, fontFamily: "'Plus Jakarta Sans', sans-serif", marginTop: 6, fontVariantNumeric: "tabular-nums" }}>{s.value}</div>
-                  <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{s.sub}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 20, marginBottom: 20, order: -1 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>✅ Perlu Ditindak</div>
-              {todo.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Aman. Nggak ada follow-up, penawaran, deal macet, atau tagihan yang nunggu. Pasang jadwal follow-up dari detail lead.</div>}
-              {todo.map(t => {
-                const late = t.when < now;
-                const isToday = t.when === now;
-                return (
-                  <div key={t.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--app-inner)" }}>
-                    <button onClick={t.open} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", color: "inherit", fontFamily: "inherit" }}>
-                      <div style={{ fontSize: 18, flexShrink: 0 }}>{t.icon}</div>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
-                        <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{t.what}</div>
-                      </div>
-                    </button>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: late ? "#ff4444" : isToday ? "#ff9900" : "var(--app-muted)" }}>{late ? `telat ${daysBetween(t.when, now)}h` : isToday ? "hari ini" : longDate(t.when)}</span>
-                      {t.phone && <a href={waLink(t.phone, t.text)} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${t.title}`} style={{ background: "#25D366", color: WA_INK, borderRadius: 6, padding: "6px 10px", fontSize: 11, fontWeight: 700, textDecoration: "none" }}>WA</a>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
             <LeadSources leads={leads} invoices={invoices} />
-            <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 24, marginBottom: 24 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Sales Pipeline</div>
-              {["Cold", "Warm", "Hot", "Closed"].map(s => {
-                const count = leads.filter(l => l.status === s).length;
-                const pct = leads.length ? (count / leads.length) * 100 : 0;
-                return (
-                  <div key={s} style={{ marginBottom: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, color: `color-mix(in srgb, ${statusColor[s]} 55%, var(--app-text))`, fontWeight: 600 }}>{s}</span>
-                      <span style={{ fontSize: 11, color: "var(--app-muted)" }}>{count} leads · {pct.toFixed(0)}%</span>
-                    </div>
-                    <div style={{ background: "var(--app-inner)", borderRadius: 4, height: 8 }}>
-                      <div style={{ background: statusColor[s], width: `${pct}%`, height: "100%", borderRadius: 4, transition: "width 0.6s ease" }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 24 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>🔥 Hot Leads - Prioritas Sekarang</div>
-              {hotLeads.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Belum ada hot leads.</div>}
-              {hotLeads.map(l => (
-                <div key={l.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid var(--app-inner)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 8, background: "#ff44441a", border: "1px solid #ff444430", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🔥</div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{l.name}</div>
-                      <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{l.contact} · {l.category}</div>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ok)" }}>Rp {(l.value / 1000000).toFixed(1)}M</div>
-                    <div style={{ fontSize: 11, color: "var(--app-muted)" }}>Score: {l.score}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          </Beranda>
         )}
 
-        {/* LEADS */}
-        {activeTab === "Leads" && (
+        {/* LEADS (canvas "Leads + skor potensi") */}
+        {activeTab === "Leads" && (() => {
+          const shownLeads = filteredLeads.slice(0, leadLimit);
+          const panelLead = wide ? (liveLead && filteredLeads.some(l => l.id === liveLead.id) ? liveLead : filteredLeads[0]) : null;
+          return (
           <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Lead Database</div>
-                <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 2 }}>{filteredLeads.length} leads ditampilkan</div>
-              </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {["All", "Hot", "Warm", "Cold", "Closed"].map(s => (
-                  <button key={s} onClick={() => setFilterStatus(s)}
-                    style={{ background: filterStatus === s ? (statusColor[s] || "var(--app-border)") : "var(--app-card)", color: filterStatus === s ? "#fff" : "var(--app-muted)", border: "1px solid var(--app-border)", borderRadius: 18, padding: "0 14px", minHeight: 36, fontSize: 12, cursor: "pointer", fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                    {s}
-                  </button>
-                ))}
-                <button onClick={() => setShowImport(true)} style={{ ...btnPrimary, background: "transparent", color: "var(--brand-text)", border: "1px solid #005eb0" }}>⬆ Impor</button>
-                <button onClick={() => setShowAddLead(true)} style={btnPrimary}>+ Tambah lead</button>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+              <h1 style={{ margin: 0, fontSize: 34, lineHeight: 1.1, fontWeight: 600, letterSpacing: "-0.025em" }}>Leads <span className="tabnum" style={{ fontSize: 20, fontWeight: 500, color: "var(--app-muted)", letterSpacing: 0 }}>{leads.length}</span></h1>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", width: wide ? "auto" : "100%" }}>
+                <div style={{ position: "relative", flex: wide ? "0 0 auto" : "1 1 100%" }}>
+                  <label htmlFor="lead-search" className="vh">Cari lead</label>
+                  <Icon name="search" style={{ position: "absolute", left: 14, top: 13, color: "var(--app-muted)" }} />
+                  <input id="lead-search" type="search" value={leadQ} onChange={e => setLeadQ(e.target.value)} placeholder="Cari nama atau kategori" style={{ width: wide ? 260 : "100%", height: 44, padding: "0 16px 0 42px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "var(--app-card)", color: "var(--app-text)", fontSize: 14, fontFamily: "inherit" }} />
+                </div>
+                <label className="vh" htmlFor="status-filter">Status</label>
+                <select id="status-filter" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ height: 44, padding: "0 14px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "var(--app-card)", color: "var(--app-text)", fontSize: 14, fontFamily: "inherit" }}>
+                  {[["All", "Semua status"], ["Hot", "Hot"], ["Warm", "Warm"], ["Cold", "Cold"], ["Closed", "Closed"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+                <button onClick={() => setShowImport(true)} style={{ height: 44, padding: "0 18px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Import</button>
+                <button onClick={() => setShowAddLead(true)} style={{ display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}><Icon name="plus" stroke={1.8} />Tambah lead</button>
               </div>
             </div>
+
+            {leads.length > 0 && (
+              <div role="group" aria-label="Saring menurut potensi" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 24 }}>
+                {([0, 5, 4, 3, 2, 1] as (0 | Level)[]).map(lv => {
+                  const on = filterLevel === lv;
+                  const n = lv ? leads.filter(l => sc(l).level === lv).length : leads.length;
+                  return (
+                    <button key={lv} onClick={() => setFilterLevel(lv)} aria-pressed={on}
+                      style={{ height: 36, padding: "0 14px", borderRadius: 999, border: `1px solid ${on ? "var(--app-text)" : "var(--app-line-strong)"}`, background: on ? "var(--app-text)" : "transparent", color: on ? "var(--app-card)" : "var(--app-ink-2)", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, fontFamily: "inherit" }}>
+                      {lv > 0 && <HeatDots level={lv as Level} size={5} gap={2} />}
+                      {lv ? LEVEL_WORD[lv as Level] : "Semua"} <span className="tabnum" style={{ opacity: 0.7 }}>{n}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {filteredLeads.length === 0 ? (
-              <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "56px 24px", textAlign: "center" }}>
-                <div style={{ fontSize: 34, marginBottom: 12 }}>{leads.length === 0 ? "📇" : "🔍"}</div>
-                <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{leads.length === 0 ? "Belum ada lead" : "Ga ada lead yang cocok"}</div>
-                <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>{leads.length === 0 ? "Mulai dengan import Excel/CSV, atau tambah manual." : `Ga ada lead berstatus "${filterStatus}". Coba filter lain.`}</div>
+              <div style={{ marginTop: 24, background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 20, padding: "56px 24px", textAlign: "center" }}>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 12, color: "var(--app-muted)" }}><Icon name={leads.length === 0 ? "users" : "search"} size={34} stroke={1.4} /></div>
+                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>{leads.length === 0 ? "Belum ada lead" : "Ga ada lead yang cocok"}</div>
+                <div style={{ fontSize: 13, color: "var(--app-muted)", marginBottom: 20 }}>{leads.length === 0 ? "Mulai dengan import Excel/CSV, atau tambah manual." : "Coba ganti pencarian atau saringannya."}</div>
                 {leads.length === 0 ? (
                   <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-                    <button onClick={() => setShowImport(true)} style={{ ...btnPrimary, background: "transparent", color: "var(--brand-text)", border: "1px solid #005eb0" }}>⬆ Import Excel/CSV</button>
-                    <button onClick={() => setShowAddLead(true)} style={btnPrimary}>+ Lead pertama</button>
+                    <button onClick={() => setShowImport(true)} style={{ height: 44, padding: "0 18px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Import Excel/CSV</button>
+                    <button onClick={() => setShowAddLead(true)} style={{ height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>+ Lead pertama</button>
                   </div>
                 ) : (
-                  <button onClick={() => setFilterStatus("All")} style={btnPrimary}>Reset filter</button>
+                  <button onClick={() => { setFilterStatus("All"); setFilterLevel(0); setLeadQ(""); }} style={{ height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Reset saringan</button>
                 )}
               </div>
-            ) : isNarrow ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {filteredLeads.map(lead => (
-                  <div key={lead.id} className="lead-row" role="button" tabIndex={0} aria-label={`Buka lead ${lead.name}`} onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openLead(lead); } }} onClick={() => openLead(lead)} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 16, cursor: "pointer" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lead.name}</div>
-                        <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{lead.contact || "—"} · {lead.category}{showOwner && lead.ownerName ? ` · 👤 ${lead.ownerName}` : ""}</div>
-                        {lead.nextActionDate && <div style={{ fontSize: 11, marginTop: 4, color: lead.nextActionDate < now ? "#ff4444" : lead.nextActionDate === now ? "#ff9900" : "var(--app-muted)" }}>📅 {lead.nextAction || "Follow-up"} · {longDate(lead.nextActionDate)}</div>}
-                      </div>
-                      <span className="badge" style={{ background: statusBg[lead.status], color: `color-mix(in srgb, ${statusColor[lead.status]} 55%, var(--app-text))`, border: `1px solid ${statusColor[lead.status]}30`, flexShrink: 0 }}>{lead.status}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, gap: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                        <div style={{ width: 44, height: 4, background: "var(--app-inner)", borderRadius: 2, flexShrink: 0 }}>
-                          <div style={{ width: `${lead.score}%`, height: "100%", background: lead.score > 80 ? "#00a862" : lead.score > 60 ? "#f59e0b" : "#ff4444", borderRadius: 2 }} />
-                        </div>
-                        <span style={{ fontSize: 11, fontWeight: 700 }}>{lead.score}</span>
-                        <span style={{ fontSize: 11, color: "var(--app-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>· {lead.source}</span>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ok)" }}>Rp {(lead.value / 1000000).toFixed(1)}M</span>
-                        <button onClick={(e) => { e.stopPropagation(); deleteLead(lead.id); }} aria-label={`Hapus lead ${lead.name}`} style={{ background: "transparent", border: "1px solid #ff444430", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderRadius: 8, minWidth: 36, minHeight: 36, fontSize: 14, cursor: "pointer" }}>🗑</button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
             ) : (
-            <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
-                <thead>
-                  <tr style={{ background: "var(--app-inner)", borderBottom: "1px solid var(--app-border)" }}>
-                    {["PERUSAHAAN", "KONTAK", "SOURCE", "STATUS", "SCORE", "VALUE", "LAST CONTACT", ""].map(h => (
-                      <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", fontWeight: 600 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredLeads.map(lead => (
-                    <tr key={lead.id} className="lead-row" tabIndex={0} aria-label={`Buka lead ${lead.name}`} onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openLead(lead); } }} onClick={() => openLead(lead)} style={{ borderBottom: "1px solid var(--app-inner)" }}>
-                      <td style={{ padding: "14px 16px" }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{lead.name}</div>
-                        <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{lead.category}{showOwner && lead.ownerName ? ` · 👤 ${lead.ownerName}` : ""}</div>
-                        {lead.nextActionDate && <div style={{ fontSize: 11, marginTop: 2, color: lead.nextActionDate < now ? "#ff4444" : lead.nextActionDate === now ? "#ff9900" : "var(--app-muted)" }}>📅 {lead.nextAction || "Follow-up"} · {longDate(lead.nextActionDate)}</div>}
-                      </td>
-                      <td style={{ padding: "14px 16px", fontSize: 12, color: "var(--app-muted)" }}>{lead.contact}</td>
-                      <td style={{ padding: "14px 16px" }}>
-                        <span style={{ fontSize: 11, background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 4, padding: "3px 8px" }}>{lead.source}</span>
-                      </td>
-                      <td style={{ padding: "14px 16px" }}>
-                        <span className="badge" style={{ background: statusBg[lead.status], color: `color-mix(in srgb, ${statusColor[lead.status]} 55%, var(--app-text))`, border: `1px solid ${statusColor[lead.status]}30` }}>{lead.status}</span>
-                      </td>
-                      <td style={{ padding: "14px 16px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <div style={{ width: 40, height: 4, background: "var(--app-inner)", borderRadius: 2 }}>
-                            <div style={{ width: `${lead.score}%`, height: "100%", background: lead.score > 80 ? "#00a862" : lead.score > 60 ? "#f59e0b" : "#ff4444", borderRadius: 2 }} />
-                          </div>
-                          <span style={{ fontSize: 12, fontWeight: 700 }}>{lead.score}</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: "14px 16px", fontSize: 13, fontWeight: 700, color: "var(--ok)" }}>Rp {(lead.value / 1000000).toFixed(1)}M</td>
-                      <td style={{ padding: "14px 16px", fontSize: 11, color: "var(--app-muted)" }}>{lead.lastContact}</td>
-                      <td style={{ padding: "14px 16px" }}>
-                        <button onClick={(e) => { e.stopPropagation(); deleteLead(lead.id); }} aria-label={`Hapus lead ${lead.name}`} style={{ background: "transparent", border: "1px solid #ff444430", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderRadius: 6, padding: "6px 10px", fontSize: 11, cursor: "pointer" }}>Del</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+              <div style={{ marginTop: 24, display: "flex", flexWrap: "wrap", gap: 24, alignItems: "flex-start" }}>
+                <section aria-label="Daftar lead" style={{ flex: "999 1 560px", minWidth: 0 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
+                    {shownLeads.map(lead => {
+                      const s = sc(lead);
+                      const on = panelLead?.id === lead.id;
+                      const contactAgo = lead.lastContact ? (() => { const d = daysBetween(lead.lastContact, now); return d <= 0 ? "hari ini" : d === 1 ? "kemarin" : `${d} hari lalu`; })() : "—";
+                      return (
+                        <button key={lead.id} className="lead-row lift" aria-pressed={wide ? on : undefined} aria-label={`Buka lead ${lead.name}`} onClick={() => openLead(lead)}
+                          style={{ textAlign: "left", padding: 18, borderRadius: 16, border: `1px solid ${on ? "#005eb0" : "var(--app-border)"}`, boxShadow: on ? "0 0 0 1px #005eb0" : "none", background: on ? "var(--brand-tint)" : "var(--app-card)", color: "var(--app-text)", cursor: "pointer", display: "flex", flexDirection: "column", gap: 16, fontFamily: "inherit" }}>
+                          <span style={{ display: "flex", alignItems: "center", gap: 12, width: "100%" }}>
+                            <span aria-hidden="true" style={{ flexShrink: 0, width: 36, height: 36, borderRadius: "50%", background: "var(--app-inner)", color: "var(--app-ink-2)", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>{lead.name.replace(/[^A-Za-z0-9À-ÿ ]/g, "").split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?"}</span>
+                            <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+                              <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lead.name}</span>
+                              <span style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lead.category} · {lead.source}{showOwner && lead.ownerName ? ` · 👤 ${lead.ownerName}` : ""}</span>
+                            </span>
+                            <span style={{ flexShrink: 0, alignSelf: "flex-start", padding: "3px 9px", borderRadius: 999, background: "var(--app-inner)", color: ({ Hot: "var(--hot)", Warm: "var(--warm)", Cold: "var(--cold)", Closed: "var(--ok)" } as Record<string, string>)[lead.status] || "var(--app-ink-2)", fontSize: 12, fontWeight: 600 }}>{lead.status}</span>
+                          </span>
+                          <span style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+                            <HeatDots level={s.level} />
+                            <span style={{ fontSize: 13, color: "var(--app-ink-2)" }}>Potensi {s.word.toLowerCase()}</span>
+                            <span className="tabnum" style={{ marginLeft: "auto", fontSize: 15, fontWeight: 600 }} aria-label={`Skor potensi ${s.total}`}>{s.total}</span>
+                          </span>
+                          {lead.nextActionDate && <span style={{ fontSize: 12.5, color: lead.nextActionDate < now ? "var(--hot)" : lead.nextActionDate === now ? "var(--warm)" : "var(--app-muted)", display: "flex", alignItems: "center", gap: 6 }}><Icon name="clock" size={14} />{lead.nextAction || "Follow-up"} · {longDate(lead.nextActionDate)}</span>}
+                          <span style={{ display: "flex", justifyContent: "space-between", gap: 8, width: "100%", paddingTop: 12, borderTop: "1px solid var(--app-border)", fontSize: 13, color: "var(--app-muted)" }}>
+                            <span>Kontak: {contactAgo}</span>
+                            <span className="tabnum" style={{ color: "var(--app-ink-2)", fontWeight: 500 }}>{lead.value ? `Rp ${(lead.value / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt` : "—"}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ marginTop: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                    <p className="tabnum" style={{ margin: 0, fontSize: 13, color: "var(--app-muted)" }}>Menampilkan {shownLeads.length} dari {filteredLeads.length} lead</p>
+                    {filteredLeads.length > shownLeads.length && <button onClick={() => setLeadLimit(leadLimit + 20)} style={{ height: 44, padding: "0 18px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Muat lagi</button>}
+                  </div>
+                </section>
+                {panelLead && (
+                  <div style={{ flex: "1 1 360px", maxWidth: 440, minWidth: 0, alignSelf: "stretch" }}>
+                    <LeadPanel key={panelLead.id + (shareFor?.leadId === panelLead.id ? "_share" : "")} lead={panelLead} score={sc(panelLead)} actions={leadActions(panelLead)}
+                      onOpenFull={() => { setSelectedLead(panelLead); setPageOpen(true); }} shareFile={shareFor?.leadId === panelLead.id ? shareFor.file : null} />
+                  </div>
+                )}
+              </div>
             )}
           </div>
-        )}
+          );
+        })()}
 
+        {/* HUNTING */}
         {activeTab === "Hunting" && <Hunting hunts={hunts} goal={huntGoal} onOpenScripts={gotoScripts}
           journey={{ prospects, ready: prospectsReady, strategy, live: huntSession.live, sessions: huntSession.sessions, start: huntSession.start, end: huntSession.end }} />}
 
@@ -964,7 +958,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               ].map(s => (
                 <div key={s.label} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 10, padding: 16 }}>
                   <div style={{ fontSize: 22, fontWeight: 700, color: `color-mix(in srgb, ${s.color} 55%, var(--app-text))`, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{s.value}</div>
-                  <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>{s.label}</div>
+                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>{s.label}</div>
                 </div>
               ))}
             </div>
@@ -985,13 +979,13 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                       <div style={{ fontSize: 20 }}>{o.type === "Email" ? "📧" : o.type === "DM Instagram" ? "📸" : "💬"}</div>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{o.leadName}</div>
-                        <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{o.subject}</div>
-                        <div style={{ fontSize: 10, color: "var(--app-muted)", marginTop: 2 }}>{o.type} · {o.date}</div>
+                        <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{o.subject}</div>
+                        <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{o.type} · {o.date}</div>
                       </div>
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <span className="badge" style={{ background: `${statusColors[o.status]}20`, color: statusColors[o.status], border: `1px solid ${statusColors[o.status]}40` }}>{o.status}</span>
-                      <div style={{ fontSize: 10, color: "var(--app-muted)", marginTop: 6 }}>Opens: {o.opens} · Clicks: {o.clicks}</div>
+                      <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Opens: {o.opens} · Clicks: {o.clicks}</div>
                     </div>
                   </div>
                 );
@@ -1027,22 +1021,22 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{r.leadName}</div>
-                      <div style={{ fontSize: 11, color: "var(--app-muted)" }}>{r.channel} · {r.date}</div>
+                      <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{r.channel} · {r.date}</div>
                     </div>
                     <span className="badge" style={{ background: "#ff44441a", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444430" }}>REJECTED</span>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12 }}>
-                      <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 4 }}>ALASAN REJECTION</div>
+                      <div style={{ fontSize: 12, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 4 }}>ALASAN REJECTION</div>
                       <div style={{ fontSize: 12, color: "#ff8888" }}>{r.reason}</div>
                     </div>
                     <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12 }}>
-                      <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 4 }}>FOLLOW-UP DATE</div>
+                      <div style={{ fontSize: 12, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 4 }}>FOLLOW-UP DATE</div>
                       <div style={{ fontSize: 12, color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))" }}>{r.followUpDate || "Belum dijadwal"}</div>
                     </div>
                   </div>
                   <div style={{ background: "#00ff881a", borderRadius: 8, padding: 12, marginTop: 12, border: "1px solid #00ff8820" }}>
-                    <div style={{ fontSize: 10, color: "var(--ok)", letterSpacing: "1px", marginBottom: 4 }}>💡 LESSON LEARNED</div>
+                    <div style={{ fontSize: 12, color: "var(--ok)", letterSpacing: "1px", marginBottom: 4 }}>💡 LESSON LEARNED</div>
                     <div style={{ fontSize: 12 }}>{r.lesson}</div>
                   </div>
                 </div>
@@ -1072,7 +1066,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                     {section.steps.map((step, i) => (
                       <div key={i} className="step-card" style={{ ["--accent" as string]: section.color, background: "var(--app-inner)", borderRadius: 10, padding: 16, border: "1px solid var(--app-border)", transition: "border-color 0.2s" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                          <div style={{ width: 22, height: 22, borderRadius: 6, background: `${section.color}20`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: section.color, border: `1px solid ${section.color}40` }}>{i + 1}</div>
+                          <div style={{ width: 22, height: 22, borderRadius: 6, background: `${section.color}20`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: section.color, border: `1px solid ${section.color}40` }}>{i + 1}</div>
                           <div style={{ fontSize: 12, fontWeight: 700, color: section.color }}>{step.title}</div>
                         </div>
                         <div style={{ fontSize: 12, color: "var(--app-sub)", lineHeight: 1.6 }}>{step.desc}</div>
@@ -1094,9 +1088,9 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                   { metric: "Avg Deal Cycle", target: "< 14 hari", world: "> 30 hari", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" },
                 ].map(m => (
                   <div key={m.metric} style={{ background: "var(--app-inner)", borderRadius: 10, padding: 14 }}>
-                    <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 6 }}>{m.metric}</div>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>{m.metric}</div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: m.color, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{m.target}</div>
-                    <div style={{ fontSize: 10, color: "var(--app-muted)", marginTop: 4 }}>Rata-rata industri: {m.world}</div>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>Rata-rata industri: {m.world}</div>
                   </div>
                 ))}
               </div>
@@ -1113,20 +1107,20 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {([["name", "Nama Perusahaan"], ["contact", "Nama Kontak"], ["email", "Email"], ["phone", "No. HP"], ["value", "Estimasi Value (Rp)"]] as [string, string][]).map(([k, label]) => (
                 <div key={k} style={{ gridColumn: k === "name" || k === "value" ? "1/-1" : "auto" }}>
-                  <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
+                  <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
                   <input value={(newLead as Record<string, string>)[k]} onChange={e => setNewLead({ ...newLead, [k]: e.target.value })} style={inputStyle} placeholder={label} />
                 </div>
               ))}
               {([["source", "Source", ["GMaps", "DM IG", "Threads", "Cold Email", "Referral", "WhatsApp", "LinkedIn", "Lainnya"]], ["status", "Status", ["Cold", "Warm", "Hot", "Closed"]], ["category", "Kategori", ["F&B", "Retail", "Health", "Property", "Service", "Tech", "Education"]]] as [string, string, string[]][]).map(([k, label, opts]) => (
                 <div key={k}>
-                  <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
+                  <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
                   <select value={(newLead as Record<string, string>)[k]} onChange={e => setNewLead({ ...newLead, [k]: e.target.value })} style={inputStyle}>
                     {opts.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
               ))}
               <div style={{ gridColumn: "1/-1" }}>
-                <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Notes</label>
+                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Notes</label>
                 <textarea value={newLead.notes} onChange={e => setNewLead({ ...newLead, notes: e.target.value })} style={{ ...inputStyle, resize: "none", height: 70 }} placeholder="Catatan tentang lead ini..." />
               </div>
             </div>
@@ -1145,13 +1139,13 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20 }}>+ Log Outreach</div>
             {([["leadName", "Nama Lead/Perusahaan"], ["subject", "Subject / Pesan Pembuka"]] as [string, string][]).map(([k, label]) => (
               <div key={k} style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
+                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
                 <input value={(newOutreach as Record<string, string>)[k]} onChange={e => setNewOutreach({ ...newOutreach, [k]: e.target.value })} style={inputStyle} placeholder={label} />
               </div>
             ))}
             {([["type", "Tipe", ["Email", "DM Instagram", "WhatsApp", "LinkedIn", "Telepon"]], ["status", "Status", ["Sent", "Seen", "Replied", "No Response", "Rejected"]]] as [string, string, string[]][]).map(([k, label, opts]) => (
               <div key={k} style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
+                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
                 <select value={(newOutreach as Record<string, string>)[k]} onChange={e => setNewOutreach({ ...newOutreach, [k]: e.target.value })} style={inputStyle}>
                   {opts.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
@@ -1172,20 +1166,20 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20 }}>+ Log Rejection</div>
             {([["leadName", "Nama Lead/Perusahaan"], ["reason", "Alasan Rejection"], ["lesson", "Lesson Learned"]] as [string, string][]).map(([k, label]) => (
               <div key={k} style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
+                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
                 {k === "lesson"
                   ? <textarea value={(newRejection as Record<string, string>)[k]} onChange={e => setNewRejection({ ...newRejection, [k]: e.target.value })} style={{ ...inputStyle, resize: "none", height: 70 }} placeholder={label} />
                   : <input value={(newRejection as Record<string, string>)[k]} onChange={e => setNewRejection({ ...newRejection, [k]: e.target.value })} style={inputStyle} placeholder={label} />}
               </div>
             ))}
             <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Channel</label>
+              <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Channel</label>
               <select value={newRejection.channel} onChange={e => setNewRejection({ ...newRejection, channel: e.target.value })} style={inputStyle}>
                 {["Email", "DM Instagram", "WhatsApp", "LinkedIn", "Telepon"].map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Jadwal Follow-Up</label>
+              <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Jadwal Follow-Up</label>
               <input type="date" value={newRejection.followUpDate} onChange={e => setNewRejection({ ...newRejection, followUpDate: e.target.value })} style={inputStyle} />
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
@@ -1196,55 +1190,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         </div>
       )}
 
-      {/* Lead Detail Modal */}
-      {liveLead && (
-        <div className="modal-overlay" onClick={() => setSelectedLead(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 480, maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div>
-                <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{liveLead.name}</div>
-                <span className="badge" style={{ background: statusBg[liveLead.status], color: statusColor[liveLead.status], border: `1px solid ${statusColor[liveLead.status]}30`, marginTop: 6, display: "inline-block" }}>{liveLead.status}</span>
-              </div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: "var(--ok)", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Rp {(liveLead.value / 1000000).toFixed(1)}M</div>
-            </div>
-            {([["👤 Kontak", liveLead.contact], ["📧 Email", liveLead.email], ["📱 Phone", liveLead.phone], ["🏷️ Kategori", liveLead.category], ["📍 Source", liveLead.source], ["📅 Last Contact", liveLead.lastContact]] as [string, string][]).map(([k, v]) => (
-              <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--app-inner)", fontSize: 13 }}>
-                <span style={{ color: "var(--app-muted)" }}>{k}</span>
-                <span style={{ fontWeight: 600 }}>{v}</span>
-              </div>
-            ))}
-            <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12, marginTop: 16 }}>
-              <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 6 }}>NOTES</div>
-              <div style={{ fontSize: 12 }}>{liveLead.notes || "—"}</div>
-            </div>
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 8 }}>LEAD SCORE</div>
-              <div style={{ background: "var(--app-inner)", borderRadius: 6, height: 10 }}>
-                <div style={{ width: `${liveLead.score}%`, height: "100%", background: liveLead.score > 80 ? "#00a862" : liveLead.score > 60 ? "#f59e0b" : "#ff4444", borderRadius: 6, transition: "width 0.6s" }} />
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 700, marginTop: 6, color: liveLead.score > 80 ? "#00a862" : liveLead.score > 60 ? "#f59e0b" : "#ff4444" }}>{liveLead.score} / 100</div>
-            </div>
-            <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12, marginTop: 16 }}>
-              <div style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 8 }}>FOLLOW-UP BERIKUTNYA</div>
-              <input value={fu.action} onChange={e => setFu({ ...fu, action: e.target.value })} style={{ ...inputStyle, marginBottom: 8 }} placeholder="mis. Kirim portfolio, telpon owner" aria-label="Tindakan berikutnya" />
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                {([["Besok", 1], ["3 hari", 3], ["1 minggu", 7]] as [string, number][]).map(([l, d]) => (
-                  <button key={l} onClick={() => setFu({ ...fu, date: addDays(today(), d) })} style={{ background: "transparent", border: "1px solid var(--app-border)", color: "var(--app-muted)", borderRadius: 6, padding: "6px 10px", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>{l}</button>
-                ))}
-                <input type="date" value={fu.date} onChange={e => setFu({ ...fu, date: e.target.value })} style={{ ...inputStyle, width: "auto", padding: "5px 8px", fontSize: 12 }} aria-label="Tanggal follow-up" />
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => saveFollowUp(liveLead.id)} disabled={!fu.date} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 12, opacity: fu.date ? 1 : 0.5 }}>Simpan jadwal</button>
-                {liveLead.nextActionDate && <button onClick={() => doneFollowUp(liveLead.id)} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 12, background: "transparent", color: "var(--ok)", border: "1px solid var(--ok)" }}>✓ Selesai</button>}
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-              <button onClick={() => startQuote(liveLead)} style={{ ...btnPrimary, flex: 1 }}>Buat penawaran</button>
-              {liveLead.phone && <a href={waLink(liveLead.phone, `Halo ${liveLead.contact || liveLead.name}, `)} target="_blank" rel="noreferrer" style={{ ...btnPrimary, background: "#25D366", color: WA_INK, textDecoration: "none", textAlign: "center" }}>WA</a>}
-            </div>
-            <button onClick={() => setSelectedLead(null)} style={{ ...btnPrimary, width: "100%", marginTop: 8, background: "var(--app-border)", color: "var(--app-text)" }}>TUTUP</button>
-          </div>
-        </div>
+      {/* Profil customer: full screen on phones, "Profil lengkap" on desktop */}
+      {liveLead && pageOpen && (
+        <LeadPage key={liveLead.id + (shareFor?.leadId === liveLead.id ? "_share" : "")} lead={liveLead} score={sc(liveLead)} actions={leadActions(liveLead)}
+          onClose={() => { setPageOpen(false); if (!wide) setSelectedLead(null); }} shareFile={!wide && shareFor?.leadId === liveLead.id ? shareFor.file : null} />
       )}
 
       {/* Profile & Settings Modal */}
@@ -1293,12 +1242,16 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               )}
             </div>
 
+            <button onClick={toggleTheme} aria-pressed={isDark} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: "var(--app-inner)", border: "none", borderRadius: 12, padding: 16, cursor: "pointer", fontFamily: "inherit", color: "var(--app-text)", marginBottom: 12 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, fontWeight: 700 }}><Icon name={isDark ? "moon" : "sun"} size={18} /> Tampilan</span>
+              <span style={{ fontSize: 12, color: "var(--app-muted)" }}>{isDark ? "Gelap" : "Terang"} · ganti</span>
+            </button>
             <PushToggle />
 
             {/* Clear cache */}
             <button onClick={clearCacheAndReload} disabled={clearing} style={{ width: "100%", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 16, textAlign: "left", cursor: "pointer", fontFamily: "inherit", marginBottom: 12, opacity: clearing ? 0.6 : 1 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "var(--app-text)" }}>🧹 {clearing ? "Membersihkan..." : "Clear cache & muat ulang"}</div>
-              <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>Hapus cache app & load versi terbaru. Login kamu tetap aman.</div>
+              <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>Hapus cache app & load versi terbaru. Login kamu tetap aman.</div>
             </button>
 
             {/* Logout */}
@@ -1307,6 +1260,45 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             </button>
           </div>
         </div>
+      )}
+
+      {shared && (
+        <div className="modal-overlay" onClick={() => setShared(null)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="share-h" onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 22, width: "100%", maxWidth: 440, maxHeight: "86vh", display: "flex", flexDirection: "column" }}>
+            <div id="share-h" style={{ fontSize: 16, fontWeight: 700 }}>Chat ini buat lead mana?</div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", margin: "4px 0 12px" }}>{shared.name}</div>
+            <label htmlFor="share-q" style={{ position: "absolute", left: -9999 }}>Cari lead</label>
+            <input id="share-q" value={shareQ} onChange={e => setShareQ(e.target.value)} placeholder="Cari nama lead" style={{ ...inputStyle, fontSize: 16 }} />
+            <div style={{ overflowY: "auto", marginTop: 8, flex: 1 }}>
+              {(() => {
+                const guess = shared.name.replace(/\.(txt|zip|vcf)$/i, "").replace(/^(Chat WhatsApp dengan|WhatsApp Chat with|WhatsApp Chat -)\s*/i, "").trim();
+                const q = (shareQ || "").toLowerCase();
+                const list = leads.filter(l => !q || l.name.toLowerCase().includes(q))
+                  .sort((a, b) => Number(b.name.toLowerCase().includes(guess.toLowerCase())) - Number(a.name.toLowerCase().includes(guess.toLowerCase())) || a.name.localeCompare(b.name)).slice(0, 30);
+                return (
+                  <>
+                    {list.map(l => (
+                      <button key={l.id} onClick={() => { setShareFor({ leadId: l.id, file: shared }); setShared(null); openLead(l); }}
+                        style={{ width: "100%", textAlign: "left", padding: "11px 4px", border: "none", borderBottom: "1px solid var(--app-inner)", background: "transparent", color: "inherit", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 600 }}>
+                        {l.name} <span style={{ fontWeight: 400, color: "var(--app-muted)", fontSize: 12 }}>· {l.category}</span>
+                      </button>
+                    ))}
+                    <button onClick={async () => {
+                      const id = `lead_${Date.now()}`;
+                      const lead = stamp(space, { name: guess || "Lead dari WhatsApp", contact: "", source: "WhatsApp", status: "Warm", email: "", phone: "", category: "F&B", notes: "", value: 0, lastContact: today() });
+                      await setDoc(spaceDoc(space, "leads", id), lead);
+                      setShareFor({ leadId: id, file: shared }); setShared(null); setActiveTab("Leads");
+                      openLead({ id, ...lead } as Lead);
+                    }} style={{ ...btnPrimary, width: "100%", marginTop: 10 }}>+ Lead baru: {guess || "dari WhatsApp"}</button>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+      {shareMsg && (
+        <div role="alert" onClick={() => setShareMsg("")} style={{ position: "fixed", left: 16, right: 16, bottom: 90, zIndex: 120, maxWidth: 480, margin: "0 auto", background: "var(--app-text)", color: "var(--app-bg)", borderRadius: 12, padding: "12px 14px", fontSize: 13 }}>{shareMsg}</div>
       )}
 
       {/* Import Leads Modal */}
@@ -1322,7 +1314,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             {importDone !== null ? (
               <div style={{ textAlign: "center", padding: "32px 16px" }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-                <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{importDone} lead berhasil diimport</div>
+                <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{importDone} lead masuk</div>
                 <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Data udah masuk ke Lead Database lo.</div>
                 <button onClick={closeImport} style={btnPrimary}>Selesai</button>
               </div>
@@ -1346,7 +1338,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                     <input type="file" accept=".xlsx,.xls,.csv,.vcf,text/vcard" onChange={handleImportFile} style={{ display: "none" }} />
                     <div style={{ fontSize: 24, marginBottom: 8 }}>📄</div>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{importFileName || "Klik buat pilih file"}</div>
-                    <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>.xlsx, .xls, .csv, atau kontak HP (.vcf)</div>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>.xlsx, .xls, .csv, atau kontak HP (.vcf)</div>
                   </label>
                 ) : (
                   <>
@@ -1354,7 +1346,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                       <input type="file" accept="image/*" onChange={handleScanImage} disabled={scanning} style={{ display: "none" }} />
                       <div style={{ fontSize: 24, marginBottom: 8 }}>{scanning ? "🤖" : "📷"}</div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{scanning ? "Membaca gambar dengan AI..." : (importFileName || "Klik buat pilih / foto data")}</div>
-                      <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>Screenshot chat, tabel, atau kartu nama · JPG/PNG</div>
+                      <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>Screenshot chat, tabel, atau kartu nama · JPG/PNG</div>
                     </label>
                     {scanError && (
                       <div style={{ fontSize: 12, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", background: "#ff44440d", border: "1px solid #ff444430", borderRadius: 8, padding: "10px 14px", marginBottom: 16 }}>{scanError}</div>
@@ -1368,7 +1360,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, marginBottom: 20 }}>
                       {IMPORT_FIELDS.map(f => (
                         <div key={f.key}>
-                          <label style={{ fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 4 }}>
+                          <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 4 }}>
                             {f.label}{f.required && <span style={{ color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}> *</span>}
                           </label>
                           <select value={colMap[f.key] || ""} onChange={e => setColMap({ ...colMap, [f.key]: e.target.value })} style={inputStyle} aria-label={`Kolom untuk ${f.label}`}>
@@ -1381,7 +1373,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
                     <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Preview (3 baris pertama)</div>
                     <div style={{ overflowX: "auto", border: "1px solid var(--app-border)", borderRadius: 8, marginBottom: 20 }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 480 }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 480 }}>
                         <thead>
                           <tr style={{ background: "var(--app-inner)" }}>
                             {IMPORT_FIELDS.filter(f => colMap[f.key]).map(f => (

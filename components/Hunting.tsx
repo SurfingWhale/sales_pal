@@ -124,7 +124,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   // The bar's paste button and its queue land here.
   useHuntInbox((m: HuntInbox) => {
     if (m.kind === "link") {
-      if (!apply(m.text)) setPasteMsg("Clipboard nggak berisi link. Copy link post/profil dulu.");
+      if (!apply(m.text)) setPasteMsg("Clipboard ga berisi link. Copy link post/profil dulu.");
       targetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     } else {
       setProspectFilter("Antrian");
@@ -170,7 +170,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       const text = await navigator.clipboard.readText();
       if (!apply(text)) setPasteMsg("Clipboard kosong. Copy link profil dulu di Threads/IG.");
     } catch {
-      setPasteMsg("Browser nggak izinkan baca clipboard. Tahan kolom Target lalu Tempel.");
+      setPasteMsg("Browser ga izinkan baca clipboard. Tahan kolom Target lalu Tempel.");
       targetRef.current?.focus();
     }
   }
@@ -198,7 +198,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     );
   }
 
-  // Copy or Kirim WA is the send (PRD-008 D1): it goes in the log and the
+  // Copy or Kirim WA is the send (PRD-009 D1): it goes in the log and the
   // person's journey at once, with five seconds to take it back.
   function pick(t: PitchTemplate, how: "copy" | "wa") {
     if (isBlocked) return;
@@ -276,6 +276,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     await setDoc(spaceDoc(space, "leads", leadId), stamp(space, {
       name: h.target || "Tanpa nama", contact: "", source: platformSource[h.platform], status: "Warm", score: 70,
       email: "", phone: "", category: "F&B", notes: note, lastContact: now, value: 0,
+      ...(responded(h) ? { lastReplyAt: now } : {}),
     }, h as { ownerUid?: string; ownerName?: string }));
     await updateDoc(spaceDoc(space, "hunts", h.id), { leadId });
     const p = h.prospectId ? prospects.find(x => x.id === h.prospectId) : undefined;
@@ -330,7 +331,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
           <div style={heading}>Hunting Mode</div>
           <div style={subheading}>Kirim DM, catat hasilnya sekali tap, dan lihat pesan mana yang beneran dibales.</div>
           {!live && lastSession && (
-            <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 6 }}>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>
               Sesi terakhir: {Math.round(sessionMinutes(lastSession, Date.now()))} menit · {lastSession.counts?.intros || 0} intro · {lastSession.counts?.replies || 0} dibales · {lastSession.counts?.converted || 0} data
               {sessionMinutes(lastSession, Date.now()) >= 10 ? ` · ${((lastSession.counts?.intros || 0) / (sessionMinutes(lastSession, Date.now()) / 60)).toFixed(1)} intro/jam` : ""}
             </div>
@@ -349,17 +350,17 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
           <div style={{ height: 4, background: "var(--app-inner)", borderRadius: 2, marginTop: 10, overflow: "hidden" }}>
             <div style={{ width: `${progress * 100}%`, height: "100%", background: progress >= 1 ? "var(--ok)" : "#005eb0" }} />
           </div>
-          <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 6 }}>{progress >= 1 ? "Tercapai 🎯" : "Ubah target"}</div>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>{progress >= 1 ? "Tercapai 🎯" : "Ubah target"}</div>
         </button>
         <div style={{ ...card, padding: 12 }}>
           <div style={{ fontSize: 22, fontWeight: 700, color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))" }}>{week.length ? pct(weekReplied / week.length) : "—"}</div>
           <div style={{ fontSize: 12, fontWeight: 700, marginTop: 2 }}>Dibales 7 hari</div>
-          <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>{weekReplied} dari {week.length} DM</div>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>{weekReplied} dari {week.length} DM</div>
         </div>
         <div style={{ ...card, padding: 12 }}>
           <div style={{ fontSize: 22, fontWeight: 700, color: "var(--ok)" }}>{weekInterested}</div>
           <div style={{ fontSize: 12, fontWeight: 700, marginTop: 2 }}>Tertarik 7 hari</div>
-          <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>{interested.filter(h => !h.leadId).length} belum jadi lead</div>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>{interested.filter(h => !h.leadId).length} belum jadi lead</div>
         </div>
       </div>
 
@@ -374,8 +375,8 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
             placeholder="@akun, atau tempel link profil" autoComplete="off" style={{ ...inputStyle, fontSize: 16 }} />
           <button onClick={pasteLink} aria-label="Tempel link profil dari clipboard" style={{ ...chip, flexShrink: 0, minHeight: 44, padding: "0 12px", fontSize: 12, fontWeight: 700, color: "var(--app-text)" }}>📋 Tempel link</button>
         </div>
-        {url && <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>🔗 {url}</div>}
-        {pasteMsg && <div role="status" style={{ fontSize: 11, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginBottom: 12 }}>{pasteMsg}</div>}
+        {url && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>🔗 {url}</div>}
+        <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginBottom: pasteMsg ? 12 : 0 }}>{pasteMsg}</div>
         <div role="radiogroup" aria-label="Platform" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
           {PLATFORMS.map(p => (
             <button key={p} role="radio" aria-checked={platform === p} onClick={() => setPlatform(p)}
@@ -397,21 +398,21 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700 }}>{cur.name ? `${cur.name} (${cur.handle})` : cur.handle}</div>
-                  <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>
                     {cur.segment} · {v.status === "intro" || v.status === "belum" ? `percobaan ${cur.attempts}/${strategy.maxAttempts}` : `masuk ${longDate(cur.firstSeenAt)}`}
                   </div>
                 </div>
                 <span style={badge(statusColor(cur, v))}>{statusLabel(cur, v)}</span>
               </div>
               {curPost?.text && <div style={{ fontSize: 12, color: "var(--app-sub)", lineHeight: 1.5, marginTop: 8, whiteSpace: "pre-wrap" }}>“{curPost.text}”</div>}
-              {curPost?.url && <a href={curPost.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", fontSize: 11, color: "var(--brand-text)", marginTop: 6 }}>Buka post ↗</a>}
-              {v.status === "tidak" && <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 6 }}>Udah {strategy.maxAttempts}× tanpa jawaban, diparkir sampai {longDate(v.parkedUntil || now)}. Kirim lagi tetap bisa.</div>}
+              {curPost?.url && <a href={curPost.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", fontSize: 12, color: "var(--brand-text)", marginTop: 6 }}>Buka post ↗</a>}
+              {v.status === "tidak" && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Udah {strategy.maxAttempts}× tanpa jawaban, diparkir sampai {longDate(v.parkedUntil || now)}. Kirim lagi tetap bisa.</div>}
             </div>
           );
         })()}
         {(curPost || source.kind === "post") && !isBlocked && (
           <div role="radiogroup" aria-label="Kirim lewat" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
-            <span style={{ fontSize: 11, color: "var(--app-muted)", marginRight: 2 }}>Kirim lewat</span>
+            <span style={{ fontSize: 12, color: "var(--app-muted)", marginRight: 2 }}>Kirim lewat</span>
             {([["post", "Balas di post"], ["dm", "DM"]] as [Channel, string][]).map(([k, l]) => (
               <button key={k} role="radio" aria-checked={channel === k} onClick={() => setChannel(k)}
                 style={{ ...chip, minHeight: 36, padding: "8px 14px", fontSize: 12, fontWeight: 700, ...(channel === k ? { background: "#005eb0", color: "#fff", border: "1px solid #005eb0" } : {}) }}>{l}</button>
@@ -433,7 +434,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
                   <div style={{ fontSize: 13, fontWeight: 700 }}>{t.title}</div>
                   {canEdit && <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} style={{ ...chip, padding: "2px 8px" }}>✎</button>}
                 </div>
-                {s && <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 6 }}>{s.sent} terkirim · dibales {pct(s.responseRate)} · tertarik {pct(s.winRate)}</div>}
+                {s && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>{s.sent} terkirim · dibales {pct(s.responseRate)} · tertarik {pct(s.winRate)}</div>}
                 <div style={{ fontSize: 12, color: "var(--app-sub)", lineHeight: 1.6, whiteSpace: "pre-wrap", marginBottom: 12, flex: 1 }}>{fill(t.body, target)}</div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => pick(t, "copy")} disabled={isBlocked} style={{ ...chip, flex: 1, minHeight: 40, fontSize: 12, fontWeight: 700, color: copiedId === t.id ? "var(--ok)" : "var(--app-text)", border: `1px solid ${copiedId === t.id ? "var(--ok)" : "var(--app-border)"}` }}>
@@ -441,18 +442,21 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
                   </button>
                   <button onClick={() => pick(t, "wa")} disabled={isBlocked} style={{ ...btnWA, flex: 1, minHeight: 40, padding: "8px", fontSize: 12 }}>Kirim WA</button>
                 </div>
-                {copyFail === t.id && <div role="status" style={{ fontSize: 11, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 8 }}>Gagal menyalin. Pilih teks di atas, lalu salin manual.</div>}
+                {copyFail === t.id && <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 8 }}>Gagal menyalin. Pilih teks di atas, lalu salin manual.</div>}
               </div>
             );
           })}
         </div>
 
-        {undo && (
-          <div role="status" style={{ marginTop: 14, padding: "10px 14px", borderRadius: 12, background: "#005eb014", border: "1px solid #005eb050", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <div style={{ fontSize: 12, minWidth: 0 }}>{undo.label}</div>
-            <button onClick={takeBack} aria-label="Batal catat" style={{ ...btnMuted, minHeight: 40, padding: "8px 14px", flexShrink: 0 }}>Batal</button>
-          </div>
-        )}
+        {/* Mounted before its text, so screen readers announce "Tercatat". */}
+        <div role="status">
+          {undo && (
+            <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 12, background: "#005eb014", border: "1px solid #005eb050", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <div style={{ fontSize: 12, minWidth: 0 }}>{undo.label}</div>
+              <button onClick={takeBack} aria-label="Batal catat" style={{ ...btnMuted, minHeight: 40, padding: "8px 14px", flexShrink: 0 }}>Batal</button>
+            </div>
+          )}
+        </div>
       </div>
 
       <ProspectList prospects={prospects} ready={journey.ready} hunts={hunts} strategy={strategy} sessionId={live?.id}
@@ -471,10 +475,10 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
             ))}
           </div>
         </div>
-        {filter === "Follow-up" && stale.length > 0 && <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 8 }}>Terkirim {STALE_DAYS}+ hari tanpa balasan. Follow-up sekali, kalau tetap diam tandai 👻.</div>}
+        {filter === "Follow-up" && stale.length > 0 && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>Terkirim {STALE_DAYS}+ hari tanpa balasan. Follow-up sekali, kalau tetap diam tandai 👻.</div>}
         {shown.length === 0 && (
           <div style={{ fontSize: 12, color: "var(--app-muted)", padding: "16px 0" }}>
-            {filter === "Semua" ? "Belum ada DM. Isi target, pilih pesan, lalu Copy — langsung kecatat." : filter === "Follow-up" ? "Nggak ada yang nunggu follow-up." : "Belum ada yang tertarik. Terus kirim 💪"}
+            {filter === "Semua" ? "Belum ada DM. Isi target, pilih pesan, lalu Copy — langsung kecatat." : filter === "Follow-up" ? "Ga ada yang nunggu follow-up." : "Belum ada yang tertarik. Terus kirim 💪"}
           </div>
         )}
         {shown.slice(0, limit).map(h => {
@@ -484,10 +488,10 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.target || "Tanpa nama"}</div>
-                  <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>
                     {h.platform} · {h.templateTitle} · {age === 0 ? "hari ini" : age === 1 ? "kemarin" : longDate(h.date)}
                   </div>
-                  {h.note && <div style={{ fontSize: 11, color: "var(--app-sub)", marginTop: 4 }}>“{h.note}”</div>}
+                  {h.note && <div style={{ fontSize: 12, color: "var(--app-sub)", marginTop: 4 }}>“{h.note}”</div>}
                 </div>
                 <span style={badge(huntColor[h.status])}>{huntIcon[h.status]} {h.status}</span>
               </div>
@@ -498,7 +502,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
                 ))}
                 {isStale(h, now) && <button onClick={() => followUp(h)} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", border: "1px solid #ff990060" }}>↻ Follow-up</button>}
                 {h.status === "Tertarik" && !h.leadId && <button onClick={() => makeLead(h)} style={{ ...chip, minHeight: 36, background: "#00a862", color: "#1c2128", border: "none", fontWeight: 700 }}>Jadiin Lead →</button>}
-                {h.leadId && <span style={{ fontSize: 11, color: "var(--ok)", fontWeight: 700 }}>✓ Sudah jadi lead</span>}
+                {h.leadId && <span style={{ fontSize: 12, color: "var(--ok)", fontWeight: 700 }}>✓ Sudah jadi lead</span>}
                 {h.url && <a href={h.url} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Profil ↗</a>}
                 {h.status !== "Terkirim" && (
                   <button onClick={() => setReplyFor(replyFor?.id === h.id ? null : { id: h.id, topic: defaultTopic(h.status, h.note), tone: "santai" })}
@@ -510,7 +514,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
               </div>
               {replyFor?.id === h.id && h.status !== "Terkirim" && (
                 <div role="region" aria-label={`Saran balasan untuk ${h.target || "target"}`} style={{ marginTop: 10, padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)" }}>
-                  <div ref={topicsRef} role="group" aria-label="Jenis balasan" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8 }}>
+                  <div ref={topicsRef} role="group" aria-label="Jenis balasan" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, scrollbarWidth: "none" }}>
                     {TOPICS.map(tp => (
                       <button key={tp.id} onClick={() => setReplyFor({ ...replyFor, topic: tp.id })} aria-pressed={replyFor.topic === tp.id}
                         style={{ ...chip, flexShrink: 0, minHeight: 34, fontWeight: 600, ...(replyFor.topic === tp.id ? { background: "#005eb0", color: "#fff", border: "1px solid #005eb0" } : {}) }}>{tp.label}</button>
@@ -528,7 +532,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
                     return (
                       <div key={r.key} style={{ padding: "10px 0", borderTop: "1px solid var(--app-border)" }}>
                         <div style={{ fontSize: 13, lineHeight: 1.55, color: "var(--app-text)" }}>{text}</div>
-                        <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>{r.hint}</div>
+                        <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>{r.hint}</div>
                         <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
                           <button onClick={() => copy(text, key, setCopiedReply)}
                             style={{ ...chip, minHeight: 36, minWidth: 80, fontWeight: 700, color: copiedReply === key ? "var(--ok)" : "var(--app-text)", border: `1px solid ${copiedReply === key ? "var(--ok)" : "var(--app-border)"}` }}>
@@ -538,13 +542,13 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
                             ? <a href={waLinkFor(h.target, text)} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", fontWeight: 700, background: btnWA.background, color: btnWA.color, border: "none" }}>Kirim WA</a>
                             : h.url && <a href={h.url} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Buka profil ↗</a>}
                         </div>
-                        {copyFail === key && <div role="status" style={{ fontSize: 11, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 6 }}>Gagal menyalin. Pilih teks di atas, lalu salin manual.</div>}
+                        {copyFail === key && <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 6 }}>Gagal menyalin. Pilih teks di atas, lalu salin manual.</div>}
                       </div>
                     );
                   })}
                   {fromLibrary(replyFor.topic) && (
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
-                      <div style={{ fontSize: 11, color: "var(--app-muted)" }}>Pilih yang paling mirip gaya orangnya.</div>
+                      <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Pilih yang paling mirip gaya orangnya.</div>
                       {onOpenScripts && <button onClick={onOpenScripts} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)" }}>Buka Script Library →</button>}
                     </div>
                   )}
@@ -568,22 +572,22 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       {/* Which message works */}
       <div style={{ ...card, padding: 20, marginBottom: 20 }}>
         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font, marginBottom: 4 }}>Pesan mana yang works?</div>
-        <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 14 }}>Dibales = dijawab apa pun, termasuk ditolak. Tertarik = mau lanjut. Angka mulai bisa dipercaya setelah {MIN_SAMPLE} DM per template.</div>
+        <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 14 }}>Dibales = dijawab apa pun, termasuk ditolak. Tertarik = mau lanjut. Angka mulai bisa dipercaya setelah {MIN_SAMPLE} DM per template.</div>
         {advice && <div style={{ fontSize: 12, padding: 12, borderRadius: 10, background: "#f59e0b14", border: "1px solid #f59e0b50", marginBottom: 14 }}>💡 {advice}</div>}
         {scores.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Belum ada data. Catat beberapa DM dulu.</div>}
         {scores.map(s => (
           <div key={s.templateId} style={{ padding: "10px 0", borderTop: "1px solid var(--app-inner)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
               <div style={{ fontSize: 13, fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</div>
-              <div style={{ fontSize: 11, color: "var(--app-muted)", flexShrink: 0 }}>{s.sent} DM{s.sent < MIN_SAMPLE ? " · sampel kecil" : ""}</div>
+              <div style={{ fontSize: 12, color: "var(--app-muted)", flexShrink: 0 }}>{s.sent} DM{s.sent < MIN_SAMPLE ? " · sampel kecil" : ""}</div>
             </div>
             {([["Dibales", s.responseRate, "#f59e0b"], ["Tertarik", s.winRate, "#00a862"]] as [string, number, string][]).map(([k, r, c]) => (
               <div key={k} style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
-                <div style={{ fontSize: 11, color: "var(--app-muted)", width: 56 }}>{k}</div>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", width: 56 }}>{k}</div>
                 <div style={{ flex: 1, height: 6, background: "var(--app-inner)", borderRadius: 3, overflow: "hidden" }}>
                   <div style={{ width: `${r * 100}%`, height: "100%", background: c }} />
                 </div>
-                <div style={{ fontSize: 11, fontWeight: 700, width: 36, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{pct(r)}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, width: 36, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{pct(r)}</div>
               </div>
             ))}
           </div>
@@ -607,7 +611,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
             <input id="tpl-title" value={editing.title} onChange={e => setEditing({ ...editing, title: e.target.value })} placeholder="mis. Cold DM Cafe" style={{ ...inputStyle, fontSize: 16, marginBottom: 12 }} />
             <label htmlFor="tpl-body" style={label}>Isi pesan · <code>{"{nama}"}</code> diganti nama target</label>
             <textarea id="tpl-body" value={editing.body} onChange={e => setEditing({ ...editing, body: e.target.value })} placeholder="Halo {nama}! ..." style={{ ...inputStyle, fontSize: 16, height: 140, resize: "vertical", marginBottom: 16 }} />
-            {editing.id && <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 12 }}>Kalau isinya berubah banyak, mending bikin template baru supaya angka evaluasinya nggak kecampur.</div>}
+            {editing.id && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>Kalau isinya berubah banyak, mending bikin template baru supaya angka evaluasinya ga kecampur.</div>}
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={saveTemplate} disabled={!editing.title.trim() || !editing.body.trim()} style={{ ...btnPrimary, opacity: editing.title.trim() && editing.body.trim() ? 1 : 0.5 }}>Simpan</button>
               <button onClick={() => setEditing(null)} style={btnMuted}>Batal</button>

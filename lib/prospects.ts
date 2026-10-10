@@ -1,4 +1,4 @@
-// Prospect journeys (docs/prd/PRD-008): one person per document, from the post
+// Prospect journeys (docs/prd/PRD-009): one person per document, from the post
 // they wrote to the day they hand over their details. Pure functions only —
 // Firestore lives in lib/prospectStore.ts — so Hunting, the dashboard and the
 // morning push read a prospect the same way.
@@ -64,7 +64,7 @@ export interface Prospect {
   ownerName?: string;
 }
 
-// The contact strategy (settings/hunting, PRD-008 §6.3). gaps[i] = days after
+// The contact strategy (settings/hunting, PRD-009 §6.3). gaps[i] = days after
 // send i+1 before the next follow-up; gaps[0] is also when "Belum respon" starts.
 export interface Strategy {
   maxAttempts: number;
@@ -325,7 +325,7 @@ interface HuntLike {
 
 const RESPONDED: HuntStatus[] = ["Dibales", "Tertarik", "Ditolak"];
 
-// The DMs logged before journeys existed, one prospect per person (PRD-008 §9).
+// The DMs logged before journeys existed, one prospect per person (PRD-009 §9).
 export function fromHunts(hunts: HuntLike[], ctx: Ctx): { id: string; data: Omit<Prospect, "id">; huntIds: string[] }[] {
   const groups = new Map<string, HuntLike[]>();
   for (const h of hunts) {
@@ -367,7 +367,7 @@ export function fromHunts(hunts: HuntLike[], ctx: Ctx): { id: string; data: Omit
   });
 }
 
-// ---- campaigns (PRD-008 §7) ----------------------------------------------
+// ---- campaigns (PRD-009 §7) ----------------------------------------------
 
 export const GROUPS = ["baru", "nunggu", "terhubung", "tolak", "etb"] as const;
 export type Group = (typeof GROUPS)[number];
@@ -407,7 +407,7 @@ export function audience(ps: Prospect[], c: Campaign, on: string, s: Strategy = 
     .sort((a, b) => a.createdAt - b.createdAt);
 }
 
-// ---- sessions (PRD-008 §4) -----------------------------------------------
+// ---- sessions (PRD-009 §4) -----------------------------------------------
 
 export interface HuntSession {
   id: string;
@@ -433,7 +433,7 @@ export function sessionMinutes(s: HuntSession, now: number): number {
   return Math.max(0, (sessionEnd(s, now) - s.startedAt) / 60000);
 }
 
-// ---- metrics (PRD-008 §8) ------------------------------------------------
+// ---- metrics (PRD-009 §8) ------------------------------------------------
 
 // Under this many, a rate says more about luck than about the hunter (PRD-005 §7).
 export const SMALL = 10;

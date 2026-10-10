@@ -1,9 +1,9 @@
-# PRD-008 — Sesi Hunting & Journey Prospek (NTB → ETB)
+# PRD-009 — Sesi Hunting & Journey Prospek (NTB → ETB)
 
 - **Status:** Dibangun 2026-10-10 — Fase 0–2 penuh + metrik & biaya Fase 3 (`lib/prospects.ts`, `lib/prospectStore.ts`, `components/{HuntBar,ProspectList,Campaigns,HunterStats}.tsx`, `app/api/hunt/unfurl`, `app/share`). Belum: Document Picture-in-Picture desktop. Live butuh deploy `firestore.rules` (4 koleksi baru).
 - **Tanggal:** 2026-10-10
 - **Konteks:** Pas hunting, owner share post Threads orang yang lagi nyari jasa (contoh: *"ada yang open jasa foto katalog F&B buat UMKM?"*) → orang itu harus langsung masuk basis lead, CTA/intro siap di-copy, dan semua yang terjadi sesudahnya (intro, follow-up, kampanye, balasan, remarks) kecatat sebagai satu riwayat. Polanya dipinjam dari sales/telemarketing perbankan: tiap nasabah punya **disposisi** (terhubung atau belum → hasil → remarks), ada **contact strategy**, dan dari situ keluar metrik performa hunter-nya.
-- **Terkait:** PRD-002 (Hunting), PRD-003 (Radar Threads), PRD-005 §7 (aturan tampilan angka), PRD-007 §2.5–2.6 (ruang kerja, Perlu Ditindak, push), `lib/hunting.ts`, `lib/replies.ts`, `lib/space.ts`.
+- **Terkait:** PRD-002 (Hunting), PRD-003 (Radar Threads), PRD-008 (desain baru, profil customer, skor potensi), PRD-005 §7 (aturan tampilan angka), PRD-007 §2.5–2.6 (ruang kerja, Perlu Ditindak, push), `lib/hunting.ts`, `lib/replies.ts`, `lib/space.ts`.
 - **Diagram & diskusi:** [Master Flow Hunting & Journey Prospek](https://claude.ai/code/artifact/67dd1690-74ec-4686-8179-7b2cf80fe9f5) (artifact private, buat diskusi). Kalau beda, **dokumen ini yang berlaku**.
 
 ---
@@ -123,7 +123,7 @@ flowchart TD
 | Desktop Chrome / Edge | bar; **Document Picture-in-Picture**: mini panel ngambang di atas tab Threads web (fase 3) | — |
 
 ### 4.4 Share masuk
-- `public/manifest.json` → `share_target` `{ action: "/share", method: "GET", params: { title, text, url } }`. Threads ngirim link di `text`; `app/share` ambil URL pertama dari `url`, `text` atau `title`, lalu lanjut ke `/dashboard?hunt&url=…`.
+- Satu manifest cuma boleh satu `share_target`. Yang dipakai punya PRD-008: `POST /share-target` (multipart), ditangkep `public/sw.js`. Ada file (export WhatsApp) → import WA; ga ada file tapi ada link di `url`/`text`/`title` → `/dashboard?hunt&url=…`. `app/share` tetap ada sebagai pintu GET (bookmarklet, flow test).
 - `Hunting.tsx` buka link itu: post Threads → `/api/hunt/unfurl` → prospek. Prospek tetap disimpan walau sesi belum ON.
 
 ---

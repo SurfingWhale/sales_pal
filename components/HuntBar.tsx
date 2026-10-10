@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { HuntSession, isLive } from "@/lib/prospects";
 import { sendToHunting, sessionNotice } from "@/lib/prospectStore";
 
-// The bar over every tab while a hunting session runs (docs/prd/PRD-008 §4):
+// The bar over every tab while a hunting session runs (docs/prd/PRD-009 §4):
 // how long, how much, paste the next post, the follow-ups waiting, stop.
 export const HUNT_COLOR = "#b93a06";
 export const BAR_HEIGHT = 48;
@@ -54,13 +54,13 @@ export default function HuntBar({ session, queued, sentToday, goal, onOpen, onEn
   const progress = Math.min(1, goal ? sentToday / goal : 0);
   const btn = { minHeight: 36, padding: "0 10px", borderRadius: 8, border: "1px solid #ffffff60", background: "#ffffff1f", color: "#fff", font: "700 12px 'Plus Jakarta Sans', sans-serif", cursor: "pointer", whiteSpace: "nowrap" as const, flexShrink: 0 };
   return (
-    <div role="region" aria-label="Sesi hunting" style={{ position: "relative", height: BAR_HEIGHT, background: HUNT_COLOR, color: "#fff", display: "flex", alignItems: "center", gap: 8, padding: "0 12px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+    <div role="region" aria-label="Sesi hunting" style={{ position: "relative", zIndex: 2, height: BAR_HEIGHT, background: HUNT_COLOR, color: "#fff", display: "flex", alignItems: "center", gap: 8, padding: "0 12px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       <style>{`@keyframes sp-hunt-pulse{0%,100%{opacity:1}50%{opacity:.35}} .sp-hunt-dot{animation:sp-hunt-pulse 1.6s ease-in-out infinite} @media (prefers-reduced-motion: reduce){.sp-hunt-dot{animation:none}} @media (max-width:520px){.sp-hunt-wide{display:none}}`}</style>
       <button onClick={onOpen} aria-label={`Buka Hunting. Sesi ${clock(now - session.startedAt)}, ${summary}`} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1, background: "none", border: "none", color: "#fff", padding: 0, cursor: "pointer", textAlign: "left", font: "inherit" }}>
         <span className="sp-hunt-dot" aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 4, background: "#fff", flexShrink: 0 }} />
         <span style={{ display: "flex", flexDirection: "column", minWidth: 0, lineHeight: 1.2 }}>
           <span style={{ fontSize: 13, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>Hunting {clock(now - session.startedAt)}</span>
-          <span style={{ fontSize: 11.5, opacity: 0.92, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg || summary}</span>
+          <span style={{ fontSize: 12, opacity: 0.92, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg || summary}</span>
         </span>
       </button>
       <button onClick={paste} aria-label="Tempel link dari clipboard" style={btn}>📋<span className="sp-hunt-wide"> Tempel</span></button>

@@ -19,7 +19,7 @@ async function signup(t) {
   await page.locator('input[type="password"]').fill("rahasia123");
   await page.locator('form button[type="submit"]').click();
   await page.waitForURL("**/dashboard", { timeout: 20000 });
-  await page.getByText("Sales Command Center").waitFor();
+  await page.getByRole("heading", { name: /^Perlu ditindak/ }).waitFor();
 }
 
 async function go(page, place, tab) {
@@ -54,6 +54,32 @@ async function addLead(page, name) {
   // The dialog closes once the write is confirmed; the row can show up before that.
   await page.locator(".modal-overlay").waitFor({ state: "detached", timeout: 10000 });
   await expectText(page, name);
+}
+
+// Leads (PRD-008): on a wide screen a lead opens in the panel beside the
+// list; on a phone it opens as a full-screen profile.
+const isWide = (page) => (page.viewportSize()?.width || 0) >= 1024;
+async function openLeadRow(page, name) {
+  await closeAll(page);
+  await go(page, "Leads");
+  await page.locator(".lead-row", { hasText: name }).first().click();
+  if (!isWide(page)) await page.getByRole("dialog", { name: new RegExp(`^Profil ${name}`) }).waitFor();
+}
+// The full profile: already open on a phone, behind "Profil lengkap" on desktop.
+async function fullProfile(page) {
+  if (isWide(page)) await page.getByRole("button", { name: "Profil lengkap" }).click();
+  await page.getByRole("dialog", { name: /^Profil / }).waitFor();
+}
+// The "Kenapa" list: always shown in the panel, folded on the phone profile.
+async function showWhy(page) {
+  const fold = page.getByRole("button", { name: /^\d+ Potensi .* Kenapa \d+/ });
+  if (await fold.count()) await fold.first().click();
+}
+async function closeAll(page) {
+  for (let i = 0; i < 4 && await page.locator(".modal-overlay").count(); i++) {
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+  }
 }
 
 // Firestore REST against the emulator, as the websites write: public, server time.
@@ -91,9 +117,11 @@ export const flows = [
         await t.page.getByRole("button", { name: "Lanjutkan dengan Google" }).waitFor();
       });
       await t.step("create an account with email", () => signup(t));
-      await t.step("Perlu Ditindak is the first card", async () => {
-        const first = await t.page.evaluate(() => [...document.querySelectorAll(".sp-main *")].find(e => /Perlu Ditindak|Total Leads/.test(e.textContent || "") && e.children.length === 0)?.textContent);
-        if (!/Perlu Ditindak/.test(first || "")) throw new Error(`first card is "${first}"`);
+      await t.step("Beranda says what to do before the lead map", async () => {
+        await t.page.getByRole("heading", { level: 1, name: /perlu ditindak hari ini|mendesak hari ini/ }).waitFor();
+        const order = await t.page.evaluate(() => [...document.querySelectorAll(".sp-main h2")].map(h => (h.textContent || "").trim()));
+        const todo = order.findIndex(x => /^Perlu ditindak/.test(x)), map = order.findIndex(x => /^Peta lead/.test(x));
+        if (todo < 0 || map < 0 || todo > map) throw new Error(`headings: ${order.join(" | ")}`);
       });
     },
   },
@@ -101,20 +129,36 @@ export const flows = [
     name: "navigation reaches every place and tab",
     async run(t) {
       await t.step("sign up", () => signup(t));
-      const places = [["Beranda", null, "Sales Command Center"], ["Hunting", null, "Hunting Mode"], ["Leads", null, "Lead Database"],
+      const places = [["Beranda", null, "Perlu ditindak"], ["Hunting", null, "Hunting Mode"], ["Leads", null, "Belum ada lead"],
         ["Jualan", "Penawaran", "Susun dari paket"], ["Jualan", "Invoice", "Invoice & Pembayaran"], ["Jualan", "Paket", "Paket & Harga"],
         ["Lainnya", "Outreach", "Outreach Tracker"], ["Lainnya", "Rejection Log", "Rejection"], ["Lainnya", "Simulator", "Simulator"],
         ["Lainnya", "Script Library", "Script Library"], ["Lainnya", "AI Playbook", "Playbook"]];
       for (const [place, tab, heading] of places) {
         await t.step(`${place}${tab ? ` → ${tab}` : ""} shows "${heading}"`, async () => { await go(t.page, place, tab); await expectText(t.page, heading); });
       }
-      await t.step("no sideways scroll on any of them", async () => {
-        const over = await t.page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-        if (over > 0) throw new Error(`page is ${over}px wider than the screen`);
+      // WCAG 1.4.10: every place reflows at 320px (= 200% zoom) without sideways scroll.
+      await t.step("no sideways scroll on any of them, also at 320px", async () => {
+        const size = t.page.viewportSize();
+        const wide = [];
+        for (const width of [size.width, 320]) {
+          await t.page.setViewportSize({ width, height: size.height });
+          for (const [place, tab] of places) {
+            await go(t.page, place, tab);
+            const over = await t.page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+            if (over > 0) wide.push(`${place}${tab ? `/${tab}` : ""} @${width}px +${over}px`);
+          }
+        }
+        await t.page.setViewportSize(size);
+        if (wide.length) throw new Error(`wider than the screen: ${wide.join(", ")}`);
       });
       await t.step("dark mode toggles", async () => {
-        await t.page.locator("button").filter({ hasText: /🌙|☀️/ }).first().click();
-        await t.page.waitForTimeout(300);
+        await t.page.getByRole("button", { name: "Profil dan pengaturan" }).click();
+        await t.page.getByRole("button", { name: /Tampilan/ }).click();
+        const theme = await t.page.evaluate(() => document.documentElement.getAttribute("data-theme"));
+        if (theme !== "dark") throw new Error(`theme is ${theme}`);
+        await t.page.getByRole("button", { name: /Tampilan/ }).click();
+        await t.page.keyboard.press("Escape");
+        await modal(t.page).click({ position: { x: 5, y: 5 } }).catch(() => {});
       });
     },
   },
@@ -123,22 +167,108 @@ export const flows = [
     async run(t) {
       await t.step("sign up", () => signup(t));
       await t.step("add a lead", () => addLead(t.page, "Kopi Flow"));
-      await t.step("filter Cold shows it", async () => { await t.page.getByRole("button", { name: "Cold", exact: true }).click(); await expectText(t.page, "Kopi Flow"); });
+      await t.step("filter Cold shows it", async () => { await t.page.locator("#status-filter").selectOption("Cold"); await expectText(t.page, "Kopi Flow"); });
       await t.step("open it and schedule a follow-up tomorrow", async () => {
-        await t.page.getByRole("button", { name: "All", exact: true }).click();
-        await t.page.locator(".lead-row", { hasText: "Kopi Flow" }).first().click();
+        await t.page.locator("#status-filter").selectOption("All");
+        await openLeadRow(t.page, "Kopi Flow");
+        // Skor potensi (PRD-008 §2): contacted today + Rp 5 jt = 25, sangat rendah.
+        await showWhy(t.page);
+        await expectText(t.page, "Kenapa 25");
+        await t.page.getByRole("button", { name: "Mereka bales hari ini" }).click();
+        await expectText(t.page, "Kenapa 55");
+        await t.page.getByRole("button", { name: /^Jadwal/ }).first().click();
         await t.page.getByPlaceholder(/Kirim portfolio/).fill("Kirim portfolio");
         await t.page.getByRole("button", { name: "Besok" }).click();
         await t.page.getByRole("button", { name: "Simpan jadwal" }).click();
         await t.page.getByRole("button", { name: "✓ Selesai" }).waitFor();
-        await t.page.keyboard.press("Escape");
-        await modal(t.page).click({ position: { x: 5, y: 5 } }).catch(() => {});
+        await expectText(t.page, "Kenapa 75");
+        await expectText(t.page, "Potensi tinggi");
+        await closeAll(t.page);
+      });
+      await t.step("the Tinggi filter finds it", async () => {
+        await go(t.page, "Leads");
+        await t.page.getByRole("button", { name: /^Tinggi/ }).click();
+        await expectText(t.page, "Kopi Flow");
+        await t.page.getByRole("button", { name: /^Semua/ }).click();
+      });
+      await t.step("it sits on the lead map as Cepat closing, and opens from there", async () => {
+        await go(t.page, "Beranda");
+        await t.page.getByRole("heading", { name: "Peta lead" }).first().waitFor();
+        if (!isWide(t.page)) return; // the phone map is a picture; the list below it opens leads
+        await t.page.getByRole("button", { name: "Kopi Flow, skor 75, Rp 5 jt, Cepat closing" }).click();
+        await t.page.getByRole("region", { name: "Lead terpilih" }).getByRole("button", { name: "Buka lead" }).click();
+        await expectText(t.page, "Kenapa 75");
+        await closeAll(t.page);
+      });
+      await t.step("fill the profile by hand and get the script for that customer", async () => {
+        await openLeadRow(t.page, "Kopi Flow");
+        await t.page.getByRole("button", { name: "Isi manual" }).first().click();
+        await t.page.locator("#pf-need").fill("Foto menu baru buat 2 cabang");
+        await t.page.locator("#pf-obj").fill("Harganya kemahalan");
+        await t.page.getByRole("button", { name: "🦁 Singa" }).click();
+        await t.page.getByRole("button", { name: "Simpan profil" }).click();
+        await expectText(t.page, "Foto menu baru buat 2 cabang");
+        await fullProfile(t.page);
+        await t.page.getByRole("button", { name: "Buka script Singa" }).click();
+        await expectText(t.page, "Script: 💸 Harga Mahal");
+        await closeAll(t.page);
+      });
+      await t.step("pull a WhatsApp chat export into the profile, keep only the summary", async () => {
+        const d = (n) => { const x = new Date(Date.now() - n * 86400000); return `${String(x.getDate()).padStart(2, "0")}/${String(x.getMonth() + 1).padStart(2, "0")}/${String(x.getFullYear()).slice(2)}`; };
+        const chat = [
+          `${d(12)} 10.01 - Aku: Halo kak, aku fotografer makanan. Boleh kirim portfolio?`,
+          `${d(12)} 10.15 - Kopi Flow: Boleh. Berapa harganya? langsung aja`,
+          `${d(12)} 10.20 - Aku: Paket mulai 1,5 jt kak`,
+          `${d(2)} 11.40 - Kopi Flow: Bisa sekalian foto 2 cabang?`,
+          `${d(1)} 09.00 - Kopi Flow: Boleh kirim pricelist-nya, Kak?`,
+        ].join("\n");
+        await openLeadRow(t.page, "Kopi Flow");
+        await fullProfile(t.page);
+        await t.page.getByRole("button", { name: "Tarik ulang dari WhatsApp" }).click();
+        await t.page.getByLabel("File ekspor chat").setInputFiles({ name: "Chat WhatsApp dengan Kopi Flow.txt", mimeType: "text/plain", buffer: Buffer.from(chat) });
+        await expectText(t.page, "Ketemu dari 5 pesan");
+        await t.page.getByRole("switch", { name: /^Terakhir bales/ }).click();
+        await t.page.getByRole("button", { name: /^Simpan \d bagian ke Kopi Flow$/ }).click();
+        await expectText(t.page, "Pola chat");
+        await expectText(t.page, "“Boleh kirim pricelist-nya, Kak?”");
+        await expectText(t.page, "belum dijawab");
+        await closeAll(t.page);
       });
       await t.step("the follow-up shows in Perlu Ditindak", async () => { await go(t.page, "Beranda"); await expectText(t.page, "Kirim portfolio"); });
       await t.step("delete asks first, then removes it", async () => {
-        await go(t.page, "Leads");
-        await t.page.getByRole("button", { name: "Hapus lead Kopi Flow" }).first().click();
-        await t.page.getByText("Kopi Flow").first().waitFor({ state: "detached", timeout: 8000 });
+        await openLeadRow(t.page, "Kopi Flow");
+        await t.page.getByRole("button", { name: "Menu lead" }).first().click();
+        await t.page.getByRole("menuitem", { name: "Hapus lead Kopi Flow" }).click();
+        await t.page.locator(".lead-row", { hasText: "Kopi Flow" }).first().waitFor({ state: "detached", timeout: 8000 });
+      });
+    },
+  },
+  {
+    name: "whatsapp: a chat shared from Android becomes a new lead's profile",
+    async run(t) {
+      const { page, base } = t;
+      await t.step("sign up", () => signup(t));
+      await t.step("share a chat export the way Android's share sheet does", async () => {
+        await page.evaluate(async () => {
+          await navigator.serviceWorker.ready;
+          for (let i = 0; i < 50 && !navigator.serviceWorker.controller; i++) await new Promise(r => setTimeout(r, 100));
+        });
+        const chat = ["01/10/26 10.01 - Aku: Halo kak, boleh kirim portfolio?", "01/10/26 10.30 - Kopi Share: Boleh, berapa harganya?", "02/10/26 09.00 - Kopi Share: Bisa minggu depan?"].join("\n");
+        await page.evaluate(async (txt) => {
+          const fd = new FormData();
+          fd.append("file", new File([txt], "Chat WhatsApp dengan Kopi Share.txt", { type: "text/plain" }));
+          await fetch("/share-target", { method: "POST", body: fd });
+        }, chat);
+        await page.goto(`${base}/dashboard?share`);
+        await page.getByText("Chat ini buat lead mana?").waitFor({ timeout: 15000 });
+      });
+      await t.step("make it a new lead and keep the summary", async () => {
+        await page.getByRole("button", { name: "+ Lead baru: Kopi Share" }).click();
+        await expectText(page, "Ketemu dari 3 pesan");
+        await page.getByRole("button", { name: /^Simpan \d bagian ke Kopi Share$/ }).click();
+        await fullProfile(page);
+        await expectText(page, "Pola chat");
+        await expectText(page, "“Bisa minggu depan?”");
       });
     },
   },
@@ -369,13 +499,20 @@ export const flows = [
         await addLead(page, "Keyboard Flow");
         await page.locator(".lead-row", { hasText: "Keyboard Flow" }).first().focus();
         await page.keyboard.press("Enter");
+        if (isWide(page)) {
+          // Desktop: Enter shows it in the panel; its full profile is the dialog.
+          await page.getByRole("complementary", { name: "Detail lead" }).waitFor();
+          await page.getByRole("button", { name: "Profil lengkap" }).focus();
+          await page.keyboard.press("Enter");
+        }
         await page.getByRole("dialog").waitFor();
       });
-      await t.step("Escape closes it and focus returns to the row", async () => {
+      await t.step("Escape closes it and focus returns to what opened it", async () => {
         await page.keyboard.press("Escape");
         await page.getByRole("dialog").waitFor({ state: "detached" });
-        const back = await page.evaluate(() => document.activeElement?.getAttribute("aria-label"));
-        if (back !== "Buka lead Keyboard Flow") throw new Error(`focus went to "${back}"`);
+        const back = await page.evaluate(() => document.activeElement?.getAttribute("aria-label") || document.activeElement?.textContent?.trim());
+        const want = isWide(page) ? "Profil lengkap" : "Buka lead Keyboard Flow";
+        if (back !== want) throw new Error(`focus went to "${back}"`);
       });
       await t.step("the add-lead dialog focuses its first field and keeps Tab inside", async () => {
         await page.getByRole("button", { name: /tambah lead/i }).click();
@@ -482,7 +619,7 @@ export const flows = [
       await t.step("the leader prints the team report", async () => {
         await page.getByRole("button", { name: "Cetak / PDF" }).click();
         await expectText(page, "REPORT SALES TIM");
-        await page.getByRole("button", { name: "TUTUP" }).click();
+        await modal(page).getByRole("button", { name: "Tutup", exact: true }).click();
       });
       await t.step("the activity log shows who did what", async () => {
         await page.getByRole("tab", { name: "Aktivitas" }).click();
@@ -637,7 +774,7 @@ export const flows = [
         await page.getByRole("button", { name: "Cetak / PDF" }).click();
         await expectText(page, "LAPORAN BULANAN");
         await expectText(page, "OMZET PER SUMBER");
-        await page.getByRole("button", { name: "TUTUP" }).click();
+        await modal(page).getByRole("button", { name: "Tutup", exact: true }).click();
       });
       await t.step("a chat untouched for 10 days shows up in Perlu Ditindak", async () => {
         await page.getByRole("tab", { name: "Chat & Deal" }).click();

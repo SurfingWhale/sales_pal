@@ -27,32 +27,109 @@ html, body {
   --ok: #0a8052;  /* green as text: 5.0:1 on the card (was #00a862, 3.1:1) */
   --brand-text: #005eb0;
 
-  /* App dashboard theme — light (default) */
-  --app-bg: #f0f2f5;
+  /* App dashboard theme — light (default). Values from the SalesPal
+     Redesign canvas (docs/prd/PRD-008). */
+  --app-bg: #f4f5f7;
   --app-card: #ffffff;
-  --app-inner: #f6f8fa;
-  --app-border: #d0d7de;
-  --app-text: #1c2128;
-  --app-muted: #57606a;
+  --app-inner: #eef0f3;
+  --app-border: #e3e6ea;
+  --app-line-strong: #cdd2d8;
+  --app-text: #15181c;
+  --app-ink-2: #3a414a;
+  --app-muted: #5b636c;
   --app-dim: #6e7681;
-  --app-sub: #57606a;
-  --app-nav: rgba(240,242,245,0.94);
+  --app-sub: #5b636c;
+  --app-nav: rgba(244,245,247,0.94);
+  --brand-tint: rgba(0,94,176,0.06);
+  --hot: #b42d1c; --warm: #8a5300; --cold: #4a5560;
+  --dot-ring: #c3c9d1;
+  --bar-tint: rgba(244,245,247,0.72);
+  --map-bg: #edf1f6; --map-fade: rgba(237,241,246,0.6); --map-line: rgba(21,24,28,0.14);
+  --blob: rgba(0,94,176,0.07); --blob-hot: rgba(0,94,176,0.22); --pin: #6b7480; --ring: #ffffff; --halo: rgba(0,94,176,0.22);
+  --glass-fill: rgba(255,255,255,0.56); --glass-strong: rgba(255,255,255,0.84); --glass-btn: rgba(110,122,138,0.16);
+  --glass-shadow: 0 1px 1px rgba(15,30,60,0.04), 0 10px 30px rgba(15,30,60,0.12), inset 0 1px 0 rgba(255,255,255,0.75);
+  --edge-a: rgba(255,255,255,0.95); --edge-b: rgba(255,255,255,0.18); --edge-c: rgba(255,255,255,0.6);
+  --thumb: #ffffff; --thumb-shadow: 0 1px 2px rgba(15,30,60,0.10), 0 4px 12px rgba(15,30,60,0.10);
+  --tab-on: rgba(255,255,255,0.78);
+  --frost-a: rgba(255,255,255,0.88); --frost-b: rgba(248,249,251,0.82); --frost-ring: rgba(255,255,255,0.72);
+  --frost-drop: rgba(30,40,60,0.12); --frost-float: rgba(15,30,60,0.16); --frost-line: rgba(21,24,28,0.08);
+  --folder: #e2e6ec; --folder-edge: rgba(255,255,255,0.7); --sheet: #ffffff;
+  --folder-shadow: drop-shadow(0 1px 2px rgba(30,40,60,0.06)) drop-shadow(0 7px 14px rgba(30,40,60,0.07)) drop-shadow(0 20px 34px rgba(30,40,60,0.08));
+  --panel-shadow: 0 1px 2px rgba(16,24,40,0.04), 0 12px 32px rgba(16,24,40,0.08);
+  --glow-a: rgba(110,169,228,0.35); --glow-b: rgba(0,94,176,0.22);
+  --scrim: rgba(10,14,20,0.32);
 }
 
 [data-theme="dark"] {
   --ok: #00e07a;
-  --brand-text: #58a6ff;  /* brand blue as text on dark: #005eb0 was 2.9:1 */
+  --brand-text: #7ab5ef;  /* brand blue as text on dark */
 
-  --app-bg: #010409;
-  --app-card: #0d1117;
-  --app-inner: #161b22;
-  --app-border: #21262d;
-  --app-text: #e6edf3;
-  --app-muted: #7d8590;
-  --app-dim: #5a6270;
-  --app-sub: #8b949e;
-  --app-nav: rgba(4,4,10,0.85);
+  --app-bg: #0d0f12;
+  --app-card: #15181c;
+  --app-inner: #1f2328;
+  --app-border: #252a30;
+  --app-line-strong: #383e46;
+  --app-text: #eef0f3;
+  --app-ink-2: #c6ccd3;
+  --app-muted: #9aa3ad;
+  --app-dim: #7d8590;
+  --app-sub: #9aa3ad;
+  --app-nav: rgba(13,15,18,0.85);
+  --brand-tint: rgba(59,143,224,0.10);
+  --hot: #ff8f7d; --warm: #f2b866; --cold: #a9b3bd;
+  --dot-ring: #4a515b;
+  --bar-tint: rgba(13,15,18,0.7);
+  --map-bg: #0f141b; --map-fade: rgba(15,20,27,0.6); --map-line: rgba(255,255,255,0.12);
+  --blob: rgba(120,160,210,0.07); --blob-hot: rgba(59,143,224,0.34); --pin: #8a939d; --ring: rgba(255,255,255,0.9); --halo: rgba(59,143,224,0.3);
+  --glass-fill: rgba(30,35,42,0.52); --glass-strong: rgba(36,42,50,0.86); --glass-btn: rgba(255,255,255,0.12);
+  --glass-shadow: 0 1px 1px rgba(0,0,0,0.2), 0 10px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.10);
+  --edge-a: rgba(255,255,255,0.30); --edge-b: rgba(255,255,255,0.04); --edge-c: rgba(255,255,255,0.14);
+  --thumb: #3b414a; --thumb-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.3);
+  --tab-on: rgba(255,255,255,0.14);
+  --frost-a: rgba(46,49,55,0.9); --frost-b: rgba(29,31,36,0.84); --frost-ring: rgba(255,255,255,0.08);
+  --frost-drop: rgba(0,0,0,0.4); --frost-float: rgba(0,0,0,0.5); --frost-line: rgba(255,255,255,0.08);
+  --folder: #22272e; --folder-edge: rgba(255,255,255,0.07); --sheet: #2b3038;
+  --folder-shadow: drop-shadow(0 1px 2px rgba(0,0,0,0.3)) drop-shadow(0 10px 24px rgba(0,0,0,0.35));
+  --panel-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.4);
+  --glow-a: rgba(59,143,224,0.25); --glow-b: rgba(0,94,176,0.3);
+  --scrim: rgba(0,0,0,0.5);
 }
+
+/* ---- Redesign surfaces (canvas: glass, frost, numbers, edge blur) ---- */
+.num { font-family: 'Bebas Neue', sans-serif; font-weight: 400; letter-spacing: 0.01em; line-height: 0.9; font-variant-numeric: tabular-nums; }
+.tabnum { font-variant-numeric: tabular-nums; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.glass { position: relative; background: var(--glass-fill); -webkit-backdrop-filter: blur(22px) saturate(185%); backdrop-filter: blur(22px) saturate(185%); box-shadow: var(--glass-shadow); }
+.glass::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; background: linear-gradient(150deg, var(--edge-a) 0%, var(--edge-b) 38%, var(--edge-b) 62%, var(--edge-c) 100%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; pointer-events: none; }
+.frost { background: linear-gradient(to bottom, var(--frost-a), var(--frost-b)); -webkit-backdrop-filter: blur(18px) saturate(115%); backdrop-filter: blur(18px) saturate(115%); }
+.pb { position: absolute; left: 0; right: 0; pointer-events: none; }
+.pb > span { position: absolute; inset: 0; }
+.pb > span:nth-child(1) { backdrop-filter: blur(0.5px); -webkit-backdrop-filter: blur(0.5px); }
+.pb > span:nth-child(2) { backdrop-filter: blur(1px); -webkit-backdrop-filter: blur(1px); }
+.pb > span:nth-child(3) { backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+.pb > span:nth-child(4) { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.pb > span:nth-child(5) { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.pb > span:nth-child(6) { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+.pb.t > span:nth-child(1) { -webkit-mask: linear-gradient(to top, transparent 0%, #000 16%, #000 33%, transparent 50%); mask: linear-gradient(to top, transparent 0%, #000 16%, #000 33%, transparent 50%); }
+.pb.t > span:nth-child(2) { -webkit-mask: linear-gradient(to top, transparent 16%, #000 33%, #000 50%, transparent 66%); mask: linear-gradient(to top, transparent 16%, #000 33%, #000 50%, transparent 66%); }
+.pb.t > span:nth-child(3) { -webkit-mask: linear-gradient(to top, transparent 33%, #000 50%, #000 66%, transparent 83%); mask: linear-gradient(to top, transparent 33%, #000 50%, #000 66%, transparent 83%); }
+.pb.t > span:nth-child(4) { -webkit-mask: linear-gradient(to top, transparent 50%, #000 66%, #000 83%, transparent 100%); mask: linear-gradient(to top, transparent 50%, #000 66%, #000 83%, transparent 100%); }
+.pb.t > span:nth-child(5) { -webkit-mask: linear-gradient(to top, transparent 66%, #000 83%, #000 100%); mask: linear-gradient(to top, transparent 66%, #000 83%, #000 100%); }
+.pb.t > span:nth-child(6) { -webkit-mask: linear-gradient(to top, transparent 83%, #000 100%); mask: linear-gradient(to top, transparent 83%, #000 100%); }
+.pb.b > span:nth-child(1) { -webkit-mask: linear-gradient(to bottom, transparent 0%, #000 16%, #000 33%, transparent 50%); mask: linear-gradient(to bottom, transparent 0%, #000 16%, #000 33%, transparent 50%); }
+.pb.b > span:nth-child(2) { -webkit-mask: linear-gradient(to bottom, transparent 16%, #000 33%, #000 50%, transparent 66%); mask: linear-gradient(to bottom, transparent 16%, #000 33%, #000 50%, transparent 66%); }
+.pb.b > span:nth-child(3) { -webkit-mask: linear-gradient(to bottom, transparent 33%, #000 50%, #000 66%, transparent 83%); mask: linear-gradient(to bottom, transparent 33%, #000 50%, #000 66%, transparent 83%); }
+.pb.b > span:nth-child(4) { -webkit-mask: linear-gradient(to bottom, transparent 50%, #000 66%, #000 83%, transparent 100%); mask: linear-gradient(to bottom, transparent 50%, #000 66%, #000 83%, transparent 100%); }
+.pb.b > span:nth-child(5) { -webkit-mask: linear-gradient(to bottom, transparent 66%, #000 83%, #000 100%); mask: linear-gradient(to bottom, transparent 66%, #000 83%, #000 100%); }
+.pb.b > span:nth-child(6) { -webkit-mask: linear-gradient(to bottom, transparent 83%, #000 100%); mask: linear-gradient(to bottom, transparent 83%, #000 100%); }
+.lift { transition: border-color .15s ease; }
+.rowhover { transition: background-color .15s ease; }
+@media (hover: hover) {
+  .lift:hover { border-color: var(--app-line-strong) !important; }
+  .rowhover:hover { background: var(--app-inner) !important; }
+}
+/* The app header is sticky: keep focused or anchored items clear of it. */
+html { scroll-padding-top: 96px; }
 
 /* ---- Accessibility foundations (better-accessibility) ---- */
 

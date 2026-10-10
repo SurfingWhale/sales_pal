@@ -56,6 +56,16 @@ export function useHuntGoal(space: Space): number {
   return goal;
 }
 
+// Deals to close this month (Beranda's "Closing bulan ini"), same settings doc.
+export function useClosingTarget(space: Space): number {
+  const [n, setN] = useState(0);
+  const key = `${space.kind}:${space.id}`;
+  useEffect(() => onSnapshot(spaceDoc(space, "settings", "hunting"), snap => {
+    setN(Number((snap.data() as { monthlyClosing?: number } | undefined)?.monthlyClosing) || 0);
+  }, () => setN(0)), [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  return n;
+}
+
 // A reply of any kind, a no included, means the message got read and answered.
 export function responded(h: Hunt): boolean {
   return h.status === "Dibales" || h.status === "Tertarik" || h.status === "Ditolak";

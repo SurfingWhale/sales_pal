@@ -53,12 +53,12 @@ export default function SalesSimulator() {
                   background: isActive ? "#005eb0" : isDone ? "#005eb030" : "var(--app-inner)",
                   border: `2px solid ${isActive || isDone ? "#005eb0" : "var(--app-border)"}`,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 11, fontWeight: 700,
+                  fontSize: 12, fontWeight: 700,
                   color: isActive ? "#000" : isDone ? "#005eb0" : "var(--app-muted)",
                 }}>
                   {isDone ? "✓" : i + 1}
                 </div>
-                <span style={{ fontSize: 11, color: isActive ? "var(--app-text)" : isDone ? "var(--app-muted)" : "var(--app-muted)", fontWeight: isActive ? 700 : 400 }}>
+                <span style={{ fontSize: 12, color: isActive ? "var(--app-text)" : isDone ? "var(--app-muted)" : "var(--app-muted)", fontWeight: isActive ? 700 : 400 }}>
                   {label}
                 </span>
               </div>
@@ -96,13 +96,13 @@ export default function SalesSimulator() {
               >
                 <div style={{ fontSize: 38, marginBottom: 12 }}>{a.animal}</div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: a.color, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 6 }}>{a.name}</div>
-                <div style={{ fontSize: 11, color: "var(--app-muted)", lineHeight: 1.6, marginBottom: 14 }}>{a.comStyle}</div>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", lineHeight: 1.6, marginBottom: 14 }}>{a.comStyle}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                   {a.traits.map(t => (
-                    <span key={t} style={{ fontSize: 10, background: `${a.color}15`, color: a.color, border: `1px solid ${a.color}30`, borderRadius: 20, padding: "2px 8px" }}>{t}</span>
+                    <span key={t} style={{ fontSize: 12, background: `${a.color}15`, color: a.color, border: `1px solid ${a.color}30`, borderRadius: 20, padding: "2px 8px" }}>{t}</span>
                   ))}
                 </div>
-                <div style={{ marginTop: 16, fontSize: 11, color: "var(--app-muted)", borderTop: "1px solid #161b22", paddingTop: 12 }}>
+                <div style={{ marginTop: 16, fontSize: 12, color: "var(--app-muted)", borderTop: "1px solid #161b22", paddingTop: 12 }}>
                   <span style={{ color: "var(--app-dim)" }}>Kata kunci: </span>
                   {a.triggerWords.slice(0, 3).join(", ")}...
                 </div>
@@ -124,11 +124,11 @@ export default function SalesSimulator() {
             <span style={{ fontSize: 28 }}>{archetype.animal}</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: archetype.color }}>{archetype.name}</div>
-              <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{archetype.strategy}</div>
+              <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{archetype.strategy}</div>
             </div>
             <button
               onClick={() => setStep("archetype")}
-              style={{ background: "transparent", border: "1px solid var(--app-border)", color: "var(--app-muted)", borderRadius: 6, padding: "4px 12px", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
+              style={{ background: "transparent", border: "1px solid var(--app-border)", color: "var(--app-muted)", borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}
             >
               Ganti
             </button>
@@ -150,7 +150,7 @@ export default function SalesSimulator() {
               >
                 <div style={{ fontSize: 26, marginBottom: 10 }}>{o.icon}</div>
                 <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 6 }}>{o.label}</div>
-                <div style={{ fontSize: 11, color: "var(--app-dim)", fontStyle: "italic", lineHeight: 1.5 }}>{o.example}</div>
+                <div style={{ fontSize: 12, color: "var(--app-dim)", fontStyle: "italic", lineHeight: 1.5 }}>{o.example}</div>
               </button>
             ))}
           </div>
@@ -168,7 +168,7 @@ export default function SalesSimulator() {
             >
               <span>{archetype.animal}</span>
               <span style={{ fontSize: 12, fontWeight: 700, color: archetype.color }}>{archetype.name}</span>
-              <span style={{ fontSize: 10, color: "var(--app-dim)" }}>✕</span>
+              <span style={{ fontSize: 12, color: "var(--app-dim)" }}>✕</span>
             </button>
             <button
               onClick={() => setStep("objection")}
@@ -176,7 +176,7 @@ export default function SalesSimulator() {
             >
               <span>{objection.icon}</span>
               <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ok)" }}>{objection.label}</span>
-              <span style={{ fontSize: 10, color: "var(--app-dim)" }}>✕</span>
+              <span style={{ fontSize: 12, color: "var(--app-dim)" }}>✕</span>
             </button>
           </div>
 
@@ -187,7 +187,7 @@ export default function SalesSimulator() {
               <div key={i} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 14, padding: 24 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
                   <span style={{
-                    fontSize: 10, fontWeight: 700, letterSpacing: "1px",
+                    fontSize: 12, fontWeight: 700, letterSpacing: "1px",
                     background: s.tone === "formal" ? "#a78bfa20" : "#00ccff20",
                     color: s.tone === "formal" ? "#a78bfa" : "#00ccff",
                     border: `1px solid ${s.tone === "formal" ? "#a78bfa40" : "#00ccff40"}`,
@@ -201,7 +201,7 @@ export default function SalesSimulator() {
                       background: copiedIdx === i ? "#005eb020" : "transparent",
                       border: `1px solid ${copiedIdx === i ? "#005eb0" : "var(--app-border)"}`,
                       color: copiedIdx === i ? "#005eb0" : "var(--app-muted)",
-                      borderRadius: 6, padding: "5px 14px", fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+                      borderRadius: 6, padding: "5px 14px", fontSize: 12, cursor: "pointer", fontFamily: "inherit",
                     }}
                   >
                     {copiedIdx === i ? "✓ Tersalin!" : "Copy Script"}
@@ -215,7 +215,7 @@ export default function SalesSimulator() {
                   &ldquo;{s.script}&rdquo;
                 </div>
                 <div style={{ background: "#005eb01a", borderRadius: 8, padding: "10px 14px", border: "1px solid #005eb015" }}>
-                  <span style={{ fontSize: 10, color: "var(--ok)", fontWeight: 700, letterSpacing: "1px" }}>💡 WHY IT WORKS&nbsp;&nbsp;</span>
+                  <span style={{ fontSize: 12, color: "var(--ok)", fontWeight: 700, letterSpacing: "1px" }}>💡 WHY IT WORKS&nbsp;&nbsp;</span>
                   <span style={{ fontSize: 12, color: "color-mix(in srgb, #8b949e 55%, var(--app-text))" }}>{s.tips}</span>
                 </div>
               </div>

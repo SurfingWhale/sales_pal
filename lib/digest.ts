@@ -35,7 +35,7 @@ const owed = (i: InvoiceLike) => {
   return total - (i.payments || []).reduce((a, p) => a + (p.amount || 0), 0);
 };
 
-// prospects: Hunting journeys due today (PRD-008), counted by lib/prospects.ts.
+// prospects: Hunting journeys due today (PRD-009), counted by lib/prospects.ts.
 export interface DigestCounts { followUps: number; quotes: number; invoices: number; stalled: number; prospects?: number }
 
 export function digest(on: string, d: { leads: LeadLike[]; quotes: QuoteLike[]; invoices: InvoiceLike[]; rejections: RejectionLike[]; deals: Deal[] }): DigestCounts {

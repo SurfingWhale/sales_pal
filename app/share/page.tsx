@@ -4,8 +4,9 @@ export const dynamic = "force-dynamic";
 
 import { useEffect } from "react";
 
-// Where Android's share sheet lands (manifest.json share_target, PRD-008 §4.4):
-// Threads → Share → SalesPal. The link rides on to Hunting, which opens it.
+// A plain GET door to Hunting for a shared link (bookmarklets, the flow tests,
+// PRD-009 §4.4). Android's share sheet posts to /share-target instead, where
+// the service worker sends a link to the same place.
 export default function SharePage() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);

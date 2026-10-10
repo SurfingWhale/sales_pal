@@ -38,7 +38,7 @@ export default function Services({ services, business }: { services: Service[]; 
   }
 
   async function remove(id: string) {
-    if (!confirm("Hapus paket ini? Penawaran yang udah dibuat nggak ikut berubah.")) return;
+    if (!confirm("Hapus paket ini? Penawaran yang udah dibuat ga ikut berubah.")) return;
     await deleteDoc(spaceDoc(space, "services", id));
   }
 
@@ -93,7 +93,7 @@ export default function Services({ services, business }: { services: Service[]; 
           {shown.map(s => (
             <div key={s.id} style={{ ...card, padding: 18, display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                <span style={{ fontSize: 10, color: "var(--app-muted)", letterSpacing: "1px", fontWeight: 600 }}>{s.category.toUpperCase()}</span>
+                <span style={{ fontSize: 12, color: "var(--app-muted)", letterSpacing: "1px", fontWeight: 600 }}>{s.category.toUpperCase()}</span>
                 {canEdit && <div style={{ display: "flex", gap: 6 }}>
                   <button onClick={() => setEditing({ ...s, price: String(s.price) })} aria-label={`Edit ${s.name}`} style={chip}>✎</button>
                   <button onClick={() => remove(s.id)} aria-label={`Hapus ${s.name}`} style={{ ...chip, borderColor: "#ff444440", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}>🗑</button>
@@ -102,7 +102,7 @@ export default function Services({ services, business }: { services: Service[]; 
               <div style={{ fontSize: 15, fontWeight: 700, fontFamily: font }}>{s.name}</div>
               <div>
                 <span style={{ fontSize: 18, fontWeight: 700, color: "var(--ok)" }}>{rupiah(s.price)}</span>
-                <span style={{ fontSize: 11, color: "var(--app-muted)" }}> {s.unit}</span>
+                <span style={{ fontSize: 12, color: "var(--app-muted)" }}> {s.unit}</span>
               </div>
               {s.description && <div style={{ fontSize: 12, color: "var(--app-sub)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{s.description}</div>}
             </div>

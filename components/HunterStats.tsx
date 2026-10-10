@@ -7,7 +7,7 @@ import { HuntSession, Prospect, SMALL, journey, rate, sessionMinutes } from "@/l
 import { COST_CATEGORIES, CostItem, loadClosed, saveCosts, useCosts } from "@/lib/prospectStore";
 import { btnPrimary, card, chip, font, inputStyle } from "@/components/ui";
 
-// How the hunter is doing (docs/prd/PRD-008 §8): reached, answered, converted,
+// How the hunter is doing (docs/prd/PRD-009 §8): reached, answered, converted,
 // and what each conversion cost. Under ten, a rate is written "X dari Y".
 
 function Tile({ k, v, sub }: { k: string; v: string; sub?: string }) {
@@ -15,7 +15,7 @@ function Tile({ k, v, sub }: { k: string; v: string; sub?: string }) {
     <div style={{ background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 10, padding: 12 }}>
       <div style={{ fontSize: 18, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{v}</div>
       <div style={{ fontSize: 12, fontWeight: 700, marginTop: 2 }}>{k}</div>
-      {sub && <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 4 }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>{sub}</div>}
     </div>
   );
 }
@@ -113,7 +113,7 @@ export default function HunterStats({ prospects, sessions }: { prospects: Prospe
               </div>
             )}
           </div>
-          <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 12 }}>Di bawah {SMALL}, angka ditulis &quot;X dari Y&quot; — persennya belum bisa dipercaya.</div>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 12 }}>Di bawah {SMALL}, angka ditulis &quot;X dari Y&quot; — persennya belum bisa dipercaya.</div>
         </div>
       )}
     </div>

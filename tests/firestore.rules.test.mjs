@@ -170,7 +170,7 @@ await t("member logs a quote and a hunt of their own", assertSucceeds(Promise.al
   setDoc(doc(M, "guilds", G, "quotes", "q1"), { number: "Q-1", ownerUid: "memb", ownerName: "memb" }),
   setDoc(doc(M, "guilds", G, "hunts", "h1"), { target: "@x", ownerUid: "memb", ownerName: "memb" }),
 ])));
-// Hunting journeys (PRD-008): prospects and sessions are owned, campaigns and costs shared.
+// Hunting journeys (PRD-009): prospects and sessions are owned, campaigns and costs shared.
 const prospect = (owner, extra = {}) => ({ platform: "Threads", handle: "@uji", contact: "baru", closed: false, ownerUid: owner, ownerName: owner, ...extra });
 await t("member logs a prospect of their own", assertSucceeds(setDoc(doc(M, "guilds", G, "prospects", "Threads_uji"), prospect("memb"))));
 await t("member cannot log a prospect for someone else", assertFails(setDoc(doc(M, "guilds", G, "prospects", "Threads_lain"), prospect("memb2"))));
