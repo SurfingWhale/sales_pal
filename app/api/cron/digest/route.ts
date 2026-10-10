@@ -4,6 +4,7 @@ import type { PushSubscription } from "web-push";
 import { adminDb, canStore } from "@/lib/serverAuth";
 import { pushReady, sendTo } from "@/lib/pushServer";
 import { digest, digestText, wibToday } from "@/lib/digest";
+import { Prospect, queue, strategyFrom } from "@/lib/prospects";
 import type { Deal } from "@/lib/funnel";
 
 export const runtime = "nodejs";
@@ -33,7 +34,10 @@ async function countFor(uid: string, on: string) {
     const snap = await adminDb().collection(`guilds/${g.id}/deals`).where("ownerUid", "==", uid).get();
     deals.push(...snap.docs.map(d => ({ id: d.id, ...d.data() }) as Deal));
   }
-  return digest(on, { leads, quotes, invoices, rejections, deals } as unknown as Parameters<typeof digest>[1]);
+  const counts = digest(on, { leads, quotes, invoices, rejections, deals } as unknown as Parameters<typeof digest>[1]);
+  const open = (await adminDb().collection(`${u}/prospects`).where("closed", "==", false).get()).docs.map(d => ({ id: d.id, ...d.data() }) as Prospect);
+  const hunting = (await adminDb().doc(`${u}/settings/hunting`).get()).data() as { strategy?: Parameters<typeof strategyFrom>[0] } | undefined;
+  return { ...counts, prospects: queue(open, on, strategyFrom(hunting?.strategy)).length };
 }
 
 // Vercel cron (vercel.json), every morning: one push per device of each user

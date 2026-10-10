@@ -45,8 +45,10 @@ service cloud.firestore {
       return d.keys().hasOnly(['name', 'leaderUid', 'titles', 'createdAt'])
         && d.name is string && d.name.size() > 0 && d.name.size() <= 80;
     }
-    function ownedData(c) { return c in ['leads', 'outreach', 'rejections', 'hunts', 'quotes', 'invoices', 'clients']; }
-    function catalog(c) { return c in ['services', 'pitchTemplates', 'settings']; }
+    // prospects + huntSessions: the hunter's journeys and sessions (PRD-009);
+    // campaigns + costs: the team's campaigns and running costs.
+    function ownedData(c) { return c in ['leads', 'outreach', 'rejections', 'hunts', 'prospects', 'huntSessions', 'quotes', 'invoices', 'clients']; }
+    function catalog(c) { return c in ['services', 'pitchTemplates', 'settings', 'campaigns', 'costs']; }
     function memberShape(d) {
       return d.keys().hasOnly(['uid', 'name', 'email', 'role', 'inviteCode', 'joinedAt'])
         && d.role in ['leader', 'officer', 'member', 'viewer'];

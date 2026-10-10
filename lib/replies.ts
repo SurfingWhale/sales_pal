@@ -28,6 +28,30 @@ const NEXT_STEPS: Record<Tone, Reply[]> = {
   ],
 };
 
+// No answer even after the one follow-up (that is when a DM gets 👻). The
+// Script Library's ghosting scripts assume a conversation already happened
+// ("did the PDF arrive?"); a cold DM needs a new angle, or a polite last word.
+const GHOSTED: Record<Tone, Reply[]> = {
+  santai: [
+    { key: "g1", text: "Halo {nama}! Biar kebayang, ini contoh foto menu yang aku kerjain 👇 Kalau cocok, aku bisa bikinin yang serupa.", hint: "Lampirkan 1 foto terbaik. Ganti sudut, jangan tanya ulang." },
+    { key: "g2", text: "{nama}, boleh tanya satu hal aja? Sekarang foto menunya dikerjain sendiri atau udah ada yang bantu?", hint: "Pertanyaan yang gampang dijawab, tanpa jualan." },
+    { key: "g3", text: "Terakhir dari aku ya, {nama}. Kalau suatu saat butuh foto menu, tinggal chat aja. Sukses terus!", hint: "Pesan penutup sering justru dibales. Setelah ini berhenti." },
+  ],
+  formal: [
+    { key: "g1", text: "Halo {nama}, sebagai gambaran, berikut contoh foto menu yang kami kerjakan. Jika berkenan, kami dapat membuat yang serupa untuk menu Anda.", hint: "Lampirkan satu foto terbaik." },
+    { key: "g2", text: "Halo {nama}, boleh saya bertanya satu hal? Saat ini foto menu dikerjakan sendiri atau sudah ada fotografer?", hint: "Pertanyaan ringan yang mudah dijawab." },
+    { key: "g3", text: "Ini pesan terakhir dari saya, {nama}. Jika suatu saat membutuhkan foto menu, silakan hubungi saya kapan saja. Terima kasih.", hint: "Penutup sopan. Setelah ini berhenti." },
+  ],
+};
+
+// The Script Library says "Bapak/Ibu"; a DM to a business account says "Kak".
+function address(script: string): string {
+  return script.replace(/\b(Bapak\/Ibu|Bu\/Pak)\b(?=,)/g, "Kak").replace(/\b(Bapak\/Ibu|Bu\/Pak)\b/g, "Kakak");
+}
+
+// A script with a blank to fill ("[tanggal]") is not ready to send.
+const hasBlank = (script: string) => /\[[^\]]+\]/.test(script);
+
 // Words the owner tends to type as the reason for a no, per objection.
 const CUES: [string, RegExp][] = [
   ["price", /mahal|harga|budget|bujet|murah|diskon|kemahalan/i],
@@ -54,12 +78,18 @@ export const TOPICS: { id: string; label: string }[] = [
   ...objections.map(o => ({ id: o.id, label: `${o.icon} ${o.label}` })),
 ];
 
+// Replies picked per customer type from the Script Library, rather than written here.
+export function fromLibrary(topic: string): boolean {
+  return topic !== NEXT_STEP && topic !== "ghosting";
+}
+
 export function repliesFor(topic: string, tone: Tone): Reply[] {
   if (topic === NEXT_STEP) return NEXT_STEPS[tone];
+  if (topic === "ghosting") return GHOSTED[tone];
   const out: Reply[] = [];
   for (const a of archetypes) {
     const s = scriptMatrix[a.id]?.[topic]?.find(x => x.tone === tone);
-    if (s) out.push({ key: `${a.id}_${topic}_${tone}`, text: s.script, hint: `${a.animal} ${a.name}: ${s.tips}` });
+    if (s && !hasBlank(s.script)) out.push({ key: `${a.id}_${topic}_${tone}`, text: address(s.script), hint: `${a.animal} ${a.name}: ${s.tips}` });
   }
   return out;
 }

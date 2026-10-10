@@ -25,9 +25,10 @@ self.addEventListener("notificationclick", e => {
   }));
 });
 
-// A WhatsApp chat export shared from Android lands here as a POST. Park the
-// file for the app (Cache Storage, one slot) and open the dashboard to pick
-// the lead it belongs to. Every other request goes to the network untouched.
+// Android's share sheet lands here as a POST. A WhatsApp chat export: park
+// the file for the app (Cache Storage, one slot) and open the dashboard to
+// pick the lead it belongs to. A link (a Threads post, PRD-009 §4.4): open
+// Hunting with it. Every other request goes to the network untouched.
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
   if (e.request.method !== "POST" || url.pathname !== "/share-target") return;
@@ -40,6 +41,9 @@ self.addEventListener("fetch", e => {
         await cache.put("/shared-file", new Response(file, { headers: { "content-type": file.type || "text/plain", "x-name": encodeURIComponent(file.name || "chat.txt") } }));
         return Response.redirect("/dashboard?share", 303);
       }
+      const words = ["url", "text", "title"].map(k => form.get(k)).filter(v => typeof v === "string").join(" ");
+      const link = (words.match(/https?:\/\/[^\s]+/) || [])[0];
+      if (link) return Response.redirect(`/dashboard?hunt&url=${encodeURIComponent(link)}`, 303);
     } catch (err) { /* fall through */ }
     return Response.redirect("/dashboard?share=kosong", 303);
   })());

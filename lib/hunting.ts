@@ -23,6 +23,7 @@ export interface PitchTemplate {
   id: string;
   title: string;
   body: string;
+  stage?: string;        // lib/templates.ts STAGES; older ones are placed by title
 }
 
 export interface Hunt {
@@ -37,6 +38,10 @@ export interface Hunt {
   createdAt: number;
   leadId?: string;       // set once "Jadiin Lead" has run
   url?: string;          // the profile, to go back and check for a reply
+  prospectId?: string;   // the person's journey (lib/prospects.ts)
+  channel?: "post" | "dm";
+  campaignId?: string;
+  sessionId?: string;
 }
 
 export const DEFAULT_GOAL = 20;

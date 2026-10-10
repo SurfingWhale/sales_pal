@@ -12,6 +12,7 @@
 // Output: tests/flows/out/report.md, plus a screenshot of every failed step.
 
 import { spawn, execSync } from "node:child_process";
+import { createServer } from "node:net";
 import { mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { chromium } from "playwright";
 import { flows } from "./flows.mjs";
@@ -43,8 +44,30 @@ async function waitFor(url, ms) {
   return false;
 }
 
+// A run started right after another can find the last one's emulators still
+// shutting down on these ports, attach to them, and lose its data when they
+// finally exit. Wait until the ports are free instead.
+const portFree = (port) => new Promise(ok => {
+  const s = createServer().once("error", () => ok(false)).once("listening", () => s.close(() => ok(true)));
+  s.listen(port, "127.0.0.1");
+});
+
+async function waitPortsFree(ports, ms) {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    const busy = [];
+    for (const p of ports) if (!(await portFree(p))) busy.push(p);
+    if (!busy.length) return [];
+    await new Promise(r => setTimeout(r, 1000));
+    if (Date.now() >= until) return busy;
+  }
+  return ports;
+}
+
 async function main() {
   if (!checkJava()) process.exit(2);
+  const busy = await waitPortsFree([8089, 9099, PORT], 60000);
+  if (busy.length) { console.error(`✗ ports still in use: ${busy.join(", ")} — another test run or emulator is up`); process.exit(2); }
   rmSync(OUT, { recursive: true, force: true });
   mkdirSync(OUT, { recursive: true });
   const project = projectId();

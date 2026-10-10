@@ -8,7 +8,7 @@ import {
   addDays, daysBetween, longDate, nextNumber, quoteColor, quoteText, rupiah, subtotal, today, total, waLink, waNumber,
 } from "@/lib/billing";
 import PrintSheet from "@/components/PrintSheet";
-import { badge, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
+import { badge, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, label, modalBox, subheading, WA_INK } from "@/components/ui";
 
 export interface LeadRef { id: string; name: string; contact: string; phone: string }
 
@@ -195,7 +195,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 14 }}>
-                  <button onClick={() => sendWA(q)} style={{ ...chip, background: "#25D366", color: "#fff", border: "none", fontWeight: 700 }}>
+                  <button onClick={() => sendWA(q)} style={{ ...chip, background: "#25D366", color: WA_INK, border: "none", fontWeight: 700 }}>
                     {q.status === "Terkirim" ? "Follow-up WA" : "Kirim WA"}
                   </button>
                   <button onClick={() => copy(q)} style={{ ...chip, color: copied === q.id ? "var(--ok)" : "var(--app-text)" }}>{copied === q.id ? "✓ Tersalin" : "Copy teks"}</button>

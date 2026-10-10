@@ -27,11 +27,14 @@ import Services from "@/components/Services";
 import Quotes, { LeadRef } from "@/components/Quotes";
 import Invoices from "@/components/Invoices";
 import Hunting from "@/components/Hunting";
+import HuntBar from "@/components/HuntBar";
 import ClientHub from "@/components/ClientHub";
 import GuildHub from "@/components/GuildHub";
 import LeadSources from "@/components/LeadSources";
 import ModalA11y from "@/components/ModalA11y";
 import { Hunt, useClosingTarget, useHuntGoal } from "@/lib/hunting";
+import { queue, statusLabel, view } from "@/lib/prospects";
+import { useHuntSession, useProspects, useStrategy } from "@/lib/prospectStore";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { parseVCards } from "@/lib/vcard";
 import { authFetch } from "@/lib/authFetch";
@@ -260,6 +263,11 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const hunts = useSpaceCollection<Hunt>(space, "hunts");
   const huntGoal = useHuntGoal(space);
   const closingTarget = useClosingTarget(space);
+  // Prospect journeys and the hunting session (PRD-009), shared by the bar,
+  // Hunting and Perlu Ditindak.
+  const { rows: prospects, ready: prospectsReady } = useProspects(space);
+  const strategy = useStrategy(space);
+  const huntSession = useHuntSession(space);
   const stuck = useStalledDeals(uid);
   useEffect(() => { restorePush(); registerWorker(); }, []);
 
@@ -279,6 +287,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [fu, setFu] = useState({ action: "", date: "" });
   const clearQuoteFor = useCallback(() => setQuoteFor(null), []);
   const gotoInvoices = useCallback(() => setActiveTab("Invoice"), []);
+  const gotoHunting = useCallback(() => setActiveTab("Hunting"), []);
+  const gotoScripts = useCallback(() => { setActiveTab("Script Library"); window.scrollTo({ top: 0 }); }, []);
 
   useEffect(() => {
     // A different space: start from empty rather than show the last one's rows.
@@ -604,7 +614,13 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       snooze: () => { updateDoc(spaceDoc(space, "leads", l.id), { nextActionDate: addDays(today(), 1) }); },
       open: () => openLead(l),
     })),
-    ...hunts.filter(h => h.status === "Tertarik" && !h.leadId).map(h => ({
+    ...queue(prospects, now, strategy).map(p => ({
+      key: `p_${p.id}`, when: view(p, now, strategy).due as string, icon: "target" as IconName, title: p.name ? `${p.name} (${p.handle})` : p.handle,
+      what: `${statusLabel(p, view(p, now, strategy))} via ${p.platform}`, phone: "", text: "",
+      kind: "Hunting", action: p.contact === "baru" ? "Kirim intro" : "Follow-up", wa: false,
+      open: () => setActiveTab("Hunting"),
+    })),
+    ...hunts.filter(h => h.status === "Tertarik" && !h.leadId && !h.prospectId).map(h => ({
       key: `h_${h.id}`, when: h.date, icon: "target" as IconName, title: h.target || "Tanpa nama",
       what: `Tertarik via ${h.platform} — jadiin lead`, phone: "", text: "",
       kind: "Tertarik di Hunting", action: "Jadiin lead", wa: false,
@@ -702,6 +718,12 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
       {/* Header: glass over a soft edge blur, like the canvas */}
       <header className="sp-top">
+        {/* The hunting session's bar over every tab (PRD-009 §4) */}
+        {huntSession.live && (
+          <HuntBar session={huntSession.live} queued={queue(prospects, now, strategy).length}
+            sentToday={hunts.filter(h => h.date === now).length} goal={huntGoal}
+            onOpen={gotoHunting} onEnd={huntSession.end} />
+        )}
         <div className="pb t" aria-hidden="true" style={{ top: 0, height: 96 }}><span /><span /><span /><span /><span /><span /></div>
         <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 96, background: "linear-gradient(to bottom, var(--bar-tint) 0%, var(--bar-tint) 40%, transparent 100%)", pointerEvents: "none" }} />
         <div className="sp-top-in">
@@ -899,7 +921,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         })()}
 
         {/* HUNTING */}
-        {activeTab === "Hunting" && <Hunting hunts={hunts} goal={huntGoal} />}
+        {activeTab === "Hunting" && <Hunting hunts={hunts} goal={huntGoal} onOpenScripts={gotoScripts}
+          journey={{ prospects, ready: prospectsReady, strategy, live: huntSession.live, sessions: huntSession.sessions, start: huntSession.start, end: huntSession.end }} />}
 
         {/* REPORT KLIEN (PRD-005) */}
         {activeTab === "Report Klien" && <ClientHub />}

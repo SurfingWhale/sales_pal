@@ -8,7 +8,7 @@ import {
   longDate, paid, rupiah, today, total, waLink,
 } from "@/lib/billing";
 import PrintSheet from "@/components/PrintSheet";
-import { badge, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
+import { badge, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, label, modalBox, subheading, WA_INK } from "@/components/ui";
 
 const FILTERS = ["All", "Belum bayar", "DP masuk", "Telat", "Lunas"] as const;
 
@@ -150,7 +150,7 @@ export default function Invoices({ invoices, business }: { invoices: Invoice[]; 
                   {st !== "Lunas" && (
                     <>
                       <button onClick={() => startPayment(inv)} style={{ ...chip, background: "#005eb0", color: "#fff", border: "none", fontWeight: 700 }}>+ Catat pembayaran</button>
-                      <button onClick={() => window.open(waLink(inv.phone, invoiceText(inv, business)), "_blank")} style={{ ...chip, background: "#25D366", color: "#fff", border: "none", fontWeight: 700 }}>Tagih via WA</button>
+                      <button onClick={() => window.open(waLink(inv.phone, invoiceText(inv, business)), "_blank")} style={{ ...chip, background: "#25D366", color: WA_INK, border: "none", fontWeight: 700 }}>Tagih via WA</button>
                     </>
                   )}
                   <button onClick={() => copy(inv)} style={{ ...chip, color: copied === inv.id ? "var(--ok)" : "var(--app-text)" }}>{copied === inv.id ? "✓ Tersalin" : "Copy teks"}</button>
