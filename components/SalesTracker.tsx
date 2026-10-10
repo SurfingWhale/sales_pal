@@ -19,12 +19,15 @@ import Services from "@/components/Services";
 import Quotes, { LeadRef } from "@/components/Quotes";
 import Invoices from "@/components/Invoices";
 import Hunting from "@/components/Hunting";
+import HuntBar, { BAR_HEIGHT } from "@/components/HuntBar";
 import ClientHub from "@/components/ClientHub";
 import GuildHub from "@/components/GuildHub";
 import LeadSources from "@/components/LeadSources";
 import ModalA11y from "@/components/ModalA11y";
 import { WA_INK } from "@/components/ui";
 import { Hunt, useHuntGoal } from "@/lib/hunting";
+import { queue, statusLabel, view } from "@/lib/prospects";
+import { useHuntSession, useProspects, useStrategy } from "@/lib/prospectStore";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { parseVCards } from "@/lib/vcard";
 import { authFetch } from "@/lib/authFetch";
@@ -270,6 +273,12 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const business = useBusiness(space);
   const hunts = useSpaceCollection<Hunt>(space, "hunts");
   const huntGoal = useHuntGoal(space);
+  // Prospect journeys and the hunting session (PRD-008), shared by the bar,
+  // Hunting and Perlu Ditindak.
+  const { rows: prospects, ready: prospectsReady } = useProspects(space);
+  const strategy = useStrategy(space);
+  const huntSession = useHuntSession(space);
+  const gotoHunting = useCallback(() => setActiveTab("Hunting"), []);
   const stuck = useStalledDeals(uid);
   useEffect(() => { restorePush(); }, []);
   const [quoteFor, setQuoteFor] = useState<LeadRef | null>(null);
@@ -577,7 +586,12 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       what: l.nextAction || "Follow-up", phone: l.phone, text: `Halo ${l.contact || l.name}, `,
       open: () => openLead(l),
     })),
-    ...hunts.filter(h => h.status === "Tertarik" && !h.leadId).map(h => ({
+    ...queue(prospects, now, strategy).map(p => ({
+      key: `p_${p.id}`, when: view(p, now, strategy).due as string, icon: "🎯", title: p.name ? `${p.name} (${p.handle})` : p.handle,
+      what: `${statusLabel(p, view(p, now, strategy))} via ${p.platform} — ${p.contact === "baru" ? "kirim intro" : "follow-up"}`, phone: "", text: "",
+      open: () => setActiveTab("Hunting"),
+    })),
+    ...hunts.filter(h => h.status === "Tertarik" && !h.leadId && !h.prospectId).map(h => ({
       key: `h_${h.id}`, when: h.date, icon: "🎯", title: h.target || "Tanpa nama",
       what: `Tertarik via ${h.platform} — jadiin lead`, phone: "", text: "",
       open: () => setActiveTab("Hunting"),
@@ -607,7 +621,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   ].sort((a, b) => a.when.localeCompare(b.when));
 
   return (
-    <div style={{ background: "var(--app-bg)", minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, color: "var(--app-text)" }}>
+    <div style={{ background: "var(--app-bg)", minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, color: "var(--app-text)", ["--sp-top" as string]: `${57 + (huntSession.live ? BAR_HEIGHT : 0)}px` }}>
       <style>{`
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: var(--app-card); } ::-webkit-scrollbar-thumb { background: var(--app-border); border-radius: 4px; }
         .sp-nav { display: flex; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--app-border); background: var(--app-card); }
@@ -624,7 +638,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           .sp-nav-btn { flex: 1; flex-direction: column; gap: 3px; padding: 8px 0 6px; min-height: 56px; font-size: 11px; border-bottom: none; border-top: 2px solid transparent; }
           .sp-nav-btn.is-on { background: transparent; border-top-color: #005eb0; color: var(--brand-text); }
           .sp-nav-icon { font-size: 19px; }
-          .sp-subnav { padding: 10px 16px; position: sticky; top: 57px; z-index: 40; }
+          .sp-subnav { padding: 10px 16px; position: sticky; top: var(--sp-top, 57px); z-index: 40; }
           .sp-main { padding: 16px 16px calc(96px + env(safe-area-inset-bottom, 0px)) !important; }
           .sp-fab { bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important; }
         }
@@ -637,8 +651,14 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         input:focus, select:focus, textarea:focus { border-color: #005eb0 !important; }
       `}</style>
 
-      {/* Header */}
-      <div style={{ borderBottom: "1px solid var(--app-border)", padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--app-nav)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 50, gap: 12 }}>
+      {/* Header, with the hunting bar over it while a session runs (PRD-008 §4) */}
+      <div style={{ position: "sticky", top: 0, zIndex: 50 }}>
+      {huntSession.live && (
+        <HuntBar session={huntSession.live} queued={queue(prospects, now, strategy).length}
+          sentToday={hunts.filter(h => h.date === now).length} goal={huntGoal}
+          onOpen={gotoHunting} onEnd={huntSession.end} />
+      )}
+      <div style={{ borderBottom: "1px solid var(--app-border)", padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--app-nav)", backdropFilter: "blur(12px)", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-mark.png" alt="SalesPal" width={32} height={32} style={{ display: "block", flexShrink: 0 }} />
@@ -678,6 +698,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             {(user.displayName || user.email || "U").charAt(0).toUpperCase()}
           </button>
         </div>
+      </div>
+
       </div>
 
       {/* Navigation: a top bar on wide screens, a bottom bar on phones */}
@@ -905,7 +927,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           </div>
         )}
 
-        {activeTab === "Hunting" && <Hunting hunts={hunts} goal={huntGoal} onOpenScripts={gotoScripts} />}
+        {activeTab === "Hunting" && <Hunting hunts={hunts} goal={huntGoal} onOpenScripts={gotoScripts}
+          journey={{ prospects, ready: prospectsReady, strategy, live: huntSession.live, sessions: huntSession.sessions, start: huntSession.start, end: huntSession.end }} />}
 
         {/* REPORT KLIEN (PRD-005) */}
         {activeTab === "Report Klien" && <ClientHub />}

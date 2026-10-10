@@ -1,6 +1,6 @@
 # PRD-008 — Sesi Hunting & Journey Prospek (NTB → ETB)
 
-- **Status:** Draft, belum dibangun.
+- **Status:** Dibangun 2026-10-10 — Fase 0–2 penuh + metrik & biaya Fase 3 (`lib/prospects.ts`, `lib/prospectStore.ts`, `components/{HuntBar,ProspectList,Campaigns,HunterStats}.tsx`, `app/api/hunt/unfurl`, `app/share`). Belum: Document Picture-in-Picture desktop. Live butuh deploy `firestore.rules` (4 koleksi baru).
 - **Tanggal:** 2026-10-10
 - **Konteks:** Pas hunting, owner share post Threads orang yang lagi nyari jasa (contoh: *"ada yang open jasa foto katalog F&B buat UMKM?"*) → orang itu harus langsung masuk basis lead, CTA/intro siap di-copy, dan semua yang terjadi sesudahnya (intro, follow-up, kampanye, balasan, remarks) kecatat sebagai satu riwayat. Polanya dipinjam dari sales/telemarketing perbankan: tiap nasabah punya **disposisi** (terhubung atau belum → hasil → remarks), ada **contact strategy**, dan dari situ keluar metrik performa hunter-nya.
 - **Terkait:** PRD-002 (Hunting), PRD-003 (Radar Threads), PRD-005 §7 (aturan tampilan angka), PRD-007 §2.5–2.6 (ruang kerja, Perlu Ditindak, push), `lib/hunting.ts`, `lib/replies.ts`, `lib/space.ts`.
@@ -101,7 +101,7 @@ flowchart TD
 ## 4. Sesi hunting & bar panel
 
 ### 4.1 ON / OFF
-- **▶ Mulai hunting** di tab Hunting (dan di Quick Pitch FAB). Bikin `huntSessions/{id}` `{ startedAt }`; id sesi aktif disimpan di `settings/hunting.activeSession` biar bar tetap ada setelah reload / pindah device.
+- **▶ Mulai hunting** di tab Hunting. Bikin `huntSessions/{id}` `{ startedAt, lastActionAt, endedAt: null, counts }`; sesi aktif = yang `endedAt`-nya masih kosong, jadi bar tetap ada setelah reload / pindah device. (Bukan di `settings/hunting`: di guild itu katalog yang cuma bisa ditulis Leader/Officer, sedangkan sesi milik tiap orang.)
 - Semua prospek, intro, dan status yang dibuat selama ON dapat `sessionId`.
 - **■ Akhiri** nutup sesi (`endedAt`, hitungan dibekukan). Sesi yang lupa dimatiin auto-tutup setelah 30 menit tanpa aksi (durasi dihitung sampai aksi terakhir, biar intro/jam ga rusak).
 
@@ -119,12 +119,12 @@ flowchart TD
 | Device | Yang bisa | Yang ga bisa |
 |---|---|---|
 | Android (PWA terpasang) | bar di dalam SalesPal; **share target** (Share → SalesPal); **notifikasi sesi** dari service worker ("Hunting aktif · 6 intro · ketuk buat balik"), diperbarui tiap aksi, tanpa server push | bar nampil di atas app Threads |
-| iPhone (PWA terpasang) | bar di dalam SalesPal; tombol 📋; **Shortcut iOS** di share sheet yang buka `…/dashboard?hunt&url=<link>` | share target (Safari belum dukung Web Share Target), notifikasi lokal tanpa push |
+| iPhone (PWA terpasang) | bar di dalam SalesPal; **Copy link** di Threads → tombol 📋 di bar | share target (Safari belum dukung Web Share Target); Shortcut iOS ga dipakai karena link dari Shortcut kebuka di Safari, yang login-nya terpisah dari PWA; notifikasi lokal tanpa push |
 | Desktop Chrome / Edge | bar; **Document Picture-in-Picture**: mini panel ngambang di atas tab Threads web (fase 3) | — |
 
 ### 4.4 Share masuk
-- `public/manifest.json` → `share_target` `{ action: "/dashboard", method: "GET", params: { title, text, url } }`. Threads ngirim link di `text`, jadi ambil URL pertama dari `url` atau `text`.
-- Route `?hunt&url=…` udah ada di `Hunting.tsx`; diperluas: kalau sesi belum ON, tawarin "Mulai sesi?" sekali, prospek tetap disimpan.
+- `public/manifest.json` → `share_target` `{ action: "/share", method: "GET", params: { title, text, url } }`. Threads ngirim link di `text`; `app/share` ambil URL pertama dari `url`, `text` atau `title`, lalu lanjut ke `/dashboard?hunt&url=…`.
+- `Hunting.tsx` buka link itu: post Threads → `/api/hunt/unfurl` → prospek. Prospek tetap disimpan walau sesi belum ON.
 
 ---
 
@@ -278,16 +278,16 @@ flowchart LR
 
 | Path | Isi |
 |---|---|
-| `prospects/{platform_handle}` | `platform, handle, name, segment (NTB/ETB), contact (status §6.1), result?, remark?, attempts, firstSeenAt, firstSentAt?, firstReplyAt?, lastTouchAt, nextAt?, parkedUntil?, convertedAt?, leadId?, source { kind: post/radar/manual, url?, postId? }, sessionId?, history[] (≤ 200, yang paling lama dipangkas), ownerUid?` |
+| `prospects/{platform_handle}` | `platform, handle, name?, url?, segment (NTB/ETB), contact (baru/intro/terhubung/dnc — "Belum respon" & "Tidak terhubung" dihitung dari tanggal), result? (tertarik/pikir/nanti/tolak/data), remark?, attempts, firstSeenAt, firstSentAt?, lastSentAt?, firstReplyAt?, lastReplyAt?, attemptsToReply?, nextAt?, parkedUntil?, convertedAt?, leadId?, dncAt?, source { kind: post/radar/manual, url?, postId?, text? }, sessionId?, history[] (≤ 200), closed (true = DNC), createdAt, updatedAt, ownerUid?` |
 | `hunts/{id}` | tetap; + `prospectId`, `channel` (post/dm), `campaignId?`, `sessionId?` |
 | `huntSessions/{id}` | `startedAt, endedAt, lastActionAt, counts { prospects, intros, replies, converted }` |
-| `campaigns/{id}` | `name, templateId, audience { segment, statuses[] }, startAt, endAt` |
-| `costs/{yyyy-mm}` | `items[] { name, category (hosting/tool/scraping/iklan/domain/lain), amount }` |
-| `settings/hunting` | + `activeSession`, contact strategy (`maxAttempts`, `windowDays`, `parkDays`, `notInterestedParkDays`) |
+| `campaigns/{id}` | `name, templateId, segment (NTB/ETB/all), groups[] (baru/nunggu/terhubung/tolak/etb), createdAt` |
+| `costs/{yyyy-mm}` | `items[] { id, name, category (Hosting/Tool/Scraping/Iklan/Domain/Lainnya), amount }` |
+| `settings/hunting` | + `strategy { maxAttempts, gaps[], parkDays, declinedParkDays, thinkDays }` (default 3, [2, 5], 60, 90, 3) |
 
 - **Id dokumen = `{platform}_{handle}` yang dinormalisasi** → share post orang yang sama dua kali otomatis nyatu, aman dipanggil ulang.
-- Riwayat di array satu dokumen: 1 baca = journey utuh, tulis pakai `arrayUnion`.
-- **Anggaran baca Spark (50K/hari):** `onSnapshot` satu koleksi = N baca tiap app dibuka (PRD-006 B5). Prospek bisa nambah ±1.500/bulan, jadi layar Hunting cuma query yang **aktif** (belum diparkir, bukan DNC, bukan ETB lama) + `limit`; arsip dimuat pas dibuka. Kira-kira 300 aktif × 20 buka/hari = 6K baca/hari.
+- Riwayat di array satu dokumen: 1 baca = journey utuh. Ditulis utuh dari app (dipangkas ke 200), biar Batal bisa balikin persis.
+- **Anggaran baca Spark (50K/hari):** `onSnapshot` satu koleksi = N baca tiap app dibuka (PRD-006 B5). Prospek bisa nambah ±1.500/bulan, jadi app cuma subscribe yang `closed == false`; DNC (`closed`) dimuat sekali pas filter DNC atau Performa hunter dibuka. Arsip prospek lama = langkah berikutnya kalau angkanya mulai mendekati limit. Kira-kira 300 aktif × 20 buka/hari = 6K baca/hari.
 - **Wajib per CLAUDE.md:** `prospects`, `huntSessions`, `campaigns`, `costs` masuk daftar coverage `firestore.rules` (pribadi + guild: owned buat `prospects`/`huntSessions`, katalog bersama buat `campaigns`/`costs`), test per peran di `tests/firestore.rules.test.mjs`, daftar di `CLAUDE.md` diperbarui, baru deploy. Shape `inbound_leads` ga berubah.
 - **Back-fill:** satu kali, kelompokkan `hunts` lama per platform + target → prospek, status dipetakan (§6.2), riwayat diisi dari tiap hunt.
 
@@ -327,6 +327,8 @@ Enrichment data (beli nomor/email prospek) sengaja **ga** masuk tabel: konversi 
 
 Tiap fase dapat flow di `tests/flows/flows.mjs` (CLAUDE.md), dijalanin mobile + `DESKTOP=1` sebelum PR.
 
+**Status 2026-10-10:** Fase 0, 1, 2 jadi. Fase 3: metrik + biaya jadi di Hunting → **Performa hunter** (bukan halaman Insights), notifikasi sesi Android jadi; **Document PiP desktop belum**. Flow `journey: shared post, intro, answer, data to ETB, DNC, session bar`, rules test per peran.
+
 ---
 
 ## 12. Risiko
@@ -341,10 +343,10 @@ Tiap fase dapat flow di `tests/flows/flows.mjs` (CLAUDE.md), dijalanin mobile + 
 
 ---
 
-## 13. Keputusan terbuka (buat owner)
+## 13. Keputusan (diambil 2026-10-10, ngikutin rekomendasi — owner: "do the task sampe fiturnya nyala")
 
-- **D1:** Copy intro langsung dicatat "Intro terkirim" (Batal 5 detik), atau tetap tombol "Udah kirim" terpisah? *Rekomendasi: langsung + Batal — sesuai prinsip 1 tap PRD-002.*
-- **D2:** ETB mulai dari **Kasih data** (usul owner) atau dari deal lunas pertama? *Rekomendasi: Kasih data = ETB (KPI hunter); lunas tetap diukur di Jualan / Report.*
-- **D3:** Contact strategy default — maks 3 percobaan / 30 hari, parkir 60 hari (Tidak terhubung) & 90 hari (Tidak tertarik). Oke?
-- **D4:** HP utama buat hunting Android atau iPhone? Nentuin share target atau Shortcut iOS yang dikerjain duluan.
-- **D5:** Fase 0 langsung dikerjain? *Rekomendasi: ya — gratis, ga butuh izin platform.*
+- **D1:** Copy / Kirim WA **langsung dicatat**, dengan **Batal** 5 detik. Tombol "Catat terkirim" dihapus.
+- **D2:** **Kasih data = ETB** (KPI hunter); lunas tetap diukur di Jualan / Report.
+- **D3:** Default 3 percobaan, follow-up H+2 lalu H+7, parkir 60 hari (Tidak terhubung) & 90 hari (Tidak tertarik); Pikir-pikir follow-up +3 hari, Hubungi nanti default +7 hari. Bisa diubah lewat `settings/hunting.strategy`.
+- **D4:** Belum dijawab owner → dua-duanya: share target Android + tombol 📋 buat semua HP.
+- **D5:** Ya.

@@ -1,7 +1,7 @@
 "use client";
 
 import { type Dispatch, type SetStateAction, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { deleteDoc, setDoc, updateDoc } from "firebase/firestore";
+import { deleteDoc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { addDays, daysBetween, longDate, today, useSpaceCollection } from "@/lib/billing";
 import { canEditCatalog, spaceDoc, stamp, useSpace } from "@/lib/space";
 import {
@@ -9,20 +9,43 @@ import {
   fill, waLinkFor, huntColor, huntIcon, isStale, parseProfile, pct, platformSource, responded, scoreTemplates, verdict,
 } from "@/lib/hunting";
 import ThreadsRadar from "@/components/ThreadsRadar";
+import ProspectList, { ProspectFilter } from "@/components/ProspectList";
+import Campaigns from "@/components/Campaigns";
+import HunterStats from "@/components/HunterStats";
 import { TOPICS, Tone, defaultTopic, fromLibrary, repliesFor } from "@/lib/replies";
 import { profileUrl } from "@/lib/threads";
+import {
+  Channel, HuntSession, Prospect, Strategy, newProspect, patchFromHunt, postPatch, prospectId, sessionMinutes,
+  statusColor, statusLabel, threadsPostLink, view,
+} from "@/lib/prospects";
+import { HuntInbox, bump, createProspect, ctx, recordSend, saveProspect, unfurl, useHuntInbox } from "@/lib/prospectStore";
 import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
 type Filter = "Semua" | "Follow-up" | "Tertarik";
 const PAGE = 30;
 
-export default function Hunting({ hunts, goal, onOpenScripts }: { hunts: Hunt[]; goal: number; onOpenScripts?: () => void }) {
+export interface HuntingSession {
+  prospects: Prospect[];
+  ready: boolean;
+  strategy: Strategy;
+  live: HuntSession | null;
+  sessions: HuntSession[];
+  start: () => Promise<void>;
+  end: () => Promise<void>;
+}
+
+export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts: Hunt[]; goal: number; onOpenScripts?: () => void; journey: HuntingSession }) {
   const space = useSpace();
   const canEdit = canEditCatalog(space);
+  const { prospects, strategy, live } = journey;
   const templates = useSpaceCollection<PitchTemplate>(space, "pitchTemplates").slice().sort((a, b) => a.title.localeCompare(b.title));
   const [target, setTarget] = useState("");
   const [platform, setPlatform] = useState<Platform>("IG");
-  const [pending, setPending] = useState<PitchTemplate | null>(null);
+  const [channel, setChannel] = useState<Channel>("dm");
+  const [source, setSource] = useState<Prospect["source"]>({ kind: "manual" });
+  const [blocked, setBlocked] = useState<string | null>(null);
+  const [undo, setUndo] = useState<{ label: string; run: () => Promise<void> } | null>(null);
+  const [prospectFilter, setProspectFilter] = useState<ProspectFilter>("Antrian");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<PitchTemplate | null>(null);
   const [noting, setNoting] = useState<{ id: string; note: string } | null>(null);
@@ -37,13 +60,77 @@ export default function Hunting({ hunts, goal, onOpenScripts }: { hunts: Hunt[];
   const topicsRef = useRef<HTMLDivElement>(null);
 
   function apply(text: string) {
+    const post = threadsPostLink(text);
+    if (post) { openPost(post); return true; }
     const p = parseProfile(text);
     if (!p) return false;
     setTarget(p.target);
     if (p.platform) setPlatform(p.platform);
     setUrl(p.url || "");
+    setSource({ kind: "manual" });
+    setChannel("dm");
     return true;
   }
+
+  // A Threads post shared or pasted: who wrote it and what, then their journey
+  // (a new prospect, or the post added to the one they have).
+  async function openPost(link: string) {
+    const guess = link.match(/threads\.(?:com|net)\/(@[A-Za-z0-9._]+)\/post\//)?.[1];
+    if (guess) { setTarget(guess); setPlatform("Threads"); setUrl(profileUrl(guess.slice(1))); }
+    setPasteMsg("Membuka post…");
+    const r = await unfurl(link);
+    if ("error" in r) {
+      // The words are lost, the person isn't: the post still counts as the source.
+      if (guess) { setSource({ kind: "post", url: link.split("?")[0] }); setChannel("post"); }
+      setPasteMsg(guess ? "" : r.error);
+      if (!guess) targetRef.current?.focus();
+      return;
+    }
+    const handle = r.handle;
+    const profile = profileUrl(handle.slice(1));
+    setTarget(handle); setPlatform("Threads"); setUrl(profile); setChannel("post");
+    const src: Prospect["source"] = { kind: "post", url: r.postUrl || link, ...(r.postId ? { postId: r.postId } : {}), ...(r.text ? { text: r.text } : {}) };
+    setSource(src);
+    const id = prospectId("Threads", handle);
+    const c = ctx(live?.id);
+    try {
+      const snap = await getDoc(spaceDoc(space, "prospects", id)).catch(() => null);
+      const had = snap?.exists() ? ({ id, ...snap.data() } as Prospect) : undefined;
+      if (had?.contact === "dnc") { setBlocked(id); setPasteMsg(""); return; }
+      if (had) await saveProspect(space, had, postPatch(had, src, r.name, c));
+      else {
+        await createProspect(space, id, newProspect({ platform: "Threads", handle, name: r.name || undefined, url: profile, source: src }, c));
+        bump(space, live?.id, "prospects");
+      }
+      setPasteMsg("");
+    } catch {
+      setPasteMsg("Post kebaca, tapi gagal disimpan. Cek koneksi.");
+    }
+  }
+
+  // Someone who asked not to be contacted stays that way, whoever types their name.
+  const curId = target.trim() ? prospectId(platform, target) : "";
+  const cur = curId ? prospects.find(p => p.id === curId) : undefined;
+  useEffect(() => {
+    if (!curId || cur) { setBlocked(null); return; }
+    const t = setTimeout(() => {
+      getDoc(spaceDoc(space, "prospects", curId)).then(s => setBlocked(s.exists() && s.data()?.contact === "dnc" ? curId : null), () => setBlocked(null));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [curId, cur, space]);
+  const isBlocked = blocked === curId && !!curId;
+  const curPost = cur ? [...(cur.history || [])].reverse().find(e => e.kind === "post") : undefined;
+
+  // The bar's paste button and its queue land here.
+  useHuntInbox((m: HuntInbox) => {
+    if (m.kind === "link") {
+      if (!apply(m.text)) setPasteMsg("Clipboard nggak berisi link. Copy link post/profil dulu.");
+      targetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    } else {
+      setProspectFilter("Antrian");
+      setTimeout(() => document.getElementById("journey-prospek")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    }
+  });
 
   // Opened from a share or a bookmarklet: /dashboard?hunt&target=…&platform=…&url=…
   useEffect(() => {
@@ -71,6 +158,8 @@ export default function Hunting({ hunts, goal, onOpenScripts }: { hunts: Hunt[];
     setTarget(`@${username}`);
     setPlatform("Threads");
     setUrl(profileUrl(username));
+    setSource({ kind: "radar" });
+    setChannel("dm");
     targetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     targetRef.current?.focus({ preventScroll: true });
   }
@@ -109,28 +198,58 @@ export default function Hunting({ hunts, goal, onOpenScripts }: { hunts: Hunt[];
     );
   }
 
+  // Copy or Kirim WA is the send (PRD-008 D1): it goes in the log and the
+  // person's journey at once, with five seconds to take it back.
   function pick(t: PitchTemplate, how: "copy" | "wa") {
+    if (isBlocked) return;
     const text = fill(t.body, target);
     if (how === "copy") {
       copy(text, t.id, setCopiedId);
     } else {
       window.open(waLinkFor(target, text), "_blank");
     }
-    setPending(t);
+    if (!target.trim()) {
+      setPasteMsg("Isi target dulu biar kecatat.");
+      targetRef.current?.focus();
+      return;
+    }
+    logSent(t, text, how);
   }
 
-  async function logSent() {
-    if (!pending) return;
-    const id = `hunt_${Date.now()}`;
-    const h: Omit<Hunt, "id"> = {
-      target: target.trim(), platform, templateId: pending.id, templateTitle: pending.title,
-      status: "Terkirim", note: "", date: now, createdAt: Date.now(), ...(url ? { url } : {}),
-    };
-    setPending(null);
-    setTarget("");
-    setUrl("");
-    targetRef.current?.focus();
-    await setDoc(spaceDoc(space, "hunts", id), stamp(space, h));
+  async function logSent(t: PitchTemplate, text: string, how: "copy" | "wa") {
+    const who = target.trim();
+    const ch: Channel = curPost || source.kind === "post" ? channel : "dm";
+    try {
+      const back = await recordSend(space, {
+        target: who, platform, url: url || undefined, templateId: t.id, templateTitle: t.title, text, channel: ch,
+        source: cur ? undefined : source,
+      }, cur, live?.id, strategy);
+      setTarget("");
+      setUrl("");
+      setSource({ kind: "manual" });
+      setChannel("dm");
+      targetRef.current?.focus();
+      const entry = { label: `Tercatat: ${how === "wa" ? "WA" : ch === "post" ? "balasan di post" : "DM"} ke ${who}`, run: back };
+      setUndo(entry);
+      setTimeout(() => setUndo(u => (u?.run === back ? null : u)), 5000);
+    } catch {
+      setPasteMsg("Pesan tersalin, tapi gagal dicatat. Cek koneksi lalu kirim ulang.");
+    }
+  }
+
+  async function takeBack() {
+    if (!undo) return;
+    const u = undo;
+    setUndo(null);
+    await u.run();
+  }
+
+  // The journey hears what the DM log was told.
+  function syncProspect(h: Hunt, status: HuntStatus, note: string) {
+    const p = h.prospectId ? prospects.find(x => x.id === h.prospectId) : undefined;
+    if (!p) return;
+    const patch = patchFromHunt(p, status, note, ctx(live?.id), strategy);
+    if (patch) saveProspect(space, p, patch).then(() => { if (p.contact !== "terhubung") bump(space, live?.id, "replies"); }, () => undefined);
   }
 
   async function setStatus(h: Hunt, status: HuntStatus) {
@@ -138,6 +257,7 @@ export default function Hunting({ hunts, goal, onOpenScripts }: { hunts: Hunt[];
     // An open Balas cepat follows the new status; back at Terkirim there is nothing to answer.
     setReplyFor(r => (r?.id !== h.id ? r : status === "Terkirim" ? null : { ...r, topic: defaultTopic(status, h.note) }));
     await updateDoc(spaceDoc(space, "hunts", h.id), { status });
+    syncProspect(h, status, h.note);
   }
 
   async function saveNote() {
@@ -145,6 +265,8 @@ export default function Hunting({ hunts, goal, onOpenScripts }: { hunts: Hunt[];
     // A reason is only asked for on Ditolak; a new one can change the guessed objection.
     setReplyFor(r => (r?.id === noting.id ? { ...r, topic: defaultTopic("Ditolak", noting.note) } : r));
     await updateDoc(spaceDoc(space, "hunts", noting.id), { note: noting.note.trim() });
+    const h = hunts.find(x => x.id === noting.id);
+    if (h && noting.note.trim()) syncProspect(h, "Ditolak", noting.note.trim());
     setNoting(null);
   }
 
@@ -156,6 +278,19 @@ export default function Hunting({ hunts, goal, onOpenScripts }: { hunts: Hunt[];
       email: "", phone: "", category: "F&B", notes: note, lastContact: now, value: 0,
     }, h as { ownerUid?: string; ownerName?: string }));
     await updateDoc(spaceDoc(space, "hunts", h.id), { leadId });
+    const p = h.prospectId ? prospects.find(x => x.id === h.prospectId) : undefined;
+    if (p && !p.leadId) saveProspect(space, p, { leadId, updatedAt: Date.now() }).catch(() => undefined);
+  }
+
+  // From a journey: this person, ready for the next message.
+  function compose(p: Prospect) {
+    setTarget(p.handle);
+    setPlatform(p.platform);
+    setUrl(p.url || "");
+    setSource(p.source || { kind: "manual" });
+    setChannel(view(p, now, strategy).status === "baru" && (p.history || []).some(e => e.kind === "post") ? "post" : "dm");
+    targetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    targetRef.current?.focus({ preventScroll: true });
   }
 
   async function remove(h: Hunt) {
@@ -186,12 +321,24 @@ export default function Hunting({ hunts, goal, onOpenScripts }: { hunts: Hunt[];
   }
 
   const progress = Math.min(1, sentToday / goal);
+  const lastSession = journey.sessions.find(x => x.endedAt) || null;
 
   return (
     <div>
-      <div style={{ marginBottom: 20 }}>
-        <div style={heading}>Hunting Mode</div>
-        <div style={subheading}>Kirim DM, catat hasilnya sekali tap, dan lihat pesan mana yang beneran dibales.</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+        <div style={{ minWidth: 0, flex: "1 1 240px" }}>
+          <div style={heading}>Hunting Mode</div>
+          <div style={subheading}>Kirim DM, catat hasilnya sekali tap, dan lihat pesan mana yang beneran dibales.</div>
+          {!live && lastSession && (
+            <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 6 }}>
+              Sesi terakhir: {Math.round(sessionMinutes(lastSession, Date.now()))} menit · {lastSession.counts?.intros || 0} intro · {lastSession.counts?.replies || 0} dibales · {lastSession.counts?.converted || 0} data
+              {sessionMinutes(lastSession, Date.now()) >= 10 ? ` · ${((lastSession.counts?.intros || 0) / (sessionMinutes(lastSession, Date.now()) / 60)).toFixed(1)} intro/jam` : ""}
+            </div>
+          )}
+        </div>
+        {live
+          ? <button onClick={journey.end} style={{ ...btnMuted, minHeight: 44 }}>■ Akhiri sesi</button>
+          : <button onClick={journey.start} style={{ ...btnPrimary, minHeight: 44, background: "#b93a06" }}>▶ Mulai hunting</button>}
       </div>
 
       {/* Today at a glance */}
@@ -238,6 +385,40 @@ export default function Hunting({ hunts, goal, onOpenScripts }: { hunts: Hunt[];
           ))}
         </div>
 
+        {isBlocked && (
+          <div role="alert" style={{ padding: 12, borderRadius: 10, background: "#ff44441a", border: "1px solid #ff444460", fontSize: 12, marginBottom: 16 }}>
+            <b>{target.trim()}</b> minta ga dihubungi. Pesan dimatiin buat orang ini.
+          </div>
+        )}
+        {cur && (() => {
+          const v = view(cur, now, strategy);
+          return (
+            <div aria-label={`Prospek ${cur.handle}`} style={{ padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)", marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{cur.name ? `${cur.name} (${cur.handle})` : cur.handle}</div>
+                  <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>
+                    {cur.segment} · {v.status === "intro" || v.status === "belum" ? `percobaan ${cur.attempts}/${strategy.maxAttempts}` : `masuk ${longDate(cur.firstSeenAt)}`}
+                  </div>
+                </div>
+                <span style={badge(statusColor(cur, v))}>{statusLabel(cur, v)}</span>
+              </div>
+              {curPost?.text && <div style={{ fontSize: 12, color: "var(--app-sub)", lineHeight: 1.5, marginTop: 8, whiteSpace: "pre-wrap" }}>“{curPost.text}”</div>}
+              {curPost?.url && <a href={curPost.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", fontSize: 11, color: "var(--brand-text)", marginTop: 6 }}>Buka post ↗</a>}
+              {v.status === "tidak" && <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 6 }}>Udah {strategy.maxAttempts}× tanpa jawaban, diparkir sampai {longDate(v.parkedUntil || now)}. Kirim lagi tetap bisa.</div>}
+            </div>
+          );
+        })()}
+        {(curPost || source.kind === "post") && !isBlocked && (
+          <div role="radiogroup" aria-label="Kirim lewat" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
+            <span style={{ fontSize: 11, color: "var(--app-muted)", marginRight: 2 }}>Kirim lewat</span>
+            {([["post", "Balas di post"], ["dm", "DM"]] as [Channel, string][]).map(([k, l]) => (
+              <button key={k} role="radio" aria-checked={channel === k} onClick={() => setChannel(k)}
+                style={{ ...chip, minHeight: 36, padding: "8px 14px", fontSize: 12, fontWeight: 700, ...(channel === k ? { background: "#005eb0", color: "#fff", border: "1px solid #005eb0" } : {}) }}>{l}</button>
+            ))}
+          </div>
+        )}
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
           <div style={{ fontSize: 13, fontWeight: 700 }}>Pilih pesan</div>
           {canEdit && <button onClick={() => setEditing({ id: "", title: "", body: "" })} style={chip}>+ Template</button>}
@@ -246,9 +427,8 @@ export default function Hunting({ hunts, goal, onOpenScripts }: { hunts: Hunt[];
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
           {templates.map(t => {
             const s = scores.find(x => x.templateId === t.id);
-            const active = pending?.id === t.id;
             return (
-              <div key={t.id} style={{ background: "var(--app-inner)", border: `1px solid ${active ? "#005eb0" : "var(--app-border)"}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column" }}>
+              <div key={t.id} style={{ background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", opacity: isBlocked ? 0.5 : 1 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
                   <div style={{ fontSize: 13, fontWeight: 700 }}>{t.title}</div>
                   {canEdit && <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} style={{ ...chip, padding: "2px 8px" }}>✎</button>}
@@ -256,10 +436,10 @@ export default function Hunting({ hunts, goal, onOpenScripts }: { hunts: Hunt[];
                 {s && <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 6 }}>{s.sent} terkirim · dibales {pct(s.responseRate)} · tertarik {pct(s.winRate)}</div>}
                 <div style={{ fontSize: 12, color: "var(--app-sub)", lineHeight: 1.6, whiteSpace: "pre-wrap", marginBottom: 12, flex: 1 }}>{fill(t.body, target)}</div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => pick(t, "copy")} style={{ ...chip, flex: 1, minHeight: 40, fontSize: 12, fontWeight: 700, color: copiedId === t.id ? "var(--ok)" : "var(--app-text)", border: `1px solid ${copiedId === t.id ? "var(--ok)" : "var(--app-border)"}` }}>
+                  <button onClick={() => pick(t, "copy")} disabled={isBlocked} style={{ ...chip, flex: 1, minHeight: 40, fontSize: 12, fontWeight: 700, color: copiedId === t.id ? "var(--ok)" : "var(--app-text)", border: `1px solid ${copiedId === t.id ? "var(--ok)" : "var(--app-border)"}` }}>
                     {copiedId === t.id ? "✓ Tersalin" : "Copy"}
                   </button>
-                  <button onClick={() => pick(t, "wa")} style={{ ...btnWA, flex: 1, minHeight: 40, padding: "8px", fontSize: 12 }}>Kirim WA</button>
+                  <button onClick={() => pick(t, "wa")} disabled={isBlocked} style={{ ...btnWA, flex: 1, minHeight: 40, padding: "8px", fontSize: 12 }}>Kirim WA</button>
                 </div>
                 {copyFail === t.id && <div role="status" style={{ fontSize: 11, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 8 }}>Gagal menyalin. Pilih teks di atas, lalu salin manual.</div>}
               </div>
@@ -267,18 +447,16 @@ export default function Hunting({ hunts, goal, onOpenScripts }: { hunts: Hunt[];
           })}
         </div>
 
-        {pending && (
-          <div role="status" style={{ marginTop: 14, padding: 14, borderRadius: 12, background: "#005eb014", border: "1px solid #005eb050", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 12, flex: "1 1 200px" }}>
-              Udah dikirim ke <b>{target.trim() || "target"}</b> via {platform}? Pesan: <b>{pending.title}</b>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={logSent} style={{ ...btnPrimary, minHeight: 44 }}>📤 Catat terkirim</button>
-              <button onClick={() => setPending(null)} aria-label="Batal catat" style={{ ...btnMuted, minHeight: 44, padding: "11px 14px" }}>×</button>
-            </div>
+        {undo && (
+          <div role="status" style={{ marginTop: 14, padding: "10px 14px", borderRadius: 12, background: "#005eb014", border: "1px solid #005eb050", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ fontSize: 12, minWidth: 0 }}>{undo.label}</div>
+            <button onClick={takeBack} aria-label="Batal catat" style={{ ...btnMuted, minHeight: 40, padding: "8px 14px", flexShrink: 0 }}>Batal</button>
           </div>
         )}
       </div>
+
+      <ProspectList prospects={prospects} ready={journey.ready} hunts={hunts} strategy={strategy} sessionId={live?.id}
+        filter={prospectFilter} setFilter={setProspectFilter} onCompose={compose} />
 
       {/* Log */}
       <div style={{ ...card, padding: 20, marginBottom: 20 }}>
@@ -296,7 +474,7 @@ export default function Hunting({ hunts, goal, onOpenScripts }: { hunts: Hunt[];
         {filter === "Follow-up" && stale.length > 0 && <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 8 }}>Terkirim {STALE_DAYS}+ hari tanpa balasan. Follow-up sekali, kalau tetap diam tandai 👻.</div>}
         {shown.length === 0 && (
           <div style={{ fontSize: 12, color: "var(--app-muted)", padding: "16px 0" }}>
-            {filter === "Semua" ? "Belum ada DM. Isi target, pilih pesan, Copy, lalu Catat terkirim." : filter === "Follow-up" ? "Nggak ada yang nunggu follow-up." : "Belum ada yang tertarik. Terus kirim 💪"}
+            {filter === "Semua" ? "Belum ada DM. Isi target, pilih pesan, lalu Copy — langsung kecatat." : filter === "Follow-up" ? "Nggak ada yang nunggu follow-up." : "Belum ada yang tertarik. Terus kirim 💪"}
           </div>
         )}
         {shown.slice(0, limit).map(h => {
@@ -388,7 +566,7 @@ export default function Hunting({ hunts, goal, onOpenScripts }: { hunts: Hunt[];
       </div>
 
       {/* Which message works */}
-      <div style={{ ...card, padding: 20 }}>
+      <div style={{ ...card, padding: 20, marginBottom: 20 }}>
         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font, marginBottom: 4 }}>Pesan mana yang works?</div>
         <div style={{ fontSize: 11, color: "var(--app-muted)", marginBottom: 14 }}>Dibales = dijawab apa pun, termasuk ditolak. Tertarik = mau lanjut. Angka mulai bisa dipercaya setelah {MIN_SAMPLE} DM per template.</div>
         {advice && <div style={{ fontSize: 12, padding: 12, borderRadius: 10, background: "#f59e0b14", border: "1px solid #f59e0b50", marginBottom: 14 }}>💡 {advice}</div>}
@@ -417,6 +595,9 @@ export default function Hunting({ hunts, goal, onOpenScripts }: { hunts: Hunt[];
           </div>
         )}
       </div>
+
+      <Campaigns prospects={prospects} templates={templates} strategy={strategy} sessionId={live?.id} />
+      <HunterStats prospects={prospects} sessions={journey.sessions} />
 
       {editing && (
         <div className="modal-overlay" onClick={() => setEditing(null)}>
