@@ -57,7 +57,18 @@ Diminta user: "catet ke PRD terus lakuin semuanya". Urutan eksekusi = dari yang 
 
 Di atas tab: lambang (inisial nama guild dalam perisai, warnanya dari nama), nama + peran kamu, avatar anggota diwarnai per peran, **Level guild** (naik tiap deal tim lunas: 3, 10, 25, 50, 100, 200, 400), dan **bulan ini vs target** (tim buat Leader/Officer, punya sendiri buat Member). Viewer ga lihat deal, jadi cuma lambang, nama, dan anggota.
 
+## 2.7 Bawa data Pribadi ke guild (2026-10-10)
+
+Masukan owner: lead di ruang guild kosong padahal Pribadi isinya banyak — dua silo. Diputus: **pindah, bukan salin**, biar ga ada dua salinan yang bisa beda.
+
+- Kartu **Data pribadi kamu** di halaman Guild (buat yang jualan): berapa yang masih di Pribadi, **Bawa ke {guild}**. Pilih: Leads (+ outreach, rejection), Hunting (prospek, log DM, sesi), Penawaran & invoice, Report Klien (klien + chat, konten, report). Leader/Officer bisa sekalian **salin** Paket, template pesan, kampanye, info bisnis & setting hunting yang belum ada di guild.
+- Tiap baris disalin ke guild **atas nama kamu** (`ownerUid`), salinannya disimpan di `users/{uid}/moved/{guild}__{path}`, lalu dihapus dari Pribadi. Isi klien dipindah setelah kliennya ada di guild (rules ngecek pemilik klien).
+- **Jadiin guild ruang kerja utama** (default nyala): pemilih ruang kerja pindah ke guild, dan `users/{uid}/settings/workspace.mainGuild` bikin **lead website** ikut masuk ke guild atas nama owner pipeline.
+- **Balikin ke Pribadi**: versi terakhir di guild (termasuk editan tim) dibawa pulang, lalu dihapus dari guild; guild utama dilepas.
+- Di ruang guild, **Leads** ngasih tau kalau masih ada lead di Pribadi, dengan tombol ke kartu tadi.
+
+Rules ga berubah (koleksi guild yang dipakai udah ada; `moved` & `settings/workspace` di bawah `users/{uid}/**`). Flow `guild: bring Pribadi data in under your name, and back`.
+
 ## Belum ada (sesudah Fase 2)
 
-- Salin/pindah data pribadi lama ke guild secara massal.
 - Notifikasi lewat email / WhatsApp template (butuh layanan email / WABA).

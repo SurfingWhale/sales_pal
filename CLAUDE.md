@@ -8,8 +8,8 @@ then here.
 
 - **`firestore.rules` is deployed as a whole and replaces what is live.** Every
   collection the app reads or writes must stay covered. Today that is
-  `users/{uid}/{leads,outreach,rejections,pitchTemplates,hunts,prospects,huntSessions,campaigns,costs,radarSeen,services,quotes,invoices,settings}`
-  (prospects/huntSessions/campaigns/costs: Hunting journeys, PRD-009),
+  `users/{uid}/{leads,outreach,rejections,pitchTemplates,hunts,prospects,huntSessions,campaigns,costs,radarSeen,services,quotes,invoices,settings,moved}`
+  (prospects/huntSessions/campaigns/costs: Hunting journeys, PRD-009; moved: rows brought into a guild, PRD-007 §2.7),
   `users/{uid}/clients/{c}/{deals,posts,reports}` (Report Klien, PRD-005)
   `users/{uid}/guilds`, `guilds/{g}` with `{members,invites,deals,targets,reports,activities}`
   plus the guild workspace (PRD-007 §2.5, `lib/space.ts`): owned

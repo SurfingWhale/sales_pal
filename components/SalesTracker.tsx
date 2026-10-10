@@ -17,7 +17,7 @@ import { Space, SpaceContext, seesEveryone, spaceDoc, spaceQuery, stamp } from "
 import { SpaceOption, useSpaceChoice } from "@/lib/spaceChoice";
 import { disablePush, restorePush } from "@/lib/push";
 import PushToggle from "@/components/PushToggle";
-import { collection, doc, getDoc, setDoc, onSnapshot, deleteDoc, writeBatch, query, where, updateDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, getCountFromServer, getDoc, setDoc, onSnapshot, deleteDoc, writeBatch, query, where, updateDoc, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import { auth, db } from "@/lib/firebase";
@@ -44,13 +44,29 @@ import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, l
 
 // Five places, so a phone never scrolls sideways to find one. Jualan and
 // Lainnya hold several tabs, picked from a second row.
-const SECTIONS: { id: string; label: string; icon: string; tabs: string[] }[] = [
-  { id: "home", label: "Beranda", icon: "home" as IconName, tabs: ["Dashboard"] },
-  { id: "hunt", label: "Hunting", icon: "target" as IconName, tabs: ["Hunting"] },
-  { id: "leads", label: "Leads", icon: "users" as IconName, tabs: ["Leads"] },
-  { id: "sell", label: "Jualan", icon: "briefcase" as IconName, tabs: ["Penawaran", "Invoice", "Paket"] },
-  { id: "more", label: "Lainnya", icon: "grid" as IconName, tabs: ["Guild", "Report Klien", "Outreach", "Rejection Log", "Simulator", "Script Library", "AI Playbook"] },
+// Five places, in the order the work goes (owner, 2026-10-10): find people,
+// sell to them, report as a team, learn. Each tab says in one line what it's
+// for, so nothing hides behind a "Lainnya".
+const SECTIONS: { id: string; label: string; short: string; icon: string; tabs: string[] }[] = [
+  { id: "home", label: "Beranda", short: "Beranda", icon: "home" as IconName, tabs: ["Dashboard"] },
+  { id: "hunt", label: "Hunting", short: "Hunting", icon: "target" as IconName, tabs: ["Hunting"] },
+  { id: "sell", label: "Jualan", short: "Jualan", icon: "briefcase" as IconName, tabs: ["Leads", "Penawaran", "Invoice", "Paket"] },
+  { id: "team", label: "Tim & Report", short: "Tim", icon: "shield" as IconName, tabs: ["Guild", "Report Klien", "Outreach", "Rejection Log"] },
+  { id: "learn", label: "Belajar", short: "Belajar", icon: "book" as IconName, tabs: ["Script Library", "Simulator", "AI Playbook"] },
 ];
+const TAB_HINT: Record<string, string> = {
+  Leads: "Semua calon customer: skor potensi, profil, dan jadwal follow-up.",
+  Penawaran: "Susun penawaran dari paket, kirim, lalu catat yang disetujui.",
+  Invoice: "Tagih DP dan pelunasan, ingetin yang jatuh tempo.",
+  Paket: "Daftar jasa dan harga, dipakai waktu bikin penawaran.",
+  Guild: "Tim kamu: anggota, peran, pipeline bersama, target, dan report tim.",
+  "Report Klien": "Report bulanan buat klien: konten, chat, sampai lunas.",
+  Outreach: "Catatan email dan pesan yang udah dikirim.",
+  "Rejection Log": "Siapa yang nolak, alasannya, dan kapan coba lagi.",
+  "Script Library": "Script jawaban per tipe customer dan per keberatan.",
+  Simulator: "Latihan jawab customer sebelum ketemu beneran.",
+  "AI Playbook": "Cara pakai AI dan tools buat cari dan olah lead.",
+};
 const sectionOf = (tab: string) => SECTIONS.find(x => x.tabs.includes(tab)) || SECTIONS[0];
 
 interface Lead {
@@ -313,10 +329,22 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spaceKey]);
 
+  // A guild picked as the main workspace (PRD-007 §2.7) also takes the website leads.
+  const [mainGuild, setMainGuild] = useState<string | null>(null);
+  useEffect(() => onSnapshot(doc(db, "users", uid, "settings", "workspace"),
+    s => setMainGuild((s.data() as { mainGuild?: string | null } | undefined)?.mainGuild || null), () => setMainGuild(null)), [uid]);
+  const inboundTo = mainGuild && spaces.some(o => o.id === mainGuild) ? mainGuild : null;
+  // In a guild, leads still sitting in Pribadi (Leads shows a way to bring them in).
+  const [personalLeads, setPersonalLeads] = useState(0);
+  useEffect(() => {
+    if (space.kind !== "guild") { setPersonalLeads(0); return; }
+    getCountFromServer(collection(db, "users", uid, "leads")).then(c => setPersonalLeads(c.data().count), () => setPersonalLeads(0));
+  }, [spaceKey, uid]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const unsubs: (() => void)[] = [];
-    // Website leads (always into the owner's own space). Only the owner may read them (firestore.rules); for
-    // anyone else this listener is refused and simply stays quiet.
+    // Website leads: into the owner's own space, or the guild they made their main one. Only the owner may
+    // read them (firestore.rules); for anyone else this listener is refused and simply stays quiet.
     unsubs.push(
       onSnapshot(
         query(collection(db, "inbound_leads"), where("status", "==", "new")),
@@ -324,10 +352,12 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           snap.docs.forEach(async (d) => {
             try {
               const l = d.data() as InboundLead;
-              const ref = doc(db, "users", uid, "leads", leadIdFor(l, d.id));
-              const existing = await getDoc(ref);
-              const lead = mergeInbound(existing.exists() ? existing.data() : null, leadFromInbound(l), isMember(l));
-              if (lead) await setDoc(ref, lead, { merge: true });
+              const id = leadIdFor(l, d.id);
+              const ref = inboundTo ? doc(db, "guilds", inboundTo, "leads", id) : doc(db, "users", uid, "leads", id);
+              // A Member can't read a guild lead that isn't there yet: treat that as new.
+              const existing = await getDoc(ref).catch(() => null);
+              const lead = mergeInbound(existing?.exists() ? existing.data() : null, leadFromInbound(l), isMember(l));
+              if (lead) await setDoc(ref, inboundTo ? { ...lead, ownerUid: uid, ownerName: space.me.name } : lead, { merge: true });
               await updateDoc(doc(db, "inbound_leads", d.id), { status: "imported", importedAt: serverTimestamp(), importedBy: uid });
             } catch (err) {
               console.warn("Could not import website lead", d.id, err);
@@ -338,7 +368,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       )
     );
     return () => unsubs.forEach(u => u());
-  }, [uid]);
+  }, [uid, inboundTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -692,6 +722,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         .sp-nav-btn { position: relative; height: 38px; padding: 0 16px; display: flex; align-items: center; gap: 6px; border: none; border-radius: 999px; background: transparent; color: var(--app-ink-2); font: 500 14px 'Plus Jakarta Sans', sans-serif; cursor: pointer; white-space: nowrap; }
         .sp-nav-btn.is-on { color: var(--app-text); font-weight: 600; background: var(--thumb); box-shadow: var(--thumb-shadow); }
         .sp-nav-icon { display: none; }
+        .sp-nav-short { display: none; }
+        .sp-subhint { max-width: 1200px; margin: 0 auto; padding: 8px 32px 0; font-size: 13px; color: var(--app-muted); position: relative; z-index: 1; }
         .sp-iconbtn { width: 44px; height: 44px; border: 0; border-radius: 999px; color: var(--app-ink-2); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; flex-shrink: 0; font-family: inherit; }
         .sp-space { display: flex; align-items: center; height: 44px; border-radius: 999px; color: var(--app-ink-2); font-size: 13px; font-weight: 500; padding: 0 12px 0 16px; gap: 6px; }
         .sp-space select { appearance: none; -webkit-appearance: none; background: transparent; border: none; color: inherit; font: inherit; max-width: 150px; text-overflow: ellipsis; cursor: pointer; outline: none; }
@@ -706,6 +738,9 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           .sp-nav-btn { flex: 1; height: auto; flex-direction: column; justify-content: center; gap: 3px; padding: 0; border-radius: 28px; font-size: 11px; }
           .sp-nav-btn.is-on { background: var(--tab-on); box-shadow: none; color: var(--brand-text); }
           .sp-nav-icon { display: block; }
+          .sp-nav-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+          .sp-nav-short { display: inline; }
+          .sp-subhint { padding: 6px 16px 0; font-size: 12px; }
           .sp-space { padding: 0 10px 0 12px; font-size: 12px; }
           .sp-space select { max-width: 96px; }
           .sp-subnav { padding: 6px 16px 0; }
@@ -749,6 +784,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                   onClick={() => { if (!on) setActiveTab(sec.tabs[0]); }}>
                   <span className="sp-nav-icon"><Icon name={sec.icon} size={22} stroke={on ? 1.9 : 1.6} /></span>
                   <span className="sp-nav-label">{sec.label}</span>
+                  <span className="sp-nav-short" aria-hidden="true">{sec.short}</span>
                 </button>
               );
             })}
@@ -800,6 +836,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             ))}
           </div>
         )}
+        {TAB_HINT[activeTab] && <p className="sp-subhint">{TAB_HINT[activeTab]}</p>}
       </header>
 
       <div className="sp-main" style={{ padding: "32px 32px 96px", maxWidth: 1200, margin: "0 auto" }}>
@@ -834,6 +871,12 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           const panelLead = wide ? (liveLead && filteredLeads.some(l => l.id === liveLead.id) ? liveLead : filteredLeads[0]) : null;
           return (
           <div>
+            {space.kind === "guild" && personalLeads > 0 && (
+              <div role="status" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: "12px 16px", marginBottom: 16, fontSize: 14 }}>
+                <span>Ada <b>{personalLeads} lead</b> di ruang Pribadi kamu, belum ada di {space.name}.</span>
+                <button onClick={() => setActiveTab("Guild")} style={{ display: "inline-flex", alignItems: "center", height: 40, padding: "0 18px", borderRadius: 999, border: 0, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>Bawa ke {space.name} →</button>
+              </div>
+            )}
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
               <h1 style={{ margin: 0, fontSize: 34, lineHeight: 1.1, fontWeight: 600, letterSpacing: "-0.025em" }}>Leads <span className="tabnum" style={{ fontSize: 20, fontWeight: 500, color: "var(--app-muted)", letterSpacing: 0 }}>{leads.length}</span></h1>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", width: wide ? "auto" : "100%" }}>
@@ -939,7 +982,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         {activeTab === "Report Klien" && <ClientHub />}
 
         {/* GUILD (PRD-007) */}
-        {activeTab === "Guild" && <GuildHub uid={uid} name={user.displayName || (user.email || "").split("@")[0]} email={user.email || ""} />}
+        {activeTab === "Guild" && <GuildHub uid={uid} onUseSpace={g => { chooseSpace(g); setSelectedLead(null); }} name={user.displayName || (user.email || "").split("@")[0]} email={user.email || ""} />}
 
         {activeTab === "Penawaran" && (
           <Quotes quotes={quotes} invoices={invoices} services={services} business={business}
