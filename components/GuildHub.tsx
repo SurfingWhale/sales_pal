@@ -14,6 +14,7 @@ import {
   isManager, isSeller, leaveGuild, logActivity, removeMember, setRole, teamMonth, titleOf, transferLeadership,
 } from "@/lib/guild";
 import TeamReportSheet from "@/components/TeamReportSheet";
+import MoveToGuild from "@/components/MoveToGuild";
 import { Pipeline } from "@/components/ClientHub";
 import { badge, btnGhost, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
@@ -27,7 +28,7 @@ function recalled(): string { try { return localStorage.getItem("sp-guild") || "
 
 interface FrozenTeam { month: string; rows: ReturnType<typeof teamMonth>["rows"]; revenue: number; paidCount: number; leads: number; frozenAt: number }
 
-export default function GuildHub({ uid, name, email }: { uid: string; name: string; email: string }) {
+export default function GuildHub({ uid, name, email, onUseSpace }: { uid: string; name: string; email: string; onUseSpace?: (g: string) => void }) {
   const [refs, setRefs] = useState<GuildRef[] | null>(null);
   const [gid, setGid] = useState("");
   const [guild, setGuild] = useState<Guild | null>(null);
@@ -153,6 +154,7 @@ export default function GuildHub({ uid, name, email }: { uid: string; name: stri
         </div>
       )}
       {guild && me && <GuildBanner guild={guild} me={me} members={members} deals={deals} targets={targets} />}
+      {guild && me && isSeller(me.role) && <MoveToGuild me={{ uid, name: me.name }} guild={{ id: guild.id, name: guild.name }} role={me.role} onUseGuild={() => onUseSpace?.(guild.id)} />}
 
       {!guild || !me ? (
         <div style={{ ...card, padding: 24, fontSize: 12.5, color: "var(--app-muted)", textAlign: "center" }}>Memuat…</div>
