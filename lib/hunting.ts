@@ -23,6 +23,7 @@ export interface PitchTemplate {
   id: string;
   title: string;
   body: string;
+  stage?: string;        // lib/templates.ts STAGES; older ones are placed by title
 }
 
 export interface Hunt {

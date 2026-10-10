@@ -343,7 +343,17 @@ Tiap fase dapat flow di `tests/flows/flows.mjs` (CLAUDE.md), dijalanin mobile + 
 
 ---
 
-## 13. Keputusan (diambil 2026-10-10, ngikutin rekomendasi — owner: "do the task sampe fiturnya nyala")
+## 13. Template per tahap & konteks customer (masukan owner, 2026-10-10)
+
+Dari uji pertama: template masih satu tumpukan, ga ada panduan bikin pesan yang personal, dan pas post di-parse ga keliatan siapa customernya & butuh apa sebelum milih balasan.
+
+**Kanban tahap.** Template punya `stage`: **1 Intro → 2 Follow-up → 3 Gali kebutuhan → 4 Penawaran → 5 Closing → 6 ETB / repeat**. Deck tampil sebagai kolom per tahap; kolom yang cocok sama status prospek ditandai *Cocok sekarang* dan digulir ke tampilan (Baru → Intro; Intro terkirim / Belum respon / Tidak terhubung / Tidak tertarik → Follow-up; dibales tanpa hasil → Gali; Tertarik → Penawaran; Pikir-pikir / Hubungi nanti → Closing; ETB → ETB). Template lama tanpa `stage` ditaruh dari judulnya. Kolom kosong: **+ Pakai contoh** (contoh per tahap, `lib/templates.ts STARTERS`) atau tulis sendiri.
+
+**Variabel.** `{nama}` `{kebutuhan}` `{waktu}` `{lokasi}` `{post}` `{bisnis}`. Bagian dalam `[ ]` yang berisi variabel ilang kalau datanya kosong, bisa bertingkat: `Halo {nama}![ Aku liat kamu lagi nyari {kebutuhan}[ buat {waktu}].]`. Editor template: pilih tahap (dengan kapan dipakai + tips), tombol sisipkan variabel, daftar artinya, dan **preview** pakai prospek yang lagi dibuka. Kampanye & Quick Pitch ngisi variabel yang sama.
+
+**Konteks customer** (`lib/postContext.ts`, aturan kata, tanpa biaya): dari teks post dibaca **butuh apa, kapan, di mana, sinyal budget, jenis bisnis, jenis post** (minta rekomendasi / ngajak kolaborasi / lagi nyari jasa, plus saran balas di post atau DM), dan **gaya ngobrol** (tebakan tipe customer dari kata-katanya, `lib/profile.ts`). Disimpan di `prospects.context`, bisa diedit (✎ Ubah konteks; hasil edit ga ketimpa post berikutnya). Kartu konteks muncul sebelum deck, ringkasannya juga di baris journey.
+
+## 14. Keputusan (diambil 2026-10-10, ngikutin rekomendasi — owner: "do the task sampe fiturnya nyala")
 
 - **D1:** Copy / Kirim WA **langsung dicatat**, dengan **Batal** 5 detik. Tombol "Catat terkirim" dihapus.
 - **D2:** **Kasih data = ETB** (KPI hunter); lunas tetap diukur di Jualan / Report.

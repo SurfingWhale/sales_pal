@@ -227,6 +227,11 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
 
             {open && (
               <div role="region" aria-label={`Riwayat ${who}`} style={{ marginTop: 10 }}>
+                {p.context && (p.context.need || p.context.when || p.context.where) && (
+                  <div style={{ fontSize: 12, color: "var(--app-sub)", marginBottom: 6 }}>
+                    {[p.context.need && `Butuh ${p.context.need}`, p.context.when, p.context.where, p.context.budget].filter(Boolean).join(" · ")}
+                  </div>
+                )}
                 <div style={{ maxHeight: 360, overflowY: "auto", padding: "4px 2px" }}>
                   {(p.history || []).length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Belum ada riwayat.</div>}
                   {(p.history || []).map((e, i) => <Bubble key={`${e.at}_${i}`} e={e} />)}

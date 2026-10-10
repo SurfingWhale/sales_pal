@@ -5,17 +5,19 @@ import { onSnapshot, setDoc, deleteDoc } from "firebase/firestore";
 import Icon from "@/components/Icon";
 import { canEditCatalog, spaceCol, spaceDoc, useSpace } from "@/lib/space";
 import { WA_INK } from "@/components/ui";
+import { fillTemplate } from "@/lib/templates";
 
 interface Template {
   id: string;
   title: string;
   body: string;
+  stage?: string;   // Hunting's stage column (lib/templates.ts); kept when edited here
 }
 
 // Minimal starter examples so the panel isn't empty on first use — fully editable/deletable.
 const SEED: Omit<Template, "id">[] = [
-  { title: "Cold DM — Tawarin Jasa", body: "Halo {nama}! Aku fotografer makanan freelance 📸 Foto menu yang aesthetic bisa naikin order online. Boleh aku kirim portfolio + paket harga?" },
-  { title: "Follow-up", body: "Hai {nama}, mau follow up penawaran foto menu kemarin. Minggu ini ada slot promo kalau tertarik 😊" },
+  { stage: "intro", title: "Cold DM — Tawarin Jasa", body: "Halo {nama}! Aku fotografer makanan freelance 📸 Foto menu yang aesthetic bisa naikin order online. Boleh aku kirim portfolio + paket harga?" },
+  { stage: "followup", title: "Follow-up", body: "Hai {nama}, mau follow up penawaran foto menu kemarin. Minggu ini ada slot promo kalau tertarik 😊" },
 ];
 
 export default function QuickPitch({ hideButton = false }: { hideButton?: boolean }) {
@@ -42,8 +44,9 @@ export default function QuickPitch({ hideButton = false }: { hideButton?: boolea
     return unsub;
   }, [spaceKey, seeded]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // No person behind a quick pitch: {nama} is who you typed, the rest says nothing.
   function render(body: string) {
-    return body.replace(/\{nama\}/gi, target.trim() || "kak");
+    return fillTemplate(body, { nama: target.trim().replace(/^@/, "") });
   }
   function copyTpl(t: Template) {
     navigator.clipboard.writeText(render(t.body));
@@ -56,7 +59,7 @@ export default function QuickPitch({ hideButton = false }: { hideButton?: boolea
   async function save() {
     if (!editing || !editing.title.trim() || !editing.body.trim() || !canEdit) return;
     const id = editing.id || `tpl_${Date.now()}`;
-    await setDoc(spaceDoc(space, "pitchTemplates", id), { title: editing.title.trim(), body: editing.body.trim() });
+    await setDoc(spaceDoc(space, "pitchTemplates", id), { title: editing.title.trim(), body: editing.body.trim(), ...(editing.stage ? { stage: editing.stage } : {}) });
     setEditing(null);
   }
   async function remove(id: string) {

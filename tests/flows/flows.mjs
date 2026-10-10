@@ -397,6 +397,30 @@ export const flows = [
         await page.getByLabel("Prospek @tokokue").getByText("ada yang open jasa foto katalog buat UMKM?").waitFor();
         await page.getByRole("radio", { name: "Balas di post", checked: true }).waitFor();
       });
+      await t.step("before the message: the post's context and the stage that fits", async () => {
+        const card = page.getByLabel("Prospek @tokokue");
+        await card.getByText("foto katalog", { exact: true }).waitFor();
+        await card.getByText("Saran tahap:").waitFor();
+        await page.getByRole("listitem", { name: "Tahap 1: Intro, cocok sekarang" }).waitFor();
+        await card.getByRole("button", { name: "✎ Ubah konteks" }).click();
+        await page.locator("#ctx-when").fill("besok jam 1-5 sore");
+        await page.getByRole("button", { name: "Simpan konteks" }).click();
+        await card.getByText("besok jam 1-5 sore").waitFor();
+      });
+      await t.step("an empty stage takes an example, filled in with their need", async () => {
+        const offer = page.getByRole("listitem", { name: /Tahap 4: Penawaran/ });
+        await offer.getByRole("button", { name: "+ Pakai contoh" }).click();
+        await offer.getByText(/dua pilihan paket buat foto katalog besok jam 1-5 sore/).waitFor();
+      });
+      await t.step("a new template shows its stage, the words it can use, and a preview", async () => {
+        await page.getByRole("button", { name: "+ Template" }).click();
+        const dlg = page.getByRole("dialog", { name: "Template baru" });
+        await dlg.getByRole("radio", { name: "1. Intro", checked: true }).waitFor();
+        await page.locator("#tpl-body").fill("Halo {nama}! Butuh ");
+        await dlg.getByRole("button", { name: /Sisipkan \{kebutuhan\}/ }).click();
+        await dlg.getByText("Halo Toko Kue! Butuh foto katalog").waitFor();
+        await dlg.getByRole("button", { name: "Batal", exact: true }).click();
+      });
       // After the share's page load: a write still in flight when a page reloads is lost.
       await t.step("start a session: the bar shows over the page", async () => {
         await page.getByRole("button", { name: "▶ Mulai hunting" }).click();

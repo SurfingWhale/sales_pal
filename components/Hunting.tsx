@@ -2,7 +2,7 @@
 
 import { type Dispatch, type SetStateAction, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { deleteDoc, getDoc, setDoc, updateDoc } from "firebase/firestore";
-import { addDays, daysBetween, longDate, today, useSpaceCollection } from "@/lib/billing";
+import { addDays, daysBetween, longDate, today, useBusiness, useSpaceCollection } from "@/lib/billing";
 import { canEditCatalog, spaceDoc, stamp, useSpace } from "@/lib/space";
 import {
   HUNT_STATUS, Hunt, HuntStatus, MIN_SAMPLE, PLATFORMS, STALE_DAYS, PitchTemplate, Platform,
@@ -12,14 +12,17 @@ import ThreadsRadar from "@/components/ThreadsRadar";
 import ProspectList, { ProspectFilter } from "@/components/ProspectList";
 import Campaigns from "@/components/Campaigns";
 import HunterStats from "@/components/HunterStats";
+import CustomerContext from "@/components/CustomerContext";
+import TemplateBoard from "@/components/TemplateBoard";
+import { dataFor, fillTemplate, stageFor } from "@/lib/templates";
 import { TOPICS, Tone, defaultTopic, fromLibrary, repliesFor } from "@/lib/replies";
 import { profileUrl } from "@/lib/threads";
 import {
   Channel, HuntSession, Prospect, Strategy, newProspect, patchFromHunt, postPatch, prospectId, sessionMinutes,
-  statusColor, statusLabel, threadsPostLink, view,
+  threadsPostLink, view,
 } from "@/lib/prospects";
 import { HuntInbox, bump, createProspect, ctx, recordSend, saveProspect, unfurl, useHuntInbox } from "@/lib/prospectStore";
-import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
+import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, subheading } from "@/components/ui";
 
 type Filter = "Semua" | "Follow-up" | "Tertarik";
 const PAGE = 30;
@@ -47,7 +50,6 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   const [undo, setUndo] = useState<{ label: string; run: () => Promise<void> } | null>(null);
   const [prospectFilter, setProspectFilter] = useState<ProspectFilter>("Antrian");
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<PitchTemplate | null>(null);
   const [noting, setNoting] = useState<{ id: string; note: string } | null>(null);
   const [replyFor, setReplyFor] = useState<{ id: string; topic: string; tone: Tone } | null>(null);
   const [copiedReply, setCopiedReply] = useState<string | null>(null);
@@ -119,6 +121,8 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     return () => clearTimeout(t);
   }, [curId, cur, space]);
   const isBlocked = blocked === curId && !!curId;
+  const business = useBusiness(space);
+  const fillData = dataFor(target, cur, business.name);
   const curPost = cur ? [...(cur.history || [])].reverse().find(e => e.kind === "post") : undefined;
 
   // The bar's paste button and its queue land here.
@@ -202,7 +206,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   // person's journey at once, with five seconds to take it back.
   function pick(t: PitchTemplate, how: "copy" | "wa") {
     if (isBlocked) return;
-    const text = fill(t.body, target);
+    const text = fillTemplate(t.body, fillData);
     if (how === "copy") {
       copy(text, t.id, setCopiedId);
     } else {
@@ -314,13 +318,6 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     await setDoc(spaceDoc(space, "settings", "hunting"), { dailyGoal: n }, { merge: true });
   }
 
-  async function saveTemplate() {
-    if (!editing || !editing.title.trim() || !editing.body.trim() || !canEdit) return;
-    const id = editing.id || `tpl_${Date.now()}`;
-    await setDoc(spaceDoc(space, "pitchTemplates", id), { title: editing.title.trim(), body: editing.body.trim() });
-    setEditing(null);
-  }
-
   const progress = Math.min(1, sentToday / goal);
   const lastSession = journey.sessions.find(x => x.endedAt) || null;
 
@@ -391,25 +388,10 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
             <b>{target.trim()}</b> minta ga dihubungi. Pesan dimatiin buat orang ini.
           </div>
         )}
-        {cur && (() => {
-          const v = view(cur, now, strategy);
-          return (
-            <div aria-label={`Prospek ${cur.handle}`} style={{ padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)", marginBottom: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>{cur.name ? `${cur.name} (${cur.handle})` : cur.handle}</div>
-                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>
-                    {cur.segment} · {v.status === "intro" || v.status === "belum" ? `percobaan ${cur.attempts}/${strategy.maxAttempts}` : `masuk ${longDate(cur.firstSeenAt)}`}
-                  </div>
-                </div>
-                <span style={badge(statusColor(cur, v))}>{statusLabel(cur, v)}</span>
-              </div>
-              {curPost?.text && <div style={{ fontSize: 12, color: "var(--app-sub)", lineHeight: 1.5, marginTop: 8, whiteSpace: "pre-wrap" }}>“{curPost.text}”</div>}
-              {curPost?.url && <a href={curPost.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", fontSize: 12, color: "var(--brand-text)", marginTop: 6 }}>Buka post ↗</a>}
-              {v.status === "tidak" && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Udah {strategy.maxAttempts}× tanpa jawaban, diparkir sampai {longDate(v.parkedUntil || now)}. Kirim lagi tetap bisa.</div>}
-            </div>
-          );
-        })()}
+        {cur && (
+          <CustomerContext p={cur} v={view(cur, now, strategy)} strategy={strategy} stage={stageFor(cur, view(cur, now, strategy))} now={now}
+            onSave={c => saveProspect(space, cur, { context: c, updatedAt: Date.now() })} />
+        )}
         {(curPost || source.kind === "post") && !isBlocked && (
           <div role="radiogroup" aria-label="Kirim lewat" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
             <span style={{ fontSize: 12, color: "var(--app-muted)", marginRight: 2 }}>Kirim lewat</span>
@@ -420,33 +402,9 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
           </div>
         )}
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontSize: 13, fontWeight: 700 }}>Pilih pesan</div>
-          {canEdit && <button onClick={() => setEditing({ id: "", title: "", body: "" })} style={chip}>+ Template</button>}
-        </div>
-        {templates.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)", padding: "8px 0" }}>Belum ada template. Tambah satu dulu, pakai <code>{"{nama}"}</code> untuk nama target.</div>}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
-          {templates.map(t => {
-            const s = scores.find(x => x.templateId === t.id);
-            return (
-              <div key={t.id} style={{ background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", opacity: isBlocked ? 0.5 : 1 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>{t.title}</div>
-                  {canEdit && <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} style={{ ...chip, padding: "2px 8px" }}>✎</button>}
-                </div>
-                {s && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>{s.sent} terkirim · dibales {pct(s.responseRate)} · tertarik {pct(s.winRate)}</div>}
-                <div style={{ fontSize: 12, color: "var(--app-sub)", lineHeight: 1.6, whiteSpace: "pre-wrap", marginBottom: 12, flex: 1 }}>{fill(t.body, target)}</div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => pick(t, "copy")} disabled={isBlocked} style={{ ...chip, flex: 1, minHeight: 40, fontSize: 12, fontWeight: 700, color: copiedId === t.id ? "var(--ok)" : "var(--app-text)", border: `1px solid ${copiedId === t.id ? "var(--ok)" : "var(--app-border)"}` }}>
-                    {copiedId === t.id ? "✓ Tersalin" : "Copy"}
-                  </button>
-                  <button onClick={() => pick(t, "wa")} disabled={isBlocked} style={{ ...btnWA, flex: 1, minHeight: 40, padding: "8px", fontSize: 12 }}>Kirim WA</button>
-                </div>
-                {copyFail === t.id && <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 8 }}>Gagal menyalin. Pilih teks di atas, lalu salin manual.</div>}
-              </div>
-            );
-          })}
-        </div>
+        <TemplateBoard templates={templates} scores={scores} data={fillData} stage={stageFor(cur, cur ? view(cur, now, strategy) : undefined)}
+          blocked={isBlocked} copiedId={copiedId} copyFail={copyFail} onPick={pick} canEdit={canEdit}
+          sampleName={target.trim() ? (cur?.name || target.trim()) : ""} />
 
         {/* Mounted before its text, so screen readers announce "Tercatat". */}
         <div role="status">
@@ -603,22 +561,6 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       <Campaigns prospects={prospects} templates={templates} strategy={strategy} sessionId={live?.id} />
       <HunterStats prospects={prospects} sessions={journey.sessions} />
 
-      {editing && (
-        <div className="modal-overlay" onClick={() => setEditing(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 460 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 16 }}>{editing.id ? "Edit template" : "Template baru"}</div>
-            <label htmlFor="tpl-title" style={label}>Judul</label>
-            <input id="tpl-title" value={editing.title} onChange={e => setEditing({ ...editing, title: e.target.value })} placeholder="mis. Cold DM Cafe" style={{ ...inputStyle, fontSize: 16, marginBottom: 12 }} />
-            <label htmlFor="tpl-body" style={label}>Isi pesan · <code>{"{nama}"}</code> diganti nama target</label>
-            <textarea id="tpl-body" value={editing.body} onChange={e => setEditing({ ...editing, body: e.target.value })} placeholder="Halo {nama}! ..." style={{ ...inputStyle, fontSize: 16, height: 140, resize: "vertical", marginBottom: 16 }} />
-            {editing.id && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>Kalau isinya berubah banyak, mending bikin template baru supaya angka evaluasinya ga kecampur.</div>}
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={saveTemplate} disabled={!editing.title.trim() || !editing.body.trim()} style={{ ...btnPrimary, opacity: editing.title.trim() && editing.body.trim() ? 1 : 0.5 }}>Simpan</button>
-              <button onClick={() => setEditing(null)} style={btnMuted}>Batal</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

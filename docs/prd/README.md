@@ -12,6 +12,6 @@ SalesPal: PWA buat freelancer & tim sales kecil di Indonesia — cari lead, ngob
 | [006](PRD-006-audit-dan-platform.md) | Audit flow & backend: login di server, brankas token, kuota, tanpa data contoh | P0 dibangun | #29 |
 | [007](PRD-007-guild.md) | Guild: tim dengan peran Leader/Officer/Member/Viewer, pipeline & report tim, ruang kerja, notifikasi pagi | v1 + Fase 2 dibangun | #30–#33 |
 | [008](PRD-008-redesign-skor-potensi.md) | Desain baru: Beranda yang nyuruh, peta lead, skor potensi 5 sinyal, profil customer dari WhatsApp; audit `better-*`; uji tiap deploy | Dibangun | #34–#40 |
-| [009](PRD-009-hunting-session-journey.md) | Sesi hunting + journey prospek: share post Threads → prospek, Copy = kirim (Batal), disposisi status + hasil, DNC, NTB → ETB, kampanye, performa hunter & biaya | Dibangun, nunggu merge | #42 |
+| [009](PRD-009-hunting-session-journey.md) | Sesi hunting + journey prospek: share post Threads → prospek dengan konteks (butuh apa, kapan, di mana), template kanban per tahap + variabel, Copy = kirim (Batal), disposisi status + hasil, DNC, NTB → ETB, kampanye, performa hunter & biaya | Dibangun, nunggu merge | #42 |
 
-Uji otomatis: `npm run test:flows` (HP) dan `DESKTOP=1 npm run test:flows` — 12 flow lewat emulator Firebase. Uji manual tiap deploy: skill `salespal-uat` (claude-config).
+Uji otomatis: `npm run test:flows` (HP) dan `DESKTOP=1 npm run test:flows` — 13 flow lewat emulator Firebase. Uji manual tiap deploy: skill `salespal-uat` (claude-config).

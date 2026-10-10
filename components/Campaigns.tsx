@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { deleteDoc, setDoc } from "firebase/firestore";
-import { today, useSpaceCollection } from "@/lib/billing";
+import { today, useBusiness, useSpaceCollection } from "@/lib/billing";
 import { canEditCatalog, spaceDoc, useSpace } from "@/lib/space";
-import { PitchTemplate, fill } from "@/lib/hunting";
+import { PitchTemplate } from "@/lib/hunting";
+import { dataFor, fillTemplate } from "@/lib/templates";
 import { Campaign, GROUPS, GROUP_LABEL, Group, Prospect, Segment, Strategy, audience, rate, sentIn } from "@/lib/prospects";
 import { clean, recordSend } from "@/lib/prospectStore";
 import { btnMuted, btnPrimary, card, chip, font, inputStyle, label, modalBox } from "@/components/ui";
@@ -21,6 +22,9 @@ export default function Campaigns({ prospects, templates, strategy, sessionId }:
   const space = useSpace();
   const canEdit = canEditCatalog(space);
   const campaigns = useSpaceCollection<Campaign>(space, "campaigns").slice().sort((a, b) => b.createdAt - a.createdAt);
+  const business = useBusiness(space);
+  // The same message, in each person's own words (lib/templates.ts).
+  const textFor = (t: PitchTemplate, p: Prospect) => fillTemplate(t.body, dataFor(p.handle, p, business.name));
   const [draft, setDraft] = useState<Draft | null>(null);
   const [running, setRunning] = useState<{ id: string; skipped: string[] } | null>(null);
   const [undo, setUndo] = useState<{ label: string; run: () => Promise<void> } | null>(null);
@@ -35,7 +39,7 @@ export default function Campaigns({ prospects, templates, strategy, sessionId }:
   }
 
   async function send(c: Campaign, p: Prospect, t: PitchTemplate) {
-    const text = fill(t.body, p.handle);
+    const text = textFor(t, p);
     setMsg("");
     const copied = await (navigator.clipboard ? navigator.clipboard.writeText(text).then(() => true, () => false) : Promise.resolve(false));
     try {
@@ -95,7 +99,7 @@ export default function Campaigns({ prospects, templates, strategy, sessionId }:
                   <>
                     <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>{reached.length + 1} dari {reached.length + queue.length}</div>
                     <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{cur.name ? `${cur.name} (${cur.handle})` : cur.handle} · {cur.platform}</div>
-                    <div style={{ fontSize: 12.5, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: 10 }}>{fill(t.body, cur.handle)}</div>
+                    <div style={{ fontSize: 12.5, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: 10 }}>{textFor(t, cur)}</div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       <button onClick={() => send(c, cur, t)} style={{ ...btnPrimary, padding: "8px 14px" }}>Copy & catat</button>
                       {cur.url && <a href={cur.url} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Buka profil ↗</a>}

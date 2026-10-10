@@ -11,6 +11,7 @@
 
 import { daysFrom, shift } from "@/lib/digest";
 import type { HuntStatus, Platform } from "@/lib/hunting";
+import { PostContext, mergeContext, readPost } from "@/lib/postContext";
 
 export type Contact = "baru" | "intro" | "terhubung" | "dnc";
 export type Status = "baru" | "intro" | "belum" | "tidak" | "terhubung" | "dnc";
@@ -55,6 +56,7 @@ export interface Prospect {
   leadId?: string;
   dncAt?: string;
   source: { kind: SourceKind; url?: string; postId?: string; text?: string };
+  context?: PostContext;   // need, when, where… read from their post (lib/postContext.ts)
   sessionId?: string;
   history: ProspectEvent[];
   closed: boolean;         // DNC: kept only so the request is honoured
@@ -180,9 +182,11 @@ export function newProspect(
   ctx: Ctx,
 ): Omit<Prospect, "id"> {
   const history: ProspectEvent[] = input.source.text ? [{ at: ctx.at, kind: "post", text: input.source.text, url: input.source.url }] : [];
+  const context = input.source.text ? readPost(input.source.text) : {};
   return {
     platform: input.platform, handle: input.handle, ...(input.name ? { name: input.name } : {}), ...(input.url ? { url: input.url } : {}),
     segment: "NTB", contact: "baru", attempts: 0, firstSeenAt: ctx.on, source: input.source,
+    ...(Object.keys(context).length ? { context } : {}),
     ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
     history, closed: false, createdAt: ctx.at, updatedAt: ctx.at,
   };
@@ -194,7 +198,10 @@ export function postPatch(p: Prospect, source: Prospect["source"], name: string 
   const known = p.history?.some(e => e.kind === "post" && e.url && e.url === source.url);
   const out: Partial<Prospect> = { updatedAt: ctx.at };
   if (name && !p.name) out.name = name;
-  if (!known && source.text) out.history = withEvent(p.history, { at: ctx.at, kind: "post", text: source.text, url: source.url });
+  if (!known && source.text) {
+    out.history = withEvent(p.history, { at: ctx.at, kind: "post", text: source.text, url: source.url });
+    out.context = mergeContext(p.context, readPost(source.text));
+  }
   if (p.contact === "intro" && p.attempts > 0) out.attempts = 0;
   return out;
 }
