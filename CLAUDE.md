@@ -28,3 +28,8 @@ then here.
   `tests/flows/out/report.md` with the failing step and a screenshot. Needs
   Java (`brew install openjdk@21`). A new feature gets a flow in
   `tests/flows/flows.mjs`.
+- **UI changes follow `docs/standards/native.md`** (PRD-010): 44pt touch
+  targets, 16px fields, no browser print/alert/confirm/prompt, a way out of
+  every dialog, AA contrast via the text tokens, restrained motion, neutral
+  sample data. The flow runner audits every step; a finding fails the run, and
+  the `native` workflow (WebKit iPhone 12 + Safari) must be green before merge.

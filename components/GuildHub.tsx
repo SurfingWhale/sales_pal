@@ -257,7 +257,7 @@ function GuildBanner({ guild, me, members, deals, targets }: { guild: Guild; me:
           <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>
             {members.length} anggota{sees ? ` · Level ${lv} · ${lunas} deal lunas${team ? "" : " (punya kamu)"}` : ""}
           </div>
-          <div aria-label={`Anggota: ${people.map(m => `${m.name} (${titleOf(guild, m.role)})`).join(", ")}`} style={{ display: "flex", alignItems: "center", marginTop: 10 }}>
+          <div role="group" aria-label={`Anggota: ${people.map(m => `${m.name} (${titleOf(guild, m.role)})`).join(", ")}`} style={{ display: "flex", alignItems: "center", marginTop: 10 }}>
             {shown.map((m, i) => (
               <span key={m.uid} title={`${m.name} · ${titleOf(guild, m.role)}`} aria-hidden="true"
                 style={{ width: 30, height: 30, borderRadius: "50%", marginLeft: i ? -8 : 0, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff", background: ROLE_COLOR[m.role], border: "2px solid var(--app-card)" }}>

@@ -119,9 +119,9 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
 
       <div className="sp-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 20 }}>
         {[
-          { l: "Menunggu jawaban", v: open.length, s: rupiah(open.reduce((a, q) => a + total(q), 0)), c: "#005eb0" },
+          { l: "Menunggu jawaban", v: open.length, s: rupiah(open.reduce((a, q) => a + total(q), 0)), c: "var(--brand-text)" },
           { l: "Disetujui", v: won.length, s: rupiah(won.reduce((a, q) => a + total(q), 0)), c: "var(--ok)" },
-          { l: "Win rate", v: decided ? `${Math.round((won.length / decided) * 100)}%` : "—", s: `${decided} sudah dijawab`, c: "#a78bfa" },
+          { l: "Win rate", v: decided ? `${Math.round((won.length / decided) * 100)}%` : "—", s: `${decided} sudah dijawab`, c: "var(--violet-text)" },
         ].map(x => (
           <div key={x.l} style={{ ...card, padding: 16 }}>
             <div style={{ fontSize: 22, fontWeight: 700, color: x.c, fontFamily: font }}>{x.v}</div>

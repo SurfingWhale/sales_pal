@@ -47,8 +47,16 @@ export default function ModalA11y() {
     // Back closes a dialog: one history entry per open dialog. Next.js keeps
     // its own fields in history.state, so they're copied along.
     let entries = 0;
-    let swallow = 0;
-    const push = () => { entries++; window.history.pushState({ ...(window.history.state || {}), spModal: entries }, ""); };
+    // Going back lands later, and Safari merges back() calls made together into
+    // one step. So: at most one traversal in flight (`inFlight`), entries still
+    // to drop wait in `owed`, and a dialog opened meanwhile waits in `deferred`
+    // to push its entry until the traversal is through.
+    let inFlight = false;
+    let owed = 0;
+    let deferred = 0;
+    const pushNow = () => window.history.pushState({ ...(window.history.state || {}), spModal: entries }, "");
+    const push = () => { entries++; if (inFlight) deferred++; else pushNow(); };
+    const drop = (n: number) => { if (inFlight) { owed += n; return; } inFlight = true; window.history.go(-n); };
     const topmost = () => {
       const all = document.querySelectorAll<HTMLElement>(".modal-overlay");
       return all.length ? all[all.length - 1] : null;
@@ -81,11 +89,14 @@ export default function ModalA11y() {
         if (el && document.contains(el)) el.focus({ preventScroll: true });
       }
       // Closed by its own button: drop the entry it pushed, quietly.
+      let gone = 0;
       while (entries > open) {
         entries--;
-        swallow++;
-        window.history.back();
+        // Its entry never went in (still waiting on a back): nothing to undo.
+        if (deferred > 0) { deferred--; continue; }
+        gone++;
       }
+      if (gone) drop(gone);
     });
     observer.observe(document.body, { childList: true, subtree: true });
     document.querySelectorAll<HTMLElement>(".modal-overlay").forEach(prepare);
@@ -108,7 +119,12 @@ export default function ModalA11y() {
       else if (!e.shiftKey && (document.activeElement === last || !box.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
     }
     function onPop() {
-      if (swallow > 0) { swallow--; return; }
+      if (inFlight) {
+        inFlight = false;
+        if (owed) { const n = owed; owed = 0; drop(n); return; }
+        for (; deferred > 0; deferred--) pushNow();
+        return;
+      }
       const overlay = topmost();
       if (!overlay || entries === 0) return;
       entries--;

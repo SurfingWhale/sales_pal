@@ -12,9 +12,11 @@ import { useConfirm } from "@/components/ConfirmSheet";
 // one column per stage, the column that fits this person lit up, and every
 // template filled in with what their post said.
 
-export default function TemplateBoard({ templates, scores, data, stage, blocked, copiedId, copyFail, onPick, canEdit, sampleName }: {
+export default function TemplateBoard({ templates, scores, data, stage, blocked, copiedId, copyFail, onPick, canEdit, sampleName, send = { how: "wa", label: "Kirim WA" } }: {
   templates: PitchTemplate[]; scores: TemplateScore[]; data: FillData; stage: Stage; blocked: boolean;
-  copiedId: string | null; copyFail: string | null; onPick: (t: PitchTemplate, how: "copy" | "wa") => void;
+  copiedId: string | null; copyFail: string | null; onPick: (t: PitchTemplate, how: "copy" | "wa" | "open") => void;
+  // The second button: WhatsApp, or copy and open the DM / post (Hunting decides by platform).
+  send?: { how: "wa" | "open"; label: string };
   canEdit: boolean; sampleName: string;
 }) {
   const [ask, askSheet] = useConfirm();
@@ -94,7 +96,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
                 const sc = scores.find(x => x.templateId === t.id);
                 const missing = missingIn(t.body, data);
                 return (
-                  <div key={t.id} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", opacity: blocked ? 0.5 : 1 }}>
+                  <div key={t.id} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", filter: blocked ? "grayscale(1)" : undefined }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
                       <div style={{ fontSize: 13, fontWeight: 700 }}>{t.title}</div>
                       {canEdit && <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} title="Edit template" className="sp-icon-btn" style={{ ...chip, flexShrink: 0, minWidth: 32, minHeight: 32, padding: "2px 8px", margin: "-6px -6px 0 0" }}>✎</button>}
@@ -106,7 +108,8 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
                       <button onClick={() => onPick(t, "copy")} disabled={blocked} style={{ ...chip, flex: 1, minHeight: 40, fontSize: 12, fontWeight: 700, color: copiedId === t.id ? "var(--ok)" : "var(--app-text)", border: `1px solid ${copiedId === t.id ? "var(--ok)" : "var(--app-border)"}` }}>
                         {copiedId === t.id ? "✓ Tersalin" : "Copy"}
                       </button>
-                      <button onClick={() => onPick(t, "wa")} disabled={blocked} style={{ ...btnWA, flex: 1, minHeight: 40, padding: "8px", fontSize: 12 }}>Kirim WA</button>
+                      <button onClick={() => onPick(t, send.how)} disabled={blocked}
+                        style={{ ...(send.how === "wa" ? btnWA : { ...btnWA, background: "#005eb0", color: "#fff" }), flex: 1, minHeight: 40, padding: "8px", fontSize: 12 }}>{send.label}</button>
                     </div>
                     {copyFail === t.id && <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 8 }}>Gagal menyalin. Pilih teks di atas, lalu salin manual.</div>}
                   </div>

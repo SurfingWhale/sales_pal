@@ -12,7 +12,7 @@ import {
   resultPatch, statusColor, statusLabel, view,
 } from "@/lib/prospects";
 import { Counter, bump, clean, ctx, loadClosed, removeProspect, saveProspect, syncHunt } from "@/lib/prospectStore";
-import { badge, btnPrimary, btnMuted, card, chip, font, inputStyle, label, modalBox } from "@/components/ui";
+import { badge, btnPrimary, btnMuted, card, chip, font, inputStyle, label, modalBox, ink } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmSheet";
 
 // Every person hunted, one journey each (docs/prd/PRD-009 §6): where they
@@ -224,7 +224,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
           return (
             <button key={f} onClick={() => { setFilter(f); setLimit(PAGE); }} aria-pressed={filter === f}
               style={{ ...chip, flexShrink: 0, minHeight: 36, fontWeight: 700, ...(filter === f ? { background: "#005eb0", color: "#fff", border: "1px solid #005eb0" } : {}) }}>
-              {f}{n ? <span style={{ opacity: 0.75 }}> {n}</span> : null}
+              {f}{n ? <span> {n}</span> : null}
             </button>
           );
         })}

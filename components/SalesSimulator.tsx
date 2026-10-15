@@ -1,5 +1,6 @@
 "use client";
 
+import { ink } from "@/components/ui";
 import { useRef, useState } from "react";
 import { archetypes, objections, scriptMatrix } from "@/lib/salespal-data";
 
@@ -110,15 +111,15 @@ export default function SalesSimulator() {
                 }}
               >
                 <div aria-hidden="true" style={{ fontSize: 34, marginBottom: 10 }}>{a.animal}</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: a.color, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 6 }}>{a.name}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: ink(a.color), fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 6 }}>{a.name}</div>
                 <div style={{ fontSize: 12, color: "var(--app-muted)", lineHeight: 1.6, marginBottom: 14 }}>{a.comStyle}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                   {a.traits.map(t => (
-                    <span key={t} style={{ fontSize: 12, background: `${a.color}15`, color: a.color, border: `1px solid ${a.color}30`, borderRadius: 20, padding: "2px 8px" }}>{t}</span>
+                    <span key={t} style={{ fontSize: 12, background: `${a.color}15`, color: "var(--app-text)", border: `1px solid ${a.color}30`, borderRadius: 20, padding: "2px 8px" }}>{t}</span>
                   ))}
                 </div>
                 <div style={{ marginTop: 16, fontSize: 12, color: "var(--app-muted)", borderTop: "1px solid var(--app-border)", paddingTop: 12 }}>
-                  <span style={{ color: "var(--app-dim)" }}>Kata kunci: </span>
+                  <span style={{ color: "var(--app-muted)", fontWeight: 600 }}>Kata kunci: </span>
                   {a.triggerWords.slice(0, 3).join(", ")}...
                 </div>
               </button>
@@ -138,7 +139,7 @@ export default function SalesSimulator() {
           }}>
             <span aria-hidden="true" style={{ fontSize: 28 }}>{archetype.animal}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: archetype.color }}>{archetype.name}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: ink(archetype.color) }}>{archetype.name}</div>
               <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{archetype.strategy}</div>
             </div>
             <button
@@ -184,7 +185,7 @@ export default function SalesSimulator() {
               style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 40, background: `${archetype.color}0d`, border: `1px solid ${archetype.color}30`, borderRadius: 20, padding: "0 14px", cursor: "pointer", color: "inherit", fontFamily: "inherit" }}
             >
               <span aria-hidden="true">{archetype.animal}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: archetype.color }}>{archetype.name}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: ink(archetype.color) }}>{archetype.name}</span>
               <span style={{ fontSize: 12, color: "var(--app-muted)" }}>· ganti</span>
             </button>
             <button

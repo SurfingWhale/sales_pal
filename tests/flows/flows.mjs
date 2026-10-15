@@ -11,15 +11,115 @@ const OWNER_EMAIL = readFileSync(new URL("../../firestore.rules", import.meta.ur
 // One DM in Hunting's log: the row that holds this target and its delete button.
 const huntRow = (page, target) => page.locator("div").filter({ has: page.getByText(target, { exact: true }) }).filter({ has: page.getByRole("button", { name: /^Hapus DM/ }) }).last();
 
+// ---- Production-size account (PRD-010): written straight into the emulator
+// as the owner, so a flow can open the app the way a busy seller sees it.
+// Every name and number here is invented.
+const fv = (v) =>
+  v === null || v === undefined ? { nullValue: null }
+  : typeof v === "boolean" ? { booleanValue: v }
+  : typeof v === "number" ? (Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v })
+  : typeof v === "string" ? { stringValue: v }
+  : Array.isArray(v) ? { arrayValue: { values: v.map(fv) } }
+  : { mapValue: { fields: Object.fromEntries(Object.entries(v).filter(([, x]) => x !== undefined).map(([k, x]) => [k, fv(x)])) } };
+
+async function uidOf(project, email) {
+  const r = await fetch(`http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/${project}/accounts:query`, {
+    method: "POST", headers: { Authorization: "Bearer owner", "Content-Type": "application/json" }, body: "{}",
+  });
+  const j = await r.json();
+  return (j.userInfo || []).find(u => u.email === email)?.localId;
+}
+
+async function seedDocs(project, docs) {
+  const root = `projects/${project}/databases/(default)/documents`;
+  for (let i = 0; i < docs.length; i += 400) {
+    const writes = docs.slice(i, i + 400).map(([path, data]) => ({ update: { name: `${root}/${path}`, fields: fv(data).mapValue.fields } }));
+    const r = await fetch(`http://127.0.0.1:8089/v1/${root}:commit`, {
+      method: "POST", headers: { Authorization: "Bearer owner", "Content-Type": "application/json" }, body: JSON.stringify({ writes }),
+    });
+    if (!r.ok) throw new Error(`seed failed: ${r.status} ${(await r.text()).slice(0, 200)}`);
+  }
+}
+
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return ymd(d); };
+
+// 200 leads, 40 quotes, 50 invoices, 60 prospects, 120 DMs, 3 clients.
+function bigAccount(uid) {
+  const u = `users/${uid}`;
+  const docs = [];
+  const STATUS = ["Cold", "Warm", "Hot", "Closed", "Lost"];
+  const CAT = ["F&B", "Retail", "Health", "Service"];
+  for (let i = 1; i <= 200; i++) {
+    const n = String(i).padStart(3, "0");
+    docs.push([`${u}/leads/big_${n}`, {
+      name: `Usaha Contoh ${n}`, contact: `Kontak ${n}`, source: ["GMaps", "Instagram", "Threads", "Referral"][i % 4], status: STATUS[i % 5],
+      score: (i * 37) % 100, email: "", phone: i % 3 ? `0812000${n}${n.slice(1)}` : "", category: CAT[i % 4],
+      notes: i % 7 ? "" : "Minta pricelist, follow-up minggu depan.", lastContact: daysAgo(i % 90), value: 1_000_000 + (i % 20) * 750_000,
+      ...(i % 4 === 0 ? { nextActionDate: daysAgo((i % 9) - 4), nextAction: "Follow-up penawaran" } : {}),
+      ...(i % 6 === 0 ? { lastReplyAt: daysAgo(i % 10) } : {}),
+    }]);
+  }
+  const item = (k) => ({ name: `Paket foto ${k}`, qty: 1, price: 750_000 + k * 250_000, description: "20 foto edit\n1x revisi" });
+  for (let i = 1; i <= 40; i++) {
+    const n = String(i).padStart(3, "0");
+    docs.push([`${u}/quotes/big_q${n}`, {
+      number: `Q-BIG-${n}`, leadId: `big_${n}`, leadName: `Usaha Contoh ${n}`, contact: `Kontak ${n}`, phone: "",
+      items: [item(i % 4)], discount: 0, dpPercent: 50, notes: "", date: daysAgo(i * 2), validUntil: daysAgo(i * 2 - 14),
+      status: ["Draft", "Terkirim", "Disetujui", "Ditolak"][i % 4], ...(i % 4 === 1 ? { sentAt: daysAgo(i * 2 - 1) } : {}),
+    }]);
+  }
+  for (let i = 1; i <= 50; i++) {
+    const n = String(i).padStart(3, "0");
+    const total = 750_000 + (i % 4) * 250_000;
+    const pays = i % 3 === 0 ? [] : i % 3 === 1 ? [{ date: daysAgo(i), amount: total / 2, note: "DP 50%" }] : [{ date: daysAgo(i + 3), amount: total / 2, note: "DP 50%" }, { date: daysAgo(i), amount: total / 2, note: "Pelunasan" }];
+    docs.push([`${u}/invoices/big_i${n}`, {
+      number: `INV-BIG-${n}`, quoteId: "", leadId: `big_${n}`, leadName: `Usaha Contoh ${n}`, contact: `Kontak ${n}`, phone: "",
+      items: [item(i % 4)], discount: 0, dpPercent: 50, notes: "", date: daysAgo(i + 5), dueDate: daysAgo(i - 2), payments: pays,
+      ...(i % 5 === 0 ? { project: `Foto katalog ${n}`, eventDate: daysAgo(-(i % 20)), eventTime: "10.00–12.00 WIB", venue: "Jl. Contoh No. 1" } : {}),
+    }]);
+  }
+  for (let i = 1; i <= 60; i++) {
+    const n = String(i).padStart(3, "0");
+    const at = Date.now() - i * 86_400_000;
+    docs.push([`${u}/prospects/Threads_contoh_${n}`, {
+      platform: "Threads", handle: `@contoh_${n}`, segment: i % 10 === 0 ? "ETB" : "NTB", contact: ["baru", "intro", "terhubung"][i % 3], attempts: i % 3,
+      firstSeenAt: daysAgo(i), source: { kind: "post", url: `https://www.threads.com/@contoh_${n}/post/X${n}`, text: "ada yang open jasa foto produk buat UMKM? budget ramah ya" },
+      context: { need: "foto produk", budget: "budget ramah", kind: "rekomendasi" },
+      history: [{ at, kind: "post", text: "ada yang open jasa foto produk buat UMKM?" }, ...(i % 3 ? [{ at: at + 3_600_000, kind: "sent", text: "Halo kak, aku fotografer produk…", channel: "dm" }] : [])],
+      closed: false, createdAt: at, updatedAt: at, ...(i % 3 ? { firstSentAt: daysAgo(i), lastSentAt: daysAgo(i) } : {}),
+    }]);
+  }
+  for (let i = 1; i <= 120; i++) {
+    const n = String(i).padStart(3, "0");
+    docs.push([`${u}/hunts/big_h${n}`, {
+      target: `@contoh_${String((i % 60) + 1).padStart(3, "0")}`, platform: "Threads", templateId: "tpl_cold", templateTitle: "Cold DM — Tawarin Jasa",
+      status: ["Terkirim", "Dibales", "Tertarik", "Ditolak", "Ghosting"][i % 5], note: "", date: daysAgo(i % 30), createdAt: Date.now() - (i % 30) * 86_400_000,
+    }]);
+  }
+  for (const c of ["Toko Contoh A", "Toko Contoh B", "Toko Contoh C"]) {
+    const id = c.toLowerCase().replace(/\W+/g, "_");
+    docs.push([`${u}/clients/${id}`, { name: c, segmentThreshold: 5_000_000, createdAt: Date.now() }]);
+    for (let k = 1; k <= 15; k++) docs.push([`${u}/clients/${id}/deals/d${k}`, {
+      contactName: `Pembeli ${k}`, phone: "", firstTouch: { channel: ["Instagram", "TikTok", "WhatsApp"][k % 3], method: "self_report", at: daysAgo(k * 2) },
+      stage: ["lead", "qualified", "quoted", "won", "paid"][k % 5], leadAt: daysAgo(k * 2), quoteValue: 500_000 + k * 100_000,
+      ...(k % 5 === 4 ? { paidAt: daysAgo(k), paidAmount: 500_000 + k * 100_000, wonAt: daysAgo(k + 1) } : {}),
+    }]);
+  }
+  return docs;
+}
+
 async function signup(t) {
   const { page, base } = t;
   await page.goto(`${base}/login`);
   await page.getByRole("button", { name: "Daftar gratis" }).click();
-  await page.locator('input[type="email"]').fill(`flow${Date.now()}${Math.floor(Math.random() * 1e4)}@contoh.id`);
+  const email = `flow${Date.now()}${Math.floor(Math.random() * 1e4)}@contoh.id`;
+  await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill("rahasia123");
   await page.locator('form button[type="submit"]').click();
   await page.waitForURL("**/dashboard", { timeout: 20000 });
   await page.getByRole("heading", { name: /^Perlu ditindak/ }).waitFor();
+  return email;
 }
 
 async function go(page, place, tab) {
@@ -208,7 +308,7 @@ export const flows = [
         await go(t.page, "Jualan", "Leads");
         await t.page.getByRole("button", { name: /^Tinggi/ }).click();
         await expectText(t.page, "Kopi Flow");
-        await t.page.getByRole("button", { name: /^Semua/ }).click();
+        await t.page.getByRole("group", { name: "Saring menurut potensi" }).getByRole("button", { name: /^Semua/ }).click();
       });
       await t.step("it sits on the lead map as Cepat closing, and opens from there", async () => {
         await go(t.page, "Beranda");
@@ -287,6 +387,7 @@ export const flows = [
   },
   {
     name: "whatsapp: a chat shared from Android becomes a new lead's profile",
+    serviceWorker: true,
     async run(t) {
       const { page, base } = t;
       await t.step("sign up", () => signup(t));
@@ -481,6 +582,81 @@ export const flows = [
     },
   },
   {
+    // PRD-010: a busy seller's account (200 leads, 50 invoices, 60 prospects…).
+    // Every place must open, stay usable, and pass the HIG audit with real volume.
+    name: "akun besar: every place with production-size data",
+    async run(t) {
+      const { page, project } = t;
+      let email = "";
+      await t.step("sign up", async () => { email = await signup(t); });
+      await t.step("seed a production-size account", async () => {
+        const uid = await uidOf(project, email);
+        if (!uid) throw new Error(`no emulator user for ${email}`);
+        await seedDocs(project, bigAccount(uid));
+        await page.reload();
+        await page.waitForURL("**/dashboard");
+      });
+      const places = [
+        ["Beranda", null, /Usaha Contoh|perlu ditindak/i],
+        ["Hunting", null, /contoh_0/],
+        ["Jualan", "Leads", /Usaha Contoh 1/],
+        ["Jualan", "Penawaran", /Q-BIG-/],
+        ["Jualan", "Invoice", /INV-BIG-/],
+        ["Tim", "Report Klien", /Penjualan/],
+      ];
+      for (const [place, tab, want] of places) {
+        await t.step(`${place}${tab ? ` → ${tab}` : ""} opens with its data`, async () => {
+          const t0 = Date.now();
+          await go(page, place, tab);
+          await page.getByText(want).first().waitFor({ timeout: 15000 });
+          const ms = Date.now() - t0;
+          if (ms > 8000) throw new Error(`took ${ms} ms to show`);
+        });
+        await t.audit(`${place}${tab ? ` → ${tab}` : ""} (big account)`);
+      }
+      await t.step("search 200 leads", async () => {
+        await go(page, "Jualan", "Leads");
+        await page.locator("#lead-search").fill("Contoh 137");
+        await page.locator(".lead-row", { hasText: "Usaha Contoh 137" }).first().waitFor();
+        if (await page.locator(".lead-row").count() > 3) throw new Error("search did not narrow the list");
+      });
+      await t.step("find a prospect by ID among 60", async () => {
+        await go(page, "Hunting");
+        await page.getByLabel("Cari prospek pakai ID atau @username").fill("contoh_042");
+        await expectText(page, "1 ketemu");
+      });
+      await t.step("search finds a lead by part of its phone number", async () => {
+        await go(page, "Jualan", "Leads");
+        await page.locator("#lead-search").fill("13737");
+        await page.locator(".lead-row", { hasText: "Usaha Contoh 137" }).first().waitFor();
+        if (await page.locator(".lead-row").count() !== 1) throw new Error("phone search did not find exactly one lead");
+        await page.locator("#lead-search").fill("");
+      });
+      await t.step("quick views and sort answer the daily questions", async () => {
+        await page.getByRole("group", { name: "Tampilan cepat" }).getByRole("button", { name: /^Telat \d+/ }).click();
+        await page.locator(".lead-row").first().waitFor();
+        await page.locator("#lead-sort").selectOption("nilai");
+        await page.getByRole("group", { name: "Tampilan cepat" }).getByRole("button", { name: /^Semua/ }).click();
+      });
+      await t.step("follow-up one lead after another, without going back to the list", async () => {
+        const run = page.getByRole("button", { name: /Follow-up beruntun/ });
+        const total = Number((await run.textContent()).match(/\d+/)[0]);
+        await run.click();
+        const sheet = page.getByRole("dialog", { name: "Follow-up beruntun" });
+        await sheet.getByText(`1 dari ${total}`).waitFor();
+        await sheet.getByRole("button", { name: "Besok" }).click();
+        await sheet.getByText(`2 dari ${total}`).waitFor();
+        await sheet.getByRole("button", { name: "💬 Dibales" }).click();
+        await sheet.getByText(`3 dari ${total}`).waitFor();
+        await sheet.getByRole("button", { name: "Lewati →" }).click();
+        await sheet.getByRole("button", { name: "Tutup" }).first().click();
+        await sheet.waitFor({ state: "detached" });
+        const left = Number((await run.textContent()).match(/\d+/)[0]);
+        if (left !== total - 2) throw new Error(`queue ${total} → ${left}, expected ${total - 2}`);
+      });
+    },
+  },
+  {
     // QA 15 Okt: in the installed app there is no browser back button, and a
     // tall dialog on a small phone hid its way out. Every dialog here must show
     // a way out, reach its last button, and close on the phone's back.
@@ -502,7 +678,8 @@ export const flows = [
             // A phone form: the sheet fills the screen, and no field crowds another.
             const bad = await top().evaluate((ov) => {
               const box = ov.querySelector("[aria-modal]");
-              const vw = window.innerWidth, out = [];
+              // The sheet must fill the space it has (a desktop-Linux WebKit scrollbar can take 4px of it; iOS has none).
+              const vw = ov.clientWidth || document.documentElement.clientWidth, out = [];
               const r0 = box.getBoundingClientRect();
               if (ov.matches(":not(.print-overlay):not(.sp-leadpage):not([style*='flex-end'])") && (r0.width < vw - 1 || r0.left > 1)) out.push(`sheet is ${Math.round(r0.width)}px of ${vw}`);
               const fields = [...box.querySelectorAll("input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea")].filter(e => e.offsetParent);
@@ -597,7 +774,7 @@ export const flows = [
         await page.getByRole("radio", { name: "Threads", checked: true }).waitFor();
       });
       await t.step("nothing floats over the Kirim WA button", async () => {
-        const hit = await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find(x => x.textContent.trim() === "Kirim WA"); b.scrollIntoView({ block: "center" }); const r = b.getBoundingClientRect(); const top = document.elementFromPoint(r.right - 8, r.top + r.height / 2); return b.contains(top) ? "" : (top?.getAttribute("aria-label") || top?.textContent || "?").slice(0, 40); });
+        const hit = await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find(x => /^(Kirim WA|Copy & )/.test(x.textContent.trim())); b.scrollIntoView({ block: "center" }); const r = b.getBoundingClientRect(); const top = document.elementFromPoint(r.right - 8, r.top + r.height / 2); return b.contains(top) ? "" : (top?.getAttribute("aria-label") || top?.textContent || "?").slice(0, 40); });
         if (hit) throw new Error(`covered by "${hit}"`);
       });
       await t.step("copy a template: it is logged at once", async () => {
@@ -652,6 +829,15 @@ export const flows = [
       await t.step("back to Terkirim, Balas cepat closes with its button", async () => {
         await huntRow(page, "@rotiflow").getByRole("button", { name: "Tandai Belum dibales" }).click();
         await page.getByRole("region", { name: /Saran balasan/ }).waitFor({ state: "detached" });
+      });
+      await t.step("a Threads target: Copy & DM opens Instagram's DM to that username", async () => {
+        await page.context().route("https://ig.me/**", r => r.fulfill({ status: 200, contentType: "text/html", body: "<title>ig</title>" }));
+        await page.locator("#hunt-target").fill("@dmflow");
+        await page.getByRole("radiogroup", { name: "Platform" }).getByRole("radio", { name: "Threads" }).click();
+        const [pop] = await Promise.all([page.waitForEvent("popup"), page.getByRole("button", { name: "Copy & DM (via IG)" }).first().click()]);
+        if (!pop.url().startsWith("https://ig.me/m/dmflow")) throw new Error(`opened ${pop.url()}`);
+        await pop.close();
+        await page.getByRole("button", { name: "Batal catat" }).waitFor();
       });
       await t.step("change the daily goal to 25 in a sheet with Batal", async () => {
         await page.getByRole("button", { name: /Ubah target harian/ }).click();
