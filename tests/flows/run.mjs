@@ -159,7 +159,8 @@ async function main() {
   for (const f of flows.filter(f => f.name.toLowerCase().includes(filter.toLowerCase()))) {
     const opts = contextFor();
     const ctx = await browser.newContext(opts);
-    await ctx.grantPermissions(["clipboard-read", "clipboard-write"], { origin: BASE }).catch(() => {});
+    // Chromium knows the clipboard permissions; WebKit rejects them when the page opens.
+    if (!DEVICE) await ctx.grantPermissions(["clipboard-read", "clipboard-write"], { origin: BASE });
     const ux = { taps: 0, ms: [], native: [], audits: [] };
     await ctx.exposeBinding("__ux", (_src, k, v) => { if (k === "tap") ux.taps++; else if (k === "ms") ux.ms.push(v); else if (k === "native") ux.native.push(v); });
     await ctx.addInitScript(uxProbe);
@@ -246,7 +247,11 @@ async function main() {
   }
   writeFileSync(OUT + "report.md", lines.join("\n"));
   console.log(`\n${passed}/${results.length} flows passed — tests/flows/out/report.md`);
-  if (unique.size) console.log(`✗ HIG audit: ${unique.size} unique finding(s) — see report`);
+  if (unique.size) {
+    console.log(`✗ HIG audit: ${unique.size} unique finding(s):`);
+    for (const u of [...unique.values()].slice(0, 120)) console.log(`  - ${u.f} — first at ${u.where}${u.n > 1 ? ` (${u.n}×)` : ""}`);
+  }
+  for (const r of results.filter(r => r.failed)) console.log(`✗ ${r.name}: ${r.steps.filter(s => !s.ok).map(s => `${s.label} — ${s.error}`).join("; ")}`);
   process.exit(passed === results.length && !unique.size ? 0 : 1);
 }
 

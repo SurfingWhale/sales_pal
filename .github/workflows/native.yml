@@ -65,7 +65,7 @@ jobs:
       - run: npx playwright install --with-deps ${{ matrix.browser }}
       - run: node tests/flows/run.mjs
       - if: always()
-        run: cat tests/flows/out/report.md >> "$GITHUB_STEP_SUMMARY"
+        run: cat tests/flows/out/report.md >> "$GITHUB_STEP_SUMMARY" || true
       - if: always()
         uses: actions/upload-artifact@v4
         with:
