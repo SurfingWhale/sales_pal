@@ -421,6 +421,29 @@ export const flows = [
           const vh = page.viewportSize().height;
           const box = await x.boundingBox();
           if (!box || box.y < 0 || box.y + box.height > vh) throw new Error(`the way out is off screen (y=${box?.y})`);
+          if (!isWide(page)) {
+            // A phone form: the sheet fills the screen, and no field crowds another.
+            const bad = await top().evaluate((ov) => {
+              const box = ov.querySelector("[aria-modal]");
+              const vw = window.innerWidth, out = [];
+              const r0 = box.getBoundingClientRect();
+              if (ov.matches(":not(.print-overlay):not(.sp-leadpage):not([style*='flex-end'])") && (r0.width < vw - 1 || r0.left > 1)) out.push(`sheet is ${Math.round(r0.width)}px of ${vw}`);
+              const fields = [...box.querySelectorAll("input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea")].filter(e => e.offsetParent);
+              const rects = fields.map(e => [e, e.getBoundingClientRect()]);
+              for (const [e, r] of rects) {
+                const name = e.getAttribute("aria-label") || e.id || e.name || e.tagName;
+                if (r.right > vw + 1 || r.left < -1) out.push(`${name} spills off screen`);
+                if (parseFloat(getComputedStyle(e).fontSize) < 16) out.push(`${name} text under 16px`);
+                if (e.tagName !== "TEXTAREA" && r.height < 44) out.push(`${name} only ${Math.round(r.height)}px tall`);
+              }
+              for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
+                const [a, b] = [rects[i][1], rects[j][1]];
+                if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) out.push(`${rects[i][0].id || rects[i][0].getAttribute("aria-label")} overlaps ${rects[j][0].id || rects[j][0].getAttribute("aria-label")}`);
+              }
+              return out;
+            });
+            if (bad.length) throw new Error(bad.slice(0, 4).join("; "));
+          }
           if (last) {
             const b = top().getByRole("button", { name: last, exact: true }).last();
             await b.scrollIntoViewIfNeeded();
@@ -451,6 +474,17 @@ export const flows = [
       });
       await check("Paket baru", async () => { await go(page, "Jualan", "Paket"); await page.getByRole("button", { name: "+ Paket" }).click(); }, { last: "Batal" });
       await check("Penawaran baru", async () => { await go(page, "Jualan", "Penawaran"); await page.getByRole("button", { name: "+ Penawaran" }).first().click(); }, { last: "Batal" });
+      await check("Invoice baru", async () => { await go(page, "Jualan", "Invoice"); await page.getByRole("button", { name: "+ Invoice" }).first().click(); }, { last: "Simpan" });
+      await t.step("typing in the invoice form keeps the field focused", async () => {
+        await go(page, "Jualan", "Invoice");
+        await page.getByRole("button", { name: "+ Invoice" }).first().click();
+        await page.locator("#doc-project").click();
+        await page.keyboard.type("Wedding Sinta");
+        if (await page.locator("#doc-project").inputValue() !== "Wedding Sinta") throw new Error("typing lost focus");
+        await page.locator("#doc-event").fill("2026-11-07");
+        await top().getByRole("button", { name: "Tutup" }).first().click();
+        await page.locator("#doc-project").waitFor({ state: "detached" });
+      });
       await check("Klien baru", async () => { await go(page, "Tim", "Report Klien"); await page.getByRole("button", { name: "+ Klien" }).click(); });
       await check("Template baru", async () => { await go(page, "Hunting"); await page.getByRole("button", { name: "+ Template" }).click(); }, { last: "Batal" });
       await check("Quick Pitch", async () => { await go(page, "Jualan", "Leads"); await page.getByRole("button", { name: /Quick Pitch/ }).click(); });
