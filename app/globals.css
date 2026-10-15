@@ -711,3 +711,77 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   .sp-leads button:not(:disabled):hover, .sp-leads a[href]:hover { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--app-text) 6%, transparent); }
   .sp-leads button:disabled { cursor: not-allowed; }
 }
+
+/* ---- Jualan: Penawaran, Invoice, Paket (QA 15 Okt) ---- */
+/* A card's buttons: the next step first, then the tools (copy, PDF, edit, delete). */
+.sp-doc-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; align-items: center; }
+.sp-doc-actions > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.sp-doc-tools { flex: 1 1 auto; }
+.sp-doc-tools .sp-del { margin-left: auto; }
+/* Invoice dates on a card: label above field, side by side. */
+.sp-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 150px)); gap: 8px; margin-top: 8px; }
+.sp-dates label { display: block; font-size: 12px; color: var(--app-muted); margin-bottom: 3px; }
+.sp-dates input { width: 100% !important; }
+/* A long form's Batal / Simpan stay in view while it scrolls. */
+.sp-form-foot { position: sticky; bottom: -24px; margin: 20px -24px -24px; padding: 12px 24px 16px; background: var(--app-card); border-top: 1px solid var(--app-border); display: flex; gap: 10px; z-index: 3; }
+.sp-form-foot > button { min-height: 44px; }
+.sp-form-foot > button:last-child { flex: 1; }
+/* The PDF sheet: a header with its name and Tutup, the paper, the actions. */
+.sp-print-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; background: var(--app-card); color: var(--app-text); box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+.sp-print-title { flex: 1 1 160px; min-width: 0; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-print-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sp-print-msg:empty { display: none; }
+.sp-paper-qp { display: none; }
+@media (max-width: 640px) {
+  .sp-sell button { min-height: 44px; font-size: 14px !important; }
+  .sp-sell .sp-tight { min-height: 0; }
+  .sp-doc-actions { flex-direction: column; align-items: stretch; }
+  .sp-doc-main > button, .sp-doc-main > span { flex: 1 1 calc(50% - 3px); }
+  .sp-doc-tools { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) 48px; }
+  .sp-doc-tools > button { padding-left: 4px !important; padding-right: 4px !important; white-space: nowrap; }
+  .sp-doc-tools .sp-del { margin-left: 0; }
+  .sp-dates { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sp-dates input { min-height: 44px; padding: 8px !important; }
+  /* Only odd stat cards: the last one spans the row instead of sitting alone. */
+  .sp-stats > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .sp-form-foot { bottom: calc(-28px - env(safe-area-inset-bottom, 0px)); margin: 20px -20px calc(-28px - env(safe-area-inset-bottom, 0px)); padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px)); }
+
+  /* PDF on a phone: a full-screen page — name and Tutup on top, the paper,
+     and Kop & logo / Simpan PDF pinned at the bottom by the thumb. */
+  .print-overlay.sp-pdf { padding: 0 !important; align-items: stretch !important; background: var(--app-bg) !important; }
+  .sp-pdf > .print-frame { max-width: none !important; max-height: none !important; height: 100dvh; gap: 10px !important;
+    padding: 0 12px calc(env(safe-area-inset-bottom, 0px) + 92px); overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  .sp-print-head { margin: 0 -12px; border-radius: 0; padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px 8px 16px; box-shadow: none; border-bottom: 1px solid var(--app-border); flex-wrap: nowrap; }
+  .sp-print-actions { position: fixed; left: 0; right: 0; bottom: 0; z-index: 3; flex-wrap: nowrap; padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px); background: var(--app-card); border-top: 1px solid var(--app-border); }
+  .sp-print-actions > button { min-height: 48px; white-space: nowrap; padding-left: 14px !important; padding-right: 14px !important; }
+  .sp-doc-sum { text-align: left !important; }
+  .sp-doc-sum > div:last-child { justify-content: flex-start !important; }
+  .sp-print-actions > button { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .sp-print-actions > .sp-print-main { flex: 1 1 auto; }
+  .sp-print-msg { position: fixed; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + 80px); z-index: 3; padding: 10px 12px; border-radius: 10px; background: var(--app-text); color: var(--app-bg) !important; text-align: center !important; }
+  /* The paper reflows to the phone; the PDF file itself is A4 (lib/pdfDoc). */
+  .sp-pdf .print-root { padding: 22px 16px !important; }
+  .sp-paper-head { flex-direction: column; gap: 14px !important; margin-bottom: 22px !important; }
+  .sp-paper-head > div:last-child { text-align: left !important; }
+  .sp-paper-brand { flex-wrap: wrap; }
+  .sp-paper-meta { flex-direction: column; gap: 8px !important; }
+  .sp-paper-meta > div:last-child { text-align: left !important; }
+  .sp-paper-hide { display: none; }
+  .sp-paper-qp { display: block; }
+}
+@media (max-width: 640px), not ((hover: hover) and (pointer: fine)) {
+  .sp-sell button, .sp-sell label.sp-tap { min-height: 44px !important; }
+  .sp-sell .sp-tight { min-height: 0 !important; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .sp-sell button:not(:disabled):hover, .sp-pdf button:not(:disabled):hover, .sp-sell label.sp-tap:hover { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--app-text) 7%, transparent); }
+  .sp-sell button:disabled, .sp-pdf button:disabled { cursor: not-allowed; }
+}
+@media (max-width: 359px) {
+  .sp-doc-main > button, .sp-doc-main > span { flex-basis: 100%; }
+  .sp-print-actions > button { font-size: 14px !important; }
+}
+/* Printing needs a wide screen and a mouse; a phone-sized window saves the PDF. */
+@media (max-width: 480px) { .sp-print-actions .pointer-only { display: none !important; } }
+.sp-tap:focus-within { outline: 2px solid #005eb0; outline-offset: 2px; }
+.modal-overlay label.sp-tap { color: var(--app-text) !important; margin-bottom: 0 !important; font-size: 14px !important; }

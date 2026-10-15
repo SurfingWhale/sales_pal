@@ -433,6 +433,47 @@ export const flows = [
         await page.getByRole("heading", { name: /^Penjualan / }).waitFor();
         await page.getByRole("table").getByText("Bakso Flow").first().waitFor();
       });
+      await t.step("a changed form asks before throwing it away", async () => {
+        await go(page, "Jualan", "Invoice");
+        await page.getByRole("button", { name: "Edit", exact: true }).first().click();
+        await page.locator("#doc-project").fill("Judul baru");
+        await page.keyboard.press("Escape");
+        const ask = page.getByRole("dialog", { name: "Buang perubahan?" });
+        await ask.getByRole("button", { name: "Batal" }).click();
+        await ask.waitFor({ state: "detached" });
+        if (await page.locator("#doc-project").inputValue() !== "Judul baru") throw new Error("Batal lost what was typed");
+        await page.keyboard.press("Escape");
+        await ask.getByRole("button", { name: "Buang" }).click();
+        await page.locator("#doc-project").waitFor({ state: "detached" });
+      });
+      await t.step("deleting asks in the app: Batal keeps, Hapus removes", async () => {
+        await go(page, "Jualan", "Penawaran");
+        await page.getByRole("button", { name: /^Hapus Q-/ }).first().click();
+        const ask = page.getByRole("dialog", { name: "Hapus penawaran?" });
+        await ask.getByRole("button", { name: "Batal" }).click();
+        await ask.waitFor({ state: "detached" });
+        await page.getByRole("button", { name: /^Hapus Q-/ }).first().waitFor();
+        await go(page, "Jualan", "Invoice");
+        await page.getByRole("button", { name: /^Hapus pembayaran/ }).first().click();
+        await page.getByRole("dialog", { name: "Hapus pembayaran?" }).getByRole("button", { name: "Hapus", exact: true }).click();
+        await page.getByRole("dialog", { name: "Hapus pembayaran?" }).waitFor({ state: "detached" });
+        await page.getByText("+Rp 750.000").first().waitFor({ state: "detached" });
+      });
+      await t.step("a payment's date changes with Simpan, and Batal leaves it", async () => {
+        await page.getByRole("button", { name: "+ Catat pembayaran" }).first().click();
+        await modal(page).locator("#pay-amount").fill("");
+        await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
+        await modal(page).getByText("Isi jumlahnya dulu.").waitFor();
+        await modal(page).locator("#pay-amount").fill("100000");
+        await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
+        await page.locator("#pay-amount").waitFor({ state: "detached" });
+        await page.getByRole("button", { name: /^Ganti tanggal pembayaran/ }).first().click();
+        await page.getByRole("button", { name: "Batal", exact: true }).click();
+        await page.getByRole("button", { name: /^Ganti tanggal pembayaran/ }).first().click();
+        await page.getByLabel(/^Tanggal uang masuk/).first().fill("2026-01-02");
+        await page.getByRole("button", { name: "Simpan", exact: true }).click();
+        await page.getByRole("button", { name: /^Ganti tanggal pembayaran 2 Jan 2026/ }).waitFor();
+      });
     },
   },
   {
@@ -517,10 +558,11 @@ export const flows = [
         await go(page, "Jualan", "Invoice");
         await page.getByRole("button", { name: "+ Invoice" }).first().click();
         await page.locator("#doc-project").click();
-        await page.keyboard.type("Wedding Sinta");
-        if (await page.locator("#doc-project").inputValue() !== "Wedding Sinta") throw new Error("typing lost focus");
+        await page.keyboard.type("Wedding Dina");
+        if (await page.locator("#doc-project").inputValue() !== "Wedding Dina") throw new Error("typing lost focus");
         await page.locator("#doc-event").fill("2026-11-07");
         await top().getByRole("button", { name: "Tutup" }).first().click();
+        await page.getByRole("dialog", { name: "Buang perubahan?" }).getByRole("button", { name: "Buang" }).click();
         await page.locator("#doc-project").waitFor({ state: "detached" });
       });
       await check("Klien baru", async () => { await go(page, "Tim", "Report Klien"); await page.getByRole("button", { name: "+ Klien" }).click(); });

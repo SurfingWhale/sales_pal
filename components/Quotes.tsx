@@ -9,6 +9,7 @@ import {
 } from "@/lib/billing";
 import PrintSheet from "@/components/PrintSheet";
 import DocEditor, { DocDraft, LeadRef, briefOf, cleanItems } from "@/components/DocEditor";
+import ConfirmSheet from "@/components/ConfirmSheet";
 import { badge, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, label, modalBox, subheading, WA_INK } from "@/components/ui";
 
 export type { LeadRef };
@@ -37,6 +38,8 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
   const [printing, setPrinting] = useState<Quote | null>(null);
   const [copied, setCopied] = useState("");
   const [filter, setFilter] = useState<"All" | QuoteStatus>("All");
+  const [deleting, setDeleting] = useState<Quote | null>(null);
+  const [failed, setFailed] = useState("");
 
   // Opened from a lead's detail: start a quote already addressed to them.
   useEffect(() => {
@@ -80,13 +83,12 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
   }
 
   async function copy(q: Quote) {
-    await navigator.clipboard.writeText(quoteText(q, business));
+    try { await navigator.clipboard.writeText(quoteText(q, business)); } catch { setFailed(q.id); setTimeout(() => setFailed(""), 3000); return; }
     setCopied(q.id);
     setTimeout(() => setCopied(""), 1800);
   }
 
   async function remove(q: Quote) {
-    if (!confirm(`Hapus penawaran ${q.number}?`)) return;
     await deleteDoc(spaceDoc(space, "quotes", q.id));
   }
 
@@ -106,7 +108,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
   }
 
   return (
-    <div>
+    <div className="sp-sell">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
           <div style={heading}>Penawaran</div>
@@ -115,7 +117,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
         <button onClick={() => setEditing(blank())} style={btnPrimary}>+ Penawaran</button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
+      <div className="sp-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 20 }}>
         {[
           { l: "Menunggu jawaban", v: open.length, s: rupiah(open.reduce((a, q) => a + total(q), 0)), c: "#005eb0" },
           { l: "Disetujui", v: won.length, s: rupiah(won.reduce((a, q) => a + total(q), 0)), c: "var(--ok)" },
@@ -130,13 +132,19 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
       </div>
 
       {quotes.length > 0 && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        <div className="sp-chiprow" role="group" aria-label="Saring penawaran" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
           {(["All", ...QUOTE_STATUS] as const).map(s => (
-            <button key={s} onClick={() => setFilter(s)}
+            <button key={s} onClick={() => setFilter(s)} aria-pressed={filter === s}
               style={{ ...chip, background: filter === s ? (s === "All" ? "#005eb0" : quoteColor[s]) : "var(--app-card)", color: filter === s ? "#fff" : "var(--app-muted)", fontWeight: 600 }}>
-              {s}
+              {s === "All" ? "Semua" : s}
             </button>
           ))}
+        </div>
+      )}
+
+      {quotes.length > 0 && shown.length === 0 && (
+        <div style={{ ...card, padding: "28px 20px", textAlign: "center", fontSize: 13, color: "var(--app-muted)" }}>
+          Belum ada penawaran {filter}. <button onClick={() => setFilter("All")} style={{ ...chip, marginLeft: 6, color: "var(--app-text)", fontWeight: 700 }}>Lihat semua</button>
         </div>
       )}
 
@@ -164,7 +172,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                       {q.project || q.items.map(i => i.name).join(", ")}{q.eventDate ? ` · acara ${longDate(q.eventDate)}` : ""}
                     </div>
                   </div>
-                  <div style={{ textAlign: "right" }}>
+                  <div className="sp-doc-sum" style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ok)" }}>{rupiah(total(q))}</div>
                     <div style={{ marginTop: 6, display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
                       {expired && <span style={badge("#ff9900")}>Kedaluwarsa</span>}
@@ -173,26 +181,31 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                     </div>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 14 }}>
-                  <button onClick={() => sendWA(q)} style={{ ...chip, background: "#25D366", color: WA_INK, border: "none", fontWeight: 700 }}>
-                    {q.status === "Terkirim" ? "Follow-up WA" : "Kirim WA"}
-                  </button>
-                  <button onClick={() => copy(q)} style={{ ...chip, color: copied === q.id ? "var(--ok)" : "var(--app-text)" }}>{copied === q.id ? "✓ Tersalin" : "Copy teks"}</button>
-                  <button onClick={() => setPrinting(q)} style={chip}>PDF</button>
-                  <button onClick={() => setEditing({ ...q, validUntil: q.validUntil })} style={chip}>Edit</button>
-                  {q.status === "Terkirim" && (
-                    <>
-                      <button onClick={() => setStatus(q, "Disetujui")} style={{ ...chip, color: "var(--ok)", borderColor: "#00a86260" }}>✓ Disetujui</button>
-                      <button onClick={() => setStatus(q, "Ditolak")} style={{ ...chip, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}>✗ Ditolak</button>
-                    </>
-                  )}
-                  {q.status === "Draft" && <button onClick={() => setStatus(q, "Terkirim")} style={chip}>Tandai terkirim</button>}
-                  {q.status === "Disetujui" && !q.invoiceId && (
-                    <button onClick={() => makeInvoice(q)} style={{ ...chip, background: "#005eb0", color: "#fff", border: "none", fontWeight: 700 }}>Buat invoice →</button>
-                  )}
-                  {q.invoiceId && <span style={{ ...chip, cursor: "default", color: "var(--ok)" }}>Invoice dibuat</span>}
-                  <button onClick={() => remove(q)} aria-label={`Hapus ${q.number}`} style={{ ...chip, marginLeft: "auto", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}>🗑</button>
+                <div className="sp-doc-actions">
+                  <div className="sp-doc-main">
+                    <button onClick={() => sendWA(q)} style={{ ...chip, background: "#25D366", color: WA_INK, border: "none", fontWeight: 700 }}>
+                      {q.status === "Terkirim" ? "Follow-up WA" : "Kirim WA"}
+                    </button>
+                    {q.status === "Terkirim" && (
+                      <>
+                        <button onClick={() => setStatus(q, "Disetujui")} style={{ ...chip, color: "var(--ok)", borderColor: "#00a86260", fontWeight: 700 }}>✓ Disetujui</button>
+                        <button onClick={() => setStatus(q, "Ditolak")} style={{ ...chip, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440", fontWeight: 700 }}>✗ Ditolak</button>
+                      </>
+                    )}
+                    {q.status === "Draft" && <button onClick={() => setStatus(q, "Terkirim")} style={{ ...chip, color: "var(--app-text)", fontWeight: 700 }}>Tandai terkirim</button>}
+                    {q.status === "Disetujui" && !q.invoiceId && (
+                      <button onClick={() => makeInvoice(q)} style={{ ...chip, background: "#005eb0", color: "#fff", border: "none", fontWeight: 700 }}>Buat invoice →</button>
+                    )}
+                    {q.invoiceId && <span style={{ ...chip, cursor: "default", color: "var(--ok)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>✓ Invoice dibuat</span>}
+                  </div>
+                  <div className="sp-doc-tools">
+                    <button onClick={() => copy(q)} style={{ ...chip, color: copied === q.id ? "var(--ok)" : "var(--app-text)" }}>{copied === q.id ? "✓ Tersalin" : "Copy teks"}</button>
+                    <button onClick={() => setPrinting(q)} style={{ ...chip, color: "var(--app-text)" }}>PDF</button>
+                    <button onClick={() => setEditing({ ...q, validUntil: q.validUntil })} style={{ ...chip, color: "var(--app-text)" }}>Edit</button>
+                    <button className="sp-del" onClick={() => setDeleting(q)} aria-label={`Hapus ${q.number}`} title="Hapus" style={{ ...chip, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}>🗑</button>
+                  </div>
                 </div>
+                {failed === q.id && <div role="alert" style={{ fontSize: 12, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", marginTop: 8 }}>Gagal menyalin. Buka PDF atau Kirim WA aja.</div>}
                 {!waNumber(q.phone) && <div style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 8 }}>Belum ada nomor WA — Kirim WA akan minta pilih kontak.</div>}
               </div>
             );
@@ -203,6 +216,12 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
       {editing && <DocEditor kind="quote" initial={editing} leads={leads} services={services} onSave={save} onClose={() => setEditing(null)} />}
 
       {printing && <PrintSheet kind="quote" data={printing} business={business} onClose={() => setPrinting(null)} />}
+
+      {deleting && (
+        <ConfirmSheet title="Hapus penawaran?" onConfirm={() => remove(deleting)} onClose={() => setDeleting(null)}>
+          <b>{deleting.number}</b> untuk {deleting.leadName || "klien"} hilang dari daftar.{deleting.invoiceId ? " Invoice-nya tetap ada." : ""} Ini ga bisa dibatalkan.
+        </ConfirmSheet>
+      )}
     </div>
   );
 }

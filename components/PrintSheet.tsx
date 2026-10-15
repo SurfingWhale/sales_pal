@@ -65,24 +65,31 @@ export default function PrintSheet(props: Props) {
 
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className="modal-overlay print-overlay" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} className="print-frame" style={{ width: "100%", maxWidth: 720, maxHeight: "92vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-        <div className="no-print" style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
-          {canEdit && <button onClick={() => setKop(true)} style={{ ...chip, minHeight: 44, marginRight: "auto", background: "var(--app-card)", color: "var(--app-text)", fontWeight: 700 }}>Kop & logo</button>}
-          <button onClick={save} disabled={!pdf} aria-busy={!pdf} style={{ ...btnPrimary, opacity: pdf ? 1 : 0.6 }}>{pdf ? "Simpan / kirim PDF" : "Menyiapkan PDF…"}</button>
-          <button onClick={printIt} className="pointer-only" style={btnMuted}>Cetak</button>
-          <button onClick={onClose} style={btnMuted}>Tutup</button>
+    <div className="modal-overlay print-overlay sp-pdf" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} className="print-frame" aria-label={`${isQuote ? "Penawaran" : "Invoice"} ${data.number}, PDF`}
+        style={{ width: "100%", maxWidth: 720, maxHeight: "92vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* What this is and the way out on top; on a phone the actions sit at
+            the bottom by the thumb (globals.css, .sp-print-actions). */}
+        <div className="no-print sp-print-head">
+          <div className="sp-print-title">{isQuote ? "Penawaran" : "Invoice"} {data.number}<span style={{ fontWeight: 400, color: "var(--app-muted)" }}> · {data.leadName}</span></div>
+          <div className="sp-print-actions">
+            {canEdit && <button onClick={() => setKop(true)} style={{ ...btnMuted, background: "var(--app-card)", border: "1px solid var(--app-border)" }}>Kop & logo</button>}
+            <button onClick={printIt} className="pointer-only" style={btnMuted}>Cetak</button>
+            <button onClick={save} disabled={!pdf} aria-busy={!pdf} className="sp-print-main" style={{ ...btnPrimary, opacity: pdf ? 1 : 0.6 }}>{pdf ? "Simpan / kirim PDF" : "Menyiapkan PDF…"}</button>
+          </div>
+          <button onClick={onClose} aria-label="Tutup" title="Tutup (Esc)" style={{ ...btnMuted, minHeight: 44, padding: "0 16px" }}>Tutup</button>
         </div>
-        <div className="no-print" role="status" style={{ fontSize: 12, color: "#fff", textAlign: "right" }}>{pdfMsg}</div>
+        <div className="no-print sp-print-msg" role="status" style={{ fontSize: 13, color: "#fff", textAlign: "right" }}>{pdfMsg}</div>
         {!b.name && (
-          <div className="no-print" role="status" style={{ padding: 12, borderRadius: 10, background: "var(--app-card)", border: "1px solid #ff990060", fontSize: 12, color: "var(--app-text)" }}>
-            Kop masih kosong: nama bisnis, logo, dan syarat & ketentuan belum diisi. {canEdit ? "Tekan Kop & logo." : "Minta Leader/Officer guild ngisi di Paket → Kop & logo."}
+          <div className="no-print" role="status" style={{ padding: 12, borderRadius: 10, background: "var(--app-card)", border: "1px solid #ff990060", fontSize: 13, lineHeight: 1.5, color: "var(--app-text)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ flex: "1 1 220px" }}>Kop masih kosong: nama bisnis, logo, dan syarat & ketentuan belum diisi.{canEdit ? "" : " Minta Leader/Officer guild ngisi di Paket → Kop & logo."}</span>
+            {canEdit && <button onClick={() => setKop(true)} style={{ ...chip, minHeight: 44, color: "var(--app-text)", fontWeight: 700 }}>Isi kop sekarang</button>}
           </div>
         )}
 
         <div className="print-root" style={{ background: "#fff", color: ink, borderRadius: 8, padding: "40px 36px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 24, flexWrap: "wrap", marginBottom: 32 }}>
-            <div style={{ display: "flex", gap: 14, alignItems: "center", minWidth: 0 }}>
+          <div className="sp-paper-head" style={{ display: "flex", justifyContent: "space-between", gap: 24, flexWrap: "wrap", marginBottom: 32 }}>
+            <div className="sp-paper-brand" style={{ display: "flex", gap: 14, alignItems: "center", minWidth: 0 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               {b.logo && <img src={b.logo} alt="" style={{ maxHeight: 64, maxWidth: 140, objectFit: "contain" }} />}
               <div style={{ minWidth: 0 }}>
@@ -100,7 +107,7 @@ export default function PrintSheet(props: Props) {
             </div>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 24, flexWrap: "wrap", marginBottom: 24, fontSize: 12, lineHeight: 1.7 }}>
+          <div className="sp-paper-meta" style={{ display: "flex", justifyContent: "space-between", gap: 24, flexWrap: "wrap", marginBottom: 24, fontSize: 12, lineHeight: 1.7 }}>
             <div>
               <div style={{ color: soft, fontSize: 10, letterSpacing: "1px" }}>UNTUK</div>
               <div style={{ fontWeight: 700, fontSize: 14 }}>{data.leadName}</div>
@@ -128,7 +135,7 @@ export default function PrintSheet(props: Props) {
             <thead>
               <tr>
                 {["#", "Layanan & scope", "Qty", "Harga", "Jumlah"].map((h, i) => (
-                  <th key={h} style={{ ...(i >= 2 ? right : cell), fontSize: 10, color: soft, letterSpacing: "1px", borderBottom: `2px solid ${ink}`, fontWeight: 600, textAlign: i >= 2 ? "right" : "left" }}>{h.toUpperCase()}</th>
+                  <th key={h} className={i === 2 || i === 3 ? "sp-paper-hide" : undefined} style={{ ...(i >= 2 ? right : cell), fontSize: 10, color: soft, letterSpacing: "1px", borderBottom: `2px solid ${ink}`, fontWeight: 600, textAlign: i >= 2 ? "right" : "left" }}>{h.toUpperCase()}</th>
                 ))}
               </tr>
             </thead>
@@ -139,9 +146,10 @@ export default function PrintSheet(props: Props) {
                   <td style={cell}>
                     <div style={{ fontWeight: 600 }}>{it.name}</div>
                     {it.description?.trim() && <div style={{ fontSize: 11, color: soft, marginTop: 3, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{it.description.trim()}</div>}
+                    <div className="sp-paper-qp" style={{ fontSize: 11, color: soft, marginTop: 3 }}>{it.qty} × {rupiah(it.price)}</div>
                   </td>
-                  <td style={right}>{it.qty}</td>
-                  <td style={right}>{rupiah(it.price)}</td>
+                  <td className="sp-paper-hide" style={right}>{it.qty}</td>
+                  <td className="sp-paper-hide" style={right}>{rupiah(it.price)}</td>
                   <td style={right}>{rupiah(it.qty * it.price)}</td>
                 </tr>
               ))}
