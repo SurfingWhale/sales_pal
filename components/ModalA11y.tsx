@@ -10,8 +10,32 @@ import { useEffect } from "react";
 // - Tab stays inside it, Escape closes it (by clicking the overlay, the same
 //   path as clicking outside)
 // - the page behind does not scroll along
+// - a × that stays at the top while the box scrolls, unless it has its own
+//   Tutup / Kembali
+// - the phone's back (swipe on iOS, the back button on Android) closes the
+//   top dialog instead of leaving the app: each dialog is a history entry
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+const OWN_CLOSE = /^(tutup|kembali)/i;
+
+function addCloseButton(overlay: HTMLElement, box: HTMLElement) {
+  if (overlay.classList.contains("print-overlay") || overlay.classList.contains("sp-leadpage")) return;
+  const own = Array.from(box.querySelectorAll("button")).some(b => OWN_CLOSE.test((b.getAttribute("aria-label") || b.textContent || "").trim()));
+  if (own) return;
+  // A zero-height sticky rail as the first child: the × floats over the
+  // box's top-right corner and stays there while the box scrolls.
+  const rail = document.createElement("div");
+  rail.className = "modal-x-rail";
+  const x = document.createElement("button");
+  x.type = "button";
+  x.className = "modal-x";
+  x.setAttribute("aria-label", "Tutup");
+  x.textContent = "×";
+  x.addEventListener("click", e => { e.stopPropagation(); overlay.click(); });
+  rail.appendChild(x);
+  box.insertBefore(rail, box.firstChild);
+}
 
 function focusables(el: HTMLElement): HTMLElement[] {
   return Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(e => e.offsetParent !== null || e === document.activeElement);
@@ -20,6 +44,11 @@ function focusables(el: HTMLElement): HTMLElement[] {
 export default function ModalA11y() {
   useEffect(() => {
     const openers: (HTMLElement | null)[] = [];
+    // Back closes a dialog: one history entry per open dialog. Next.js keeps
+    // its own fields in history.state, so they're copied along.
+    let entries = 0;
+    let swallow = 0;
+    const push = () => { entries++; window.history.pushState({ ...(window.history.state || {}), spModal: entries }, ""); };
     const topmost = () => {
       const all = document.querySelectorAll<HTMLElement>(".modal-overlay");
       return all.length ? all[all.length - 1] : null;
@@ -33,6 +62,8 @@ export default function ModalA11y() {
       if (!box) return;
       box.setAttribute("role", "dialog");
       box.setAttribute("aria-modal", "true");
+      addCloseButton(overlay, box);
+      push();
       const title = (box.textContent || "").trim().split("\n")[0].slice(0, 60);
       if (!box.hasAttribute("aria-label") && title) box.setAttribute("aria-label", title);
       openers.push(document.activeElement as HTMLElement | null);
@@ -48,6 +79,12 @@ export default function ModalA11y() {
       while (openers.length > open) {
         const el = openers.pop();
         if (el && document.contains(el)) el.focus({ preventScroll: true });
+      }
+      // Closed by its own button: drop the entry it pushed, quietly.
+      while (entries > open) {
+        entries--;
+        swallow++;
+        window.history.back();
       }
     });
     observer.observe(document.body, { childList: true, subtree: true });
@@ -70,8 +107,19 @@ export default function ModalA11y() {
       if (e.shiftKey && (document.activeElement === first || !box.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && (document.activeElement === last || !box.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
     }
+    function onPop() {
+      if (swallow > 0) { swallow--; return; }
+      const overlay = topmost();
+      if (!overlay || entries === 0) return;
+      entries--;
+      overlay.click();
+      // Some dialogs won't close from outside (mid-save); keep their entry.
+      setTimeout(() => { if (document.contains(overlay)) push(); }, 50);
+    }
+
     document.addEventListener("keydown", onKey);
-    return () => { observer.disconnect(); document.removeEventListener("keydown", onKey); };
+    window.addEventListener("popstate", onPop);
+    return () => { observer.disconnect(); document.removeEventListener("keydown", onKey); window.removeEventListener("popstate", onPop); };
   }, []);
   return null;
 }

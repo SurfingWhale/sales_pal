@@ -339,13 +339,75 @@ export const flows = [
         await page.getByRole("button", { name: "Cetak / PDF" }).first().click();
         await page.locator(".print-root").getByText("Fotografi menu").waitFor();
         await page.locator(".print-root").getByText("SYARAT & KETENTUAN").waitFor();
-        await modal(page).getByRole("button", { name: "Tutup", exact: true }).click();
+      });
+      await t.step("Kop & logo over the PDF: back closes Kop, then the PDF", async () => {
+        await page.getByRole("button", { name: "Kop & logo" }).click();
+        await page.locator("#biz-name").waitFor();
+        await page.goBack();
+        await page.locator("#biz-name").waitFor({ state: "detached" });
+        await page.locator(".print-root").waitFor();
+        await page.goBack();
+        await page.locator(".print-root").waitFor({ state: "detached" });
+        if (!page.url().includes("/dashboard")) throw new Error(`left the app: ${page.url()}`);
       });
       await t.step("Report Klien shows this month's sales from invoices", async () => {
         await go(page, "Tim", "Report Klien");
         await page.getByRole("heading", { name: /^Penjualan / }).waitFor();
         await page.getByRole("table").getByText("Bakso Flow").first().waitFor();
       });
+    },
+  },
+  {
+    // QA 15 Okt: in the installed app there is no browser back button, and a
+    // tall dialog on a small phone hid its way out. Every dialog here must show
+    // a way out, reach its last button, and close on the phone's back.
+    name: "dialogs: × visible, last button reachable, back closes (small phone)",
+    async run(t) {
+      const { page } = t;
+      if (!isWide(page)) await page.setViewportSize({ width: 375, height: 667 });
+      const top = () => page.locator(".modal-overlay").last();
+      async function check(label, open, { last, layers = 1 } = {}) {
+        await t.step(`${label}: open, × and last button in reach`, async () => {
+          await open();
+          await top().waitFor();
+          const x = top().getByRole("button", { name: /^(Tutup|Kembali)/ }).first();
+          await x.waitFor();
+          const vh = page.viewportSize().height;
+          const box = await x.boundingBox();
+          if (!box || box.y < 0 || box.y + box.height > vh) throw new Error(`the way out is off screen (y=${box?.y})`);
+          if (last) {
+            const b = top().getByRole("button", { name: last, exact: true }).last();
+            await b.scrollIntoViewIfNeeded();
+            const r = await b.boundingBox();
+            if (!r || r.y + r.height > vh + 1) throw new Error(`"${last}" can't be reached (y=${r?.y})`);
+          }
+        });
+        await t.step(`${label}: back closes it and stays in the app`, async () => {
+          const before = await page.locator(".modal-overlay").count();
+          await page.goBack();
+          await page.waitForFunction((n) => document.querySelectorAll(".modal-overlay").length === n, before - 1, { timeout: 5000 });
+          if (!page.url().includes("/dashboard")) throw new Error(`left the app: ${page.url()}`);
+          for (let i = 1; i < layers; i++) { await page.goBack(); await page.waitForFunction((n) => document.querySelectorAll(".modal-overlay").length === n, before - 1 - i, { timeout: 5000 }); }
+        });
+      }
+      await t.step("sign up", () => signup(t));
+      await check("Tambah lead", async () => { await go(page, "Jualan", "Leads"); await page.getByRole("button", { name: /tambah lead/i }).click(); }, { last: "Simpan lead" });
+      await check("Profil", () => page.getByRole("button", { name: "Profil dan pengaturan" }).click());
+      await check("Kop & logo", async () => { await go(page, "Jualan", "Paket"); await page.getByRole("button", { name: "Kop & logo" }).click(); }, { last: "Simpan kop" });
+      await t.step("a brand logo fills the letterhead", async () => {
+        await go(page, "Jualan", "Paket");
+        await page.getByRole("button", { name: "Kop & logo" }).click();
+        await page.getByRole("button", { name: "Pakai logo Visufavor" }).click();
+        await top().getByRole("img", { name: "Logo" }).waitFor();
+        if (await page.locator("#biz-name").inputValue() !== "Visufavor") throw new Error("name not filled from the brand");
+        await top().getByRole("button", { name: "Tutup" }).first().click();
+        await page.locator("#biz-name").waitFor({ state: "detached" });
+      });
+      await check("Paket baru", async () => { await go(page, "Jualan", "Paket"); await page.getByRole("button", { name: "+ Paket" }).click(); }, { last: "Batal" });
+      await check("Penawaran baru", async () => { await go(page, "Jualan", "Penawaran"); await page.getByRole("button", { name: "+ Penawaran" }).first().click(); }, { last: "Batal" });
+      await check("Klien baru", async () => { await go(page, "Tim", "Report Klien"); await page.getByRole("button", { name: "+ Klien" }).click(); });
+      await check("Template baru", async () => { await go(page, "Hunting"); await page.getByRole("button", { name: "+ Template" }).click(); }, { last: "Batal" });
+      await check("Quick Pitch", async () => { await go(page, "Jualan", "Leads"); await page.getByRole("button", { name: /Quick Pitch/ }).click(); });
     },
   },
   {
@@ -393,6 +455,7 @@ export const flows = [
       await t.step("log a second DM, decline it with a reason", async () => {
         await page.locator("#hunt-target").fill("@rotiflow");
         await page.getByRole("button", { name: "Copy", exact: true }).nth(1).click();
+        await page.getByRole("button", { name: "Hapus DM ke @rotiflow" }).waitFor();
         await huntRow(page, "@rotiflow").getByRole("button", { name: "Tandai Ditolak" }).click();
         await page.getByLabel("Alasan ditolak").fill("udah punya fotografer");
         await page.getByRole("button", { name: "Simpan", exact: true }).click();
