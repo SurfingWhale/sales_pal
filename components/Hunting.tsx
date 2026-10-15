@@ -16,18 +16,23 @@ import Campaigns from "@/components/Campaigns";
 import HunterStats from "@/components/HunterStats";
 import CustomerContext from "@/components/CustomerContext";
 import TemplateBoard from "@/components/TemplateBoard";
-import { dataFor, fillTemplate, stageFor } from "@/lib/templates";
+import { dataFor, defaultsWith, fillTemplate, stageFor } from "@/lib/templates";
+import DefaultsSheet from "@/components/DefaultsSheet";
 import { TOPICS, Tone, defaultTopic, fromLibrary, repliesFor } from "@/lib/replies";
 import { profileUrl } from "@/lib/threads";
 import {
   Channel, HuntSession, Prospect, Strategy, newProspect, patchFromHunt, postPatch, prospectId, sessionMinutes,
   threadsPostLink, view,
 } from "@/lib/prospects";
-import { HuntInbox, bump, createProspect, ctx, recordSend, saveProspect, unfurl, useHuntInbox } from "@/lib/prospectStore";
+import { HuntInbox, bump, createProspect, ctx, recordSend, saveProspect, unfurl, useFillDefaults, useHuntInbox } from "@/lib/prospectStore";
 import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading, ink } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmSheet";
 
 type Filter = "Semua" | "Follow-up" | "Tertarik";
+// One part of Hunting at a time (QA 15 Okt: "tiap component mesti scroll panjang"):
+// writing the message, the people, the log, and the numbers.
+type Pane = "kirim" | "journey" | "log" | "performa";
+const PANES: [Pane, string][] = [["kirim", "Kirim"], ["journey", "Journey"], ["log", "Log DM"], ["performa", "Performa"]];
 // An inline editor under a log row: the field on its own line, Batal beside the action.
 const inlineEditor: CSSProperties = { marginTop: 10, padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)" };
 const editorButtons: CSSProperties = { display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap", marginTop: 10 };
@@ -71,6 +76,8 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   const [goalDraft, setGoalDraft] = useState<string | null>(null);
   const [goalError, setGoalError] = useState("");
   const [savingGoal, setSavingGoal] = useState(false);
+  const [pane, setPane] = useState<Pane>("kirim");
+  const [editDefaults, setEditDefaults] = useState(false);
   const allQuotes = useSpaceCollection<Quote>(space, "quotes");
   const allInvoices = useSpaceCollection<Invoice>(space, "invoices");
   const jobs = jobsFrom(allQuotes, allInvoices);
@@ -138,16 +145,30 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   }, [curId, cur, space]);
   const isBlocked = blocked === curId && !!curId;
   const business = useBusiness(space);
-  const fillData = dataFor(target, cur, business.name);
+  // A post that didn't say what, when or where: the message uses the
+  // workspace's defaults (QA 15 Okt), and "Jasa apa" from the letterhead.
+  const savedDefaults = useFillDefaults(space);
+  const defaults = defaultsWith(savedDefaults, business.tagline);
+  const fillData = dataFor(target, cur, business.name, defaults);
   const curPost = cur ? [...(cur.history || [])].reverse().find(e => e.kind === "post") : undefined;
+
+  // To the message, from wherever the person was picked; the pane shows first.
+  function toTarget(focus = true) {
+    setPane("kirim");
+    requestAnimationFrame(() => {
+      targetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (focus) targetRef.current?.focus({ preventScroll: true });
+    });
+  }
 
   // The bar's paste button and its queue land here.
   useHuntInbox((m: HuntInbox) => {
     if (m.kind === "link") {
       if (!apply(m.text)) setPasteMsg("Clipboard ga berisi link. Copy link post/profil dulu.");
-      targetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      toTarget(false);
     } else {
       setProspectFilter("Antrian");
+      setPane("journey");
       setTimeout(() => document.getElementById("journey-prospek")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     }
   });
@@ -180,8 +201,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     setUrl(profileUrl(username));
     setSource({ kind: "radar" });
     setChannel("dm");
-    targetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    targetRef.current?.focus({ preventScroll: true });
+    toTarget();
   }
 
   async function pasteLink() {
@@ -303,7 +323,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     if (h.status === "Terkirim" || h.status === "Ghosting") syncProspect(h, "Dibales", note);
     if (!apply(who)) { setTarget(who); setPlatform(h.platform); }
     setPasteMsg(`${who} siap jadi target (rekomendasi dari ${h.target}).`);
-    targetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    toTarget(false);
   }
 
   async function takeBack() {
@@ -359,8 +379,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     setUrl(p.url || "");
     setSource(p.source || { kind: "manual" });
     setChannel(view(p, now, strategy).status === "baru" && (p.history || []).some(e => e.kind === "post") ? "post" : "dm");
-    targetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    targetRef.current?.focus({ preventScroll: true });
+    toTarget();
   }
 
   function remove(h: Hunt) {
@@ -370,8 +389,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   function followUp(h: Hunt) {
     setTarget(h.target);
     setPlatform(h.platform);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    targetRef.current?.focus();
+    toTarget();
   }
 
   function changeGoal() {
@@ -415,31 +433,41 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
           : <button onClick={journey.start} style={{ ...btnPrimary, minHeight: 44, background: "#b93a06" }}>▶ Mulai hunting</button>}
       </div>
 
-      {/* Today at a glance */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 20 }}>
-        <button onClick={changeGoal} disabled={!canEdit} aria-label={`Hari ini ${sentToday} dari ${goal} DM. ${canEdit ? "Ubah target harian" : "Target harian diatur Leader atau Officer"}`} style={{ ...card, padding: 12, textAlign: "left", cursor: canEdit ? "pointer" : "default", color: "inherit", fontFamily: font }}>
-          <div style={{ fontSize: 22, fontWeight: 700, color: progress >= 1 ? "var(--ok)" : "#005eb0" }}>{sentToday}<span style={{ fontSize: 13, color: "var(--app-muted)", fontWeight: 600 }}> / {goal}</span></div>
-          <div style={{ fontSize: 12, fontWeight: 700, marginTop: 2 }}>DM hari ini</div>
-          <div style={{ height: 4, background: "var(--app-inner)", borderRadius: 2, marginTop: 10, overflow: "hidden" }}>
+      {/* Today in one line; the full numbers are under Performa. */}
+      <div style={{ display: "flex", gap: 8, alignItems: "stretch", marginBottom: 12 }}>
+        <button onClick={changeGoal} disabled={!canEdit} aria-label={`Hari ini ${sentToday} dari ${goal} DM. ${canEdit ? "Ubah target harian" : "Target harian diatur Leader atau Officer"}`}
+          style={{ ...card, flex: "1 1 0", minWidth: 0, padding: "8px 12px", textAlign: "left", cursor: canEdit ? "pointer" : "default", color: "inherit", fontFamily: font }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+            <span className="tabnum" style={{ fontSize: 18, fontWeight: 700, color: progress >= 1 ? "var(--ok)" : "var(--brand-text)" }}>{sentToday}<span style={{ fontSize: 13, color: "var(--app-muted)", fontWeight: 600 }}>/{goal}</span></span>
+            <span style={{ fontSize: 12, fontWeight: 700 }}>DM hari ini</span>
+            <span aria-hidden="true" style={{ marginLeft: "auto", fontSize: 12, color: "var(--app-muted)" }}>{progress >= 1 ? "🎯" : canEdit ? "✎" : ""}</span>
+          </div>
+          <div style={{ height: 4, background: "var(--app-inner)", borderRadius: 2, marginTop: 6, overflow: "hidden" }}>
             <div style={{ width: `${progress * 100}%`, height: "100%", background: progress >= 1 ? "var(--ok)" : "#005eb0" }} />
           </div>
-          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>{progress >= 1 ? "Tercapai 🎯" : canEdit ? "✎ Ubah target" : "Target tim"}</div>
         </button>
-        <div style={{ ...card, padding: 12 }}>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))" }}>{week.length ? pct(weekReplied / week.length) : "—"}</div>
-          <div style={{ fontSize: 12, fontWeight: 700, marginTop: 2 }}>Dibales 7 hari</div>
-          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>{weekReplied} dari {week.length} DM</div>
-        </div>
-        <div style={{ ...card, padding: 12 }}>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--ok)" }}>{weekInterested}</div>
-          <div style={{ fontSize: 12, fontWeight: 700, marginTop: 2 }}>Tertarik 7 hari</div>
-          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>{interested.filter(h => !h.leadId).length} belum jadi lead</div>
+        <div className="tabnum" style={{ ...card, flex: "1 1 0", minWidth: 0, padding: "8px 12px", fontSize: 12, color: "var(--app-sub)", display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 }}>
+          <span>Dibales 7 hr <b style={{ color: "var(--app-text)" }}>{week.length ? pct(weekReplied / week.length) : "—"}</b></span>
+          <span>Tertarik 7 hr <b style={{ color: "var(--app-text)" }}>{weekInterested}</b></span>
         </div>
       </div>
 
-      <OccupancyCalendar quotes={allQuotes} invoices={allInvoices} />
-      <ThreadsRadar uid={space.me.uid} hunts={hunts} onTarget={targetFromRadar} />
+      <div role="tablist" aria-label="Bagian Hunting" className="sp-hunt-panes"
+        style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 4, padding: 4, marginBottom: 16, borderRadius: 12, background: "var(--app-inner)", border: "1px solid var(--app-border)" }}>
+        {PANES.map(([k, l]) => {
+          const n = k === "log" ? stale.length : 0;
+          return (
+            <button key={k} role="tab" id={`hp-${k}`} aria-selected={pane === k} aria-controls={`hpane-${k}`} onClick={() => { setPane(k); }}
+              aria-label={n ? `${l}, ${n} perlu follow-up` : l}
+              style={{ minHeight: 40, minWidth: 0, padding: "0 4px", borderRadius: 9, border: 0, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                background: pane === k ? "var(--app-card)" : "transparent", color: pane === k ? "var(--app-text)" : "var(--app-sub)", boxShadow: pane === k ? "0 1px 3px rgba(0,0,0,.12)" : "none" }}>
+              {l}{n ? <span aria-hidden="true" style={{ marginLeft: 4, padding: "0 6px", borderRadius: 999, background: "#ff990033", color: "var(--warn-text)", fontSize: 11 }}>{n}</span> : null}
+            </button>
+          );
+        })}
+      </div>
 
+      <div id="hpane-kirim" role="tabpanel" aria-labelledby="hp-kirim" hidden={pane !== "kirim"}>
       {/* The hunt itself: who, where, which message */}
       <div style={{ ...card, padding: 20, marginBottom: 20 }}>
         <label htmlFor="hunt-target" style={label}>Target</label>
@@ -477,7 +505,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
           </div>
         )}
         {cur && (
-          <CustomerContext p={cur} v={view(cur, now, strategy)} strategy={strategy} stage={stageFor(cur, view(cur, now, strategy))} now={now} jobs={jobs}
+          <CustomerContext key={cur.id} p={cur} v={view(cur, now, strategy)} strategy={strategy} stage={stageFor(cur, view(cur, now, strategy))} now={now} jobs={jobs} defaults={defaults}
             onSave={c => saveProspect(space, cur, { context: c, updatedAt: Date.now() })} />
         )}
         {!cur && target.trim() && !isBlocked && (
@@ -498,7 +526,8 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
 
         <TemplateBoard templates={templates} scores={scores} data={fillData} stage={stageFor(cur, cur ? view(cur, now, strategy) : undefined)}
           blocked={isBlocked} copiedId={copiedId} copyFail={copyFail} onPick={pick} canEdit={canEdit} send={sendOut}
-          sampleName={target.trim() ? (cur?.name || target.trim()) : ""} />
+          sampleName={target.trim() ? (cur?.name || target.trim()) : ""}
+          extra={<button onClick={() => setEditDefaults(true)} aria-label="Default kalau kosong" style={chip}>⚙ Default kosong</button>} />
 
         {/* Mounted before its text, so screen readers announce "Tercatat". */}
         <div role="status">
@@ -514,9 +543,16 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         </div>
       </div>
 
-      <ProspectList prospects={prospects} ready={journey.ready} hunts={hunts} strategy={strategy} sessionId={live?.id}
-        filter={prospectFilter} setFilter={setProspectFilter} onCompose={compose} />
+        <ThreadsRadar uid={space.me.uid} hunts={hunts} onTarget={targetFromRadar} />
+      </div>
 
+      <div id="hpane-journey" role="tabpanel" aria-labelledby="hp-journey" hidden={pane !== "journey"}>
+        <ProspectList prospects={prospects} ready={journey.ready} hunts={hunts} strategy={strategy} sessionId={live?.id}
+          filter={prospectFilter} setFilter={setProspectFilter} onCompose={compose} />
+        <Campaigns prospects={prospects} templates={templates} strategy={strategy} sessionId={live?.id} defaults={defaults} />
+      </div>
+
+      <div id="hpane-log" role="tabpanel" aria-labelledby="hp-log" hidden={pane !== "log"}>
       {/* Log */}
       <div style={{ ...card, padding: 20, marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
@@ -656,6 +692,10 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         {shown.length > limit && <button onClick={() => setLimit(limit + PAGE)} style={{ ...chip, width: "100%", marginTop: 8, minHeight: 40 }}>Tampilkan {Math.min(PAGE, shown.length - limit)} lagi</button>}
       </div>
 
+      </div>
+
+      <div id="hpane-performa" role="tabpanel" aria-labelledby="hp-performa" hidden={pane !== "performa"}>
+      <OccupancyCalendar quotes={allQuotes} invoices={allInvoices} />
       {/* Which message works */}
       <div style={{ ...card, padding: 20, marginBottom: 20 }}>
         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font, marginBottom: 4 }}>Pesan mana yang works?</div>
@@ -687,8 +727,10 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         )}
       </div>
 
-      <Campaigns prospects={prospects} templates={templates} strategy={strategy} sessionId={live?.id} />
       <HunterStats prospects={prospects} sessions={journey.sessions} />
+      </div>
+
+      {editDefaults && <DefaultsSheet value={savedDefaults} tagline={business.tagline} onClose={() => setEditDefaults(false)} />}
 
       {goalDraft !== null && (
         <div className="modal-overlay" onClick={() => { if (!savingGoal) setGoalDraft(null); }}>

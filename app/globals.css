@@ -905,3 +905,10 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 @media (max-width: 767px) {
   .sp-toast { bottom: calc(env(safe-area-inset-bottom, 0px) + 96px); }
 }
+
+/* Hunting's parts (Kirim / Journey / Log DM / Performa) stay in reach under
+   the header while a pane scrolls. */
+.sp-hunt-panes { position: sticky; top: 76px; z-index: 5; }
+@media (max-width: 767px) {
+  .sp-hunt-panes { top: 66px; }
+}

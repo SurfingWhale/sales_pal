@@ -11,6 +11,7 @@ import { Space, spaceDoc, spaceQuery, stamp } from "@/lib/space";
 import { today } from "@/lib/billing";
 import { authFetch } from "@/lib/authFetch";
 import type { Platform } from "@/lib/hunting";
+import type { FillDefaults } from "@/lib/templates";
 import {
   Channel, Ctx, HuntSession, Prospect, Strategy, huntStatusFor, isLive, lastHuntId, newProspect,
   prospectId, sentPatch, strategyFrom,
@@ -49,6 +50,22 @@ export function useProspects(space: Space): { rows: Prospect[]; ready: boolean }
 export async function loadClosed(space: Space): Promise<Prospect[]> {
   const snap = await getDocs(query(spaceQuery(space, "prospects"), where("closed", "==", true)));
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as Prospect));
+}
+
+// settings/hunting.defaults: what a template says when a post left a field empty.
+export function useFillDefaults(space: Space): FillDefaults {
+  const [d, setD] = useState<FillDefaults>({});
+  const key = keyOf(space);
+  useEffect(() => onSnapshot(spaceDoc(space, "settings", "hunting"), snap => {
+    setD(((snap.data() as { defaults?: FillDefaults } | undefined)?.defaults) || {});
+  }, () => setD({})), [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  return d;
+}
+
+export async function saveFillDefaults(space: Space, d: FillDefaults): Promise<void> {
+  // Every key written, so emptying one clears it (merge keeps keys it isn't given).
+  const v = (x?: string) => (x || "").trim();
+  await setDoc(spaceDoc(space, "settings", "hunting"), { defaults: { kebutuhan: v(d.kebutuhan), waktu: v(d.waktu), lokasi: v(d.lokasi) } }, { merge: true });
 }
 
 export function useStrategy(space: Space): Strategy {
