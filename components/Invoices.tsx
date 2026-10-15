@@ -1,19 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { deleteDoc, updateDoc } from "firebase/firestore";
-import { spaceDoc, useSpace } from "@/lib/space";
+import { deleteDoc, setDoc, updateDoc } from "firebase/firestore";
+import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import {
-  Business, Invoice, InvoiceState, balance, daysBetween, dpAmount, invoiceColor, invoiceState, invoiceText,
+  Business, Invoice, InvoiceState, Service, addDays, balance, nextNumber, daysBetween, dpAmount, invoiceColor, invoiceState, invoiceText,
   longDate, paid, rupiah, today, total, waLink,
 } from "@/lib/billing";
 import PrintSheet from "@/components/PrintSheet";
+import DocEditor, { DocDraft, LeadRef, briefOf, cleanItems } from "@/components/DocEditor";
 import { badge, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, label, modalBox, subheading, WA_INK } from "@/components/ui";
 
 const FILTERS = ["All", "Belum bayar", "DP masuk", "Telat", "Lunas"] as const;
 
-export default function Invoices({ invoices, business }: { invoices: Invoice[]; business: Business }) {
+export default function Invoices({ invoices, business, leads, services }: { invoices: Invoice[]; business: Business; leads: LeadRef[]; services: Service[] }) {
   const space = useSpace();
+  const [editing, setEditing] = useState<DocDraft | null>(null);
   const [paying, setPaying] = useState<{ inv: Invoice; amount: string; date: string; note: string } | null>(null);
   const [printing, setPrinting] = useState<Invoice | null>(null);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
@@ -72,6 +74,26 @@ export default function Invoices({ invoices, business }: { invoices: Invoice[]; 
     setTimeout(() => setCopied(""), 1800);
   }
 
+  // A closing without a quote gets its invoice straight away; any invoice can be fixed later.
+  function startNew() {
+    const d = today();
+    setEditing({ id: "", number: "", leadId: "", leadName: "", contact: "", phone: "", items: [], discount: 0, dpPercent: 50, notes: "", date: d, dueDate: addDays(d, 7) });
+  }
+
+  async function saveInvoice(d: DocDraft) {
+    const old = invoices.find(i => i.id === d.id);
+    const id = d.id || `inv_${Date.now()}`;
+    const doc: Omit<Invoice, "id"> = {
+      number: d.number || nextNumber("INV", invoices.map(i => i.number)),
+      quoteId: old?.quoteId || "", leadId: d.leadId, leadName: d.leadName.trim(), contact: d.contact.trim(), phone: d.phone.trim(),
+      items: cleanItems(d.items), discount: d.discount, dpPercent: d.dpPercent, notes: d.notes.trim(),
+      date: d.date, dueDate: d.dueDate || addDays(d.date, 7), payments: old?.payments || [],
+      ...briefOf(d),
+    };
+    await setDoc(spaceDoc(space, "invoices", id), stamp(space, doc, old as { ownerUid?: string; ownerName?: string } | undefined));
+    setEditing(null);
+  }
+
   async function remove(inv: Invoice) {
     if (!confirm(`Hapus invoice ${inv.number}?`)) return;
     await deleteDoc(spaceDoc(space, "invoices", inv.id));
@@ -79,9 +101,12 @@ export default function Invoices({ invoices, business }: { invoices: Invoice[]; 
 
   return (
     <div>
-      <div style={{ marginBottom: 20 }}>
-        <div style={heading}>Invoice & Pembayaran</div>
-        <div style={subheading}>Invoice lahir dari penawaran yang disetujui. Catat DP & pelunasan di sini.</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+        <div>
+          <div style={heading}>Invoice & Pembayaran</div>
+          <div style={subheading}>Dari penawaran yang disetujui, atau langsung kalau udah closing. Catat DP & pelunasan di sini.</div>
+        </div>
+        <button onClick={startNew} style={btnPrimary}>+ Invoice</button>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
@@ -141,7 +166,8 @@ export default function Invoices({ invoices, business }: { invoices: Invoice[]; 
         <div style={{ ...card, padding: "56px 24px", textAlign: "center" }}>
           <div style={{ fontSize: 34, marginBottom: 12 }}>🧾</div>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ada invoice</div>
-          <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Tandai penawaran &quot;Disetujui&quot;, lalu tekan &quot;Buat invoice&quot;.</div>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 16 }}>Udah closing? Bikin langsung. Atau tandai penawaran &quot;Disetujui&quot;, lalu &quot;Buat invoice&quot;.</div>
+          <button onClick={startNew} style={btnPrimary}>+ Buat invoice</button>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -156,6 +182,7 @@ export default function Invoices({ invoices, business }: { invoices: Invoice[]; 
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 12, color: "var(--app-muted)", fontFamily: "monospace" }}>{inv.number} · {longDate(inv.date)}</div>
                     <div style={{ fontSize: 15, fontWeight: 700, fontFamily: font, marginTop: 2 }}>{inv.leadName}</div>
+                    {inv.project && <div style={{ fontSize: 12, color: "var(--app-sub)", marginTop: 2 }}>{inv.project}</div>}
                     {space.kind === "guild" && inv.ownerName && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>Sales: {inv.ownerName}</div>}
                     <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       Jatuh tempo
@@ -207,7 +234,8 @@ export default function Invoices({ invoices, business }: { invoices: Invoice[]; 
                     </>
                   )}
                   <button onClick={() => copy(inv)} style={{ ...chip, color: copied === inv.id ? "var(--ok)" : "var(--app-text)" }}>{copied === inv.id ? "✓ Tersalin" : "Copy teks"}</button>
-                  <button onClick={() => setPrinting(inv)} style={chip}>Cetak / PDF</button>
+                  <button onClick={() => setPrinting(inv)} style={chip}>PDF</button>
+                  <button onClick={() => setEditing({ ...inv })} style={chip}>Edit</button>
                   <button onClick={() => remove(inv)} aria-label={`Hapus ${inv.number}`} style={{ ...chip, marginLeft: "auto", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}>🗑</button>
                 </div>
               </div>
@@ -236,6 +264,7 @@ export default function Invoices({ invoices, business }: { invoices: Invoice[]; 
         </div>
       )}
 
+      {editing && <DocEditor kind="invoice" initial={editing} leads={leads} services={services} onSave={saveInvoice} onClose={() => setEditing(null)} />}
       {printing && <PrintSheet kind="invoice" data={printing} business={business} onClose={() => setPrinting(null)} />}
     </div>
   );

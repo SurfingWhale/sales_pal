@@ -990,7 +990,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             leads={leads.map(l => ({ id: l.id, name: l.name, contact: l.contact, phone: l.phone }))}
             startFor={quoteFor} onStarted={clearQuoteFor} onInvoiceCreated={gotoInvoices} />
         )}
-        {activeTab === "Invoice" && <Invoices invoices={invoices} business={business} />}
+        {activeTab === "Invoice" && <Invoices invoices={invoices} business={business} services={services}
+          leads={leads.map(l => ({ id: l.id, name: l.name, contact: l.contact, phone: l.phone }))} />}
         {activeTab === "Paket" && <Services services={services} business={business} />}
 
         {/* OUTREACH */}

@@ -43,6 +43,16 @@ export default function PrintSheet(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, b]);
 
+  // The browser names a printed PDF after the page title.
+  function printIt() {
+    const was = document.title;
+    document.title = pdfName(doc).replace(/\.pdf$/, "");
+    const back = () => { document.title = was; window.removeEventListener("afterprint", back); };
+    window.addEventListener("afterprint", back);
+    window.print();
+    setTimeout(back, 60_000);
+  }
+
   async function save() {
     if (!pdf) return;
     setPdfMsg("");
@@ -60,7 +70,7 @@ export default function PrintSheet(props: Props) {
         <div className="no-print" style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
           {canEdit && <button onClick={() => setKop(true)} style={{ ...chip, minHeight: 44, marginRight: "auto", background: "var(--app-card)", color: "var(--app-text)", fontWeight: 700 }}>Kop & logo</button>}
           <button onClick={save} disabled={!pdf} aria-busy={!pdf} style={{ ...btnPrimary, opacity: pdf ? 1 : 0.6 }}>{pdf ? "Simpan / kirim PDF" : "Menyiapkan PDF…"}</button>
-          <button onClick={() => window.print()} className="pointer-only" style={btnMuted}>Cetak</button>
+          <button onClick={printIt} className="pointer-only" style={btnMuted}>Cetak</button>
           <button onClick={onClose} style={btnMuted}>Tutup</button>
         </div>
         <div className="no-print" role="status" style={{ fontSize: 12, color: "#fff", textAlign: "right" }}>{pdfMsg}</div>
@@ -101,14 +111,23 @@ export default function PrintSheet(props: Props) {
               <div><span style={{ color: soft }}>Tanggal:</span> {longDate(data.date)}</div>
               {q && <div><span style={{ color: soft }}>Berlaku s/d:</span> {longDate(q.validUntil)}</div>}
               {inv && <div><span style={{ color: soft }}>Jatuh tempo:</span> {longDate(inv.dueDate)}</div>}
-              {data.eventDate && <div><span style={{ color: soft }}>Tanggal acara:</span> {fullDay(data.eventDate)}</div>}
             </div>
           </div>
+
+          {data.project && <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8, lineHeight: 1.35 }}>{data.project}</div>}
+          {(data.eventDate || data.eventTime || data.venue) && (
+            <div style={{ background: "#f6f7f9", borderRadius: 6, padding: "10px 14px", marginBottom: 20, fontSize: 12, lineHeight: 1.7 }}>
+              <div style={{ color: soft, fontSize: 10, letterSpacing: "1px" }}>DETAIL ACARA</div>
+              {data.eventDate && <div><span style={{ color: soft, display: "inline-block", width: 64 }}>Tanggal</span><b>{fullDay(data.eventDate)}</b></div>}
+              {data.eventTime && <div><span style={{ color: soft, display: "inline-block", width: 64 }}>Jam</span>{data.eventTime}</div>}
+              {data.venue && <div><span style={{ color: soft, display: "inline-block", width: 64 }}>Lokasi</span>{data.venue}</div>}
+            </div>
+          )}
 
           <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
             <thead>
               <tr>
-                {["#", "Deskripsi", "Qty", "Harga", "Jumlah"].map((h, i) => (
+                {["#", "Layanan & scope", "Qty", "Harga", "Jumlah"].map((h, i) => (
                   <th key={h} style={{ ...(i >= 2 ? right : cell), fontSize: 10, color: soft, letterSpacing: "1px", borderBottom: `2px solid ${ink}`, fontWeight: 600, textAlign: i >= 2 ? "right" : "left" }}>{h.toUpperCase()}</th>
                 ))}
               </tr>
@@ -128,6 +147,15 @@ export default function PrintSheet(props: Props) {
               ))}
             </tbody>
           </table>
+
+          {(data.deliverables || "").trim() && (
+            <div style={{ fontSize: 12, lineHeight: 1.7, marginBottom: 16 }}>
+              <div style={{ color: soft, fontSize: 10, letterSpacing: "1px" }}>DELIVERABLES</div>
+              <ul style={{ margin: "2px 0 0", paddingLeft: 18 }}>
+                {(data.deliverables || "").split("\n").map(l => l.replace(/^[-•*]\s*/, "").trim()).filter(Boolean).map((l, i) => <li key={i}>{l}</li>)}
+              </ul>
+            </div>
+          )}
 
           <div style={{ marginLeft: "auto", width: "100%", maxWidth: 300, fontSize: 12, lineHeight: 2 }}>
             {data.discount > 0 && (
