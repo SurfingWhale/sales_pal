@@ -112,8 +112,14 @@ export default function WaImport({ leadName, profile, onSave, onClose, initialFi
       if (on("notes")) p.wa = { ...(p.wa || {}), notes: extra.notes };
     }
     p.at = today;
-    setBusy(true);
-    await onSave(JSON.parse(JSON.stringify(patch)));
+    setBusy(true); setError("");
+    try {
+      await onSave(JSON.parse(JSON.stringify(patch)));
+    } catch {
+      setBusy(false);
+      setError("Gagal menyimpan. Cek koneksi, lalu coba lagi.");
+      return;
+    }
     setBusy(false);
     onClose();
   }
@@ -123,9 +129,9 @@ export default function WaImport({ leadName, profile, onSave, onClose, initialFi
 
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className="modal-overlay" onClick={onClose} style={{ alignItems: "flex-end", padding: 8, background: "var(--scrim)", zIndex: 140 }}>
+    <div className="modal-overlay sp-sheet-overlay" onClick={e => { e.stopPropagation(); if (!busy) onClose(); }} style={{ alignItems: "flex-end", background: "var(--scrim)", zIndex: 140 }}>
       <section role="dialog" aria-modal="true" aria-labelledby="wa-h" onClick={e => e.stopPropagation()}
-        style={{ width: "100%", maxWidth: 480, maxHeight: "92vh", overflowY: "auto", fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", color: "var(--app-text)", borderRadius: 36, padding: "10px 18px 22px", boxShadow: "inset 0 0 0 1px var(--frost-ring), 0 -10px 40px rgba(0,0,0,0.18)" }} className="frost">
+        style={{ width: "100%", maxWidth: 480, overflowY: "auto", fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", color: "var(--app-text)", borderRadius: 36, padding: "10px 18px 22px", boxShadow: "inset 0 0 0 1px var(--frost-ring), 0 -10px 40px rgba(0,0,0,0.18)" }} className="frost sp-sheet sp-leads">
         <div aria-hidden="true" style={{ width: 38, height: 5, borderRadius: 999, background: "var(--app-border)", margin: "0 auto 12px" }} />
         {step === "choose" ? (
           <>
@@ -133,22 +139,22 @@ export default function WaImport({ leadName, profile, onSave, onClose, initialFi
               <h2 id="wa-h" style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Tarik dari WhatsApp</h2>
               <button onClick={onClose} aria-label="Tutup" style={{ width: 44, height: 44, marginRight: -8, border: "none", background: "transparent", color: "var(--app-ink-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ width: 30, height: 30, borderRadius: "50%", background: "var(--glass-btn)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={13} stroke={2.4} /></span></button>
             </div>
-            <p style={{ margin: "2px 0 0", fontSize: 13.5, lineHeight: 1.5, color: "var(--app-muted)" }}>Pilih yang mau dibagikan dari WhatsApp. Chat diproses di HP kamu, yang disimpan cuma ringkasannya.</p>
+            <p style={{ margin: "2px 0 0", fontSize: 14, lineHeight: 1.5, color: "var(--app-muted)" }}>Pilih yang mau dibagikan dari WhatsApp. Chat diproses di HP kamu, yang disimpan cuma ringkasannya.</p>
             <div style={{ marginTop: 14, border: "1px solid var(--app-border)", borderRadius: 20, overflow: "hidden" }}>
               <button onClick={() => chatRef.current?.click()} disabled={busy} style={row}>
                 <span aria-hidden="true" style={{ ...icon, background: "#005eb0", color: "#fff" }}><Icon name="chatLines" size={21} /></span>
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ display: "block", fontSize: 15, fontWeight: 700 }}>Ekspor chat <span style={{ fontSize: 12, padding: "2px 8px", borderRadius: 999, background: "color-mix(in srgb, #005eb0 10%, transparent)", color: "var(--brand-text)" }}>Paling lengkap</span></span>
-                  <span style={{ display: "block", fontSize: 12.5, color: "var(--app-muted)", marginTop: 2 }}>Brief, pola chat, tipe customer, pertanyaan</span>
+                  <span style={{ display: "block", fontSize: 13, color: "var(--app-muted)", marginTop: 2 }}>Brief, pola chat, tipe customer, pertanyaan</span>
                 </span>
               </button>
               <button onClick={() => vcfRef.current?.click()} disabled={busy} style={{ ...row, borderTop: "1px solid var(--app-border)" }}>
                 <span aria-hidden="true" style={{ ...icon, background: "var(--app-inner)", color: "var(--app-ink-2)" }}><Icon name="person" size={21} /></span>
-                <span style={{ flex: 1 }}><span style={{ display: "block", fontSize: 15, fontWeight: 700 }}>Bagikan kontak</span><span style={{ display: "block", fontSize: 12.5, color: "var(--app-muted)", marginTop: 2 }}>Nama dan nomor (.vcf)</span></span>
+                <span style={{ flex: 1 }}><span style={{ display: "block", fontSize: 15, fontWeight: 700 }}>Bagikan kontak</span><span style={{ display: "block", fontSize: 13, color: "var(--app-muted)", marginTop: 2 }}>Nama dan nomor (.vcf)</span></span>
               </button>
               <button onClick={() => shotRef.current?.click()} disabled={busy} style={{ ...row, borderTop: "1px solid var(--app-border)" }}>
                 <span aria-hidden="true" style={{ ...icon, background: "var(--app-inner)", color: "var(--app-ink-2)" }}><Icon name="screenshot" size={21} /></span>
-                <span style={{ flex: 1 }}><span style={{ display: "block", fontSize: 15, fontWeight: 700 }}>Screenshot profil bisnis</span><span style={{ display: "block", fontSize: 12.5, color: "var(--app-muted)", marginTop: 2 }}>Kategori, nomor, info. Pakai 1 kuota scan.</span></span>
+                <span style={{ flex: 1 }}><span style={{ display: "block", fontSize: 15, fontWeight: 700 }}>Screenshot profil bisnis</span><span style={{ display: "block", fontSize: 13, color: "var(--app-muted)", marginTop: 2 }}>Kategori, nomor, info. Pakai 1 kuota scan.</span></span>
               </button>
             </div>
             <input ref={chatRef} type="file" accept=".txt,.zip,text/plain,application/zip" aria-label="File ekspor chat" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) readChat(f); e.target.value = ""; }} />
@@ -167,20 +173,21 @@ export default function WaImport({ leadName, profile, onSave, onClose, initialFi
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <button onClick={() => setStep("choose")} aria-label="Kembali ke pilihan sumber" style={{ width: 44, height: 44, marginLeft: -10, border: "none", background: "transparent", color: "var(--app-text)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="chevronLeft" size={20} stroke={2} /></button>
-              <div style={{ minWidth: 0 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <h2 id="wa-h" style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{sum ? `Ketemu dari ${sum.messages} pesan` : `Ketemu dari ${extra?.source}`}</h2>
-                {sum && <p style={{ margin: "2px 0 0", fontSize: 12.5, color: "var(--app-muted)" }}>{sum.since} – {sum.until}</p>}
+                {sum && <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--app-muted)" }}>{sum.since} – {sum.until}</p>}
               </div>
+              <button onClick={onClose} disabled={busy} aria-label="Tutup" style={{ flexShrink: 0, width: 44, height: 44, marginRight: -8, border: "none", background: "transparent", color: "var(--app-ink-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ width: 30, height: 30, borderRadius: "50%", background: "var(--glass-btn)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={13} stroke={2.4} /></span></button>
             </div>
             {msgs && senders(msgs).length > 1 && (
               <div style={{ marginTop: 10 }}>
-                <label htmlFor="wa-them" style={{ display: "block", fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>Yang mana customernya?</label>
+                <label htmlFor="wa-them" style={{ display: "block", fontSize: 13, fontWeight: 700, marginBottom: 4 }}>Yang mana customernya?</label>
                 <select id="wa-them" value={them} onChange={e => setThem(e.target.value)} style={{ width: "100%", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 10, color: "var(--app-text)", padding: "10px 12px", fontSize: 16, fontFamily: "inherit" }}>
                   {senders(msgs).map(x => <option key={x.name} value={x.name}>{x.name} · {x.n} pesan</option>)}
                 </select>
               </div>
             )}
-            <p style={{ margin: "12px 0 0", fontSize: 13.5, color: "var(--app-muted)" }}>Matikan yang ga mau disimpan.</p>
+            <p style={{ margin: "12px 0 0", fontSize: 14, color: "var(--app-muted)" }}>Matikan yang ga mau disimpan.</p>
             <div style={{ marginTop: 10, border: "1px solid var(--app-border)", borderRadius: 20, overflow: "hidden" }}>
               {parts.map((pt, i) => {
                 const on = !off[pt.key];
@@ -189,7 +196,7 @@ export default function WaImport({ leadName, profile, onSave, onClose, initialFi
                     style={{ ...row, padding: "12px 14px 12px 16px", borderTop: i ? "1px solid var(--app-border)" : "none" }}>
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ display: "block", fontSize: 14, fontWeight: 700 }}>{pt.label}</span>
-                      <span style={{ display: "block", fontSize: 12.5, lineHeight: 1.4, color: "var(--app-muted)", marginTop: 2 }}>{pt.preview}</span>
+                      <span style={{ display: "block", fontSize: 13, lineHeight: 1.4, color: "var(--app-muted)", marginTop: 2 }}>{pt.preview}</span>
                     </span>
                     <span aria-hidden="true" style={{ flexShrink: 0, width: 51, height: 31, borderRadius: 999, padding: 2, background: on ? "#005eb0" : "var(--app-border)", transition: "background-color .2s" }}>
                       <span style={{ display: "block", width: 27, height: 27, borderRadius: "50%", background: "#fff", boxShadow: "0 2px 6px rgba(0,0,0,0.22)", transform: `translateX(${on ? 20 : 0}px)`, transition: "transform .2s" }} />
@@ -200,8 +207,9 @@ export default function WaImport({ leadName, profile, onSave, onClose, initialFi
             </div>
             <button onClick={save} disabled={!kept.length || busy}
               style={{ marginTop: 16, width: "100%", minHeight: 52, borderRadius: 999, border: "none", background: kept.length ? "#005eb0" : "var(--app-border)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: kept.length ? "pointer" : "default", fontFamily: "inherit" }}>
-              {kept.length ? `Simpan ${kept.length} bagian ke ${leadName}` : "Pilih minimal satu"}
+              {busy ? "Menyimpan…" : kept.length ? `Simpan ${kept.length} bagian ke ${leadName}` : "Nyalakan minimal satu bagian"}
             </button>
+            {error && <p role="alert" style={{ margin: "10px 0 0", fontSize: 13, color: "color-mix(in srgb, #dc2626 80%, var(--app-text))" }}>{error}</p>}
             <p style={{ margin: "10px 0 0", textAlign: "center", fontSize: 12, color: "var(--app-muted)" }}>{sum ? "Isi chat ga disimpan, cuma ringkasan yang kamu pilih." : "Cuma bagian yang nyala yang disimpan."}</p>
           </>
         )}

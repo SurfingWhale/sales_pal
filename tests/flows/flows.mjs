@@ -172,6 +172,14 @@ export const flows = [
     name: "leads: add, filter, follow-up, delete",
     async run(t) {
       await t.step("sign up", () => signup(t));
+      await t.step("Simpan with no name says what is missing, Batal closes", async () => {
+        await go(t.page, "Jualan", "Leads");
+        await t.page.getByRole("button", { name: /tambah lead/i }).click();
+        await modal(t.page).getByRole("button", { name: "Simpan lead" }).click();
+        await modal(t.page).getByRole("alert").filter({ hasText: "Isi nama bisnisnya dulu." }).waitFor();
+        await modal(t.page).getByRole("button", { name: "Batal" }).click();
+        await t.page.locator(".modal-overlay").waitFor({ state: "detached" });
+      });
       await t.step("add a lead", () => addLead(t.page, "Kopi Flow"));
       await t.step("filter Cold shows it", async () => { await t.page.locator("#status-filter").selectOption("Cold"); await expectText(t.page, "Kopi Flow"); });
       await t.step("open it and schedule a follow-up tomorrow", async () => {
@@ -186,7 +194,8 @@ export const flows = [
         await t.page.getByPlaceholder(/Kirim portfolio/).fill("Kirim portfolio");
         await t.page.getByRole("button", { name: "Besok" }).click();
         await t.page.getByRole("button", { name: "Simpan jadwal" }).click();
-        await t.page.getByRole("button", { name: "✓ Selesai" }).waitFor();
+        // Saved: the phone's sheet closes by itself; the panel's editor folds.
+        await t.page.getByRole("button", { name: "Simpan jadwal" }).waitFor({ state: "detached" });
         await expectText(t.page, "Kenapa 75");
         await expectText(t.page, "Potensi tinggi");
         await closeAll(t.page);
@@ -241,10 +250,33 @@ export const flows = [
         await closeAll(t.page);
       });
       await t.step("the follow-up shows in Perlu Ditindak", async () => { await go(t.page, "Beranda"); await expectText(t.page, "Kirim portfolio"); });
-      await t.step("delete asks first, then removes it", async () => {
+      await t.step("a sheet closes on its own: Escape leaves the lead open", async () => {
+        await openLeadRow(t.page, "Kopi Flow");
+        await fullProfile(t.page);
+        await t.page.getByRole("dialog", { name: /^Profil Kopi Flow/ }).getByRole("button", { name: /^Jadwal/ }).first().click();
+        await t.page.getByRole("dialog", { name: "Langkah berikutnya" }).waitFor();
+        await t.page.keyboard.press("Escape");
+        await t.page.getByRole("dialog", { name: "Langkah berikutnya" }).waitFor({ state: "detached" });
+        await t.page.getByRole("dialog", { name: /^Profil Kopi Flow/ }).waitFor({ timeout: 2000 });
+        // The ⋯ menu closes on Escape without taking the page with it.
+        await t.page.getByRole("dialog", { name: /^Profil Kopi Flow/ }).getByRole("button", { name: "Menu lead" }).click();
+        await t.page.getByRole("menuitem", { name: "Ubah profil" }).waitFor();
+        await t.page.keyboard.press("Escape");
+        await t.page.getByRole("menuitem", { name: "Ubah profil" }).waitFor({ state: "detached" });
+        await t.page.getByRole("dialog", { name: /^Profil Kopi Flow/ }).waitFor({ timeout: 2000 });
+        await closeAll(t.page);
+      });
+      await t.step("delete asks first in a sheet, Batal keeps it, Hapus removes it", async () => {
         await openLeadRow(t.page, "Kopi Flow");
         await t.page.getByRole("button", { name: "Menu lead" }).first().click();
         await t.page.getByRole("menuitem", { name: "Hapus lead Kopi Flow" }).click();
+        const ask = t.page.getByRole("dialog", { name: "Hapus lead?" });
+        await ask.getByRole("button", { name: "Batal" }).click();
+        await ask.waitFor({ state: "detached" });
+        await t.page.locator(".lead-row", { hasText: "Kopi Flow" }).first().waitFor();
+        await t.page.getByRole("button", { name: "Menu lead" }).first().click();
+        await t.page.getByRole("menuitem", { name: "Hapus lead Kopi Flow" }).click();
+        await ask.getByRole("button", { name: "Hapus", exact: true }).click();
         await t.page.locator(".lead-row", { hasText: "Kopi Flow" }).first().waitFor({ state: "detached", timeout: 8000 });
       });
     },
@@ -461,6 +493,12 @@ export const flows = [
       }
       await t.step("sign up", () => signup(t));
       await check("Tambah lead", async () => { await go(page, "Jualan", "Leads"); await page.getByRole("button", { name: /tambah lead/i }).click(); }, { last: "Simpan lead" });
+      // A lead's sheets: above the lead page, each with its own way out.
+      const leadDlg = () => page.getByRole("dialog", { name: /^Profil Kopi Dialog/ });
+      await check("Jadwal lead", async () => { await addLead(page, "Kopi Dialog"); await openLeadRow(page, "Kopi Dialog"); await fullProfile(page); await leadDlg().getByRole("button", { name: /^Jadwal/ }).first().click(); }, { last: "Simpan jadwal" });
+      await check("Profil lead", () => leadDlg().getByRole("button", { name: "Isi manual" }).click(), { last: "Simpan profil" });
+      await check("Tarik dari WhatsApp", () => leadDlg().getByRole("button", { name: "Tarik dari WhatsApp" }).first().click());
+      await t.step("close the lead", () => closeAll(page));
       await check("Profil", () => page.getByRole("button", { name: "Profil dan pengaturan" }).click());
       await check("Kop & logo", async () => { await go(page, "Jualan", "Paket"); await page.getByRole("button", { name: "Kop & logo" }).click(); }, { last: "Simpan kop" });
       await t.step("a brand logo fills the letterhead", async () => {

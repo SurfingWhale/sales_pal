@@ -664,7 +664,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   .modal-overlay [aria-modal] div[style*="grid-template-columns: 1fr 1fr"],
   .modal-overlay [aria-modal] div[style*="grid-template-columns:1fr 1fr"] { grid-template-columns: minmax(0, 1fr) !important; }
   .modal-overlay [aria-modal] [style*="grid-column: auto"] { grid-column: 1 / -1 !important; }
-  .modal-overlay [aria-modal] button { min-height: 44px; font-size: 14px !important; }
+  .modal-overlay:not(.sp-leadpage) [aria-modal] button { min-height: 44px; font-size: 14px !important; }
   .modal-x-rail .modal-x { margin: -8px -6px 0 0; font-size: 22px !important; min-height: 40px; }
   /* The title and its line under it keep clear of the ×. */
   .modal-x-rail + *, .modal-x-rail + * + * { padding-right: 48px; }
@@ -686,3 +686,28 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   .sp-hunt button:disabled { cursor: not-allowed; }
 }
 @media (min-width: 768px) { .sp-choice-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); } }
+
+/* ---- Leads (QA 15 Okt) ----
+   Bottom sheets (follow-up, profil, Tarik dari WhatsApp, Hapus lead) sit above
+   the iPhone's home indicator and scroll inside when taller than the screen. */
+.sp-sheet-overlay { padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)) !important; }
+.sp-sheet {
+  max-height: 90vh;
+  max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+}
+/* The four quick actions on a lead: two by two on the narrowest phones. */
+@media (max-width: 359px) { .sp-quick { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+/* Potensi chips: one row that scrolls sideways on a phone, not a pile. */
+@media (max-width: 640px) {
+  .sp-chiprow { flex-wrap: nowrap !important; overflow-x: auto; margin: 0 -16px; padding: 2px 16px; scrollbar-width: none; }
+  .sp-chiprow::-webkit-scrollbar { display: none; }
+  .sp-chiprow > button { flex-shrink: 0; white-space: nowrap; }
+}
+@media not ((hover: hover) and (pointer: fine)) {
+  .sp-leads button, .sp-leads a[href] { min-height: 44px !important; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .sp-leads button:not(:disabled):hover, .sp-leads a[href]:hover { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--app-text) 6%, transparent); }
+  .sp-leads button:disabled { cursor: not-allowed; }
+}
