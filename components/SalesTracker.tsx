@@ -934,7 +934,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                     <button key={lv} onClick={() => setFilterLevel(lv)} aria-pressed={on}
                       style={{ height: wide ? 36 : 44, padding: "0 14px", borderRadius: 999, border: `1px solid ${on ? "var(--app-text)" : "var(--app-line-strong)"}`, background: on ? "var(--app-text)" : "transparent", color: on ? "var(--app-card)" : "var(--app-ink-2)", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, fontFamily: "inherit" }}>
                       {lv > 0 && <HeatDots level={lv as Level} size={5} gap={2} />}
-                      {lv ? LEVEL_WORD[lv as Level] : "Semua"} <span className="tabnum" style={{ opacity: 0.7 }}>{n}</span>
+                      {lv ? LEVEL_WORD[lv as Level] : "Semua"} <span className="tabnum" style={{ fontWeight: 500 }}>{n}</span>
                     </button>
                   );
                 })}
