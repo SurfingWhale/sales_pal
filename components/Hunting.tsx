@@ -217,11 +217,27 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
 
   // Copy or Kirim WA is the send (PRD-009 D1): it goes in the log and the
   // person's journey at once, with five seconds to take it back.
-  function pick(t: PitchTemplate, how: "copy" | "wa") {
+  // Where the second button goes (QA 15 Okt: "link Threads langsung ke DM"):
+  // a reply goes to the post; a DM to Instagram's own DM link (ig.me/m/…).
+  // Threads has no public DM link, and its accounts are Instagram usernames.
+  const handle = target.trim().replace(/^@/, "").replace(/[^A-Za-z0-9._]/g, "");
+  const postUrl = (curPost?.url || (source.kind === "post" ? source.url : "")) || "";
+  const sendOut: { how: "wa" | "open"; label: string; url?: string } =
+    platform === "WA" ? { how: "wa", label: "Kirim WA" }
+    : channel === "post" && postUrl ? { how: "open", label: "Copy & buka post", url: postUrl }
+    : (platform === "Threads" || platform === "IG") && handle ? { how: "open", label: platform === "IG" ? "Copy & DM" : "Copy & DM (via IG)", url: `https://ig.me/m/${handle}` }
+    : url ? { how: "open", label: "Copy & buka profil", url }
+    : { how: "wa", label: "Kirim WA" };
+
+  function pick(t: PitchTemplate, how: "copy" | "wa" | "open") {
     if (isBlocked) return;
     const text = fillTemplate(t.body, fillData);
     if (how === "copy") {
       copy(text, t.id, setCopiedId);
+    } else if (how === "open" && sendOut.url) {
+      // Copy first, then open in the same tap (a popup opened later is blocked).
+      copy(text, t.id, setCopiedId);
+      window.open(sendOut.url, "_blank", "noopener");
     } else {
       window.open(waLinkFor(target, text), "_blank");
     }
@@ -233,7 +249,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     logSent(t, text, how);
   }
 
-  async function logSent(t: PitchTemplate, text: string, how: "copy" | "wa") {
+  async function logSent(t: PitchTemplate, text: string, how: "copy" | "wa" | "open") {
     const who = target.trim();
     const ch: Channel = curPost || source.kind === "post" ? channel : "dm";
     try {
@@ -477,7 +493,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         )}
 
         <TemplateBoard templates={templates} scores={scores} data={fillData} stage={stageFor(cur, cur ? view(cur, now, strategy) : undefined)}
-          blocked={isBlocked} copiedId={copiedId} copyFail={copyFail} onPick={pick} canEdit={canEdit}
+          blocked={isBlocked} copiedId={copiedId} copyFail={copyFail} onPick={pick} canEdit={canEdit} send={sendOut}
           sampleName={target.trim() ? (cur?.name || target.trim()) : ""} />
 
         {/* Mounted before its text, so screen readers announce "Tercatat". */}

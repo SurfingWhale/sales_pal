@@ -31,6 +31,8 @@ import Quotes, { LeadRef } from "@/components/Quotes";
 import Invoices from "@/components/Invoices";
 import Hunting from "@/components/Hunting";
 import HuntBar from "@/components/HuntBar";
+import FollowUpRun from "@/components/FollowUpRun";
+import { SORTS, Sort, VIEWS, View as LeadView, followUpQueue, inView, matches, sortLeads } from "@/lib/leadQuery";
 import ClientHub from "@/components/ClientHub";
 import SalesReport from "@/components/SalesReport";
 import GuildHub from "@/components/GuildHub";
@@ -234,6 +236,9 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [filterLevel, setFilterLevel] = useState<0 | Level>(0);
   const [leadQ, setLeadQ] = useState("");
   const [leadLimit, setLeadLimit] = useState(20);
+  const [leadView, setLeadView] = useState<LeadView>("semua");
+  const [leadSort, setLeadSort] = useState<Sort>("skor");
+  const [fuRun, setFuRun] = useState<Lead[] | null>(null);
   const [pageOpen, setPageOpen] = useState(false);
   const wide = !useIsNarrow(1023);
   const [showAddLead, setShowAddLead] = useState(false);
@@ -632,10 +637,14 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const scores = new Map(leads.map(l => [l.id, scoreLead(l, today())]));
   const sc = (l: Lead) => scores.get(l.id) || scoreLead(l, today());
   const highPotential = leads.filter(l => inPlay(l.status) && isHigh(sc(l).total)).length;
-  const filteredLeads = (filterStatus === "All" ? leads : leads.filter(l => l.status === filterStatus))
-    .filter(l => !filterLevel || sc(l).level === filterLevel)
-    .filter(l => !leadQ.trim() || `${l.name} ${l.category} ${l.contact}`.toLowerCase().includes(leadQ.trim().toLowerCase()))
-    .sort((a, b) => sc(b).total - sc(a).total);
+  // Search every field, a quick view, then the chosen order (lib/leadQuery.ts).
+  const filteredLeads = sortLeads(
+    (filterStatus === "All" ? leads : leads.filter(l => l.status === filterStatus))
+      .filter(l => !filterLevel || sc(l).level === filterLevel)
+      .filter(l => inView(l, leadView, today()))
+      .filter(l => matches(l, leadQ)),
+    leadSort, l => sc(l).total);
+  const dueLeads = followUpQueue(leads, today());
   const liveLead = selectedLead ? leads.find(l => l.id === selectedLead.id) || selectedLead : null;
 
   // Everything that needs a move today: reminders due, quotes left hanging,
@@ -914,7 +923,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                 <div style={{ position: "relative", flex: wide ? "0 0 auto" : "1 1 100%" }}>
                   <label htmlFor="lead-search" className="vh">Cari lead</label>
                   <Icon name="search" style={{ position: "absolute", left: 14, top: 13, color: "var(--app-muted)" }} />
-                  <input id="lead-search" type="search" value={leadQ} onChange={e => setLeadQ(e.target.value)} placeholder="Cari nama atau kategori" style={{ ...leadField, width: wide ? 260 : "100%", padding: "0 16px 0 42px" }} />
+                  <input id="lead-search" type="search" value={leadQ} onChange={e => setLeadQ(e.target.value)} placeholder="Cari nama, nomor, catatan, kebutuhan…" style={{ ...leadField, width: wide ? 260 : "100%", padding: "0 16px 0 42px" }} />
                 </div>
                 <label className="vh" htmlFor="status-filter">Status</label>
                 <select id="status-filter" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...leadField, padding: "0 14px", flex: wide ? "0 0 auto" : "1 1 0", minWidth: 0 }}>
@@ -924,6 +933,33 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                 {wide && <button onClick={() => setShowAddLead(true)} style={{ display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}><Icon name="plus" stroke={1.8} />Tambah lead</button>}
               </div>
             </div>
+
+            {leads.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 16 }}>
+                {dueLeads.length > 0 && (
+                  <button onClick={() => setFuRun(dueLeads)} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                    ▶ Follow-up beruntun <span className="tabnum" style={{ background: "rgba(0,0,0,0.28)", borderRadius: 999, padding: "1px 8px" }}>{dueLeads.length}</span>
+                  </button>
+                )}
+                <div role="group" aria-label="Tampilan cepat" className="sp-chiprow" style={{ display: "flex", gap: 8, overflowX: "auto", flex: "1 1 260px", minWidth: 0 }}>
+                  {VIEWS.map(v => {
+                    const n = v.id === "semua" ? leads.length : leads.filter(l => inView(l, v.id, today())).length;
+                    const on = leadView === v.id;
+                    if (v.id !== "semua" && !n && !on) return null;
+                    return (
+                      <button key={v.id} onClick={() => { setLeadView(v.id); setLeadLimit(20); }} aria-pressed={on}
+                        style={{ flexShrink: 0, height: 44, padding: "0 14px", borderRadius: 999, border: `1px solid ${on ? "var(--app-text)" : "var(--app-line-strong)"}`, background: on ? "var(--app-text)" : "transparent", color: on ? "var(--app-card)" : "var(--app-ink-2)", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                        {v.label} <span className="tabnum">{n}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <label className="vh" htmlFor="lead-sort">Urutkan</label>
+                <select id="lead-sort" value={leadSort} onChange={e => setLeadSort(e.target.value as Sort)} style={{ ...leadField, padding: "0 14px", flex: "0 0 auto" }}>
+                  {SORTS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+              </div>
+            )}
 
             {leads.length > 0 && (
               <div role="group" aria-label="Saring menurut potensi" className="sp-chiprow" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 24 }}>
@@ -1266,6 +1302,13 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       )}
 
       {/* Import Leads Modal */}
+      {fuRun && (
+        <FollowUpRun queue={fuRun} live={id => leads.find(l => l.id === id)}
+          onReplied={id => markReplied(id)} onDone={id => doneFollowUp(id)}
+          onSchedule={(id, action, date) => updateDoc(spaceDoc(space, "leads", id), { nextAction: action, nextActionDate: date })}
+          onOpen={id => { const l = leads.find(x => x.id === id); setFuRun(null); if (l) openLead(l); }}
+          onClose={() => setFuRun(null)} />
+      )}
       {showImport && (
         <div className="modal-overlay" onClick={closeImport}>
           <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 640, maxHeight: "85vh", overflowY: "auto" }}>

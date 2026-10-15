@@ -625,6 +625,35 @@ export const flows = [
         await page.getByLabel("Cari prospek pakai ID atau @username").fill("contoh_042");
         await expectText(page, "1 ketemu");
       });
+      await t.step("search finds a lead by part of its phone number", async () => {
+        await go(page, "Jualan", "Leads");
+        await page.locator("#lead-search").fill("13737");
+        await page.locator(".lead-row", { hasText: "Usaha Contoh 137" }).first().waitFor();
+        if (await page.locator(".lead-row").count() !== 1) throw new Error("phone search did not find exactly one lead");
+        await page.locator("#lead-search").fill("");
+      });
+      await t.step("quick views and sort answer the daily questions", async () => {
+        await page.getByRole("group", { name: "Tampilan cepat" }).getByRole("button", { name: /^Telat \d+/ }).click();
+        await page.locator(".lead-row").first().waitFor();
+        await page.locator("#lead-sort").selectOption("nilai");
+        await page.getByRole("group", { name: "Tampilan cepat" }).getByRole("button", { name: /^Semua/ }).click();
+      });
+      await t.step("follow-up one lead after another, without going back to the list", async () => {
+        const run = page.getByRole("button", { name: /Follow-up beruntun/ });
+        const total = Number((await run.textContent()).match(/\d+/)[0]);
+        await run.click();
+        const sheet = page.getByRole("dialog", { name: "Follow-up beruntun" });
+        await sheet.getByText(`1 dari ${total}`).waitFor();
+        await sheet.getByRole("button", { name: "Besok" }).click();
+        await sheet.getByText(`2 dari ${total}`).waitFor();
+        await sheet.getByRole("button", { name: "💬 Dibales" }).click();
+        await sheet.getByText(`3 dari ${total}`).waitFor();
+        await sheet.getByRole("button", { name: "Lewati →" }).click();
+        await sheet.getByRole("button", { name: "Tutup" }).first().click();
+        await sheet.waitFor({ state: "detached" });
+        const left = Number((await run.textContent()).match(/\d+/)[0]);
+        if (left !== total - 2) throw new Error(`queue ${total} → ${left}, expected ${total - 2}`);
+      });
     },
   },
   {
@@ -745,7 +774,7 @@ export const flows = [
         await page.getByRole("radio", { name: "Threads", checked: true }).waitFor();
       });
       await t.step("nothing floats over the Kirim WA button", async () => {
-        const hit = await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find(x => x.textContent.trim() === "Kirim WA"); b.scrollIntoView({ block: "center" }); const r = b.getBoundingClientRect(); const top = document.elementFromPoint(r.right - 8, r.top + r.height / 2); return b.contains(top) ? "" : (top?.getAttribute("aria-label") || top?.textContent || "?").slice(0, 40); });
+        const hit = await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find(x => /^(Kirim WA|Copy & )/.test(x.textContent.trim())); b.scrollIntoView({ block: "center" }); const r = b.getBoundingClientRect(); const top = document.elementFromPoint(r.right - 8, r.top + r.height / 2); return b.contains(top) ? "" : (top?.getAttribute("aria-label") || top?.textContent || "?").slice(0, 40); });
         if (hit) throw new Error(`covered by "${hit}"`);
       });
       await t.step("copy a template: it is logged at once", async () => {
@@ -800,6 +829,15 @@ export const flows = [
       await t.step("back to Terkirim, Balas cepat closes with its button", async () => {
         await huntRow(page, "@rotiflow").getByRole("button", { name: "Tandai Belum dibales" }).click();
         await page.getByRole("region", { name: /Saran balasan/ }).waitFor({ state: "detached" });
+      });
+      await t.step("a Threads target: Copy & DM opens Instagram's DM to that username", async () => {
+        await page.context().route("https://ig.me/**", r => r.fulfill({ status: 200, contentType: "text/html", body: "<title>ig</title>" }));
+        await page.locator("#hunt-target").fill("@dmflow");
+        await page.getByRole("radiogroup", { name: "Platform" }).getByRole("radio", { name: "Threads" }).click();
+        const [pop] = await Promise.all([page.waitForEvent("popup"), page.getByRole("button", { name: "Copy & DM (via IG)" }).first().click()]);
+        if (!pop.url().startsWith("https://ig.me/m/dmflow")) throw new Error(`opened ${pop.url()}`);
+        await pop.close();
+        await page.getByRole("button", { name: "Batal catat" }).waitFor();
       });
       await t.step("change the daily goal to 25 in a sheet with Batal", async () => {
         await page.getByRole("button", { name: /Ubah target harian/ }).click();
