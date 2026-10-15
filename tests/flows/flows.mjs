@@ -287,6 +287,8 @@ export const flows = [
       await t.step("fill in Info bisnis", async () => {
         await go(page, "Jualan", "Paket");
         await page.getByRole("button", { name: "Kop & logo" }).click();
+        await page.getByRole("button", { name: "Pakai logo Visufavor" }).click();
+        await modal(page).getByRole("img", { name: "Logo" }).waitFor();
         await page.locator("#biz-name").fill("Studio Flow");
         await page.locator("#biz-tagline").fill("Fotografi menu");
         await page.locator("#biz-phone").fill("08123456789");
@@ -339,6 +341,20 @@ export const flows = [
         await page.getByRole("button", { name: "Cetak / PDF" }).first().click();
         await page.locator(".print-root").getByText("Fotografi menu").waitFor();
         await page.locator(".print-root").getByText("SYARAT & KETENTUAN").waitFor();
+      });
+      await t.step("Simpan / kirim PDF hands over a real PDF file", async () => {
+        // No share sheet in the test browser, so it falls back to a download.
+        const [dl] = await Promise.all([
+          page.waitForEvent("download", { timeout: 15000 }),
+          page.getByRole("button", { name: "Simpan / kirim PDF" }).click(),
+        ]);
+        if (!/^INV-.*Bakso_Flow\.pdf$/.test(dl.suggestedFilename())) throw new Error(`file name: ${dl.suggestedFilename()}`);
+        const { readFileSync } = await import("node:fs");
+        await dl.saveAs(new URL("./out/invoice-sample.pdf", import.meta.url).pathname);
+        const bytes = readFileSync(await dl.path());
+        if (bytes.subarray(0, 5).toString() !== "%PDF-" || bytes.length < 2000) throw new Error(`not a PDF (${bytes.length} bytes)`);
+        const body = bytes.toString("latin1");
+        for (const want of ["Studio Flow", "Fotografi menu", "SYARAT & KETENTUAN", "DP mengunci jadwal.", "/Subtype /Image"]) if (!body.includes(want)) throw new Error(`PDF is missing "${want}"`);
       });
       await t.step("Kop & logo over the PDF: back closes Kop, then the PDF", async () => {
         await page.getByRole("button", { name: "Kop & logo" }).click();
