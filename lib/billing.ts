@@ -28,7 +28,17 @@ export interface LineItem {
 export const QUOTE_STATUS = ["Draft", "Terkirim", "Disetujui", "Ditolak"] as const;
 export type QuoteStatus = (typeof QUOTE_STATUS)[number];
 
-export interface Quote {
+// What the job is, so it doesn't all end up in "Catatan" (QA 15 Okt): a title,
+// when and where it happens, and what the client gets at the end.
+export interface Brief {
+  project?: string;       // "Event photography — Wickedly Wild: Halloween Edition"
+  eventDate?: string;     // YYYY-MM-DD, also feeds the job calendar
+  eventTime?: string;     // "13.30–15.00 WIB"
+  venue?: string;
+  deliverables?: string;  // one per line
+}
+
+export interface Quote extends Brief {
   id: string;
   number: string;
   leadId: string;
@@ -44,7 +54,6 @@ export interface Quote {
   status: QuoteStatus;
   sentAt?: string;
   invoiceId?: string;
-  eventDate?: string;     // the shoot / event day, for the job calendar
   ownerUid?: string;
   ownerName?: string;
 }
@@ -55,7 +64,7 @@ export interface Payment {
   note: string;
 }
 
-export interface Invoice {
+export interface Invoice extends Brief {
   id: string;
   number: string;
   quoteId: string;
@@ -70,7 +79,6 @@ export interface Invoice {
   date: string;
   dueDate: string;
   payments: Payment[];
-  eventDate?: string;
   ownerUid?: string;      // guild: the seller (lib/space.ts stamp)
   ownerName?: string;
 }
@@ -198,6 +206,17 @@ function itemLines(items: LineItem[]): string[] {
   ]);
 }
 
+function briefLines(x: Brief): string[] {
+  const when = [x.eventDate ? longDate(x.eventDate) : "", x.eventTime || ""].filter(Boolean).join(", ");
+  const out = [
+    x.project ? `*${x.project}*` : "",
+    when ? `Acara: ${when}${x.venue ? ` · ${x.venue}` : ""}` : x.venue ? `Lokasi: ${x.venue}` : "",
+  ].filter(Boolean);
+  const del = (x.deliverables || "").split("\n").map(l => l.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
+  if (del.length) out.push("Deliverables:", ...del.map(l => `- ${l}`));
+  return out.length ? [...out, ""] : [];
+}
+
 function signOff(b: Business): string[] {
   return [b.name, b.phone].filter(Boolean).length ? ["", [b.name, b.phone].filter(Boolean).join(" · ")] : [];
 }
@@ -214,6 +233,7 @@ export function quoteText(q: Quote, b: Business): string {
     `Untuk: ${q.leadName}${q.contact && q.contact !== q.leadName ? ` (${q.contact})` : ""}`,
     `Tanggal: ${longDate(q.date)} · Berlaku s/d ${longDate(q.validUntil)}`,
     "",
+    ...briefLines(q),
     ...itemLines(q.items),
     "",
   ];
@@ -233,6 +253,7 @@ export function invoiceText(inv: Invoice, b: Business): string {
     `Untuk: ${inv.leadName}`,
     `Tanggal: ${longDate(inv.date)} · Jatuh tempo: ${longDate(inv.dueDate)}`,
     "",
+    ...briefLines(inv),
     ...itemLines(inv.items),
     "",
   ];

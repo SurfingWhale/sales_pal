@@ -8,16 +8,15 @@ import {
   addDays, daysBetween, longDate, nextNumber, quoteColor, quoteText, rupiah, subtotal, today, total, waLink, waNumber,
 } from "@/lib/billing";
 import PrintSheet from "@/components/PrintSheet";
+import DocEditor, { DocDraft, LeadRef, briefOf, cleanItems } from "@/components/DocEditor";
 import { badge, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, label, modalBox, subheading, WA_INK } from "@/components/ui";
 
-export interface LeadRef { id: string; name: string; contact: string; phone: string }
+export type { LeadRef };
 
-type Draft = Omit<Quote, "id" | "number" | "status"> & { id: string; number: string; status: QuoteStatus };
-
-function blank(lead?: LeadRef): Draft {
+function blank(lead?: LeadRef): DocDraft {
   const d = today();
   return {
-    id: "", number: "", status: "Draft",
+    id: "", number: "",
     leadId: lead?.id || "", leadName: lead?.name || "", contact: lead?.contact || "", phone: lead?.phone || "",
     items: [], discount: 0, dpPercent: 50, notes: "", date: d, validUntil: addDays(d, 14),
   };
@@ -34,7 +33,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
   onInvoiceCreated: () => void;
 }) {
   const space = useSpace();
-  const [editing, setEditing] = useState<Draft | null>(null);
+  const [editing, setEditing] = useState<DocDraft | null>(null);
   const [printing, setPrinting] = useState<Quote | null>(null);
   const [copied, setCopied] = useState("");
   const [filter, setFilter] = useState<"All" | QuoteStatus>("All");
@@ -50,18 +49,18 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
   const won = quotes.filter(q => q.status === "Disetujui");
   const decided = won.length + quotes.filter(q => q.status === "Ditolak").length;
 
-  async function save() {
-    if (!editing || !editing.leadName.trim() || editing.items.length === 0) return;
-    const id = editing.id || `q_${Date.now()}`;
-    const number = editing.number || nextNumber("Q", quotes.map(q => q.number));
-    const { id: _id, ...rest } = editing; // eslint-disable-line @typescript-eslint/no-unused-vars
-    await setDoc(spaceDoc(space, "quotes", id), stamp(space, {
-      ...rest,
-      number,
-      leadName: rest.leadName.trim(),
-      items: rest.items.filter(i => i.name.trim()).map(i => ({ name: i.name.trim(), qty: i.qty || 1, price: i.price || 0, ...(i.description?.trim() ? { description: i.description.trim() } : {}) })),
-      eventDate: rest.eventDate || "",
-    }, rest as { ownerUid?: string; ownerName?: string }));
+  async function save(d: DocDraft) {
+    const id = d.id || `q_${Date.now()}`;
+    const old = quotes.find(q => q.id === d.id);
+    const doc: Omit<Quote, "id"> = {
+      number: d.number || nextNumber("Q", quotes.map(q => q.number)),
+      leadId: d.leadId, leadName: d.leadName.trim(), contact: d.contact.trim(), phone: d.phone.trim(),
+      items: cleanItems(d.items), discount: d.discount, dpPercent: d.dpPercent, notes: d.notes.trim(),
+      date: d.date, validUntil: d.validUntil || addDays(d.date, 14), status: old?.status || "Draft",
+      ...(old?.sentAt ? { sentAt: old.sentAt } : {}), ...(old?.invoiceId ? { invoiceId: old.invoiceId } : {}),
+      ...briefOf(d),
+    };
+    await setDoc(spaceDoc(space, "quotes", id), stamp(space, doc, old as { ownerUid?: string; ownerName?: string } | undefined));
     setEditing(null);
   }
 
@@ -99,34 +98,12 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
       quoteId: q.id, leadId: q.leadId, leadName: q.leadName, contact: q.contact, phone: q.phone,
       items: q.items, discount: q.discount, dpPercent: q.dpPercent, notes: q.notes,
       date: d, dueDate: addDays(d, 7), payments: [],
-      ...(q.eventDate ? { eventDate: q.eventDate } : {}),
+      ...briefOf(q),
     };
     await setDoc(spaceDoc(space, "invoices", id), stamp(space, inv, q as { ownerUid?: string; ownerName?: string }));
     await updateDoc(spaceDoc(space, "quotes", q.id), { invoiceId: id });
     onInvoiceCreated();
   }
-
-  function pickLead(id: string) {
-    if (!editing) return;
-    const l = leads.find(x => x.id === id);
-    setEditing(l
-      ? { ...editing, leadId: l.id, leadName: l.name, contact: l.contact, phone: l.phone }
-      : { ...editing, leadId: "" });
-  }
-
-  function addService(id: string) {
-    if (!editing) return;
-    const s = services.find(x => x.id === id);
-    if (!s) return;
-    setEditing({ ...editing, items: [...editing.items, { name: s.name, qty: 1, price: s.price, ...(s.description?.trim() ? { description: s.description.trim() } : {}) }] });
-  }
-
-  function setItem(i: number, patch: Partial<LineItem>) {
-    if (!editing) return;
-    setEditing({ ...editing, items: editing.items.map((it, n) => (n === i ? { ...it, ...patch } : it)) });
-  }
-
-  const num = (v: string) => parseInt(v.replace(/\D/g, ""), 10) || 0;
 
   return (
     <div>
@@ -184,7 +161,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                     <div style={{ fontSize: 12, color: "var(--app-muted)", fontFamily: "monospace" }}>{q.number} · {longDate(q.date)}</div>
                     <div style={{ fontSize: 15, fontWeight: 700, fontFamily: font, marginTop: 2 }}>{q.leadName}</div>
                     <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>
-                      {q.items.map(i => i.name).join(", ")}{q.eventDate ? ` · acara ${longDate(q.eventDate)}` : ""}
+                      {q.project || q.items.map(i => i.name).join(", ")}{q.eventDate ? ` · acara ${longDate(q.eventDate)}` : ""}
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
@@ -201,8 +178,8 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                     {q.status === "Terkirim" ? "Follow-up WA" : "Kirim WA"}
                   </button>
                   <button onClick={() => copy(q)} style={{ ...chip, color: copied === q.id ? "var(--ok)" : "var(--app-text)" }}>{copied === q.id ? "✓ Tersalin" : "Copy teks"}</button>
-                  <button onClick={() => setPrinting(q)} style={chip}>Cetak / PDF</button>
-                  <button onClick={() => setEditing({ ...q })} style={chip}>Edit</button>
+                  <button onClick={() => setPrinting(q)} style={chip}>PDF</button>
+                  <button onClick={() => setEditing({ ...q, validUntil: q.validUntil })} style={chip}>Edit</button>
                   {q.status === "Terkirim" && (
                     <>
                       <button onClick={() => setStatus(q, "Disetujui")} style={{ ...chip, color: "var(--ok)", borderColor: "#00a86260" }}>✓ Disetujui</button>
@@ -223,105 +200,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
         </div>
       )}
 
-      {editing && (
-        <div className="modal-overlay" onClick={() => setEditing(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 620 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 20 }}>
-              {editing.id ? `Edit ${editing.number}` : "+ Penawaran baru"}
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div style={{ gridColumn: "1/-1" }}>
-                <label style={label}>Lead</label>
-                <select value={editing.leadId} onChange={e => pickLead(e.target.value)} style={inputStyle}>
-                  <option value="">— ketik manual —</option>
-                  {leads.slice().sort((a, b) => a.name.localeCompare(b.name)).map(l => <option key={l.id} value={l.id}>{l.name}{l.contact ? ` · ${l.contact}` : ""}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Nama klien / bisnis</label>
-                <input value={editing.leadName} onChange={e => setEditing({ ...editing, leadName: e.target.value })} style={inputStyle} placeholder="Kopi Senja" />
-              </div>
-              <div>
-                <label style={label}>Nama kontak</label>
-                <input value={editing.contact} onChange={e => setEditing({ ...editing, contact: e.target.value })} style={inputStyle} placeholder="Nama PIC" />
-              </div>
-              <div style={{ gridColumn: "1/-1" }}>
-                <label style={label}>WhatsApp</label>
-                <input inputMode="tel" value={editing.phone} onChange={e => setEditing({ ...editing, phone: e.target.value })} style={inputStyle} placeholder="0812…" />
-              </div>
-            </div>
-
-            <div style={{ marginTop: 20, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>Item</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {services.length > 0 && (
-                  <select value="" onChange={e => addService(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "6px 10px", fontSize: 12 }} aria-label="Tambah dari paket">
-                    <option value="">+ dari paket…</option>
-                    {services.map(s => <option key={s.id} value={s.id}>{s.name} · {rupiah(s.price)}</option>)}
-                  </select>
-                )}
-                <button onClick={() => setEditing({ ...editing, items: [...editing.items, { name: "", qty: 1, price: 0 }] })} style={chip}>+ item manual</button>
-              </div>
-            </div>
-
-            {editing.items.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)", padding: "12px 0" }}>Belum ada item.</div>}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {editing.items.map((it, i) => (
-                <div key={i} style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", padding: 10, borderRadius: 10, border: "1px solid var(--app-border)" }}>
-                  <input value={it.name} onChange={e => setItem(i, { name: e.target.value })} style={{ ...inputStyle, padding: "8px 10px", flex: "1 1 260px", width: "auto", minWidth: 0 }} placeholder="Nama jasa / produk" aria-label="Nama item" />
-                  <input inputMode="numeric" value={it.qty || ""} onChange={e => setItem(i, { qty: num(e.target.value) })} style={{ ...inputStyle, padding: "8px 6px", textAlign: "center", flex: "0 0 56px" }} aria-label="Qty" />
-                  <input inputMode="numeric" value={it.price ? it.price.toLocaleString("id-ID") : ""} onChange={e => setItem(i, { price: num(e.target.value) })} style={{ ...inputStyle, padding: "8px 10px", textAlign: "right", flex: "1 1 110px", width: "auto", minWidth: 0 }} placeholder="Harga" aria-label="Harga" />
-                  <button onClick={() => setEditing({ ...editing, items: editing.items.filter((_, n) => n !== i) })} aria-label="Hapus item" style={{ ...chip, padding: "8px 0", flex: "0 0 36px", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}>×</button>
-                  <textarea value={it.description || ""} onChange={e => setItem(i, { description: e.target.value })} aria-label="Rincian item"
-                    placeholder={"Rincian (muncul di PDF), mis.\n• Foto event 2 jam, 50 foto edit\n• 1 reel recap"} style={{ ...inputStyle, padding: "8px 10px", fontSize: 13, height: 64, resize: "vertical", flex: "1 1 100%" }} />
-                </div>
-              ))}
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 12, marginTop: 16 }}>
-              <div>
-                <label style={label}>Diskon (Rp)</label>
-                <input inputMode="numeric" value={editing.discount ? editing.discount.toLocaleString("id-ID") : ""} onChange={e => setEditing({ ...editing, discount: num(e.target.value) })} style={inputStyle} placeholder="0" />
-              </div>
-              <div>
-                <label style={label}>DP (%)</label>
-                <input inputMode="numeric" value={String(editing.dpPercent)} onChange={e => setEditing({ ...editing, dpPercent: Math.min(100, num(e.target.value)) })} style={inputStyle} />
-              </div>
-              <div>
-                <label style={label}>Berlaku s/d</label>
-                <input type="date" value={editing.validUntil} onChange={e => setEditing({ ...editing, validUntil: e.target.value })} style={inputStyle} />
-              </div>
-              <div>
-                <label htmlFor="q-event" style={label}>Tanggal acara</label>
-                <input id="q-event" type="date" value={editing.eventDate || ""} onChange={e => setEditing({ ...editing, eventDate: e.target.value })} style={inputStyle} />
-              </div>
-              <div style={{ gridColumn: "1/-1" }}>
-                <label style={label}>Catatan untuk klien</label>
-                <textarea value={editing.notes} onChange={e => setEditing({ ...editing, notes: e.target.value })} style={{ ...inputStyle, resize: "vertical", height: 70 }} placeholder="Jadwal shoot, lokasi, jumlah revisi…" />
-              </div>
-            </div>
-
-            <div style={{ background: "var(--app-inner)", borderRadius: 10, padding: 14, marginTop: 16, fontSize: 13, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-              <span style={{ color: "var(--app-muted)" }}>
-                Subtotal {rupiah(subtotal(editing.items))}{editing.discount ? ` · diskon ${rupiah(editing.discount)}` : ""}
-              </span>
-              <b style={{ color: "var(--ok)" }}>Total {rupiah(total(editing))}</b>
-            </div>
-
-            <div style={{ display: "flex", gap: 10, marginTop: 20, alignItems: "center", flexWrap: "wrap" }}>
-              <button onClick={save} disabled={!editing.leadName.trim() || editing.items.length === 0}
-                style={{ ...btnPrimary, opacity: !editing.leadName.trim() || editing.items.length === 0 ? 0.5 : 1 }}>Simpan</button>
-              <button onClick={() => setEditing(null)} style={btnMuted}>Batal</button>
-              {(!editing.leadName.trim() || editing.items.length === 0) && (
-                <span role="status" style={{ fontSize: 12, color: "var(--app-muted)" }}>
-                  {!editing.leadName.trim() ? "Isi nama klien dulu." : "Tambah minimal satu item."}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {editing && <DocEditor kind="quote" initial={editing} leads={leads} services={services} onSave={save} onClose={() => setEditing(null)} />}
 
       {printing && <PrintSheet kind="quote" data={printing} business={business} onClose={() => setPrinting(null)} />}
     </div>
