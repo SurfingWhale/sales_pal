@@ -37,7 +37,7 @@ function authErrorMessage(e: unknown): string {
     case "auth/email-already-in-use": return "Email ini udah terdaftar. Coba login aja.";
     case "auth/weak-password": return "Password minimal 6 karakter.";
     case "auth/too-many-requests": return "Kebanyakan percobaan. Tunggu sebentar terus coba lagi.";
-    case "auth/network-request-failed": return "Koneksi bermasalah. Cek internet lo.";
+    case "auth/network-request-failed": return "Koneksi bermasalah. Cek internet kamu, lalu coba lagi.";
     case "auth/popup-closed-by-user":
     case "auth/cancelled-popup-request": return "";
     default: return "Gagal masuk. Coba lagi ya.";
@@ -144,7 +144,7 @@ export default function LoginPage() {
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      padding: "24px",
+      padding: "max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom))",
       position: "relative",
       overflow: "hidden",
     }}>
@@ -162,7 +162,7 @@ export default function LoginPage() {
         background: "var(--app-card)",
         border: "1px solid var(--app-border)",
         borderRadius: 28,
-        padding: "44px 40px",
+        padding: "clamp(28px, 8vw, 44px) clamp(20px, 6vw, 40px)",
         position: "relative", zIndex: 1,
       }}>
         {/* Logo */}
@@ -181,10 +181,10 @@ export default function LoginPage() {
           </div>
         ) : (<>
         <h1 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, fontWeight: 400, letterSpacing: 2, color: "var(--app-text)", marginBottom: 6, textAlign: "center" }}>
-          {mode === "login" ? "Welcome back" : "Buat akun baru"}
+          {mode === "login" ? "Selamat datang lagi" : "Buat akun baru"}
         </h1>
         <p style={{ fontSize: 13, color: "var(--app-muted)", textAlign: "center", marginBottom: 28 }}>
-          {mode === "login" ? "Masuk ke dashboard sales lo" : "Mulai gratis, track lebih banyak deal"}
+          {mode === "login" ? "Masuk ke dashboard sales kamu" : "Mulai gratis, catat lebih banyak deal"}
         </p>
 
         {/* Google */}
@@ -199,7 +199,7 @@ export default function LoginPage() {
             padding: "13px 20px",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
             fontSize: 14, fontWeight: 600, color: "#111",
-            cursor: "pointer", marginBottom: 20,
+            cursor: "pointer", marginBottom: 20, fontFamily: "inherit", minHeight: 48,
             opacity: loading ? 0.6 : 1,
           }}
         >
@@ -222,7 +222,7 @@ export default function LoginPage() {
         <form onSubmit={handleEmail} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <input
             type="email"
-            placeholder="Email lo"
+            placeholder="Email kamu"
             aria-label="Email"
             autoComplete="email"
             value={email}
@@ -249,7 +249,7 @@ export default function LoginPage() {
           />
 
           {error && (
-            <div style={{ fontSize: 12, color: "#ff6b6b", background: "#ff6b6b15", border: "1px solid #ff6b6b30", borderRadius: 8, padding: "10px 14px" }}>
+            <div role="alert" style={{ fontSize: 13, lineHeight: 1.45, color: "var(--hot)", background: "#ff6b6b15", border: "1px solid #ff6b6b30", borderRadius: 8, padding: "10px 14px" }}>
               {error}
             </div>
           )}
@@ -265,7 +265,7 @@ export default function LoginPage() {
               boxShadow: "0 4px 20px rgba(0,94,176,0.4)",
             }}
           >
-            {loading ? "Loading..." : mode === "login" ? "🚀 Masuk" : "✨ Buat Akun"}
+            {loading ? "Memproses…" : mode === "login" ? "🚀 Masuk" : "✨ Buat Akun"}
           </button>
         </form>
 
@@ -273,7 +273,7 @@ export default function LoginPage() {
           {mode === "login" ? "Belum punya akun? " : "Udah punya akun? "}
           <button
             onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}
-            style={{ color: "var(--brand-text)", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600 }}
+            style={{ color: "var(--brand-text)", background: "none", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "inherit", minHeight: 44, padding: "0 6px" }}
           >
             {mode === "login" ? "Daftar gratis" : "Masuk"}
           </button>

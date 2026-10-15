@@ -34,10 +34,19 @@ export default function CustomerContext({ p, v, strategy, stage, now, jobs, onSa
     ["Butuh", c.need], ["Kapan", c.when], ["Di mana", c.where], ["Budget", c.budget], ["Bisnis", c.business],
   ];
 
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   async function save() {
     if (!draft) return;
-    await onSave({ ...c, need: draft.need.trim(), when: draft.when.trim(), date: draft.date, where: draft.where.trim(), budget: draft.budget.trim(), edited: true });
-    setDraft(null);
+    setSaving(true); setError("");
+    try {
+      await onSave({ ...c, need: draft.need.trim(), when: draft.when.trim(), date: draft.date, where: draft.where.trim(), budget: draft.budget.trim(), edited: true });
+      setDraft(null);
+    } catch {
+      setError("Gagal nyimpen konteks. Cek koneksi lalu coba lagi.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -50,15 +59,15 @@ export default function CustomerContext({ p, v, strategy, stage, now, jobs, onSa
             {sent ? ` · ${sent} pesan terkirim` : ""}
           </div>
           <button onClick={copyId} aria-label={`Salin ID prospek ${p.id}`} title="ID prospek: cari pakai ini di Journey prospek"
-            style={{ ...chip, minHeight: 28, padding: "2px 8px", marginTop: 6, fontSize: 12, fontFamily: "ui-monospace, monospace", color: copied ? "var(--ok)" : "var(--app-sub)" }}>
-            {copied ? "✓ ID tersalin" : `✓ Tersimpan · ID ${p.id}`}
+            style={{ ...chip, minHeight: 32, maxWidth: "100%", padding: "4px 10px", marginTop: 6, fontSize: 12, textAlign: "left", overflowWrap: "anywhere", color: copied ? "var(--ok)" : "var(--app-sub)" }}>
+            {copied ? "✓ ID tersalin" : <>✓ Tersimpan · ID <span style={{ fontFamily: "ui-monospace, monospace" }}>{p.id}</span></>}
           </button>
         </div>
         <span style={badge(statusColor(p, v))}>{statusLabel(p, v)}</span>
       </div>
 
       {post?.text && <div style={{ fontSize: 12.5, color: "var(--app-sub)", lineHeight: 1.5, marginTop: 10, whiteSpace: "pre-wrap" }}>“{post.text}”</div>}
-      {post?.url && <a href={post.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", fontSize: 12, color: "var(--brand-text)", marginTop: 6 }}>Buka post ↗</a>}
+      {post?.url && <a href={post.url} target="_blank" rel="noreferrer" className="sp-tap" style={{ display: "inline-flex", alignItems: "center", padding: "6px 0", fontSize: 12, color: "var(--brand-text)", marginTop: 2 }}>Buka post ↗</a>}
 
       {!draft ? (
         <>
@@ -86,20 +95,21 @@ export default function CustomerContext({ p, v, strategy, stage, now, jobs, onSa
           {v.status === "tidak" && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Udah {strategy.maxAttempts}× tanpa jawaban, diparkir sampai {longDate(v.parkedUntil || now)}. Kirim lagi tetap bisa.</div>}
         </>
       ) : (
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 12 }} onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setDraft(null); } }}>
           {([["need", "Butuh apa", "mis. foto katalog F&B"], ["when", "Kapan", "mis. besok jam 1-5 sore"], ["where", "Di mana", "mis. Sentul"], ["budget", "Budget / catatan harga", "mis. ramah UMKM"]] as [keyof Draft, string, string][]).map(([k, l, ph]) => (
             <div key={k} style={{ marginBottom: 8 }}>
               <label htmlFor={`ctx-${k}`} style={label}>{l}</label>
-              <input id={`ctx-${k}`} value={draft[k]} placeholder={ph} onChange={e => setDraft({ ...draft, [k]: e.target.value })} style={{ ...inputStyle, fontSize: 16 }} />
+              <input id={`ctx-${k}`} value={draft[k]} placeholder={ph} onChange={e => setDraft({ ...draft, [k]: e.target.value })} style={{ ...inputStyle, fontSize: 16, minHeight: 44 }} />
             </div>
           ))}
           <div style={{ marginBottom: 8 }}>
             <label htmlFor="ctx-date" style={label}>Tanggal acara (buat cek jadwal)</label>
-            <input id="ctx-date" type="date" value={draft.date} onChange={e => setDraft({ ...draft, date: e.target.value })} style={{ ...inputStyle, fontSize: 16, maxWidth: 220 }} />
+            <input id="ctx-date" type="date" value={draft.date} onChange={e => setDraft({ ...draft, date: e.target.value })} style={{ ...inputStyle, fontSize: 16, minHeight: 44, maxWidth: 240 }} />
           </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-            <button onClick={save} style={{ ...btnPrimary, padding: "8px 14px" }}>Simpan konteks</button>
-            <button onClick={() => setDraft(null)} style={{ ...btnMuted, padding: "8px 14px" }}>Batal</button>
+          {error && <div role="alert" style={{ fontSize: 12, color: "var(--hot)", marginTop: 4 }}>{error}</div>}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+            <button onClick={() => setDraft(null)} style={{ ...btnMuted, minHeight: 44, padding: "8px 16px" }}>Batal</button>
+            <button onClick={save} disabled={saving} style={{ ...btnPrimary, minHeight: 44, padding: "8px 16px", opacity: saving ? 0.7 : 1 }}>{saving ? "Menyimpan…" : "Simpan konteks"}</button>
           </div>
         </div>
       )}

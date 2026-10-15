@@ -74,6 +74,10 @@ const css = `
   .sp-todo > article { scroll-snap-align: start; border-radius: 22px; padding: 18px; min-height: 176px; gap: 10px; }
   .sp-todo h3 { font-size: 18px; }
 }
+@media (max-width: 360px) {
+  .sp-kpi .lbl { min-height: 2.7em; }
+  .sp-mode-tab { padding: 0 12px !important; }
+}
 `;
 
 export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onImport, onAdd, onAllLeads, onSetTarget, hunting, report, learn, children }: {
@@ -93,7 +97,7 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
   const tabs = (
     <div role="tablist" aria-label="Mode Beranda" style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", marginBottom: "clamp(16px, 3vw, 28px)" }}>
       {MODES.map(([m, l]) => (
-        <button key={m} role="tab" id={`bm-${m}`} aria-selected={mode === m} aria-controls="beranda-panel" onClick={() => setMode(m)}
+        <button key={m} role="tab" className="sp-mode-tab" id={`bm-${m}`} aria-selected={mode === m} aria-controls="beranda-panel" onClick={() => setMode(m)}
           style={{ flexShrink: 0, height: 40, padding: "0 16px", borderRadius: 999, border: `1px solid ${mode === m ? "var(--app-text)" : "var(--app-line-strong)"}`, background: mode === m ? "var(--app-text)" : "transparent", color: mode === m ? "var(--app-card)" : "var(--app-ink-2)", font: "500 14px 'Plus Jakarta Sans', sans-serif", cursor: "pointer", whiteSpace: "nowrap" }}>
           {l}
         </button>
@@ -227,7 +231,7 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
       </section>
 
       <div style={{ marginTop: "clamp(24px, 5vw, 56px)", display: "flex", flexDirection: "column", gap: 32 }}>
-        <LeadMap leads={mapLeads} onOpen={onOpenLead} onAll={onAllLeads} />
+        <LeadMap leads={mapLeads} onOpen={onOpenLead} onAll={onAllLeads} onAdd={onAdd} onImport={onImport} />
         {children}
       </div>
       </div>

@@ -52,16 +52,16 @@ export default function BusinessEditor({ business, onClose }: { business: Busine
     }
   }
 
-  const field = (k: keyof Business, l: string, ph: string, col = "auto") => (
-    <div style={{ gridColumn: col }}>
+  const field = (k: keyof Business, l: string, ph: string, col = "auto", type = "text") => (
+    <div style={{ gridColumn: col, minWidth: 0 }}>
       <label htmlFor={`biz-${k}`} style={label}>{l}</label>
-      <input id={`biz-${k}`} value={(b[k] as string) || ""} onChange={e => setB({ ...b, [k]: e.target.value })} style={inputStyle} placeholder={ph} />
+      <input id={`biz-${k}`} type={type} value={(b[k] as string) || ""} onChange={e => setB({ ...b, [k]: e.target.value })} style={inputStyle} placeholder={ph} />
     </div>
   );
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 160 }}>
-      <div onClick={e => e.stopPropagation()} aria-label="Kop invoice & penawaran" style={{ ...modalBox, maxWidth: 520 }}>
+    <div className="modal-overlay" onClick={() => { if (!busy) onClose(); }} style={{ zIndex: 160 }}>
+      <div onClick={e => e.stopPropagation()} aria-label="Kop invoice & penawaran" className="sp-sell" style={{ ...modalBox, maxWidth: 520 }}>
         <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 6 }}>Kop invoice & penawaran</div>
         <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Muncul di atas tiap PDF dan di akhir pesan WA. Isi sekali, kepakai terus.</div>
 
@@ -71,16 +71,16 @@ export default function BusinessEditor({ business, onClose }: { business: Busine
             {b.logo ? <img src={b.logo} alt="Logo" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <span style={{ fontSize: 12, color: "#57606a" }}>Logo</span>}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <label style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", cursor: "pointer", fontWeight: 700 }}>
+            <label className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", cursor: "pointer", fontWeight: 700, color: "var(--app-text)", position: "relative" }}>
               {b.logo ? "Ganti logo" : "+ Logo (PNG)"}
               <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={e => pickLogo(e.target.files?.[0])} style={{ position: "absolute", width: 1, height: 1, opacity: 0 }} />
             </label>
-            {b.logo && <button onClick={() => setB({ ...b, logo: "" })} style={{ ...chip, minHeight: 36 }}>Hapus</button>}
+            {b.logo && <button onClick={() => setB({ ...b, logo: "" })} style={{ ...chip, minHeight: 36, color: "var(--app-text)" }}>Hapus logo</button>}
           </div>
         </div>
 
-        <div role="group" aria-label="Logo brand lo" style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>Atau pilih logo brand lo:</div>
+        <div role="group" aria-label="Logo brand kamu" style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>Atau pilih logo brand kamu:</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {BRANDS.map(br => (
               <button key={br.id} onClick={() => pickBrand(br)} aria-label={`Pakai logo ${br.name}`}
@@ -93,13 +93,13 @@ export default function BusinessEditor({ business, onClose }: { business: Busine
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {field("name", "Nama brand / bisnis", "mis. beUntamed Studio", "1/-1")}
+          {field("name", "Nama brand / bisnis", "mis. Studio Contoh", "1/-1")}
           {field("tagline", "Jasa apa", "mis. Fotografi & video event", "1/-1")}
-          {field("phone", "WhatsApp", "0812…")}
-          {field("email", "Email", "halo@…")}
+          {field("phone", "WhatsApp", "0812…", "auto", "tel")}
+          {field("email", "Email", "halo@contoh.id", "auto", "email")}
           {field("address", "Alamat / kota", "mis. Jakarta Selatan", "1/-1")}
           {field("bank", "Bank", "BCA")}
-          {field("accountNo", "No. rekening", "123…")}
+          {field("accountNo", "No. rekening", "123…", "auto", "text")}
           {field("accountName", "Atas nama", "Nama di rekening", "1/-1")}
           <div style={{ gridColumn: "1/-1" }}>
             <label htmlFor="biz-footer" style={label}>Syarat & ketentuan</label>
@@ -108,9 +108,9 @@ export default function BusinessEditor({ business, onClose }: { business: Busine
           </div>
         </div>
         <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", marginTop: msg ? 10 : 0 }}>{msg}</div>
-        <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-          <button onClick={save} disabled={busy} style={btnPrimary}>Simpan kop</button>
-          <button onClick={onClose} style={btnMuted}>Batal</button>
+        <div className="sp-form-foot">
+          <button onClick={onClose} disabled={busy} style={btnMuted}>Batal</button>
+          <button onClick={save} disabled={busy} style={{ ...btnPrimary, opacity: busy ? 0.6 : 1 }}>{busy ? "Menyimpan…" : "Simpan kop"}</button>
         </div>
       </div>
     </div>

@@ -34,7 +34,7 @@ export const btnWA: CSSProperties = {
 
 export const chip: CSSProperties = {
   border: "1px solid var(--app-border)", background: "transparent", color: "var(--app-muted)",
-  borderRadius: 6, padding: "6px 10px", fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+  borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer", fontFamily: "inherit",
 };
 
 export const card: CSSProperties = {
@@ -42,7 +42,7 @@ export const card: CSSProperties = {
 };
 
 export const label: CSSProperties = {
-  fontSize: 11, color: "var(--app-muted)", display: "block", marginBottom: 6,
+  fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6,
 };
 
 export const modalBox: CSSProperties = {
@@ -62,7 +62,7 @@ export function ink(color: string): string {
 
 export function badge(color: string): CSSProperties {
   return {
-    display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+    display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700,
     background: `${color}1a`, color: ink(color), border: `1px solid ${color}40`, whiteSpace: "nowrap",
   };
 }

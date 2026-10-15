@@ -82,7 +82,7 @@ export default function BerandaReport({ now, numbers, paid, receivable, leadsByS
           <button onClick={onSetTarget} aria-label={numbers.closingTarget ? `Ubah target closing, sekarang ${numbers.closingTarget}` : "Atur target closing"} style={{ display: "block", width: "100%", marginTop: 14, padding: 0, border: 0, background: "none", cursor: "pointer", textAlign: "left" }}>
             {numbers.closingTarget > 0
               ? <span style={{ display: "block", height: 4, borderRadius: 999, background: "var(--app-border)", overflow: "hidden" }}><span style={{ display: "block", width: `${pct}%`, height: "100%", borderRadius: 999, background: "#005eb0" }} /></span>
-              : <span className="sub" style={{ fontSize: 13, color: "var(--brand-text)", fontWeight: 600 }}>Atur target</span>}
+              : <span style={{ display: "inline-flex", alignItems: "center", minHeight: 32, fontSize: 13, color: "var(--brand-text)", fontWeight: 600 }}>Atur target</span>}
           </button>
         </div>
         <div className="sp-kpi">

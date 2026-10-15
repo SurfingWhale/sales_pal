@@ -664,8 +664,190 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   .modal-overlay [aria-modal] div[style*="grid-template-columns: 1fr 1fr"],
   .modal-overlay [aria-modal] div[style*="grid-template-columns:1fr 1fr"] { grid-template-columns: minmax(0, 1fr) !important; }
   .modal-overlay [aria-modal] [style*="grid-column: auto"] { grid-column: 1 / -1 !important; }
-  .modal-overlay [aria-modal] button { min-height: 44px; font-size: 14px !important; }
+  .modal-overlay:not(.sp-leadpage) [aria-modal] button { min-height: 44px; font-size: 14px !important; }
   .modal-x-rail .modal-x { margin: -8px -6px 0 0; font-size: 22px !important; min-height: 40px; }
   /* The title and its line under it keep clear of the ×. */
   .modal-x-rail + *, .modal-x-rail + * + * { padding-right: 48px; }
 }
+
+/* ---- Hunting (QA 15 Okt) ----
+   Choices that answer one question (a DM's status, a journey's result) sit in
+   a tidy grid instead of wrapping into a pile. */
+.sp-choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+.sp-choice-grid > button { width: 100%; text-align: left; }
+/* A finger needs 44px: every button and link-button in Hunting gets it on touch. */
+@media not ((hover: hover) and (pointer: fine)) {
+  .sp-hunt button, .sp-hunt a.sp-tap { min-height: 44px !important; }
+  .sp-hunt .sp-icon-btn { min-width: 44px !important; }
+}
+/* A mouse sees what it is over. */
+@media (hover: hover) and (pointer: fine) {
+  .sp-hunt button:not(:disabled):hover, .sp-hunt a.sp-tap:hover { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--app-text) 6%, transparent); }
+  .sp-hunt button:disabled { cursor: not-allowed; }
+}
+@media (min-width: 768px) { .sp-choice-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); } }
+
+/* ---- Leads (QA 15 Okt) ----
+   Bottom sheets (follow-up, profil, Tarik dari WhatsApp, Hapus lead) sit above
+   the iPhone's home indicator and scroll inside when taller than the screen. */
+.sp-sheet-overlay { padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)) !important; }
+.sp-sheet {
+  max-height: 90vh;
+  max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+}
+/* The four quick actions on a lead: two by two on the narrowest phones. */
+@media (max-width: 359px) { .sp-quick { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+/* Potensi chips: one row that scrolls sideways on a phone, not a pile. */
+@media (max-width: 640px) {
+  .sp-chiprow { flex-wrap: nowrap !important; overflow-x: auto; margin: 0 -16px; padding: 2px 16px; scrollbar-width: none; }
+  .sp-chiprow::-webkit-scrollbar { display: none; }
+  .sp-chiprow > button { flex-shrink: 0; white-space: nowrap; }
+}
+@media not ((hover: hover) and (pointer: fine)) {
+  .sp-leads button, .sp-leads a[href] { min-height: 44px !important; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .sp-leads button:not(:disabled):hover, .sp-leads a[href]:hover { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--app-text) 6%, transparent); }
+  .sp-leads button:disabled { cursor: not-allowed; }
+}
+
+/* ---- Jualan: Penawaran, Invoice, Paket (QA 15 Okt) ---- */
+/* A card's buttons: the next step first, then the tools (copy, PDF, edit, delete). */
+.sp-doc-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; align-items: center; }
+.sp-doc-actions > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.sp-doc-tools { flex: 1 1 auto; }
+.sp-doc-tools .sp-del { margin-left: auto; }
+/* Invoice dates on a card: label above field, side by side. */
+.sp-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 150px)); gap: 8px; margin-top: 8px; }
+.sp-dates label { display: block; font-size: 12px; color: var(--app-muted); margin-bottom: 3px; }
+.sp-dates input { width: 100% !important; }
+/* A long form's Batal / Simpan stay in view while it scrolls. */
+.sp-form-foot { position: sticky; bottom: -24px; margin: 20px -24px -24px; padding: 12px 24px 16px; background: var(--app-card); border-top: 1px solid var(--app-border); display: flex; gap: 10px; z-index: 3; }
+.sp-form-foot > button { min-height: 44px; }
+.sp-form-foot > button:last-child { flex: 1; }
+/* The PDF sheet: a header with its name and Tutup, the paper, the actions. */
+.sp-print-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; background: var(--app-card); color: var(--app-text); box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+.sp-print-title { flex: 1 1 160px; min-width: 0; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-print-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sp-print-msg:empty { display: none; }
+.sp-paper-qp { display: none; }
+@media (max-width: 640px) {
+  .sp-sell button { min-height: 44px; font-size: 14px !important; }
+  .sp-sell .sp-tight { min-height: 0; }
+  .sp-doc-actions { flex-direction: column; align-items: stretch; }
+  .sp-doc-main > button, .sp-doc-main > span { flex: 1 1 calc(50% - 3px); }
+  .sp-doc-tools { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) 48px; }
+  .sp-doc-tools > button { padding-left: 4px !important; padding-right: 4px !important; white-space: nowrap; }
+  .sp-doc-tools .sp-del { margin-left: 0; }
+  .sp-dates { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sp-dates input { min-height: 44px; padding: 8px !important; }
+  /* Only odd stat cards: the last one spans the row instead of sitting alone. */
+  .sp-stats > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .sp-form-foot { bottom: calc(-28px - env(safe-area-inset-bottom, 0px)); margin: 20px -20px calc(-28px - env(safe-area-inset-bottom, 0px)); padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px)); }
+
+  /* PDF on a phone: a full-screen page — name and Tutup on top, the paper,
+     and Kop & logo / Simpan PDF pinned at the bottom by the thumb. */
+  .print-overlay.sp-pdf { padding: 0 !important; align-items: stretch !important; background: var(--app-bg) !important; }
+  .sp-pdf > .print-frame { max-width: none !important; max-height: none !important; height: 100dvh; gap: 10px !important;
+    padding: 0 12px calc(env(safe-area-inset-bottom, 0px) + 92px); overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  .sp-print-head { margin: 0 -12px; border-radius: 0; padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px 8px 16px; box-shadow: none; border-bottom: 1px solid var(--app-border); flex-wrap: nowrap; }
+  .sp-print-actions { position: fixed; left: 0; right: 0; bottom: 0; z-index: 3; flex-wrap: nowrap; padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px); background: var(--app-card); border-top: 1px solid var(--app-border); }
+  .sp-print-actions > button { min-height: 48px; white-space: nowrap; padding-left: 14px !important; padding-right: 14px !important; }
+  .sp-doc-sum { text-align: left !important; }
+  .sp-doc-sum > div:last-child { justify-content: flex-start !important; }
+  .sp-print-actions > button { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .sp-print-actions > .sp-print-main { flex: 1 1 auto; }
+  .sp-print-msg { position: fixed; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + 80px); z-index: 3; padding: 10px 12px; border-radius: 10px; background: var(--app-text); color: var(--app-bg) !important; text-align: center !important; }
+  /* The paper reflows to the phone; the PDF file itself is A4 (lib/pdfDoc). */
+  .sp-pdf .print-root { padding: 22px 16px !important; }
+  .sp-paper-head { flex-direction: column; gap: 14px !important; margin-bottom: 22px !important; }
+  .sp-paper-head > div:last-child { text-align: left !important; }
+  .sp-paper-brand { flex-wrap: wrap; }
+  .sp-paper-meta { flex-direction: column; gap: 8px !important; }
+  .sp-paper-meta > div:last-child { text-align: left !important; }
+  .sp-paper-hide { display: none; }
+  .sp-paper-qp { display: block; }
+}
+@media (max-width: 640px), not ((hover: hover) and (pointer: fine)) {
+  .sp-sell button, .sp-sell label.sp-tap { min-height: 44px !important; }
+  .sp-sell .sp-tight { min-height: 0 !important; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .sp-sell button:not(:disabled):hover, .sp-pdf button:not(:disabled):hover, .sp-sell label.sp-tap:hover { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--app-text) 7%, transparent); }
+  .sp-sell button:disabled, .sp-pdf button:disabled { cursor: not-allowed; }
+}
+@media (max-width: 359px) {
+  .sp-doc-main > button, .sp-doc-main > span { flex-basis: 100%; }
+  .sp-print-actions > button { font-size: 14px !important; }
+}
+/* Printing needs a wide screen and a mouse; a phone-sized window saves the PDF. */
+@media (max-width: 480px) { .sp-print-actions .pointer-only { display: none !important; } }
+.sp-tap:focus-within { outline: 2px solid #005eb0; outline-offset: 2px; }
+.modal-overlay label.sp-tap { color: var(--app-text) !important; margin-bottom: 0 !important; font-size: 14px !important; }
+
+/* ---- Tim: Guild, Report Klien, Outreach, Rejection Log (QA 15 Okt) ---- */
+/* A row of actions: wraps tidily on a phone, each button a full thumb wide. */
+.sp-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sp-deal-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.sp-deal-filter { display: flex; gap: 6px; flex-wrap: wrap; }
+.sp-deal-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.sp-deal-actions .sp-del { margin-left: auto; }
+.sp-invite-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sp-rt-only { display: none; }
+@media (max-width: 640px), not ((hover: hover) and (pointer: fine)) {
+  .sp-team button, .sp-team a.sp-tap, .sp-team label.sp-tap, .sp-team select, .sp-team summary { min-height: 44px !important; }
+  .sp-team .sp-tight { min-height: 0 !important; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .sp-team button:not(:disabled):hover, .sp-team a.sp-tap:hover, .sp-team label.sp-tap:hover { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--app-text) 6%, transparent); }
+  .sp-team button:disabled { cursor: not-allowed; }
+}
+/* Wide screens: lists and reports keep a readable measure. */
+@media (min-width: 1100px) { .sp-team { max-width: 1040px; } }
+@media (max-width: 640px) {
+  .sp-actions > button, .sp-actions > a { flex: 1 1 calc(50% - 4px); }
+  .sp-invite-row > select { flex: 0 0 auto; }
+  .sp-invite-row > button { flex: 1 1 160px; }
+  .sp-deal-bar > :last-child:not(.sp-deal-filter) { flex: 1 1 auto; }
+  .sp-deal-filter { flex: 1 1 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .sp-deal-filter > button { padding-left: 4px !important; padding-right: 4px !important; }
+  .sp-deal-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sp-deal-actions > .sp-next { grid-column: 1 / -1; }
+  .sp-deal-actions .sp-del { margin-left: 0; }
+  .sp-sales-card { padding: 16px !important; }
+  .sp-sales-num { font-size: 19px !important; }
+  /* Tables reflow into one card per row: the name on top, each number under its label. */
+  .sp-rtable { min-width: 0 !important; display: block; }
+  .sp-rtable thead { display: none; }
+  .sp-rtable caption { display: block; }
+  .sp-rtable tbody { display: block; }
+  .sp-rtable tr { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px 12px; padding: 12px 14px; border-top: 1px solid var(--app-border); }
+  .sp-rtable tbody tr:first-child { border-top: 0; }
+  .sp-rtable-flat tr { padding: 10px 0; border-top: 1px solid var(--app-inner); }
+  .sp-rtable td { padding: 0 !important; border: 0 !important; text-align: left !important; white-space: normal !important; max-width: none !important; font-size: 14px !important; min-width: 0; overflow-wrap: anywhere; }
+  .sp-rtable td[data-label]::before { content: attr(data-label); display: block; font-size: 12px; font-weight: 600; color: var(--app-muted); margin-bottom: 1px; }
+  .sp-rtable td.sp-rt-head, .sp-rtable td.sp-rt-wide { grid-column: 1 / -1; }
+  .sp-rtable td.sp-rt-hide, .sp-rtable td.sp-rt-wide:empty { display: none; }
+  .sp-rtable td.sp-rt-wide button { width: 100%; }
+  .sp-rt-only { display: inline; }
+}
+/* The guild's four tabs: one sideways row on the narrowest phones, not two-line labels. */
+@media (max-width: 380px) {
+  .sp-tabs { overflow-x: auto; scrollbar-width: none; }
+  .sp-tabs::-webkit-scrollbar { display: none; }
+  .sp-tabs > button { flex: 0 0 auto !important; white-space: nowrap; padding: 9px 12px !important; }
+}
+
+/* ---- Belajar: Script Library, Simulator, AI Playbook (QA 15 Okt) ---- */
+@media (max-width: 640px), not ((hover: hover) and (pointer: fine)) {
+  .sp-learn button, .sp-learn select, .sp-learn input { min-height: 44px !important; }
+  .sp-learn input, .sp-learn select { font-size: 16px !important; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .sp-learn button:not(:disabled):hover { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--app-text) 5%, transparent); }
+}
+/* Wide screens: script cards keep a readable line length. */
+@media (min-width: 1100px) { .sp-learn { max-width: 1040px; } }
+/* A narrow phone shows only the current step's name. */
+@media (max-width: 400px) { .sp-sim .sp-step-label { display: none; } }

@@ -55,7 +55,7 @@ export const VARIABLES = [
   { key: "waktu", desc: "Kapan dia butuh", example: "besok jam 1-5 sore" },
   { key: "lokasi", desc: "Di mana", example: "Sentul" },
   { key: "post", desc: "Kutipan pendek post-nya", example: "“ada yang open jasa foto katalog?”" },
-  { key: "bisnis", desc: "Nama bisnis lo (Info bisnis di Paket)", example: "Visufavor" },
+  { key: "bisnis", desc: "Nama bisnis kamu (Info bisnis di Paket)", example: "Visufavor" },
 ] as const;
 export type VarKey = (typeof VARIABLES)[number]["key"];
 export type FillData = Partial<Record<VarKey, string>>;

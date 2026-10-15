@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Brief, LineItem, Service, rupiah, subtotal, total } from "@/lib/billing";
 import { btnMuted, btnPrimary, chip, font, inputStyle, label, modalBox } from "@/components/ui";
+import ConfirmSheet from "@/components/ConfirmSheet";
 
 // One form for a quote and an invoice, in the order the PDF reads (QA 15 Okt:
 // "tiap elementnya bisa masuk dengan bagus"): who it's for, what the job is and
@@ -50,6 +51,22 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
   const [d, setD] = useState<DocDraft>(initial);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [leaving, setLeaving] = useState(false);
+  const [added, setAdded] = useState(-1);
+  const itemsRef = useRef<HTMLDivElement>(null);
+  const dirty = JSON.stringify(d) !== JSON.stringify(initial);
+  // Escape, a tap outside, back, × and Batal all come here: a form with
+  // changes asks before throwing them away.
+  const close = () => { if (busy) return; if (dirty) setLeaving(true); else onClose(); };
+  // A new item opens where you can see it, ready to type.
+  useEffect(() => {
+    if (added < 0) return;
+    const row = itemsRef.current?.children[added] as HTMLElement | undefined;
+    row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const name = row?.querySelector<HTMLInputElement>("input");
+    if (name && !name.value) name.focus({ preventScroll: true });
+    setAdded(-1);
+  }, [added]);
   const set = (p: Partial<DocDraft>) => setD(cur => ({ ...cur, ...p }));
   const setItem = (i: number, p: Partial<LineItem>) => set({ items: d.items.map((it, n) => (n === i ? { ...it, ...p } : it)) });
   const missing = !d.leadName.trim() ? "Isi nama klien dulu." : d.items.length === 0 ? "Tambah minimal satu item." : "";
@@ -61,7 +78,7 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
   }
   function addService(id: string) {
     const s = services.find(x => x.id === id);
-    if (s) set({ items: [...d.items, { name: s.name, qty: 1, price: s.price, ...(s.description?.trim() ? { description: s.description.trim() } : {}) }] });
+    if (s) { set({ items: [...d.items, { name: s.name, qty: 1, price: s.price, ...(s.description?.trim() ? { description: s.description.trim() } : {}) }] }); setAdded(d.items.length); }
   }
   async function save() {
     if (missing) return;
@@ -78,7 +95,7 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
   const grid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: 12 } as const;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={close}>
       <div onClick={e => e.stopPropagation()} aria-label={title} data-own-layout=""
         style={{ ...modalBox, maxWidth: 640, padding: 0, display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--app-bg)" }}>
         {/* Header: what this is, and the way out, always in view. */}
@@ -87,7 +104,7 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
             <div style={{ fontSize: 17, fontWeight: 700, fontFamily: font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 1 }}>Urutannya sama kayak di PDF. Yang kosong ga dicetak.</div>
           </div>
-          <button onClick={onClose} aria-label="Tutup" style={{ width: 40, height: 40, borderRadius: "50%", border: "1px solid var(--app-border)", background: "var(--app-card)", color: "var(--app-text)", fontSize: 22, lineHeight: 1, cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}>×</button>
+          <button onClick={close} aria-label="Tutup" style={{ width: 44, height: 44, borderRadius: "50%", border: "1px solid var(--app-border)", background: "var(--app-card)", color: "var(--app-text)", fontSize: 22, lineHeight: 1, cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}>×</button>
         </div>
 
         <div style={{ padding: "4px 16px 20px", overflowY: "auto", flex: 1, minHeight: 0, overscrollBehavior: "contain" }}>
@@ -123,20 +140,20 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
                   {services.map(s => <option key={s.id} value={s.id}>{s.name} · {rupiah(s.price)}</option>)}
                 </select>
               )}
-              <button onClick={() => set({ items: [...d.items, { name: "", qty: 1, price: 0 }] })} style={{ ...chip, fontSize: 13, fontWeight: 700, color: "var(--brand-text)", padding: "10px 14px", flex: "0 0 auto" }}>+ item manual</button>
+              <button onClick={() => { set({ items: [...d.items, { name: "", qty: 1, price: 0 }] }); setAdded(d.items.length); }} style={{ ...chip, fontSize: 13, fontWeight: 700, color: "var(--brand-text)", padding: "10px 14px", flex: "0 0 auto" }}>+ item manual</button>
             </div>
             {d.items.length === 0 && <div style={{ fontSize: 13, color: "var(--app-muted)", padding: "4px 0" }}>Belum ada item.</div>}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div ref={itemsRef} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {d.items.map((it, i) => (
-                <div key={i} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 72px minmax(0, 1fr)", gap: 8, padding: 12, borderRadius: 12, background: "var(--app-inner)" }}>
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "72px minmax(0, 1fr)", gap: 8, padding: "8px 12px 12px", borderRadius: 12, background: "var(--app-inner)" }}>
                   <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, alignItems: "center" }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--app-muted)" }}>Item {i + 1}</span>
-                    <button onClick={() => set({ items: d.items.filter((_, n) => n !== i) })} aria-label={`Hapus item ${i + 1}`} style={{ marginLeft: "auto", background: "none", border: "none", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", padding: "4px 0" }}>Hapus</button>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--app-muted)" }}>Item {i + 1}</span>
+                    <button onClick={() => set({ items: d.items.filter((_, n) => n !== i) })} aria-label={`Hapus item ${i + 1}`} style={{ marginLeft: "auto", background: "none", border: "none", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", padding: "4px 0 4px 12px", minHeight: 32 }}>Hapus</button>
                   </div>
                   <input value={it.name} onChange={e => setItem(i, { name: e.target.value })} style={{ ...inputStyle, gridColumn: "1 / -1" }} placeholder="Nama jasa, mis. Event photography" aria-label="Nama item" />
                   <textarea value={it.description || ""} onChange={e => setItem(i, { description: e.target.value })} aria-label="Rincian item"
                     placeholder={"Rincian, mis. 20 menu, 2 angle per menu, edit warna"} style={{ ...inputStyle, gridColumn: "1 / -1", height: 72, resize: "vertical" }} />
-                  <div style={{ fontSize: 12, color: "var(--app-muted)", alignSelf: "center" }}>Harga × qty</div>
+                  <div style={{ gridColumn: "1 / -1", fontSize: 12, color: "var(--app-muted)", marginBottom: -4 }}>Qty × harga satuan</div>
                   <input inputMode="numeric" value={it.qty || ""} onChange={e => setItem(i, { qty: num(e.target.value) })} style={{ ...inputStyle, textAlign: "center" }} aria-label="Qty" />
                   <input inputMode="numeric" value={it.price ? it.price.toLocaleString("id-ID") : ""} onChange={e => setItem(i, { price: num(e.target.value) })} style={{ ...inputStyle, textAlign: "right" }} placeholder="Harga" aria-label="Harga" />
                 </div>
@@ -176,11 +193,16 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
           </div>
           {(missing || err) && <div role="status" style={{ fontSize: 12, marginBottom: 8, color: err ? "color-mix(in srgb, #ff4444 55%, var(--app-text))" : "var(--app-muted)" }}>{err || missing}</div>}
           <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={onClose} style={{ ...btnMuted, flex: "0 0 auto", minHeight: 48 }}>Batal</button>
+            <button onClick={close} disabled={busy} style={{ ...btnMuted, flex: "0 0 auto", minHeight: 48 }}>Batal</button>
             <button onClick={save} disabled={!!missing || busy} style={{ ...btnPrimary, flex: 1, minHeight: 48, fontSize: 15, opacity: missing || busy ? 0.5 : 1 }}>{busy ? "Menyimpan…" : "Simpan"}</button>
           </div>
         </div>
       </div>
+      {leaving && (
+        <ConfirmSheet title="Buang perubahan?" action="Buang" busyLabel="Membuang…" onConfirm={async () => onClose()} onClose={() => setLeaving(false)}>
+          Isian di {d.id ? <b>{d.number}</b> : kind === "quote" ? "penawaran baru ini" : "invoice baru ini"} belum disimpan. Kalau dibuang, hilang.
+        </ConfirmSheet>
+      )}
     </div>
   );
 }

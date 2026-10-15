@@ -5,6 +5,7 @@ import { setDoc, deleteDoc } from "firebase/firestore";
 import { canEditCatalog, spaceDoc, useSpace } from "@/lib/space";
 import { Business, Service, rupiah } from "@/lib/billing";
 import BusinessEditor from "@/components/BusinessEditor";
+import ConfirmSheet from "@/components/ConfirmSheet";
 import { btnGhost, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
 const CATEGORIES = ["F&B", "Photography", "Sports", "Video", "Design", "Other"];
@@ -20,6 +21,9 @@ export default function Services({ services, business }: { services: Service[]; 
   const [editing, setEditing] = useState<Draft | null>(null);
   const [profile, setProfile] = useState<Business | null>(null);
   const [filter, setFilter] = useState("All");
+  const [deleting, setDeleting] = useState<Service | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
 
   const shown = (filter === "All" ? services : services.filter(s => s.category === filter))
     .slice().sort((a, b) => a.category.localeCompare(b.category) || a.price - b.price);
@@ -28,33 +32,37 @@ export default function Services({ services, business }: { services: Service[]; 
   async function save() {
     if (!editing || !editing.name.trim()) return;
     const id = editing.id || `svc_${Date.now()}`;
-    await setDoc(spaceDoc(space, "services", id), {
-      name: editing.name.trim(),
-      category: editing.category,
-      price: parseInt(editing.price.replace(/\D/g, ""), 10) || 0,
-      unit: editing.unit,
-      description: editing.description.trim(),
-    });
-    setEditing(null);
+    setBusy(true); setErr("");
+    try {
+      await setDoc(spaceDoc(space, "services", id), {
+        name: editing.name.trim(),
+        category: editing.category,
+        price: parseInt(editing.price.replace(/\D/g, ""), 10) || 0,
+        unit: editing.unit,
+        description: editing.description.trim(),
+      });
+      setEditing(null);
+    } catch { setErr("Gagal nyimpen. Cek koneksi lalu coba lagi."); }
+    finally { setBusy(false); }
   }
+  function edit(d: Draft) { setErr(""); setEditing(d); }
 
   async function remove(id: string) {
-    if (!confirm("Hapus paket ini? Penawaran yang udah dibuat ga ikut berubah.")) return;
     await deleteDoc(spaceDoc(space, "services", id));
   }
 
   const profileReady = business.name && business.bank && business.accountNo;
 
   return (
-    <div>
+    <div className="sp-sell">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
           <div style={heading}>Paket & Harga</div>
-          <div style={subheading}>Daftar jasa yang lo jual. Dipakai buat nyusun penawaran.</div>
+          <div style={subheading}>Daftar jasa yang kamu jual. Dipakai buat nyusun penawaran.</div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {canEdit && <button onClick={() => setProfile(business)} style={btnGhost}>Kop & logo</button>}
-          {canEdit && <button onClick={() => setEditing(BLANK)} style={btnPrimary}>+ Paket</button>}
+          {canEdit && <button onClick={() => edit(BLANK)} style={btnPrimary}>+ Paket</button>}
         </div>
       </div>
 
@@ -66,11 +74,11 @@ export default function Services({ services, business }: { services: Service[]; 
       )}
 
       {services.length > 0 && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        <div className="sp-chiprow" role="group" aria-label="Saring kategori" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
           {used.map(c => (
-            <button key={c} onClick={() => setFilter(c)}
+            <button key={c} onClick={() => setFilter(c)} aria-pressed={filter === c}
               style={{ ...chip, background: filter === c ? "#005eb0" : "var(--app-card)", color: filter === c ? "#fff" : "var(--app-muted)", fontWeight: 600 }}>
-              {c}
+              {c === "All" ? "Semua" : c}
             </button>
           ))}
         </div>
@@ -80,18 +88,18 @@ export default function Services({ services, business }: { services: Service[]; 
         <div style={{ ...card, padding: "56px 24px", textAlign: "center" }}>
           <div style={{ fontSize: 34, marginBottom: 12 }}>🏷️</div>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ada paket</div>
-          <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>{canEdit ? "Tulis paket jasa lo sekali, pakai terus di tiap penawaran." : "Paket tim diatur Leader atau Officer guild."}</div>
-          {canEdit && <button onClick={() => setEditing(BLANK)} style={btnPrimary}>+ Tambah paket pertama</button>}
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>{canEdit ? "Tulis paket jasa kamu sekali, pakai terus di tiap penawaran." : "Paket tim diatur Leader atau Officer guild."}</div>
+          {canEdit && <button onClick={() => edit(BLANK)} style={btnPrimary}>+ Tambah paket pertama</button>}
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
           {shown.map(s => (
             <div key={s.id} style={{ ...card, padding: 18, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 12, color: "var(--app-muted)", letterSpacing: "1px", fontWeight: 600 }}>{s.category.toUpperCase()}</span>
                 {canEdit && <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={() => setEditing({ ...s, price: String(s.price) })} aria-label={`Edit ${s.name}`} style={chip}>✎</button>
-                  <button onClick={() => remove(s.id)} aria-label={`Hapus ${s.name}`} style={{ ...chip, borderColor: "#ff444440", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}>🗑</button>
+                  <button onClick={() => edit({ ...s, price: String(s.price) })} aria-label={`Edit ${s.name}`} style={{ ...chip, color: "var(--app-text)" }}>✎ Edit</button>
+                  <button onClick={() => setDeleting(s)} aria-label={`Hapus ${s.name}`} title="Hapus" style={{ ...chip, minWidth: 44, borderColor: "#ff444440", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}>🗑</button>
                 </div>}
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, fontFamily: font }}>{s.name}</div>
@@ -106,44 +114,51 @@ export default function Services({ services, business }: { services: Service[]; 
       )}
 
       {editing && (
-        <div className="modal-overlay" onClick={() => setEditing(null)}>
+        <div className="modal-overlay" onClick={() => { if (!busy) setEditing(null); }}>
           <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 480 }}>
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 20 }}>{editing.id ? "Edit paket" : "+ Paket baru"}</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div style={{ gridColumn: "1/-1" }}>
-                <label style={label}>Nama paket</label>
-                <input value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} style={inputStyle} placeholder="mis. Foto Menu — 10 menu" />
+                <label htmlFor="svc-name" style={label}>Nama paket</label>
+                <input id="svc-name" value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} style={inputStyle} placeholder="mis. Foto Menu — 10 menu" />
               </div>
               <div>
-                <label style={label}>Harga (Rp)</label>
-                <input inputMode="numeric" value={editing.price} onChange={e => setEditing({ ...editing, price: e.target.value })} style={inputStyle} placeholder="1500000" />
+                <label htmlFor="svc-price" style={label}>Harga (Rp)</label>
+                <input id="svc-price" inputMode="numeric" value={editing.price} onChange={e => setEditing({ ...editing, price: e.target.value })} style={inputStyle} placeholder="1500000" />
               </div>
               <div>
-                <label style={label}>Satuan</label>
-                <select value={editing.unit} onChange={e => setEditing({ ...editing, unit: e.target.value })} style={inputStyle}>
+                <label htmlFor="svc-unit" style={label}>Satuan</label>
+                <select id="svc-unit" value={editing.unit} onChange={e => setEditing({ ...editing, unit: e.target.value })} style={inputStyle}>
                   {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
               </div>
               <div style={{ gridColumn: "1/-1" }}>
-                <label style={label}>Kategori</label>
-                <select value={editing.category} onChange={e => setEditing({ ...editing, category: e.target.value })} style={inputStyle}>
+                <label htmlFor="svc-cat" style={label}>Kategori</label>
+                <select id="svc-cat" value={editing.category} onChange={e => setEditing({ ...editing, category: e.target.value })} style={inputStyle}>
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div style={{ gridColumn: "1/-1" }}>
-                <label style={label}>Yang didapat klien</label>
-                <textarea value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })} style={{ ...inputStyle, resize: "vertical", height: 90 }} placeholder={"10 foto edit\n1x revisi\nFile resolusi tinggi"} />
+                <label htmlFor="svc-desc" style={label}>Yang didapat klien</label>
+                <textarea id="svc-desc" value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })} style={{ ...inputStyle, resize: "vertical", height: 90 }} placeholder={"10 foto edit\n1x revisi\nFile resolusi tinggi"} />
               </div>
             </div>
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={save} disabled={!editing.name.trim()} style={{ ...btnPrimary, opacity: editing.name.trim() ? 1 : 0.5 }}>Simpan</button>
-              <button onClick={() => setEditing(null)} style={btnMuted}>Batal</button>
+            {(err || !editing.name.trim()) && <div role="status" style={{ fontSize: 12, marginTop: 12, color: err ? "color-mix(in srgb, #ff4444 55%, var(--app-text))" : "var(--app-muted)" }}>{err || "Isi nama paketnya dulu."}</div>}
+            <div className="sp-form-foot">
+              <button onClick={() => setEditing(null)} disabled={busy} style={btnMuted}>Batal</button>
+              <button onClick={save} disabled={!editing.name.trim() || busy} style={{ ...btnPrimary, opacity: editing.name.trim() && !busy ? 1 : 0.5 }}>{busy ? "Menyimpan…" : "Simpan"}</button>
             </div>
           </div>
         </div>
       )}
 
       {profile && <BusinessEditor business={profile} onClose={() => setProfile(null)} />}
+
+      {deleting && (
+        <ConfirmSheet title="Hapus paket?" onConfirm={() => remove(deleting.id)} onClose={() => setDeleting(null)}>
+          <b>{deleting.name}</b> hilang dari daftar paket. Penawaran dan invoice yang udah dibuat ga ikut berubah.
+        </ConfirmSheet>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { signOut, User } from "firebase/auth";
 import { STALL_DAYS, stalledWhat, useStalledDeals } from "@/lib/stalled";
 import { LEVEL_WORD, Level, inPlay, isHigh, scoreLead } from "@/lib/score";
@@ -33,6 +33,7 @@ import HuntBar from "@/components/HuntBar";
 import ClientHub from "@/components/ClientHub";
 import SalesReport from "@/components/SalesReport";
 import GuildHub from "@/components/GuildHub";
+import { OutreachTab, RejectionTab, type Outreach, type Rejection } from "@/components/TeamLogs";
 import LeadSources from "@/components/LeadSources";
 import ModalA11y from "@/components/ModalA11y";
 import { Hunt, useClosingTarget, useHuntGoal } from "@/lib/hunting";
@@ -42,12 +43,11 @@ import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from 
 import { parseVCards } from "@/lib/vcard";
 import { authFetch } from "@/lib/authFetch";
 import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, longDate, rupiah, today, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
+import { useConfirm } from "@/components/ConfirmSheet";
 
-// Five places, so a phone never scrolls sideways to find one. Jualan and
-// Lainnya hold several tabs, picked from a second row.
 // Five places, in the order the work goes (owner, 2026-10-10): find people,
-// sell to them, report as a team, learn. Each tab says in one line what it's
-// for, so nothing hides behind a "Lainnya".
+// sell to them, report as a team, learn. A place with several tabs picks them
+// from a second row, and each tab says in one line what it's for.
 const SECTIONS: { id: string; label: string; short: string; icon: string; tabs: string[] }[] = [
   { id: "home", label: "Beranda", short: "Beranda", icon: "home" as IconName, tabs: ["Dashboard"] },
   { id: "hunt", label: "Hunting", short: "Hunting", icon: "target" as IconName, tabs: ["Hunting"] },
@@ -55,18 +55,11 @@ const SECTIONS: { id: string; label: string; short: string; icon: string; tabs: 
   { id: "team", label: "Tim & Report", short: "Tim", icon: "shield" as IconName, tabs: ["Guild", "Report Klien", "Outreach", "Rejection Log"] },
   { id: "learn", label: "Belajar", short: "Belajar", icon: "book" as IconName, tabs: ["Script Library", "Simulator", "AI Playbook"] },
 ];
+// Only tabs without a heading of their own get a line here; the others say
+// what they're for under their own title, and saying it twice read as clutter.
 const TAB_HINT: Record<string, string> = {
   Leads: "Semua calon customer: skor potensi, profil, dan jadwal follow-up.",
-  Penawaran: "Susun penawaran dari paket, kirim, lalu catat yang disetujui.",
-  Invoice: "Tagih DP dan pelunasan, ingetin yang jatuh tempo.",
-  Paket: "Daftar jasa dan harga, dipakai waktu bikin penawaran.",
-  Guild: "Tim kamu: anggota, peran, pipeline bersama, target, dan report tim.",
   "Report Klien": "Report bulanan buat klien: konten, chat, sampai lunas.",
-  Outreach: "Catatan email dan pesan yang udah dikirim.",
-  "Rejection Log": "Siapa yang nolak, alasannya, dan kapan coba lagi.",
-  "Script Library": "Script jawaban per tipe customer dan per keberatan.",
-  Simulator: "Latihan jawab customer sebelum ketemu beneran.",
-  "AI Playbook": "Cara pakai AI dan tools buat cari dan olah lead.",
 };
 const sectionOf = (tab: string) => SECTIONS.find(x => x.tabs.includes(tab)) || SECTIONS[0];
 
@@ -79,14 +72,6 @@ interface Lead {
   ownerUid?: string; ownerName?: string;   // in a guild space
   lastReplyAt?: string;                    // when they last answered (PRD-008 §2)
   profile?: LeadProfile;                   // need, pain, objection, type (PRD-008 §3)
-}
-interface Outreach {
-  id: string; leadName: string; type: string; date: string; subject: string;
-  status: string; opens: number; clicks: number;
-}
-interface Rejection {
-  id: string; leadName: string; date: string; reason: string; channel: string;
-  followUpDate: string; lesson: string;
 }
 
 // New accounts start empty. Earlier versions wrote example rows (ids seed_…)
@@ -217,6 +202,7 @@ export default function SalesTracker({ user }: { user: User }) {
 }
 
 function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Space; spaces: SpaceOption[]; chooseSpace: (id: string) => void }) {
+  const [ask, askSheet] = useConfirm();
   const router = useRouter();
   const isNarrow = useIsNarrow();
   // A share or bookmarklet opens straight into Hunting (/dashboard?hunt&target=…);
@@ -250,12 +236,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [pageOpen, setPageOpen] = useState(false);
   const wide = !useIsNarrow(1023);
   const [showAddLead, setShowAddLead] = useState(false);
-  const [showAddOutreach, setShowAddOutreach] = useState(false);
-  const [showAddRejection, setShowAddRejection] = useState(false);
+  const [addLeadErr, setAddLeadErr] = useState("");
+  const [savingLead, setSavingLead] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [newLead, setNewLead] = useState({ name: "", contact: "", source: "GMaps", status: "Cold", email: "", phone: "", category: "F&B", notes: "", value: "" });
-  const [newOutreach, setNewOutreach] = useState({ leadName: "", type: "Email", subject: "", status: "Sent" });
-  const [newRejection, setNewRejection] = useState({ leadName: "", reason: "", channel: "Email", followUpDate: "", lesson: "" });
   const [showImport, setShowImport] = useState(false);
   const [importHeaders, setImportHeaders] = useState<string[]>([]);
   const [importRows, setImportRows] = useState<Record<string, unknown>[]>([]);
@@ -268,6 +252,29 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [scanError, setScanError] = useState("");
   const [showProfile, setShowProfile] = useState(false);
   const [showBell, setShowBell] = useState(false);
+  // "Atur target": a small sheet with Batal/Simpan instead of the browser's prompt().
+  const bellBtn = useRef<HTMLButtonElement>(null);
+  const bellPop = useRef<HTMLDivElement>(null);
+  // The bell's popover closes like any popover: Escape (focus back on the
+  // bell) or a tap/click anywhere outside it.
+  useEffect(() => {
+    if (!showBell) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || document.querySelector(".modal-overlay")) return;
+      setShowBell(false); bellBtn.current?.focus();
+    };
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (bellPop.current?.contains(t) || bellBtn.current?.contains(t)) return;
+      setShowBell(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("pointerdown", onDown); };
+  }, [showBell]);
+  const [targetDraft, setTargetDraft] = useState<string | null>(null);
+  const [targetError, setTargetError] = useState("");
+  const [savingTarget, setSavingTarget] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<{ latest: string; hasUpdate: boolean; error?: boolean } | null>(null);
   const [clearing, setClearing] = useState(false);
@@ -294,6 +301,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [shared, setShared] = useState<File | null>(null);
   const [shareFor, setShareFor] = useState<{ leadId: string; file: File } | null>(null);
   const [shareMsg, setShareMsg] = useState("");
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareErr, setShareErr] = useState("");
   const [shareQ, setShareQ] = useState("");
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -503,39 +512,30 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   }
 
   async function addLead() {
-    if (!newLead.name) return;
-    const id = `lead_${Date.now()}`;
-    await setDoc(spaceDoc(space, "leads", id), stamp(space, {
-      ...newLead, lastContact: new Date().toISOString().split("T")[0],
-      value: parseInt(newLead.value) || 5000000,
-    }));
-    setNewLead({ name: "", contact: "", source: "GMaps", status: "Cold", email: "", phone: "", category: "F&B", notes: "", value: "" });
-    setShowAddLead(false);
+    if (!newLead.name.trim()) {
+      setAddLeadErr("Isi nama bisnisnya dulu.");
+      document.getElementById("nl-name")?.focus();
+      return;
+    }
+    setSavingLead(true); setAddLeadErr("");
+    try {
+      const id = `lead_${Date.now()}`;
+      await setDoc(spaceDoc(space, "leads", id), stamp(space, {
+        ...newLead, name: newLead.name.trim(), lastContact: new Date().toISOString().split("T")[0],
+        value: parseInt(newLead.value.replace(/\D/g, "")) || 5000000,
+      }));
+      setNewLead({ name: "", contact: "", source: "GMaps", status: "Cold", email: "", phone: "", category: "F&B", notes: "", value: "" });
+      setShowAddLead(false);
+    } catch {
+      setAddLeadErr("Gagal menyimpan. Cek koneksi, lalu coba lagi.");
+    }
+    setSavingLead(false);
   }
+  function closeAddLead() { if (!savingLead) { setShowAddLead(false); setAddLeadErr(""); } }
 
-  async function addOutreach() {
-    if (!newOutreach.leadName) return;
-    const id = `out_${Date.now()}`;
-    await setDoc(spaceDoc(space, "outreach", id), stamp(space, {
-      ...newOutreach, date: new Date().toISOString().split("T")[0], opens: 0, clicks: 0,
-    }));
-    setNewOutreach({ leadName: "", type: "Email", subject: "", status: "Sent" });
-    setShowAddOutreach(false);
-  }
 
-  async function addRejection() {
-    if (!newRejection.leadName) return;
-    const id = `rej_${Date.now()}`;
-    await setDoc(spaceDoc(space, "rejections", id), stamp(space, {
-      ...newRejection, date: new Date().toISOString().split("T")[0],
-    }));
-    setNewRejection({ leadName: "", reason: "", channel: "Email", followUpDate: "", lesson: "" });
-    setShowAddRejection(false);
-  }
-
+  // Asked first in the lead's own "Hapus lead?" sheet (components/LeadDetail).
   async function deleteLead(id: string) {
-    const name = leads.find(l => l.id === id)?.name || "lead ini";
-    if (!confirm(`Hapus ${name}? Ga bisa dibatalkan.`)) return;
     await deleteDoc(spaceDoc(space, "leads", id));
   }
 
@@ -562,6 +562,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       onDone: () => doneFollowUp(l.id),
       onQuote: () => { setPageOpen(false); startQuote(l); },
       onDelete: async () => { await deleteLead(l.id); setPageOpen(false); setSelectedLead(null); },
+      onSavePhone: phone => updateDoc(spaceDoc(space, "leads", l.id), { phone }),
     };
   }
 
@@ -589,13 +590,14 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const isSeed = (id: string) => id.startsWith("seed_");
   const seedCount = leads.filter(l => isSeed(l.id)).length + outreach.filter(o => isSeed(o.id)).length + rejections.filter(r => isSeed(r.id)).length;
 
-  async function removeSeedData() {
-    if (!confirm(`Hapus ${seedCount} data contoh? Data yang lo isi sendiri ga kesentuh.`)) return;
-    const batch = writeBatch(db);
-    leads.filter(l => isSeed(l.id)).forEach(l => batch.delete(spaceDoc(space, "leads", l.id)));
-    outreach.filter(o => isSeed(o.id)).forEach(o => batch.delete(spaceDoc(space, "outreach", o.id)));
-    rejections.filter(r => isSeed(r.id)).forEach(r => batch.delete(spaceDoc(space, "rejections", r.id)));
-    await batch.commit();
+  function removeSeedData() {
+    ask(`Hapus ${seedCount} data contoh?`, "Data yang kamu isi sendiri ga kesentuh.", async () => {
+      const batch = writeBatch(db);
+      leads.filter(l => isSeed(l.id)).forEach(l => batch.delete(spaceDoc(space, "leads", l.id)));
+      outreach.filter(o => isSeed(o.id)).forEach(o => batch.delete(spaceDoc(space, "outreach", o.id)));
+      rejections.filter(r => isSeed(r.id)).forEach(r => batch.delete(spaceDoc(space, "rejections", r.id)));
+      await batch.commit();
+    });
   }
 
   async function handleLogout() {
@@ -687,10 +689,22 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     })),
   ].sort((a, b) => a.when.localeCompare(b.when));
 
-  async function setClosingTarget() {
-    const v = prompt("Target closing bulan ini (jumlah deal)?", String(closingTarget || ""));
-    const n = parseInt(v || "", 10);
-    if (n > 0) await setDoc(spaceDoc(space, "settings", "hunting"), { monthlyClosing: n }, { merge: true }).catch(() => alert("Target tim diatur Leader atau Officer."));
+  function setClosingTarget() {
+    setTargetError("");
+    setTargetDraft(closingTarget ? String(closingTarget) : "");
+  }
+  async function saveClosingTarget() {
+    const n = parseInt(targetDraft || "", 10);
+    if (!(n > 0)) { setTargetError("Isi jumlah deal, minimal 1."); return; }
+    setSavingTarget(true);
+    try {
+      await setDoc(spaceDoc(space, "settings", "hunting"), { monthlyClosing: n }, { merge: true });
+      setTargetDraft(null);
+    } catch {
+      setTargetError("Target tim cuma bisa diatur Leader atau Officer.");
+    } finally {
+      setSavingTarget(false);
+    }
   }
 
   // Beranda's four numbers and the lead map (PRD-008 §1).
@@ -715,6 +729,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
   return (
     <div style={{ background: "var(--app-bg)", minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, color: "var(--app-text)" }}>
+      {askSheet}
       <style>{`
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: var(--app-card); } ::-webkit-scrollbar-thumb { background: var(--app-border); border-radius: 4px; }
         .sp-top { position: sticky; top: 0; z-index: 50; }
@@ -736,7 +751,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           .sp-top-in { padding: 0 14px 0 20px; height: 60px; gap: 8px; }
           .sp-brand-word { font-size: 17px !important; }
           .sp-nav { position: fixed; z-index: 60; left: 14px; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); height: 64px; padding: 4px; border-radius: 32px; margin: 0; gap: 0; }
-          .sp-nav-btn { flex: 1; height: auto; flex-direction: column; justify-content: center; gap: 3px; padding: 0; border-radius: 28px; font-size: 11px; }
+          .sp-nav-btn { flex: 1; min-width: 0; height: auto; flex-direction: column; justify-content: center; gap: 3px; padding: 0; border-radius: 28px; font-size: 12px; }
           .sp-nav-btn.is-on { background: var(--tab-on); box-shadow: none; color: var(--brand-text); }
           .sp-nav-icon { display: block; }
           .sp-nav-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -744,9 +759,19 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           .sp-subhint { padding: 6px 16px 0; font-size: 12px; }
           .sp-space { padding: 0 10px 0 12px; font-size: 12px; }
           .sp-space select { max-width: 96px; }
-          .sp-subnav { padding: 6px 16px 0; }
+          .sp-space { min-width: 0; }
+          .sp-subnav { padding: 6px 16px 4px; }
+          /* 40px pills, 44px to the finger: the hit area reaches past the pill. */
+          .sp-sub-btn { position: relative; height: 40px; }
+          .sp-sub-btn::after { content: ""; position: absolute; left: 0; right: 0; top: -2px; bottom: -2px; }
           .sp-main { padding: 16px 16px calc(110px + env(safe-area-inset-bottom, 0px)) !important; }
           .sp-fab { bottom: calc(92px + env(safe-area-inset-bottom, 0px)) !important; }
+        }
+        /* A small phone with the workspace picker: the paw alone says SalesPal,
+           so the bell and the avatar keep their place on screen. */
+        @media (max-width: 420px) {
+          .sp-top-in.has-space .sp-brand-word { display: none; }
+          .sp-top-in.has-space { padding-left: 16px; }
         }
         @media (hover: hover) {
           .sp-nav-btn:hover { color: var(--app-text); }
@@ -770,7 +795,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         )}
         <div className="pb t" aria-hidden="true" style={{ top: 0, height: 96 }}><span /><span /><span /><span /><span /><span /></div>
         <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 96, background: "linear-gradient(to bottom, var(--bar-tint) 0%, var(--bar-tint) 40%, transparent 100%)", pointerEvents: "none" }} />
-        <div className="sp-top-in">
+        <div className={`sp-top-in${spaces.length > 0 ? " has-space" : ""}`}>
           <button onClick={() => setActiveTab("Dashboard")} aria-label="SalesPal, ke Beranda" style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--app-text)", background: "none", border: "none", padding: 0, cursor: "pointer", flexShrink: 0 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-mark.png" alt="" width={18} height={18} style={{ width: 18, height: 18, objectFit: "contain" }} />
@@ -803,7 +828,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                 <Icon name="chevronDown" size={14} stroke={1.8} />
               </label>
             )}
-            <button className="sp-iconbtn glass" aria-label={`Notifikasi${todo.length ? `, ${todo.length} perlu ditindak` : ""}`} aria-expanded={showBell} onClick={() => setShowBell(!showBell)}>
+            <button ref={bellBtn} className="sp-iconbtn glass" aria-haspopup="dialog" aria-label={`Notifikasi${todo.length ? `, ${todo.length} perlu ditindak` : ""}`} aria-expanded={showBell} onClick={() => setShowBell(!showBell)}>
               <Icon name="bell" size={19} stroke={1.6} />
               {todo.some(t => t.when <= now) && <span aria-hidden="true" style={{ position: "absolute", top: 10, right: 11, width: 8, height: 8, borderRadius: "50%", background: "#005eb0", boxShadow: "0 0 0 2px var(--app-bg)" }} />}
             </button>
@@ -815,10 +840,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           </div>
         </div>
         {showBell && (
-          <div role="dialog" aria-label="Notifikasi" className="frost" style={{ position: "absolute", zIndex: 70, right: "max(16px, calc((100vw - 1200px) / 2 + 32px))", top: 64, width: "min(360px, calc(100vw - 32px))", borderRadius: 24, padding: 16, boxShadow: "inset 0 0 0 1px var(--frost-ring), 0 12px 32px var(--frost-float)" }}>
+          <div ref={bellPop} role="dialog" aria-label="Notifikasi" className="frost" style={{ position: "absolute", zIndex: 70, right: "max(16px, calc((100vw - 1200px) / 2 + 32px))", top: 64, width: "min(360px, calc(100vw - 32px))", borderRadius: 24, padding: 16, boxShadow: "inset 0 0 0 1px var(--frost-ring), 0 12px 32px var(--frost-float)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
               <div style={{ fontSize: 15, fontWeight: 600 }}>Notifikasi</div>
-              <button className="sp-iconbtn" onClick={() => setShowBell(false)} aria-label="Tutup" style={{ width: 36, height: 36 }}>
+              <button className="sp-iconbtn" onClick={() => { setShowBell(false); bellBtn.current?.focus(); }} aria-label="Tutup notifikasi" style={{ width: 44, height: 44, marginRight: -8 }}>
                 <span style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--glass-btn)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={12} stroke={2.4} /></span>
               </button>
             </div>
@@ -858,7 +883,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             {space.kind === "guild" && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: -16 }}>Ruang guild {space.name} — {showOwner ? "angka seluruh tim" : "angka kamu di guild ini"}.</div>}
             {seedCount > 0 && (
               <div role="status" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 10, padding: "12px 14px", fontSize: 12.5 }}>
-                <span>Ada <b>{seedCount} data contoh</b> (PT Maju Jaya dkk.) dari versi lama yang ikut kehitung di angka lo.</span>
+                <span>Ada <b>{seedCount} data contoh</b> (PT Maju Jaya dkk.) dari versi lama yang ikut kehitung di angka kamu.</span>
                 <button onClick={removeSeedData} style={{ background: "#005eb0", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Hapus data contoh</button>
               </div>
             )}
@@ -869,40 +894,44 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         {/* LEADS (canvas "Leads + skor potensi") */}
         {activeTab === "Leads" && (() => {
           const shownLeads = filteredLeads.slice(0, leadLimit);
+          const leadField: React.CSSProperties = { height: 44, border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "var(--app-card)", color: "var(--app-text)", fontSize: wide ? 14 : 16, fontFamily: "inherit" };
           const panelLead = wide ? (liveLead && filteredLeads.some(l => l.id === liveLead.id) ? liveLead : filteredLeads[0]) : null;
           return (
-          <div>
+          <div className="sp-leads">
             {space.kind === "guild" && personalLeads > 0 && (
               <div role="status" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: "12px 16px", marginBottom: 16, fontSize: 14 }}>
                 <span>Ada <b>{personalLeads} lead</b> di ruang Pribadi kamu, belum ada di {space.name}.</span>
                 <button onClick={() => setActiveTab("Guild")} style={{ display: "inline-flex", alignItems: "center", height: 40, padding: "0 18px", borderRadius: 999, border: 0, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>Bawa ke {space.name} →</button>
               </div>
             )}
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-              <h1 style={{ margin: 0, fontSize: 34, lineHeight: 1.1, fontWeight: 600, letterSpacing: "-0.025em" }}>Leads <span className="tabnum" style={{ fontSize: 20, fontWeight: 500, color: "var(--app-muted)", letterSpacing: 0 }}>{leads.length}</span></h1>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", width: wide ? "auto" : "100%" }}>
+            {/* Phone: title with Tambah lead, then search, then status + Import.
+                Wide: title left, everything in one row on the right. */}
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: wide ? 16 : 12 }}>
+              <h1 style={{ margin: 0, fontSize: wide ? 34 : 30, lineHeight: 1.1, fontWeight: 600, letterSpacing: "-0.025em" }}>Leads <span className="tabnum" style={{ fontSize: 20, fontWeight: 500, color: "var(--app-muted)", letterSpacing: 0 }}>{leads.length}</span></h1>
+              {!wide && <button onClick={() => setShowAddLead(true)} style={{ display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}><Icon name="plus" stroke={1.8} />Tambah lead</button>}
+              <div style={{ display: "flex", gap: 8, flexWrap: wide ? "nowrap" : "wrap", alignItems: "center", width: wide ? "auto" : "100%" }}>
                 <div style={{ position: "relative", flex: wide ? "0 0 auto" : "1 1 100%" }}>
                   <label htmlFor="lead-search" className="vh">Cari lead</label>
                   <Icon name="search" style={{ position: "absolute", left: 14, top: 13, color: "var(--app-muted)" }} />
-                  <input id="lead-search" type="search" value={leadQ} onChange={e => setLeadQ(e.target.value)} placeholder="Cari nama atau kategori" style={{ width: wide ? 260 : "100%", height: 44, padding: "0 16px 0 42px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "var(--app-card)", color: "var(--app-text)", fontSize: 14, fontFamily: "inherit" }} />
+                  <input id="lead-search" type="search" value={leadQ} onChange={e => setLeadQ(e.target.value)} placeholder="Cari nama atau kategori" style={{ ...leadField, width: wide ? 260 : "100%", padding: "0 16px 0 42px" }} />
                 </div>
                 <label className="vh" htmlFor="status-filter">Status</label>
-                <select id="status-filter" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ height: 44, padding: "0 14px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "var(--app-card)", color: "var(--app-text)", fontSize: 14, fontFamily: "inherit" }}>
+                <select id="status-filter" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...leadField, padding: "0 14px", flex: wide ? "0 0 auto" : "1 1 0", minWidth: 0 }}>
                   {[["All", "Semua status"], ["Hot", "Hot"], ["Warm", "Warm"], ["Cold", "Cold"], ["Closed", "Closed"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
-                <button onClick={() => setShowImport(true)} style={{ height: 44, padding: "0 18px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Import</button>
-                <button onClick={() => setShowAddLead(true)} style={{ display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}><Icon name="plus" stroke={1.8} />Tambah lead</button>
+                <button onClick={() => setShowImport(true)} style={{ height: 44, padding: "0 18px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>Import</button>
+                {wide && <button onClick={() => setShowAddLead(true)} style={{ display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}><Icon name="plus" stroke={1.8} />Tambah lead</button>}
               </div>
             </div>
 
             {leads.length > 0 && (
-              <div role="group" aria-label="Saring menurut potensi" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 24 }}>
+              <div role="group" aria-label="Saring menurut potensi" className="sp-chiprow" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 24 }}>
                 {([0, 5, 4, 3, 2, 1] as (0 | Level)[]).map(lv => {
                   const on = filterLevel === lv;
                   const n = lv ? leads.filter(l => sc(l).level === lv).length : leads.length;
                   return (
                     <button key={lv} onClick={() => setFilterLevel(lv)} aria-pressed={on}
-                      style={{ height: 36, padding: "0 14px", borderRadius: 999, border: `1px solid ${on ? "var(--app-text)" : "var(--app-line-strong)"}`, background: on ? "var(--app-text)" : "transparent", color: on ? "var(--app-card)" : "var(--app-ink-2)", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, fontFamily: "inherit" }}>
+                      style={{ height: wide ? 36 : 44, padding: "0 14px", borderRadius: 999, border: `1px solid ${on ? "var(--app-text)" : "var(--app-line-strong)"}`, background: on ? "var(--app-text)" : "transparent", color: on ? "var(--app-card)" : "var(--app-ink-2)", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, fontFamily: "inherit" }}>
                       {lv > 0 && <HeatDots level={lv as Level} size={5} gap={2} />}
                       {lv ? LEVEL_WORD[lv as Level] : "Semua"} <span className="tabnum" style={{ opacity: 0.7 }}>{n}</span>
                     </button>
@@ -994,112 +1023,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           leads={leads.map(l => ({ id: l.id, name: l.name, contact: l.contact, phone: l.phone }))} />}
         {activeTab === "Paket" && <Services services={services} business={business} />}
 
-        {/* OUTREACH */}
-        {activeTab === "Outreach" && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div>
-                <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Outreach Tracker</div>
-                <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 2 }}>Track semua DM, email, dan WA lo</div>
-              </div>
-              <button onClick={() => setShowAddOutreach(true)} style={btnPrimary}>+ Catat outreach</button>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 24 }}>
-              {[
-                { label: "Total Sent", value: outreach.length, color: "var(--brand-text)" },
-                { label: "Replied", value: outreach.filter(o => o.status === "Replied").length, color: "var(--ok)" },
-                { label: "Seen/Open", value: outreach.filter(o => o.status === "Seen").length, color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))" },
-                { label: "No Response", value: outreach.filter(o => o.status === "No Response").length, color: "var(--app-muted)" },
-                { label: "Rejected", value: outreach.filter(o => o.status === "Rejected").length, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" },
-              ].map(s => (
-                <div key={s.label} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 10, padding: 16 }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: `color-mix(in srgb, ${s.color} 55%, var(--app-text))`, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{s.value}</div>
-                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {outreach.length === 0 && (
-                <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "48px 24px", textAlign: "center" }}>
-                  <div style={{ fontSize: 34, marginBottom: 12 }}>📭</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ada outreach</div>
-                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Catat email, DM, atau WA pertama lo biar bisa dilacak.</div>
-                  <button onClick={() => setShowAddOutreach(true)} style={btnPrimary}>+ Log Outreach</button>
-                </div>
-              )}
-              {outreach.map(o => {
-                const statusColors: Record<string, string> = { Replied: "#00a862", Seen: "#f59e0b", Sent: "#005eb0", "No Response": "var(--app-muted)", Rejected: "#ff4444" };
-                return (
-                  <div key={o.id} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 10, padding: 20, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                      <div style={{ fontSize: 20 }}>{o.type === "Email" ? "📧" : o.type === "DM Instagram" ? "📸" : "💬"}</div>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{o.leadName}</div>
-                        <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{o.subject}</div>
-                        <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{o.type} · {o.date}</div>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <span className="badge" style={{ background: `${statusColors[o.status]}20`, color: statusColors[o.status], border: `1px solid ${statusColors[o.status]}40` }}>{o.status}</span>
-                      <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Opens: {o.opens} · Clicks: {o.clicks}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* REJECTION LOG */}
-        {activeTab === "Rejection Log" && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div>
-                <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Rejection Log</div>
-                <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 2 }}>Tiap rejection = data buat improve. Catat & belajar.</div>
-              </div>
-              <button onClick={() => setShowAddRejection(true)} style={btnPrimary}>+ LOG REJECTION</button>
-            </div>
-            <div style={{ background: "#ff44440d", border: "1px solid #ff444430", borderRadius: 10, padding: 16, marginBottom: 20, fontSize: 12, color: "#ff8888" }}>
-              <span style={{ fontWeight: 700 }}>💡 Mindset:</span> Rejection bukan kegagalan — itu adalah data. Setiap &quot;tidak&quot; lo adalah insight buat close deal berikutnya lebih cepet.
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {rejections.length === 0 && (
-                <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "48px 24px", textAlign: "center" }}>
-                  <div style={{ fontSize: 34, marginBottom: 12 }}>🗂️</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ada rejection dicatat</div>
-                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Setiap penolakan itu data. Catat biar bisa dipelajari & di-follow up.</div>
-                  <button onClick={() => setShowAddRejection(true)} style={btnPrimary}>+ Log Rejection</button>
-                </div>
-              )}
-              {rejections.map(r => (
-                <div key={r.id} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 20 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{r.leadName}</div>
-                      <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{r.channel} · {r.date}</div>
-                    </div>
-                    <span className="badge" style={{ background: "#ff44441a", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444430" }}>REJECTED</span>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12 }}>
-                      <div style={{ fontSize: 12, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 4 }}>ALASAN REJECTION</div>
-                      <div style={{ fontSize: 12, color: "#ff8888" }}>{r.reason}</div>
-                    </div>
-                    <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12 }}>
-                      <div style={{ fontSize: 12, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 4 }}>FOLLOW-UP DATE</div>
-                      <div style={{ fontSize: 12, color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))" }}>{r.followUpDate || "Belum dijadwal"}</div>
-                    </div>
-                  </div>
-                  <div style={{ background: "#00ff881a", borderRadius: 8, padding: 12, marginTop: 12, border: "1px solid #00ff8820" }}>
-                    <div style={{ fontSize: 12, color: "var(--ok)", letterSpacing: "1px", marginBottom: 4 }}>💡 LESSON LEARNED</div>
-                    <div style={{ fontSize: 12 }}>{r.lesson}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {activeTab === "Outreach" && <OutreachTab outreach={outreach} />}
+        {activeTab === "Rejection Log" && <RejectionTab rejections={rejections} />}
 
         {/* SIMULATOR */}
         {activeTab === "Simulator" && <SalesSimulator />}
@@ -1109,23 +1034,23 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
         {/* AI PLAYBOOK */}
         {activeTab === "AI Playbook" && (
-          <div>
+          <div className="sp-learn">
             <div style={{ marginBottom: 24 }}>
               <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>AI Sales Playbook</div>
-              <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 4 }}>Cara scraping, outreach, dan dominasi sales di era AI</div>
+              <div style={{ color: "var(--app-muted)", fontSize: 13, marginTop: 4 }}>Cara pakai AI dan tools buat cari lead, outreach, dan ngejar angka sales.</div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
               {AI_PLAYBOOK.map((section, si) => (
-                <div key={si} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 14, padding: 24 }}>
+                <div key={si} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 14, padding: "clamp(16px, 4vw, 24px)" }}>
                   <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20, color: section.color }}>{section.category}</div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
                     {section.steps.map((step, i) => (
                       <div key={i} className="step-card" style={{ ["--accent" as string]: section.color, background: "var(--app-inner)", borderRadius: 10, padding: 16, border: "1px solid var(--app-border)", transition: "border-color 0.2s" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                           <div style={{ width: 22, height: 22, borderRadius: 6, background: `${section.color}20`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: section.color, border: `1px solid ${section.color}40` }}>{i + 1}</div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: section.color }}>{step.title}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: section.color }}>{step.title}</div>
                         </div>
-                        <div style={{ fontSize: 12, color: "var(--app-sub)", lineHeight: 1.6 }}>{step.desc}</div>
+                        <div style={{ fontSize: 13, color: "var(--app-sub)", lineHeight: 1.6 }}>{step.desc}</div>
                       </div>
                     ))}
                   </div>
@@ -1133,7 +1058,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               ))}
             </div>
             <div style={{ background: "var(--app-card)", border: "1px solid #a78bfa40", borderRadius: 14, padding: 24, marginTop: 24 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: "color-mix(in srgb, #a78bfa 55%, var(--app-text))", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>🎯 Target Benchmark Sales Metrics Lo</div>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: "color-mix(in srgb, #a78bfa 55%, var(--app-text))", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>🎯 Target angka sales kamu</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
                 {[
                   { metric: "Cold Email Reply Rate", target: "5–15%", world: "< 3%", color: "var(--ok)" },
@@ -1157,92 +1082,42 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
       {/* Modal Add Lead */}
       {showAddLead && (
-        <div className="modal-overlay" onClick={() => setShowAddLead(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 500 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20 }}>+ Add New Lead</div>
+        <div className="modal-overlay" onClick={closeAddLead}>
+          <form noValidate aria-labelledby="nl-h" onClick={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); addLead(); }}
+            style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 520, maxHeight: "min(88vh, calc(100dvh - 48px))", overflowY: "auto", overscrollBehavior: "contain" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 16 }}>
+              <h2 id="nl-h" style={{ margin: 0, fontSize: 18, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Tambah lead</h2>
+              <button type="button" onClick={closeAddLead} aria-label="Tutup" style={{ flexShrink: 0, width: 44, height: 44, margin: "-10px -10px -10px 0", borderRadius: "50%", background: "transparent", border: "none", color: "var(--app-ink-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={18} stroke={2} /></button>
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {([["name", "Nama Perusahaan"], ["contact", "Nama Kontak"], ["email", "Email"], ["phone", "No. HP"], ["value", "Estimasi Value (Rp)"]] as [string, string][]).map(([k, label]) => (
-                <div key={k} style={{ gridColumn: k === "name" || k === "value" ? "1/-1" : "auto" }}>
-                  <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
-                  <input value={(newLead as Record<string, string>)[k]} onChange={e => setNewLead({ ...newLead, [k]: e.target.value })} style={inputStyle} placeholder={label} />
+              {([["name", "Nama bisnis", "mis. Kopi Senja", "text", "organization"], ["contact", "Nama kontak", "mis. Dina", "text", "off"], ["email", "Email", "nama@contoh.id", "email", "off"], ["phone", "No. WhatsApp", "mis. 0812 3456 7890", "tel", "off"], ["value", "Nilai deal (Rp)", "Kosong = dihitung 5 jt", "text", "off"]] as [keyof typeof newLead, string, string, string, string][]).map(([k, label, ph, type, ac]) => (
+                <div key={k} style={{ gridColumn: k === "name" ? "1/-1" : "auto" }}>
+                  <label htmlFor={`nl-${k}`} style={{ fontSize: 13, fontWeight: 600, color: "var(--app-sub)", display: "block", marginBottom: 6 }}>{label}{k === "name" && <span aria-hidden="true" style={{ color: "var(--hot)" }}> *</span>}</label>
+                  <input id={`nl-${k}`} type={type} autoComplete={ac} inputMode={k === "value" ? "numeric" : k === "phone" ? "tel" : undefined} required={k === "name"}
+                    aria-invalid={k === "name" && Boolean(addLeadErr) && !newLead.name.trim()} aria-describedby={k === "name" && addLeadErr ? "nl-err" : undefined}
+                    value={newLead[k]} onChange={e => { setNewLead({ ...newLead, [k]: e.target.value }); if (k === "name") setAddLeadErr(""); }} style={{ ...inputStyle, fontSize: 16, minHeight: 44 }} placeholder={ph} />
+                  {k === "name" && addLeadErr && !newLead.name.trim() && <p id="nl-err" role="alert" style={{ margin: "6px 0 0", fontSize: 13, color: "var(--hot)" }}>{addLeadErr}</p>}
                 </div>
               ))}
-              {([["source", "Source", ["GMaps", "DM IG", "Threads", "Cold Email", "Referral", "WhatsApp", "LinkedIn", "Lainnya"]], ["status", "Status", ["Cold", "Warm", "Hot", "Closed"]], ["category", "Kategori", ["F&B", "Retail", "Health", "Property", "Service", "Tech", "Education"]]] as [string, string, string[]][]).map(([k, label, opts]) => (
-                <div key={k}>
-                  <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
-                  <select value={(newLead as Record<string, string>)[k]} onChange={e => setNewLead({ ...newLead, [k]: e.target.value })} style={inputStyle}>
+              {([["source", "Sumber", ["GMaps", "DM IG", "Threads", "Cold Email", "Referral", "WhatsApp", "LinkedIn", "Lainnya"]], ["status", "Status", ["Cold", "Warm", "Hot", "Closed"]], ["category", "Kategori", ["F&B", "Retail", "Health", "Property", "Service", "Tech", "Education"]]] as [keyof typeof newLead, string, string[]][]).map(([k, label, opts]) => (
+                <div key={k} style={{ gridColumn: k === "category" ? "1/-1" : "auto" }}>
+                  <label htmlFor={`nl-${k}`} style={{ fontSize: 13, fontWeight: 600, color: "var(--app-sub)", display: "block", marginBottom: 6 }}>{label}</label>
+                  <select id={`nl-${k}`} value={newLead[k]} onChange={e => setNewLead({ ...newLead, [k]: e.target.value })} style={{ ...inputStyle, fontSize: 16, minHeight: 44 }}>
                     {opts.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
               ))}
               <div style={{ gridColumn: "1/-1" }}>
-                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Notes</label>
-                <textarea value={newLead.notes} onChange={e => setNewLead({ ...newLead, notes: e.target.value })} style={{ ...inputStyle, resize: "none", height: 70 }} placeholder="Catatan tentang lead ini..." />
+                <label htmlFor="nl-notes" style={{ fontSize: 13, fontWeight: 600, color: "var(--app-sub)", display: "block", marginBottom: 6 }}>Catatan</label>
+                <textarea id="nl-notes" value={newLead.notes} onChange={e => setNewLead({ ...newLead, notes: e.target.value })} style={{ ...inputStyle, fontSize: 16, resize: "vertical", minHeight: 80 }} placeholder="mis. ketemu di GMaps, buka cabang baru bulan depan" />
               </div>
             </div>
+            {addLeadErr && newLead.name.trim() && <p role="alert" style={{ margin: "12px 0 0", fontSize: 13, color: "var(--hot)" }}>{addLeadErr}</p>}
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={addLead} style={btnPrimary}>Simpan lead</button>
-              <button onClick={() => setShowAddLead(false)} style={{ ...btnPrimary, background: "var(--app-border)", color: "var(--app-text)" }}>Batal</button>
+              <button type="button" onClick={closeAddLead} disabled={savingLead} style={{ ...btnPrimary, flex: 1, minHeight: 44, background: "var(--app-inner)", color: "var(--app-text)" }}>Batal</button>
+              <button type="submit" disabled={savingLead} style={{ ...btnPrimary, flex: 1, minHeight: 44, opacity: savingLead ? 0.7 : 1 }}>{savingLead ? "Menyimpan…" : "Simpan lead"}</button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Add Outreach */}
-      {showAddOutreach && (
-        <div className="modal-overlay" onClick={() => setShowAddOutreach(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20 }}>+ Log Outreach</div>
-            {([["leadName", "Nama Lead/Perusahaan"], ["subject", "Subject / Pesan Pembuka"]] as [string, string][]).map(([k, label]) => (
-              <div key={k} style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
-                <input value={(newOutreach as Record<string, string>)[k]} onChange={e => setNewOutreach({ ...newOutreach, [k]: e.target.value })} style={inputStyle} placeholder={label} />
-              </div>
-            ))}
-            {([["type", "Tipe", ["Email", "DM Instagram", "WhatsApp", "LinkedIn", "Telepon"]], ["status", "Status", ["Sent", "Seen", "Replied", "No Response", "Rejected"]]] as [string, string, string[]][]).map(([k, label, opts]) => (
-              <div key={k} style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
-                <select value={(newOutreach as Record<string, string>)[k]} onChange={e => setNewOutreach({ ...newOutreach, [k]: e.target.value })} style={inputStyle}>
-                  {opts.map(o => <option key={o} value={o}>{o}</option>)}
-                </select>
-              </div>
-            ))}
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={addOutreach} style={btnPrimary}>Simpan</button>
-              <button onClick={() => setShowAddOutreach(false)} style={{ ...btnPrimary, background: "var(--app-border)", color: "var(--app-text)" }}>Batal</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Add Rejection */}
-      {showAddRejection && (
-        <div className="modal-overlay" onClick={() => setShowAddRejection(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20 }}>+ Log Rejection</div>
-            {([["leadName", "Nama Lead/Perusahaan"], ["reason", "Alasan Rejection"], ["lesson", "Lesson Learned"]] as [string, string][]).map(([k, label]) => (
-              <div key={k} style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
-                {k === "lesson"
-                  ? <textarea value={(newRejection as Record<string, string>)[k]} onChange={e => setNewRejection({ ...newRejection, [k]: e.target.value })} style={{ ...inputStyle, resize: "none", height: 70 }} placeholder={label} />
-                  : <input value={(newRejection as Record<string, string>)[k]} onChange={e => setNewRejection({ ...newRejection, [k]: e.target.value })} style={inputStyle} placeholder={label} />}
-              </div>
-            ))}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Channel</label>
-              <select value={newRejection.channel} onChange={e => setNewRejection({ ...newRejection, channel: e.target.value })} style={inputStyle}>
-                {["Email", "DM Instagram", "WhatsApp", "LinkedIn", "Telepon"].map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Jadwal Follow-Up</label>
-              <input type="date" value={newRejection.followUpDate} onChange={e => setNewRejection({ ...newRejection, followUpDate: e.target.value })} style={inputStyle} />
-            </div>
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={addRejection} style={btnPrimary}>Simpan</button>
-              <button onClick={() => setShowAddRejection(false)} style={{ ...btnPrimary, background: "var(--app-border)", color: "var(--app-text)" }}>Batal</button>
-            </div>
-          </div>
+          </form>
         </div>
       )}
 
@@ -1256,8 +1131,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       {showProfile && (        <div className="modal-overlay" onClick={() => setShowProfile(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Profil & Pengaturan</div>
-              <button onClick={() => setShowProfile(false)} aria-label="Tutup" style={{ background: "transparent", border: "none", color: "var(--app-muted)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
+              <div style={{ fontSize: 17, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Profil & Pengaturan</div>
+              <button onClick={() => setShowProfile(false)} aria-label="Tutup" style={{ flexShrink: 0, width: 44, height: 44, margin: "-10px -10px -10px 0", borderRadius: "50%", background: "transparent", border: "none", color: "var(--app-ink-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={18} stroke={2} /></button>
             </div>
 
             {/* User */}
@@ -1279,7 +1154,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                   <div style={{ fontSize: 12, color: "var(--app-muted)", fontFamily: "monospace", marginTop: 2 }}>{APP_VERSION}</div>
                 </div>
                 <button onClick={checkUpdate} disabled={checkingUpdate} style={{ ...btnPrimary, background: "transparent", color: "var(--brand-text)", border: "1px solid #005eb0", padding: "8px 14px", opacity: checkingUpdate ? 0.6 : 1 }}>
-                  {checkingUpdate ? "Cek..." : "Cek update"}
+                  {checkingUpdate ? "Mengecek…" : "Cek update"}
                 </button>
               </div>
               {updateInfo && (
@@ -1306,23 +1181,49 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
             {/* Clear cache */}
             <button onClick={clearCacheAndReload} disabled={clearing} style={{ width: "100%", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 16, textAlign: "left", cursor: "pointer", fontFamily: "inherit", marginBottom: 12, opacity: clearing ? 0.6 : 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--app-text)" }}>🧹 {clearing ? "Membersihkan..." : "Clear cache & muat ulang"}</div>
-              <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>Hapus cache app & load versi terbaru. Login kamu tetap aman.</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--app-text)" }}>🧹 {clearing ? "Membersihkan…" : "Bersihkan cache & muat ulang"}</div>
+              <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>Hapus cache app & muat versi terbaru. Login kamu tetap aman.</div>
             </button>
 
             {/* Logout */}
-            <button onClick={handleLogout} style={{ width: "100%", background: "transparent", border: "1px solid #ff444440", borderRadius: 12, padding: 14, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={handleLogout} style={{ width: "100%", minHeight: 48, background: "transparent", border: "1px solid #ff444440", borderRadius: 12, padding: 14, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
               Logout
             </button>
           </div>
         </div>
       )}
 
+      {/* Atur target closing */}
+      {targetDraft !== null && (
+        <div className="modal-overlay" onClick={() => { if (!savingTarget) setTargetDraft(null); }}>
+          <form noValidate aria-labelledby="target-h" onClick={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); saveClosingTarget(); }}
+            style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 400 }}>
+            <div id="target-h" style={{ fontSize: 17, fontWeight: 700 }}>Target closing bulan ini</div>
+            <p style={{ margin: "4px 0 16px", fontSize: 13, color: "var(--app-muted)" }}>Berapa deal yang mau kamu tutup bulan ini? Progresnya keliatan di Beranda.</p>
+            <label htmlFor="target-n" style={{ fontSize: 13, fontWeight: 600, color: "var(--app-sub)", display: "block", marginBottom: 6 }}>Jumlah deal</label>
+            <input id="target-n" type="number" inputMode="numeric" min={1} step={1} autoFocus value={targetDraft}
+              onChange={e => { setTargetDraft(e.target.value); setTargetError(""); }} placeholder="Contoh: 10"
+              aria-invalid={Boolean(targetError)} aria-describedby={targetError ? "target-err" : undefined}
+              style={{ ...inputStyle, fontSize: 16, height: 48 }} />
+            {targetError && <p id="target-err" role="alert" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--hot)" }}>{targetError}</p>}
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button type="button" onClick={() => setTargetDraft(null)} disabled={savingTarget} style={{ ...btnPrimary, flex: 1, minHeight: 44, background: "var(--app-inner)", color: "var(--app-text)" }}>Batal</button>
+              <button type="submit" disabled={savingTarget} style={{ ...btnPrimary, flex: 1, minHeight: 44, opacity: savingTarget ? 0.7 : 1 }}>{savingTarget ? "Menyimpan…" : "Simpan target"}</button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {shared && (
-        <div className="modal-overlay" onClick={() => setShared(null)}>
-          <div role="dialog" aria-modal="true" aria-labelledby="share-h" onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 22, width: "100%", maxWidth: 440, maxHeight: "86vh", display: "flex", flexDirection: "column" }}>
-            <div id="share-h" style={{ fontSize: 16, fontWeight: 700 }}>Chat ini buat lead mana?</div>
-            <div style={{ fontSize: 12, color: "var(--app-muted)", margin: "4px 0 12px" }}>{shared.name}</div>
+        <div className="modal-overlay" onClick={() => { if (!shareBusy) setShared(null); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="share-h" data-own-layout onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: "calc(env(safe-area-inset-top, 0px) + 22px) 22px calc(env(safe-area-inset-bottom, 0px) + 22px)", width: "100%", maxWidth: 440, maxHeight: "min(86vh, calc(100dvh - 48px))", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+              <div style={{ minWidth: 0 }}>
+                <div id="share-h" style={{ fontSize: 17, fontWeight: 700 }}>Chat ini buat lead mana?</div>
+                <div style={{ fontSize: 13, color: "var(--app-muted)", margin: "4px 0 12px", overflowWrap: "anywhere" }}>{shared.name}</div>
+              </div>
+              <button type="button" onClick={() => setShared(null)} disabled={shareBusy} aria-label="Tutup" style={{ flexShrink: 0, width: 44, height: 44, margin: "-10px -10px 0 0", borderRadius: "50%", background: "transparent", border: "none", color: "var(--app-ink-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={18} stroke={2} /></button>
+            </div>
             <label htmlFor="share-q" style={{ position: "absolute", left: -9999 }}>Cari lead</label>
             <input id="share-q" value={shareQ} onChange={e => setShareQ(e.target.value)} placeholder="Cari nama lead" style={{ ...inputStyle, fontSize: 16 }} />
             <div style={{ overflowY: "auto", marginTop: 8, flex: 1 }}>
@@ -1335,17 +1236,23 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                   <>
                     {list.map(l => (
                       <button key={l.id} onClick={() => { setShareFor({ leadId: l.id, file: shared }); setShared(null); openLead(l); }}
-                        style={{ width: "100%", textAlign: "left", padding: "11px 4px", border: "none", borderBottom: "1px solid var(--app-inner)", background: "transparent", color: "inherit", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 600 }}>
-                        {l.name} <span style={{ fontWeight: 400, color: "var(--app-muted)", fontSize: 12 }}>· {l.category}</span>
+                        className="rowhover" style={{ width: "100%", minHeight: 48, textAlign: "left", padding: "12px 4px", border: "none", borderBottom: "1px solid var(--app-inner)", background: "transparent", color: "inherit", cursor: "pointer", fontFamily: "inherit", fontSize: 15, fontWeight: 600 }}>
+                        {l.name} <span style={{ fontWeight: 400, color: "var(--app-muted)", fontSize: 13 }}>· {l.category}</span>
                       </button>
                     ))}
-                    <button onClick={async () => {
+                    {list.length === 0 && <p style={{ margin: "8px 0", fontSize: 13, color: "var(--app-muted)" }}>{leads.length ? "Ga ada lead yang cocok. Bikin lead baru di bawah." : "Belum ada lead. Bikin lead baru dari chat ini."}</p>}
+                    {shareErr && <p role="alert" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--hot)" }}>{shareErr}</p>}
+                    <button disabled={shareBusy} onClick={async () => {
                       const id = `lead_${Date.now()}`;
                       const lead = stamp(space, { name: guess || "Lead dari WhatsApp", contact: "", source: "WhatsApp", status: "Warm", email: "", phone: "", category: "F&B", notes: "", value: 0, lastContact: today() });
-                      await setDoc(spaceDoc(space, "leads", id), lead);
+                      setShareBusy(true); setShareErr("");
+                      try { await setDoc(spaceDoc(space, "leads", id), lead); }
+                      catch { setShareBusy(false); setShareErr("Gagal bikin lead. Cek koneksi, lalu coba lagi."); return; }
+                      setShareBusy(false);
                       setShareFor({ leadId: id, file: shared }); setShared(null); setActiveTab("Leads");
                       openLead({ id, ...lead } as Lead);
-                    }} style={{ ...btnPrimary, width: "100%", marginTop: 10 }}>+ Lead baru: {guess || "dari WhatsApp"}</button>
+                    }} style={{ ...btnPrimary, width: "100%", minHeight: 44, marginTop: 10, opacity: shareBusy ? 0.7 : 1 }}>{shareBusy ? "Menyimpan…" : `+ Lead baru: ${guess || "dari WhatsApp"}`}</button>
+                    <button type="button" onClick={() => setShared(null)} disabled={shareBusy} style={{ ...btnPrimary, width: "100%", minHeight: 44, marginTop: 8, background: "var(--app-inner)", color: "var(--app-text)" }}>Batal</button>
                   </>
                 );
               })()}
@@ -1354,7 +1261,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         </div>
       )}
       {shareMsg && (
-        <div role="alert" onClick={() => setShareMsg("")} style={{ position: "fixed", left: 16, right: 16, bottom: 90, zIndex: 120, maxWidth: 480, margin: "0 auto", background: "var(--app-text)", color: "var(--app-bg)", borderRadius: 12, padding: "12px 14px", fontSize: 13 }}>{shareMsg}</div>
+        <div role="alert" onClick={() => setShareMsg("")} style={{ position: "fixed", left: 16, right: 16, bottom: "calc(100px + env(safe-area-inset-bottom, 0px))", zIndex: 120, maxWidth: 480, margin: "0 auto", background: "var(--app-text)", color: "var(--app-bg)", borderRadius: 12, padding: "12px 14px", fontSize: 13 }}>{shareMsg}</div>
       )}
 
       {/* Import Leads Modal */}
@@ -1363,7 +1270,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 640, maxHeight: "85vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Import Leads dari Excel/CSV</div>
-              <button onClick={closeImport} aria-label="Tutup" style={{ background: "transparent", border: "none", color: "var(--app-muted)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
+              <button onClick={closeImport} aria-label="Tutup" style={{ flexShrink: 0, width: 44, height: 44, margin: "-10px -10px -10px 0", borderRadius: "50%", background: "transparent", border: "none", color: "var(--app-ink-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={18} stroke={2} /></button>
             </div>
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 16 }}>Upload Excel/CSV, atau scan gambar (screenshot/foto data) pakai AI. Kolom dipetakan otomatis — bisa diubah sebelum simpan.</div>
 
@@ -1371,7 +1278,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               <div style={{ textAlign: "center", padding: "32px 16px" }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
                 <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{importDone} lead masuk</div>
-                <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Data udah masuk ke Lead Database lo.</div>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Lead-nya udah ada di Leads.</div>
                 <button onClick={closeImport} style={btnPrimary}>Selesai</button>
               </div>
             ) : (
@@ -1380,7 +1287,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                 <div style={{ display: "flex", gap: 4, marginBottom: 18, background: "var(--app-inner)", padding: 4, borderRadius: 10 }}>
                   {([["file", "📄 Excel / CSV / Kontak"], ["scan", "📷 Scan Gambar"]] as const).map(([m, label]) => (
                     <button key={m} onClick={() => { setImportMode(m); resetParsed(); }}
-                      style={{ flex: 1, padding: "9px 8px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit",
+                      style={{ flex: 1, minHeight: 40, padding: "9px 8px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: "inherit",
                         background: importMode === m ? "var(--app-card)" : "transparent",
                         color: importMode === m ? "#005eb0" : "var(--app-muted)",
                         boxShadow: importMode === m ? "0 1px 3px rgba(0,0,0,0.08)" : "none" }}>
@@ -1393,7 +1300,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                   <label style={{ display: "block", border: "1.5px dashed var(--app-border)", borderRadius: 12, padding: 24, textAlign: "center", cursor: "pointer", marginBottom: 20, background: "var(--app-inner)" }}>
                     <input type="file" accept=".xlsx,.xls,.csv,.vcf,text/vcard" onChange={handleImportFile} style={{ display: "none" }} />
                     <div style={{ fontSize: 24, marginBottom: 8 }}>📄</div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{importFileName || "Klik buat pilih file"}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{importFileName || "Pilih file"}</div>
                     <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>.xlsx, .xls, .csv, atau kontak HP (.vcf)</div>
                   </label>
                 ) : (
@@ -1401,7 +1308,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                     <label style={{ display: "block", border: "1.5px dashed var(--app-border)", borderRadius: 12, padding: 24, textAlign: "center", cursor: scanning ? "wait" : "pointer", marginBottom: 12, background: "var(--app-inner)", opacity: scanning ? 0.7 : 1 }}>
                       <input type="file" accept="image/*" onChange={handleScanImage} disabled={scanning} style={{ display: "none" }} />
                       <div style={{ fontSize: 24, marginBottom: 8 }}>{scanning ? "🤖" : "📷"}</div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{scanning ? "Membaca gambar dengan AI..." : (importFileName || "Klik buat pilih / foto data")}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{scanning ? "Membaca gambar dengan AI..." : (importFileName || "Pilih gambar atau foto data")}</div>
                       <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>Screenshot chat, tabel, atau kartu nama · JPG/PNG</div>
                     </label>
                     {scanError && (

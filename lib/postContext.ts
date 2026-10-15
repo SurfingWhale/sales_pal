@@ -8,7 +8,7 @@ export interface PostContext {
   when?: string;       // "besok, jam 1-5 sore"
   date?: string;       // YYYY-MM-DD, set by hand when the words aren't enough (lib/when.ts reads them otherwise)
   where?: string;      // "Sentul"
-  budget?: string;     // "ramah utk umk"
+  budget?: string;     // "budget ramah UMKM", "budget max 2 jt"
   business?: string;   // "f&b · umk"
   kind?: "rekomendasi" | "kolaborasi" | "butuh";
   edited?: boolean;    // the owner fixed it; a new post doesn't overwrite
@@ -33,7 +33,12 @@ const FILLER = /\s+(?:dong|nih|kak|ya|deh|guys|gaes)$/i;
 const COLLAB = /\b(?:collab\w*|kolab\w*|kolaborasi|partnership|kerja ?sama|sponsor\w*)\b/i;
 const ASKS = /(?:ada (?:yang|yg) (?:punya )?(?:kenalan|rekomendasi|rekom)|rekomendasi|\brekom\b|recommend|siapa (?:yang|yg) (?:bisa|open))/i;
 const WHEN = /\b(?:hari ini|besok|lusa|nanti malam|minggu (?:ini|depan)|bulan (?:ini|depan)|weekend|akhir pekan|(?:senin|selasa|rabu|kamis|jum'?at|sabtu)(?: depan| ini)?|tanggal \d{1,2}(?:\s+[a-z]{3,9})?|tgl \d{1,2}|\d{1,2}\s+(?:jan|feb|mar|apr|mei|jun|jul|agu|agt|sep|okt|nov|des)[a-z]*|jam \d{1,2}(?:[.:]\d{2})?(?:\s*-\s*\d{1,2}(?:[.:]\d{2})?)?(?:\s*(?:pagi|siang|sore|malam))?)\b/gi;
-const BUDGET = /(?:ramah (?:utk |untuk |buat )?(?:umkm?|kantong|pelajar|mahasiswa)|low ?budget|\bbudget\b|\bbujet\b|\bmurah\b|terjangkau|harga (?:teman|pelajar|bersahabat))/i;
+// "budget" alone says little; keep what follows it ("budget ramah UMKM",
+// "budget max 2 jt", "bujet terbatas") when it's there.
+const FRIENDLY = "ramah (?:utk |untuk |buat )?(?:umkm?|kantong|pelajar|mahasiswa)";
+const AMOUNT = "(?:(?:max(?:imal)?|maks(?:imal)?|sekitar|kisaran|cuma|hanya|di ?bawah|under|<|±)\\s*)?(?:rp\\.?\\s*)?\\d+(?:[.,]\\d+)*\\s*(?:rb|ribu|k|jt|juta)?\\b";
+const TIGHT = "terbatas|minim|tipis|kecil|pas-?pasan|mepet|seadanya";
+const BUDGET = new RegExp(`\\b(?:low ?budget|(?:budget|bujet)(?:\\s+(?:${FRIENDLY}|${AMOUNT}|${TIGHT}))?)|${FRIENDLY}|\\bmurah\\b|terjangkau|harga (?:teman|pelajar|bersahabat)`, "i");
 const BUSINESS = /\b(?:umkm|umk|f&b|fnb|cafe|kafe|coffee|kopi|resto(?:ran)?|bakery|toko|olshop|online shop|brand|startup|komunitas|klinik|clinic|salon|hotel|wedding|kampus|sekolah|basket|futsal|museum)\b/gi;
 
 // Common places, as people write them; matched whole-word, any case.
@@ -72,7 +77,7 @@ export function readPost(text: string): PostContext {
   if (where.length) out.where = where.slice(0, 2).join(", ");
 
   const budget = t.match(BUDGET)?.[0];
-  if (budget) out.budget = budget.toLowerCase();
+  if (budget) out.budget = budget.toLowerCase().replace(/\bumkm?\b/g, w => w.toUpperCase());
 
   const SHOW: Record<string, string> = { umkm: "UMKM", umk: "UMK", "f&b": "F&B", fnb: "F&B" };
   const biz = uniq((t.match(BUSINESS) || []).map(s => SHOW[s.toLowerCase()] || s.toLowerCase())).slice(0, 3);

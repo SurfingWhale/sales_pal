@@ -6,6 +6,7 @@ import { spaceDoc, useSpace } from "@/lib/space";
 import { PitchTemplate, TemplateScore, pct } from "@/lib/hunting";
 import { FillData, SAMPLE, STAGES, STARTERS, Stage, VARIABLES, fillTemplate, missingIn, stageOf } from "@/lib/templates";
 import { btnMuted, btnPrimary, btnWA, chip, font, inputStyle, label, modalBox } from "@/components/ui";
+import { useConfirm } from "@/components/ConfirmSheet";
 
 // The message deck as a kanban of the conversation (docs/prd/PRD-009 §13):
 // one column per stage, the column that fits this person lit up, and every
@@ -16,6 +17,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
   copiedId: string | null; copyFail: string | null; onPick: (t: PitchTemplate, how: "copy" | "wa") => void;
   canEdit: boolean; sampleName: string;
 }) {
+  const [ask, askSheet] = useConfirm();
   const space = useSpace();
   const [editing, setEditing] = useState<PitchTemplate | null>(null);
   const board = useRef<HTMLDivElement>(null);
@@ -55,6 +57,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
 
   return (
     <>
+      {askSheet}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 700 }}>Pilih pesan</div>
         {canEdit && <button onClick={() => setEditing({ id: "", title: "", body: "", stage })} style={chip}>+ Template</button>}
@@ -65,7 +68,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
           const on = s.id === stage;
           return (
             <section key={s.id} role="listitem" data-stage={s.id} aria-label={`Tahap ${i + 1}: ${s.label}${on ? ", cocok sekarang" : ""}`}
-              style={{ flex: "0 0 272px", scrollSnapAlign: "start", borderRadius: 14, padding: 10, background: on ? "#005eb00f" : "transparent", border: `1px solid ${on ? "#005eb0" : "var(--app-border)"}`, display: "flex", flexDirection: "column", gap: 10 }}>
+              style={{ flex: "0 0 min(272px, 86%)", minWidth: 0, scrollSnapAlign: "start", borderRadius: 14, padding: 10, background: on ? "#005eb00f" : "transparent", border: `1px solid ${on ? "#005eb0" : "var(--app-border)"}`, display: "flex", flexDirection: "column", gap: 10 }}>
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
                   <div style={{ fontSize: 13, fontWeight: 700 }}><span style={{ color: "var(--app-muted)" }}>{i + 1} ·</span> {s.label}</div>
@@ -94,7 +97,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
                   <div key={t.id} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", opacity: blocked ? 0.5 : 1 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
                       <div style={{ fontSize: 13, fontWeight: 700 }}>{t.title}</div>
-                      {canEdit && <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} style={{ ...chip, padding: "2px 8px" }}>✎</button>}
+                      {canEdit && <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} title="Edit template" className="sp-icon-btn" style={{ ...chip, flexShrink: 0, minWidth: 32, minHeight: 32, padding: "2px 8px", margin: "-6px -6px 0 0" }}>✎</button>}
                     </div>
                     {sc && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>{sc.sent} terkirim · dibales {pct(sc.responseRate)} · tertarik {pct(sc.winRate)}</div>}
                     <div style={{ fontSize: 12.5, color: "var(--app-sub)", lineHeight: 1.6, whiteSpace: "pre-wrap", marginBottom: 8, flex: 1 }}>{fillTemplate(t.body, data)}</div>
@@ -159,13 +162,16 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
               {editing.body.trim() ? preview(editing.body) : "Tulis pesannya dulu."}
             </div>
             {editing.id && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>Kalau isinya berubah banyak, mending bikin template baru supaya angka evaluasinya ga kecampur.</div>}
+            {(!editing.title.trim() || !editing.body.trim()) && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>Isi judul dan isi pesan dulu buat nyimpen.</div>}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button onClick={save} disabled={!editing.title.trim() || !editing.body.trim()} style={{ ...btnPrimary, opacity: editing.title.trim() && editing.body.trim() ? 1 : 0.5 }}>Simpan</button>
-              <button onClick={() => setEditing(null)} style={btnMuted}>Batal</button>
               {editing.id && (
-                <button onClick={async () => { if (confirm(`Hapus template ${editing.title}? Angka DM yang udah kecatat tetap ada.`)) { await deleteDoc(spaceDoc(space, "pitchTemplates", editing.id)); setEditing(null); } }}
-                  style={{ ...btnMuted, marginLeft: "auto", background: "transparent", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>Hapus</button>
+                <button onClick={() => { const id = editing.id; ask(`Hapus template ${editing.title}?`, "Angka DM yang udah kecatat tetap ada.", async () => { await deleteDoc(spaceDoc(space, "pitchTemplates", id)); setEditing(null); }); }}
+                  style={{ ...btnMuted, minHeight: 44, background: "transparent", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🗑 Hapus</button>
               )}
+              <div style={{ display: "flex", gap: 10, marginLeft: "auto", flex: "1 1 220px", justifyContent: "flex-end" }}>
+                <button onClick={() => setEditing(null)} style={{ ...btnMuted, flex: 1, maxWidth: 160, minHeight: 44 }}>Batal</button>
+                <button onClick={save} disabled={!editing.title.trim() || !editing.body.trim()} style={{ ...btnPrimary, flex: 1, maxWidth: 160, minHeight: 44, opacity: editing.title.trim() && editing.body.trim() ? 1 : 0.5 }}>Simpan</button>
+              </div>
             </div>
           </div>
         </div>

@@ -30,7 +30,7 @@ export default function LeadSources({ leads, invoices }: { leads: SourcedLead[];
       </div>
       {rows.length === 0 && (
         <div style={{ fontSize: 12, color: "var(--app-muted)", padding: "8px 0" }}>
-          {mode === "channel" ? "Belum ada lead." : "Belum ada lead dari link ber-UTM. Contoh: ?utm_source=instagram&utm_medium=paid&utm_campaign=2026-10-menu"}
+          {mode === "channel" ? "Belum ada lead. Tambah atau import lead dulu, nanti kelihatan sumber mana yang paling banyak closing." : "Belum ada lead dari link ber-UTM. Contoh: ?utm_source=instagram&utm_medium=paid&utm_campaign=2026-10-menu"}
         </div>
       )}
       {rows.map(r => {
