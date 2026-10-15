@@ -3,6 +3,7 @@
 - **Status:** Dibangun 2026-10-15 — kriteria, harness WebKit + audit HIG di tiap langkah, CI GitHub Actions, akun ukuran produksi, perbaikan sampai audit nol temuan. Belum: data lapangan (Speed Insights perlu dinyalain di Vercel) dan uji owner di iPhone beneran (UAT S1–S7).
 - **Tanggal:** 2026-10-15
 - **Konteks:** Owner nguji PWA terpasang di iPhone 12 dan Mac: ga ada tombol Batal, dialog ga bisa ditutup, form sempit, tombol rebutan tempat, ukuran huruf ga nyaman, `Cetak / PDF` ga ngapa-ngapain. Enam putaran perbaikan per area (#52) nutup banyak hal, tapi semua dites di **Chromium pakai mouse** — padahal iPhone jalan di **WebKit**, sentuh, keyboard di layar. PRD ini bikin "native" jadi sesuatu yang **diukur**, bukan dirasa.
+- **Standar yang berlaku:** [`docs/standards/native.md`](../standards/native.md) (ringkas, dipakai tiap perubahan UI); skill `native-standard` di claude-config buat project lain.
 - **Terkait:** PRD-004 (audit antarmuka pertama), PRD-008 (desain & audit `better-*`), PRD-009 §15 (masukan QA 11–15 Okt), skill `salespal-uat` di claude-config.
 
 ---
