@@ -81,7 +81,6 @@ export async function buildPdf(d: Doc, b: Business): Promise<Blob> {
   const dates: [string, string][] = [["Tanggal", longDate(d.data.date)]];
   if (d.kind === "quote") dates.push(["Berlaku s/d", longDate(d.data.validUntil)]);
   else dates.push(["Jatuh tempo", longDate(d.data.dueDate)]);
-  if (d.data.eventDate) dates.push(["Tanggal acara", fullDay(d.data.eventDate)]);
   dates.forEach(([k, v], i) => text(`${k}: ${v}`, R, y + i * 4.5, { size: 9, align: "right" }));
   let ty = y + 5;
   text(d.data.leadName, M, ty, { size: 11, bold: true }); ty += 5;
@@ -89,10 +88,31 @@ export async function buildPdf(d: Doc, b: Business): Promise<Blob> {
   if (d.data.phone) { text(d.data.phone, M, ty, { size: 9 }); ty += 4.5; }
   y = Math.max(ty, y + dates.length * 4.5) + 6;
 
+  // The job: its title, then when and where.
+  const x = d.data;
+  if (x.project?.trim()) {
+    const t = wrap(x.project.trim(), R - M, 13);
+    t.forEach(l => { text(l, M, y, { size: 13, bold: true }); y += 5.8; });
+    y += 1;
+  }
+  const facts: [string, string][] = ([
+    ["Tanggal", x.eventDate ? fullDay(x.eventDate) : ""], ["Jam", x.eventTime || ""], ["Lokasi", x.venue || ""],
+  ] as [string, string][]).filter(([, v]) => v.trim());
+  if (facts.length) {
+    const rows = facts.map(([k, v]) => [k, wrap(v, R - M - 30, 9.5)] as [string, string[]]);
+    const h = rows.reduce((a, [, ls]) => a + ls.length * 4.6, 0) + 9;
+    room(h + 4);
+    pdf.setFillColor(246, 247, 249); pdf.roundedRect(M, y, R - M, h, 1.5, 1.5, "F");
+    text("DETAIL ACARA", M + 4, y + 5, { size: 7.5, color: SOFT });
+    let fy = y + 10;
+    rows.forEach(([k, ls]) => { text(k, M + 4, fy, { size: 9, color: SOFT }); ls.forEach((l, i) => text(l, M + 26, fy + i * 4.6, { size: 9.5, bold: i === 0 && k === "Tanggal" })); fy += ls.length * 4.6; });
+    y += h + 7;
+  } else if (x.project?.trim()) y += 3;
+
   // Items: name, then what's included, under it.
   const cQty = 128, cPrice = 158;
   const head = () => {
-    text("#", M, y, { size: 7.5, color: SOFT }); text("DESKRIPSI", M + 7, y, { size: 7.5, color: SOFT });
+    text("#", M, y, { size: 7.5, color: SOFT }); text("LAYANAN & SCOPE", M + 7, y, { size: 7.5, color: SOFT });
     text("QTY", cQty, y, { size: 7.5, color: SOFT, align: "right" }); text("HARGA", cPrice, y, { size: 7.5, color: SOFT, align: "right" });
     text("JUMLAH", R, y, { size: 7.5, color: SOFT, align: "right" });
     y += 2; line(M, y, R, 0.5, INK); y += 5;
@@ -111,6 +131,15 @@ export async function buildPdf(d: Doc, b: Business): Promise<Blob> {
     desc.forEach(l => { text(l, M + 7, y, { size: 8.5, color: SOFT }); y += 4; });
     y += 1.5; line(M, y, R); y += 5;
   });
+
+  // What the client gets.
+  const del = (x.deliverables || "").split("\n").map(l => l.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
+  if (del.length) {
+    room(10);
+    text("DELIVERABLES", M, y, { size: 7.5, color: SOFT }); y += 5;
+    del.forEach(l => wrap(l, R - M - 6, 9.5).forEach((w, i) => { room(5); if (i === 0) text("•", M + 1, y, { size: 9.5 }); text(w, M + 6, y, { size: 9.5 }); y += 4.6; }));
+    y += 5;
+  }
 
   // Totals on the right.
   room(40);

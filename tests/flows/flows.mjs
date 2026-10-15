@@ -338,7 +338,7 @@ export const flows = [
         await page.getByRole("region", { name: /^Uang masuk/ }).getByText("Bakso Flow").waitFor();
       });
       await t.step("the PDF carries the letterhead and the terms", async () => {
-        await page.getByRole("button", { name: "Cetak / PDF" }).first().click();
+        await page.getByRole("button", { name: "PDF", exact: true }).first().click();
         await page.locator(".print-root").getByText("Fotografi menu").waitFor();
         await page.locator(".print-root").getByText("SYARAT & KETENTUAN").waitFor();
       });
@@ -356,7 +356,37 @@ export const flows = [
         const body = bytes.toString("latin1");
         for (const want of ["Studio Flow", "Fotografi menu", "SYARAT & KETENTUAN", "DP mengunci jadwal.", "/Subtype /Image"]) if (!body.includes(want)) throw new Error(`PDF is missing "${want}"`);
       });
+      await t.step("a closing without a quote: + Invoice with the job's details", async () => {
+        await modal(page).getByRole("button", { name: "Tutup", exact: true }).click();
+        await page.getByRole("button", { name: "+ Invoice" }).click();
+        await page.locator("#doc-client").fill("Kafe Flow");
+        await page.locator("#doc-project").fill("Event photography — Flow Night");
+        await page.locator("#doc-event").fill("2026-10-31");
+        await page.locator("#doc-time").fill("13.30–15.00 WIB");
+        await page.locator("#doc-venue").fill("Kafe Flow, Cipete");
+        await modal(page).getByRole("button", { name: "+ item manual" }).click();
+        await modal(page).getByLabel("Nama item").fill("Event photography");
+        await modal(page).getByLabel("Harga").fill("300000");
+        await modal(page).getByLabel("Rincian item").fill("Workshop, candid, suasana acara");
+        await page.locator("#doc-deliverables").fill("Foto event hasil edit\n1 reel recap");
+        await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
+        await page.locator("#doc-client").waitFor({ state: "detached" });
+        await expectText(page, "Event photography — Flow Night");
+      });
+      await t.step("its PDF has every part in place, named after the invoice", async () => {
+        const card = page.locator("div").filter({ has: page.getByText("Kafe Flow", { exact: true }) }).filter({ has: page.getByRole("button", { name: "PDF", exact: true }) }).last();
+        await card.getByRole("button", { name: "PDF", exact: true }).click();
+        await page.locator(".print-root").getByText("DETAIL ACARA").waitFor();
+        const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 15000 }), page.getByRole("button", { name: "Simpan / kirim PDF" }).click()]);
+        if (!/^INV-\d{4}-\d{3}_Kafe_Flow\.pdf$/.test(dl.suggestedFilename())) throw new Error(`file name: ${dl.suggestedFilename()}`);
+        await dl.saveAs(new URL("./out/invoice-brief-sample.pdf", import.meta.url).pathname);
+        const { readFileSync } = await import("node:fs");
+        const body = readFileSync(await dl.path()).toString("latin1");
+        for (const want of ["Flow Night", "DETAIL ACARA", "Kafe Flow, Cipete", "LAYANAN & SCOPE", "Workshop, candid", "DELIVERABLES", "1 reel recap"]) if (!body.includes(want)) throw new Error(`PDF is missing "${want}"`);
+        await modal(page).getByRole("button", { name: "Tutup", exact: true }).click();
+      });
       await t.step("Kop & logo over the PDF: back closes Kop, then the PDF", async () => {
+        await page.getByRole("button", { name: "PDF", exact: true }).first().click();
         await page.getByRole("button", { name: "Kop & logo" }).click();
         await page.locator("#biz-name").waitFor();
         await page.goBack();
