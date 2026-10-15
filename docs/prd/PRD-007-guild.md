@@ -72,3 +72,9 @@ Rules ga berubah (koleksi guild yang dipakai udah ada; `moved` & `settings/works
 ## Belum ada (sesudah Fase 2)
 
 - Notifikasi lewat email / WhatsApp template (butuh layanan email / WABA).
+
+**Susulan 15 Okt (lambang & tata letak):** "Edit guild logo dll jelek banget; ga bisa milih." Dirapikan pakai skill `better-layout` / `better-ui` (Jakub Krehel):
+- **Lambang guild bisa dipilih**: dari ✎ di banner (Leader & Officer) atau "Atur guild" di Anggota. Lembar **Atur guild** mulai dari pratinjau lambang, lalu **Upload logo PNG** (diperkecil ke 256px), **Warna** (8 pilihan), **Simbol** (inisial atau 10 simbol); di bawahnya nama guild dan **Nama peran** yang dilipat (opsional, cuma Leader). Disimpan di `guilds/{g}/settings/look` (katalog bersama: Leader/Officer ubah, Member baca; Viewer lihat perisai bawaan). **Ga ada perubahan rules.**
+- **Banner ringkas**: lambang 56px, nama, peran, jumlah anggota & level, avatar anggota di kolom nama; dua kotak angka (bulan ini vs target, menuju level berikutnya) berdampingan.
+- Kartu **Data pribadi kamu** ga muncul lagi kalau ga ada yang tersisa. Tab guild nempel di bawah header. Baris anggota pakai avatar.
+- **Belum**: gambar karakter buat avatar anggota. File PNG karakter dan brief guild yang pernah dikirim ga ketemu di repo, chat ini, maupun Notion; tinggal dikirim ulang. Simpan avatar per anggota butuh field baru di `members` (perubahan rules + deploy oleh owner).

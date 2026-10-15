@@ -18,6 +18,7 @@ import MoveToGuild from "@/components/MoveToGuild";
 import ConfirmSheet from "@/components/ConfirmSheet";
 import { FormNote, useDiscard, useSave } from "@/components/FormGuard";
 import { Pipeline } from "@/components/ClientHub";
+import { logoImage } from "@/lib/image";
 import { badge, btnGhost, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
 type View = "pipeline" | "report" | "aktivitas" | "anggota";
@@ -46,6 +47,8 @@ export default function GuildHub({ uid, name, email, onUseSpace }: { uid: string
   // moment (the membership write is still landing). A refused listener stops,
   // so listen again a few times instead of staying on "Memuat…".
   const [retry, setRetry] = useState(0);
+  const look = useGuildLook(gid);
+  const [editing, setEditing] = useState(false);
   const refused = (e: { code?: string }) => {
     if (e.code === "permission-denied") setTimeout(() => setRetry(r => (r < 6 ? r + 1 : r)), 1200);
   };
@@ -162,14 +165,15 @@ export default function GuildHub({ uid, name, email, onUseSpace }: { uid: string
           </select>
         </div>
       )}
-      {guild && me && <GuildBanner guild={guild} me={me} members={members} deals={deals} targets={targets} />}
+      {guild && me && <GuildBanner guild={guild} me={me} members={members} deals={deals} targets={targets} look={look} onEdit={isManager(me.role) ? () => setEditing(true) : undefined} />}
+      {guild && me && editing && <GuildSettings gid={gid} guild={guild} me={me} uid={uid} look={look} onClose={() => setEditing(false)} />}
       {guild && me && isSeller(me.role) && <MoveToGuild me={{ uid, name: me.name }} guild={{ id: guild.id, name: guild.name }} role={me.role} onUseGuild={() => onUseSpace?.(guild.id)} />}
 
       {!guild || !me ? (
         <div style={{ ...card, padding: 24, fontSize: 12.5, color: "var(--app-muted)", textAlign: "center" }}>Memuat…</div>
       ) : (
         <>
-          <div role="tablist" aria-label="Bagian guild" className="sp-tabs" style={{ display: "flex", gap: 4, background: "var(--app-inner)", padding: 4, borderRadius: 10, marginBottom: 18 }}>
+          <div role="tablist" aria-label="Bagian guild" className="sp-tabs sp-guild-tabs" style={{ display: "flex", gap: 4, background: "var(--app-inner)", padding: 4, borderRadius: 10, marginBottom: 18 }}>
             {([["pipeline", "Pipeline"], ["report", "Report Tim"], ["aktivitas", "Aktivitas"], ["anggota", `Anggota · ${members.length}`]] as const)
               .filter(([v]) => (v !== "pipeline" && v !== "aktivitas") || isSeller(role))
               .map(([v, l]) => (
@@ -193,7 +197,7 @@ export default function GuildHub({ uid, name, email, onUseSpace }: { uid: string
           )}
           {view === "report" && <TeamReport gid={gid} guild={guild} me={me} members={members} deals={deals} targets={targets} reports={reports} />}
           {view === "aktivitas" && isSeller(role) && <Activities gid={gid} me={me} />}
-          {view === "anggota" && <Members gid={gid} guild={guild} me={me} members={members} invites={invites} uid={uid} />}
+          {view === "anggota" && <Members gid={gid} guild={guild} me={me} members={members} invites={invites} uid={uid} onSettings={() => setEditing(true)} />}
         </>
       )}
       {foundModal}
@@ -206,30 +210,59 @@ export default function GuildHub({ uid, name, email, onUseSpace }: { uid: string
 // its people by role, its level from deals closed, and this month against
 // the target. A Viewer sees no deals, so no level or month for them.
 
-const CREST = ["#005eb0", "#b45309", "#7c3aed", "#0f766e", "#be123c", "#4d7c0f"];
+const CREST = ["#005eb0", "#b45309", "#7c3aed", "#0f766e", "#be123c", "#4d7c0f", "#334155", "#c2410c"];
+// A symbol in place of the initials, picked in Atur guild.
+const EMBLEMS = ["⚔️", "🦁", "🦅", "🐺", "🐉", "🔥", "⭐", "🌊", "⚡", "👑"];
 // Deals lunas, all time, to reach each level.
 const LEVELS = [0, 3, 10, 25, 50, 100, 200, 400];
 
-function crestColor(name: string): string {
+// guilds/{g}/settings/look: the crest's colour, symbol or uploaded logo. A
+// shared catalog doc, so Leader and Officer change it and sellers read it
+// (firestore.rules); a Viewer sees the default crest.
+export interface GuildLook { color?: string; emblem?: string; logo?: string }
+
+function useGuildLook(gid: string): GuildLook {
+  const [look, setLook] = useState<GuildLook>({});
+  useEffect(() => {
+    setLook({});
+    if (!gid) return;
+    return onSnapshot(doc(db, "guilds", gid, "settings", "look"), s => setLook((s.data() as GuildLook) || {}), () => setLook({}));
+  }, [gid]);
+  return look;
+}
+
+function crestColor(name: string, look?: GuildLook): string {
+  if (look?.color && CREST.includes(look.color)) return look.color;
   let h = 0;
   for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return CREST[h % CREST.length];
+  return CREST[h % 6];
 }
 
 const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase() || "G";
 
-function Crest({ name }: { name: string }) {
-  const c = crestColor(name);
+function Crest({ name, look, size = 64 }: { name: string; look?: GuildLook; size?: number }) {
+  const c = crestColor(name, look);
+  if (look?.logo) {
+    return (
+      <span role="img" aria-label={`Logo ${name}`} style={{ width: size, height: size, flexShrink: 0, borderRadius: size * 0.28, overflow: "hidden", background: "#fff", boxShadow: `0 0 0 2px ${c}`, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={look.logo} alt="" style={{ width: "86%", height: "86%", objectFit: "contain" }} />
+      </span>
+    );
+  }
+  const sym = look?.emblem && EMBLEMS.includes(look.emblem) ? look.emblem : "";
   return (
-    <svg width="64" height="72" viewBox="0 0 64 72" role="img" aria-label={`Lambang ${name}`} style={{ flexShrink: 0 }}>
+    <svg width={size} height={size * 1.125} viewBox="0 0 64 72" role="img" aria-label={`Lambang ${name}`} style={{ flexShrink: 0 }}>
       <path d="M32 3 L58 12 V34 C58 52 46 63 32 69 C18 63 6 52 6 34 V12 Z" fill={c} fillOpacity="0.14" stroke={c} strokeWidth="2.5" strokeLinejoin="round" />
       <path d="M32 11 L50 17.5 V34 C50 47 42 55.5 32 60.5 C22 55.5 14 47 14 34 V17.5 Z" fill="none" stroke={c} strokeOpacity="0.45" strokeWidth="1.5" strokeLinejoin="round" />
-      <text x="32" y="42" textAnchor="middle" fontSize="19" fontWeight="800" fill={c} fontFamily="'Plus Jakarta Sans', sans-serif">{initials(name)}</text>
+      {sym
+        ? <text x="32" y="44" textAnchor="middle" fontSize="24">{sym}</text>
+        : <text x="32" y="42" textAnchor="middle" fontSize="19" fontWeight="800" fill={c} fontFamily="'Plus Jakarta Sans', sans-serif">{initials(name)}</text>}
     </svg>
   );
 }
 
-function GuildBanner({ guild, me, members, deals, targets }: { guild: Guild; me: Member; members: Member[]; deals: Deal[]; targets: Target[] }) {
+function GuildBanner({ guild, me, members, deals, targets, look, onEdit }: { guild: Guild; me: Member; members: Member[]; deals: Deal[]; targets: Target[]; look: GuildLook; onEdit?: () => void }) {
   const month = monthOf(today());
   const tm = useMemo(() => teamMonth(month, deals, members, targets), [month, deals, members, targets]);
   const sees = isSeller(me.role);
@@ -243,57 +276,167 @@ function GuildBanner({ guild, me, members, deals, targets }: { guild: Guild; me:
   const prev = LEVELS[lv - 1];
   const order: Role[] = ["leader", "officer", "member", "viewer"];
   const people = members.slice().sort((a, b) => order.indexOf(a.role) - order.indexOf(b.role));
-  const shown = people.slice(0, 8);
-  const c = crestColor(guild.name);
+  const shown = people.slice(0, 6);
+  const c = crestColor(guild.name, look);
+  const monthPct = target ? Math.min(100, Math.round((done / target) * 100)) : 0;
+  const levelPct = next ? Math.round(((lunas - prev) / (next - prev)) * 100) : 100;
+  // One small block per number: a label, the value, a thin bar.
+  const meter = (labelText: string, value: string, pctv: number, aria: string, color: string) => (
+    <div style={{ minWidth: 0, padding: "10px 12px", borderRadius: 12, background: "var(--app-card)", border: "1px solid var(--app-border)" }}>
+      <div style={{ fontSize: 12, color: "var(--app-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{labelText}</div>
+      <div className="tabnum" style={{ fontSize: 14, fontWeight: 700, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
+      <div role="progressbar" aria-label={aria} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pctv} style={{ height: 4, borderRadius: 2, background: "var(--app-inner)", overflow: "hidden", marginTop: 8 }}>
+        <div style={{ width: `${pctv}%`, height: "100%", background: color }} />
+      </div>
+    </div>
+  );
   return (
-    <div style={{ ...card, padding: 18, marginBottom: 16, background: `linear-gradient(135deg, ${c}14, var(--app-card) 55%)`, border: `1px solid ${c}40` }}>
-      <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-        <Crest name={guild.name} />
-        <div style={{ minWidth: 0, flex: "1 1 220px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 20, fontWeight: 800, fontFamily: font, overflowWrap: "anywhere" }}>{guild.name}</div>
+    <section aria-label={`Guild ${guild.name}`} style={{ ...card, padding: 16, marginBottom: 16, background: `linear-gradient(135deg, ${c}1f, var(--app-card) 60%)`, border: `1px solid ${c}40` }}>
+      <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+        <Crest name={guild.name} look={look} size={56} />
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, fontFamily: font, lineHeight: 1.25, overflowWrap: "anywhere" }}>{guild.name}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
             <span style={badge(ROLE_COLOR[me.role])}>{titleOf(guild, me.role)}</span>
+            <span style={{ fontSize: 12, color: "var(--app-muted)" }}>{members.length} anggota{sees ? ` · Level ${lv}` : ""}</span>
           </div>
-          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>
-            {members.length} anggota{sees ? ` · Level ${lv} · ${lunas} deal lunas${team ? "" : " (punya kamu)"}` : ""}
-          </div>
-          <div role="group" aria-label={`Anggota: ${people.map(m => `${m.name} (${titleOf(guild, m.role)})`).join(", ")}`} style={{ display: "flex", alignItems: "center", marginTop: 10 }}>
+          <div role="group" aria-label={`Anggota: ${people.map(m => `${m.name} (${titleOf(guild, m.role)})`).join(", ")}`} style={{ display: "flex", alignItems: "center", marginTop: 8 }}>
             {shown.map((m, i) => (
               <span key={m.uid} title={`${m.name} · ${titleOf(guild, m.role)}`} aria-hidden="true"
-                style={{ width: 30, height: 30, borderRadius: "50%", marginLeft: i ? -8 : 0, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff", background: ROLE_COLOR[m.role], border: "2px solid var(--app-card)" }}>
+                style={{ width: 28, height: 28, borderRadius: "50%", marginInlineStart: i ? -6 : 0, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff", background: ROLE_COLOR[m.role], border: "2px solid var(--app-card)" }}>
                 {(m.name || "?").trim()[0]?.toUpperCase()}
               </span>
             ))}
-            {people.length > shown.length && <span style={{ fontSize: 12, color: "var(--app-muted)", marginLeft: 8 }}>+{people.length - shown.length}</span>}
+            {people.length > shown.length && <span style={{ fontSize: 12, color: "var(--app-muted)", marginInlineStart: 8 }}>+{people.length - shown.length}</span>}
           </div>
         </div>
+        {onEdit && <button onClick={onEdit} aria-label="Atur lambang & nama guild" title="Atur guild" className="sp-icon-btn" style={{ ...chip, flexShrink: 0, minWidth: 44, minHeight: 44, padding: 0, fontSize: 16, alignSelf: "flex-start" }}>✎</button>}
       </div>
       {sees && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginTop: 16 }}>
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, marginBottom: 6 }}>
-              <span style={{ fontWeight: 700 }}>{monthName(month)}{team ? "" : " · kamu"}</span>
-              <span style={{ color: "var(--app-muted)" }}>{target ? `${juta(done)} dari ${juta(target)}` : `${juta(done)} lunas · belum ada target`}</span>
-            </div>
-            <div role="progressbar" aria-label="Omzet lunas bulan ini dibanding target" aria-valuemin={0} aria-valuemax={100} aria-valuenow={target ? Math.min(100, Math.round((done / target) * 100)) : 0}
-              style={{ height: 8, borderRadius: 4, background: "var(--app-inner)", overflow: "hidden" }}>
-              <div style={{ width: `${target ? Math.min(100, (done / target) * 100) : 0}%`, height: "100%", background: c }} />
-            </div>
-            <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>{(team ? tm.total.paidCount : rows.reduce((a, r) => a + r.paid, 0))} deal lunas · {(team ? tm.total.leads : rows.reduce((a, r) => a + r.leads, 0))} chat masuk</div>
-          </div>
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, marginBottom: 6 }}>
-              <span style={{ fontWeight: 700 }}>Level {lv}</span>
-              <span style={{ color: "var(--app-muted)" }}>{next ? `${lunas}/${next} deal lunas ke Level ${lv + 1}` : "Level tertinggi"}</span>
-            </div>
-            <div role="progressbar" aria-label="Menuju level berikutnya" aria-valuemin={0} aria-valuemax={100} aria-valuenow={next ? Math.round(((lunas - prev) / (next - prev)) * 100) : 100}
-              style={{ height: 8, borderRadius: 4, background: "var(--app-inner)", overflow: "hidden" }}>
-              <div style={{ width: `${next ? ((lunas - prev) / (next - prev)) * 100 : 100}%`, height: "100%", background: "#00a862" }} />
-            </div>
-            <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Level naik tiap deal tim jadi lunas.</div>
-          </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, marginTop: 14 }}>
+          {meter(`${monthName(month)}${team ? "" : " · kamu"}`, target ? `${juta(done)} / ${juta(target)}` : `${juta(done)} lunas`, monthPct, "Omzet lunas bulan ini dibanding target", c)}
+          {meter(`Level ${lv}`, next ? `${lunas}/${next} deal lunas` : "Level tertinggi", levelPct, "Menuju level berikutnya", "#00a862")}
         </div>
       )}
+    </section>
+  );
+}
+
+// ======================= Atur guild =======================
+// One sheet for how the guild looks and what it's called (QA 15 Okt: "edit
+// guild logo jelek banget"): the crest first, with a live preview — colour,
+// a symbol or an uploaded PNG logo — then the name, then the role names
+// folded away. Leader and Officer change the look; only the Leader renames.
+
+function GuildSettings({ gid, guild, me, uid, look, onClose }: { gid: string; guild: Guild; me: Member; uid: string; look: GuildLook; onClose: () => void }) {
+  const leader = me.role === "leader";
+  const first = useMemo(() => ({
+    name: guild.name, titles: Object.fromEntries(ROLES.map(r => [r, guild.titles?.[r] || ""])) as Record<Role, string>,
+    color: crestColor(guild.name, look), emblem: look.emblem || "", logo: look.logo || "",
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [f, setF] = useState(first);
+  const [msg, setMsg] = useState("");
+  const save = useSave();
+  const [close, ask] = useDiscard(JSON.stringify(f) !== JSON.stringify(first), onClose, "Perubahan guild");
+  const preview: GuildLook = { color: f.color, emblem: f.emblem, logo: f.logo };
+
+  async function pick(file?: File) {
+    setMsg("");
+    if (!file) return;
+    try { setF(x => ({ ...x, logo: "" })); const logo = await logoImage(file, 256); setF(x => ({ ...x, logo })); }
+    catch (e) { setMsg((e as Error).message); }
+  }
+  async function submit() {
+    if (!f.name.trim()) return;
+    const ok = await save.run(async () => {
+      await setDoc(doc(db, "guilds", gid, "settings", "look"), { color: f.color, emblem: f.emblem, logo: f.logo });
+      if (leader) {
+        const titles = Object.fromEntries(ROLES.map(r => [r, f.titles[r].trim()]).filter(([, t]) => t));
+        await updateDoc(doc(db, "guilds", gid), { name: f.name.trim().slice(0, 80), titles });
+        await setDoc(doc(db, "users", uid, "guilds", gid), { name: f.name.trim().slice(0, 80) }, { merge: true });
+      }
+    });
+    if (ok) onClose();
+  }
+  const section: React.CSSProperties = { marginBottom: 24 };
+  const h: React.CSSProperties = { fontSize: 14, fontWeight: 700, marginBottom: 10 };
+  const swatch = (on: boolean): React.CSSProperties => ({ width: 44, height: 44, borderRadius: "50%", cursor: "pointer", border: on ? "3px solid var(--app-text)" : "3px solid transparent", padding: 0 });
+
+  return (
+    <div className="modal-overlay" onClick={() => { if (!save.busy) close(); }}>
+      <form noValidate aria-labelledby="gs-h" onSubmit={e => { e.preventDefault(); submit(); }} onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 480 }}>
+        <div id="gs-h" style={{ fontSize: 17, fontWeight: 700, fontFamily: font, marginBottom: 16 }}>Atur guild</div>
+
+        <section aria-label="Lambang" style={section}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, padding: 14, borderRadius: 14, background: `linear-gradient(135deg, ${f.color}1f, var(--app-inner) 70%)`, marginBottom: 14 }}>
+            <Crest name={f.name || guild.name} look={preview} size={56} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, overflowWrap: "anywhere" }}>{f.name || guild.name}</div>
+              <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>Pratinjau lambang</div>
+            </div>
+          </div>
+
+          <div style={h}>Logo</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+            <label className="sp-tap" style={{ ...btnGhost, display: "inline-flex", alignItems: "center", minHeight: 44, cursor: "pointer" }}>
+              {f.logo ? "Ganti logo PNG" : "Upload logo PNG"}
+              <input type="file" accept="image/png,image/jpeg,image/webp" className="vh" onChange={e => { pick(e.target.files?.[0]); e.currentTarget.value = ""; }} style={{ position: "absolute", width: 1, height: 1, opacity: 0 }} />
+            </label>
+            {f.logo && <button type="button" onClick={() => setF({ ...f, logo: "" })} style={{ ...btnMuted, minHeight: 44 }}>Hapus logo</button>}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 16 }}>{f.logo ? "Logo dipakai di banner guild. Warna di bawah jadi bingkainya." : "Ga ada logo? Pakai perisai: pilih warna dan simbolnya."}</div>
+          {msg && <div role="alert" style={{ fontSize: 13, color: "var(--hot)", marginBottom: 12 }}>{msg}</div>}
+
+          <div style={h}>Warna</div>
+          <div role="radiogroup" aria-label="Warna lambang" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+            {CREST.map(c => (
+              <button key={c} type="button" role="radio" aria-checked={f.color === c} aria-label={`Warna ${c}`} onClick={() => setF({ ...f, color: c })}
+                style={{ ...swatch(f.color === c), background: c, boxShadow: "inset 0 0 0 2px var(--app-card)" }} />
+            ))}
+          </div>
+
+          {!f.logo && (
+            <>
+              <div style={h}>Simbol</div>
+              <div role="radiogroup" aria-label="Simbol lambang" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {["", ...EMBLEMS].map(e => (
+                  <button key={e || "init"} type="button" role="radio" aria-checked={f.emblem === e} aria-label={e ? `Simbol ${e}` : "Inisial nama"} onClick={() => setF({ ...f, emblem: e })}
+                    style={{ ...chip, minWidth: 48, minHeight: 48, fontSize: e ? 22 : 14, fontWeight: 800, color: f.color, ...(f.emblem === e ? { border: `2px solid ${f.color}`, background: `${f.color}14` } : {}) }}>
+                    {e || initials(f.name || guild.name)}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+
+        {leader ? (
+          <>
+            <section aria-label="Nama" style={section}>
+              <label htmlFor="gs-name" style={label}>Nama guild</label>
+              <input id="gs-name" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} maxLength={80} style={inputStyle} />
+            </section>
+            <details style={{ marginBottom: 8 }}>
+              <summary style={{ cursor: "pointer", fontSize: 14, fontWeight: 700, minHeight: 44, display: "flex", alignItems: "center" }}>Nama peran (opsional)</summary>
+              <div style={{ fontSize: 12, color: "var(--app-muted)", margin: "4px 0 12px" }}>Ganti sesuai istilah tim, mis. Officer jadi Supervisor. Hak aksesnya tetap.</div>
+              {ROLES.map(r => (
+                <div key={r} style={{ marginBottom: 12 }}>
+                  <label htmlFor={`gs-${r}`} style={label}>{titleOf(null, r)}</label>
+                  <input id={`gs-${r}`} value={f.titles[r]} onChange={e => setF({ ...f, titles: { ...f.titles, [r]: e.target.value } })} placeholder={titleOf(null, r)} maxLength={30} style={inputStyle} />
+                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>{ROLE_HINT[r]}</div>
+                </div>
+              ))}
+            </details>
+          </>
+        ) : <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>Nama guild & nama peran diatur Leader.</div>}
+
+        <FormNote why={f.name.trim() ? "" : "Nama guild ga boleh kosong."} err={save.err} />
+        <div className="sp-form-foot">
+          <button type="button" onClick={close} disabled={save.busy} style={btnMuted}>Batal</button>
+          <button type="submit" disabled={!f.name.trim() || save.busy} style={{ ...btnPrimary, opacity: f.name.trim() && !save.busy ? 1 : 0.5 }}>{save.busy ? "Menyimpan…" : "Simpan"}</button>
+        </div>
+      </form>
+      {ask}
     </div>
   );
 }
@@ -456,21 +599,17 @@ function TeamReport({ gid, guild, me, members, deals, targets, reports }: { gid:
 
 // ======================= Anggota =======================
 
-function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild: Guild; me: Member; members: Member[]; invites: Invite[]; uid: string }) {
+function Members({ gid, guild, me, members, invites, uid, onSettings }: { gid: string; guild: Guild; me: Member; members: Member[]; invites: Invite[]; uid: string; onSettings?: () => void }) {
   const [inviteRole, setInviteRole] = useState<Role>(invitable(me.role).includes("member") ? "member" : invitable(me.role)[0] || "member");
   const [link, setLink] = useState("");
   const [copied, setCopied] = useState(false);
-  const [settings, setSettings] = useState<{ name: string; titles: Record<Role, string> } | null>(null);
   const [handover, setHandover] = useState<string | null>(null);
   const [kicking, setKicking] = useState<Member | null>(null);
   const [leaving, setLeaving] = useState(false);
   const [copyMsg, setCopyMsg] = useState("");
   const [roleErr, setRoleErr] = useState("");
   const [inviting, setInviting] = useState(false);
-  const setSave = useSave();
   const hoSave = useSave();
-  const startSettings = useMemo(() => settings ? JSON.stringify(settings) : "", [settings === null]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [closeSettings, settingsAsk] = useDiscard(!!settings && JSON.stringify(settings) !== startSettings, () => setSettings(null), "Perubahan guild");
   const sorted = [...members].sort((a, b) => ROLES.indexOf(a.role) - ROLES.indexOf(b.role) || a.name.localeCompare(b.name));
   const live = invites.filter(i => i.expiresAt > Date.now()).sort((a, b) => b.createdAt - a.createdAt);
   const leader = me.role === "leader";
@@ -508,16 +647,6 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
     try { await navigator.clipboard.writeText(link); setCopied(true); setCopyMsg(""); setTimeout(() => setCopied(false), 2000); }
     catch { setCopyMsg("Ga bisa nyalin otomatis. Tekan lama link di atas, lalu Salin."); }
   }
-  async function saveSettings() {
-    if (!settings || !settings.name.trim()) return;
-    const st = settings;
-    const titles = Object.fromEntries(ROLES.map(r => [r, st.titles[r].trim()]).filter(([, t]) => t));
-    const ok = await setSave.run(async () => {
-      await updateDoc(doc(db, "guilds", gid), { name: st.name.trim().slice(0, 80), titles });
-      await setDoc(doc(db, "users", uid, "guilds", gid), { name: st.name.trim().slice(0, 80) }, { merge: true });
-    });
-    if (ok) setSettings(null);
-  }
   async function leave() {
     await logActivity(gid, by, "left");
     await leaveGuild(gid, uid);
@@ -538,8 +667,9 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
         {sorted.map(m => {
           const options = rolesFor(m);
           return (
-            <div key={m.uid} className="sp-member" style={{ ...card, padding: "11px 14px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ minWidth: 0, flex: "1 1 180px" }}>
+            <div key={m.uid} className="sp-member" style={{ ...card, padding: "12px 14px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+              <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: "50%", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800, color: "#fff", background: ROLE_COLOR[m.role] }}>{(m.name || "?").trim()[0]?.toUpperCase()}</span>
+              <div style={{ minWidth: 0, flex: "1 1 160px" }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}{m.uid === me.uid ? " (kamu)" : ""}</div>
                 <div style={{ fontSize: 12, color: "var(--app-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.email}</div>
               </div>
@@ -598,7 +728,7 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
       )}
 
       <div className="sp-actions">
-        {leader && <button onClick={() => { setSave.reset(); setSettings({ name: guild.name, titles: Object.fromEntries(ROLES.map(r => [r, guild.titles?.[r] || ""])) as Record<Role, string> }); }} style={btnGhost}>Atur guild & nama peran</button>}
+        {isManager(me.role) && onSettings && <button onClick={onSettings} style={btnGhost}>{leader ? "Atur guild & nama peran" : "Atur lambang guild"}</button>}
         {leader && members.length > 1 && <button onClick={() => { hoSave.reset(); setHandover(""); }} style={btnGhost}>Serahkan Leader</button>}
         {!leader && <button onClick={() => setLeaving(true)} style={{ ...btnMuted, color: "color-mix(in srgb, #dc2626 70%, var(--app-text))" }}>Keluar dari guild</button>}
       </div>
@@ -612,30 +742,6 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
         <ConfirmSheet title={`Keluar dari ${guild.name}?`} action="Keluar" busyLabel="Keluar…" onConfirm={leave} onClose={() => setLeaving(false)}>
           Deal milik kamu tetap ada di guild. Buat balik lagi, minta link undangan baru.
         </ConfirmSheet>
-      )}
-
-      {settings && (
-        <div className="modal-overlay" onClick={() => { if (!setSave.busy) closeSettings(); }}>
-          <form onSubmit={e => { e.preventDefault(); saveSettings(); }} onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 440 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 16 }}>Atur guild</div>
-            <label htmlFor="gs-name" style={label}>Nama guild</label>
-            <input id="gs-name" value={settings.name} onChange={e => setSettings({ ...settings, name: e.target.value })} maxLength={80} style={{ ...inputStyle, marginBottom: 14 }} />
-            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>Nama peran</div>
-            <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 10 }}>Ganti sesuai istilah tim kamu (mis. Officer → Supervisor). Hak aksesnya tetap.</div>
-            {ROLES.map(r => (
-              <div key={r} style={{ marginBottom: 8 }}>
-                <label htmlFor={`gs-${r}`} style={label}>{r === "leader" ? "Leader" : r === "officer" ? "Officer" : r === "member" ? "Member" : "Viewer"} — {ROLE_HINT[r]}</label>
-                <input id={`gs-${r}`} value={settings.titles[r]} onChange={e => setSettings({ ...settings, titles: { ...settings.titles, [r]: e.target.value } })} placeholder={titleOf(null, r)} maxLength={30} style={inputStyle} />
-              </div>
-            ))}
-            <FormNote why={settings.name.trim() ? "" : "Nama guild ga boleh kosong."} err={setSave.err} />
-            <div className="sp-form-foot">
-              <button type="button" onClick={closeSettings} disabled={setSave.busy} style={btnMuted}>Batal</button>
-              <button type="submit" disabled={!settings.name.trim() || setSave.busy} style={{ ...btnPrimary, opacity: settings.name.trim() && !setSave.busy ? 1 : 0.5 }}>{setSave.busy ? "Menyimpan…" : "Simpan"}</button>
-            </div>
-          </form>
-          {settingsAsk}
-        </div>
       )}
 
       {handover !== null && (

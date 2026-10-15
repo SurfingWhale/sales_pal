@@ -59,7 +59,8 @@ export default function MoveToGuild({ me, guild, role, onUseGuild }: {
     }
   }
 
-  if (!counts && !moved && !msg) return null;
+  // Nothing left in Pribadi and nothing moved: no card (it only took room).
+  if (!total && !moved && !msg) return null;
   return (
     <section aria-label="Data pribadi kamu" style={{ ...card, padding: 16, marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

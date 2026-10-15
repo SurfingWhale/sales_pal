@@ -1305,6 +1305,21 @@ export const flows = [
         await modal(page).getByRole("button", { name: "Bikin guild" }).click();
         await expectText(page, "Undang orang");
       });
+      await t.step("the crest: colour and symbol, then a PNG logo, from the banner", async () => {
+        await page.getByRole("button", { name: "Atur lambang & nama guild" }).click();
+        const sheet = page.getByRole("dialog", { name: "Atur guild" });
+        await sheet.getByRole("radiogroup", { name: "Warna lambang" }).getByRole("radio").nth(2).click();
+        await sheet.getByRole("radio", { name: "Simbol 🦁" }).click();
+        await sheet.getByRole("button", { name: "Simpan" }).click();
+        await sheet.waitFor({ state: "detached" });
+        await page.getByRole("region", { name: "Guild Tim Uji" }).getByRole("img", { name: "Lambang Tim Uji" }).getByText("🦁").waitFor();
+        await page.getByRole("button", { name: "Atur lambang & nama guild" }).click();
+        await sheet.locator('input[type="file"]').setInputFiles(new URL("../../public/brand-logos/visufavor.png", import.meta.url).pathname);
+        await sheet.getByRole("img", { name: "Logo Tim Uji" }).waitFor();
+        await sheet.getByRole("button", { name: "Simpan" }).click();
+        await sheet.waitFor({ state: "detached" });
+        await page.getByRole("region", { name: "Guild Tim Uji" }).getByRole("img", { name: "Logo Tim Uji" }).waitFor();
+      });
       await t.step("leader makes a member invite link", async () => {
         await page.locator("#inv-role").selectOption("member");
         await page.getByRole("button", { name: "Bikin link undangan" }).click();
