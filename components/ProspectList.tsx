@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { setDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { addDays, longDate, today } from "@/lib/billing";
+import { addDays, daysBetween, longDate, today } from "@/lib/billing";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import { Hunt, platformSource } from "@/lib/hunting";
 import { objections } from "@/lib/salespal-data";
@@ -47,6 +47,28 @@ function Bubble({ e }: { e: ProspectEvent }) {
   );
 }
 
+// The journey at a glance: ID, how long since the last touch, how many tries,
+// how long they took to answer, and which campaigns already reached them.
+function Summary({ p, on }: { p: Prospect; on: string }) {
+  const h = p.history || [];
+  const sent = h.filter(e => e.kind === "sent");
+  const camps = Array.from(new Set(sent.map(e => e.campaign).filter(Boolean)));
+  const since = p.lastSentAt ? daysBetween(p.lastSentAt, on) : null;
+  const facts = [
+    `ID ${p.id}`,
+    sent.length ? `${sent.length} pesan` : "belum dikirimi",
+    since !== null ? `kontak terakhir ${since === 0 ? "hari ini" : `${since} hari lalu`}` : "",
+    p.firstReplyAt && p.firstSentAt ? `bales pertama ${daysBetween(p.firstSentAt, p.firstReplyAt)} hari setelah intro${p.attemptsToReply ? ` (kiriman ke-${p.attemptsToReply})` : ""}` : "",
+    p.convertedAt ? `jadi ETB ${longDate(p.convertedAt)}` : "",
+  ].filter(Boolean);
+  return (
+    <div style={{ fontSize: 12, color: "var(--app-sub)", padding: "8px 10px", borderRadius: 10, background: "var(--app-inner)", marginBottom: 8, lineHeight: 1.6 }}>
+      {facts.join(" · ")}
+      <div style={{ color: "var(--app-muted)" }}>Kampanye yang udah diterima: {camps.length ? camps.join(", ") : "belum ada"}</div>
+    </div>
+  );
+}
+
 export default function ProspectList({ prospects, ready, hunts, strategy, sessionId, filter, setFilter, onCompose }: {
   prospects: Prospect[]; ready: boolean; hunts: Hunt[]; strategy: Strategy; sessionId?: string;
   filter: ProspectFilter; setFilter: (f: ProspectFilter) => void; onCompose: (p: Prospect) => void;
@@ -59,6 +81,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   const [limit, setLimit] = useState(PAGE);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [search, setSearch] = useState("");
   const on = today();
 
   useEffect(() => {
@@ -77,7 +100,12 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
       default: return false;
     }
   });
-  const shown = filter === "DNC"
+  // Search by ID, @username or name, across every journey, whatever the filter.
+  const needle = search.trim().toLowerCase().replace(/^@/, "");
+  const hit = (p: Prospect) => [p.id, p.handle, p.name || ""].some(x => x.toLowerCase().replace(/^@/, "").includes(needle));
+  const shown = needle
+    ? [...rows, ...(closed || []).map(p => ({ p, v: view(p, on, strategy) }))].filter(({ p }) => hit(p))
+    : filter === "DNC"
     ? (closed || []).map(p => ({ p, v: view(p, on, strategy) }))
     : inFilter(filter).sort((a, b) => filter === "Antrian" ? (a.v.due || "").localeCompare(b.v.due || "") : b.p.updatedAt - a.p.updatedAt);
   const unlinked = hunts.filter(h => !h.prospectId && h.target?.trim());
@@ -183,6 +211,10 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
       )}
       <div role="status" style={{ fontSize: 12, color: "var(--app-sub)", marginBottom: msg ? 10 : 0 }}>{msg}</div>
 
+      <input type="search" value={search} onChange={e => { setSearch(e.target.value); setLimit(PAGE); }} aria-label="Cari prospek pakai ID atau @username"
+        placeholder="Cari ID, @username, atau nama" style={{ ...inputStyle, fontSize: 16, marginBottom: 10 }} />
+      {needle && <div role="status" style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>{shown.length} ketemu buat “{search.trim()}” di semua journey.</div>}
+
       <div role="group" aria-label="Saring prospek" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6, marginBottom: 6 }}>
         {FILTERS.map(f => {
           const n = count(f);
@@ -195,7 +227,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
         })}
       </div>
 
-      {ready && shown.length === 0 && (
+      {ready && shown.length === 0 && !needle && (
         <div style={{ fontSize: 12, color: "var(--app-muted)", padding: "14px 0" }}>
           {filter === "Antrian" ? "Antrian kosong. Share post Threads ke SalesPal atau tempel link-nya buat nambah prospek."
             : filter === "DNC" ? (closed ? "Belum ada yang minta ga dihubungi." : "Memuat…")
@@ -227,6 +259,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
 
             {open && (
               <div role="region" aria-label={`Riwayat ${who}`} style={{ marginTop: 10 }}>
+                <Summary p={p} on={on} />
                 {p.context && (p.context.need || p.context.when || p.context.where) && (
                   <div style={{ fontSize: 12, color: "var(--app-sub)", marginBottom: 6 }}>
                     {[p.context.need && `Butuh ${p.context.need}`, p.context.when, p.context.where, p.context.budget].filter(Boolean).join(" · ")}

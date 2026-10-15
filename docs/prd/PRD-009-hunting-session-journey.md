@@ -360,3 +360,24 @@ Dari uji pertama: template masih satu tumpukan, ga ada panduan bikin pesan yang 
 - **D3:** Default 3 percobaan, follow-up H+2 lalu H+7, parkir 60 hari (Tidak terhubung) & 90 hari (Tidak tertarik); Pikir-pikir follow-up +3 hari, Hubungi nanti default +7 hari. Bisa diubah lewat `settings/hunting.strategy`.
 - **D4:** Belum dijawab owner → dua-duanya: share target Android + tombol 📋 buat semua HP.
 - **D5:** Ya.
+
+## 15. Masukan QA 11 Okt 2026 (Notion "Feedback QA Test Sun 11 2026") — dibangun 2026-10-15
+
+| Masukan | Yang dibangun |
+|---|---|
+| Kartu target (post + konteks) hilang tiap habis Copy/Kirim WA, padahal masih jadi panduan | Target **tetap di layar** setelah kirim; tombol **×** di kolom Target buat ganti orang |
+| "Tempel link" minta izin paste lagi | Di desktop: tempel (⌘V) langsung ke kolom Target, tanpa prompt browser; tombol 📋 cuma muncul di HP (`.touch-only`) |
+| Target hasil scrape perlu ID dan ikon simpan | Kartu prospek nunjukin **✓ Tersimpan · ID `{platform}_{username}`** (tap = salin). Target yang diketik manual dapet tombol **＋ Simpan ke journey** |
+| Cari pakai UID → riwayat, status terakhir, udah berapa hari di-follow-up, kampanye apa aja | Journey prospek: kolom **Cari ID, @username, atau nama** (lintas filter, termasuk DNC yang udah dimuat). Tiap journey dibuka dengan ringkasan: ID, jumlah pesan, kontak terakhir N hari lalu, bales pertama berapa hari setelah intro, kampanye yang udah diterima |
+| Log DM: ga jelas kapan DM, tombol ikon (💬 ✅ ❌ 👻) ga kebaca, ga bilang langkah berikutnya | Tiap baris: **"DM/balas di post {tanggal} {jam}"**, "dibales N hari kemudian" (`hunts.statusAt`), **satu kalimat langkah berikutnya** per status, tombol berlabel ("Ubah jadi: 💬 Dibales · ✅ Tertarik · ❌ Ditolak · 👻 Ga dibales"), plus **↪ Rekomendasiin orang** (dihitung dibales, orang barunya langsung jadi target) |
+| "Ada lead tanggal 24 — hari apa, dan gw udah ada job belum?" | `lib/when.ts` baca "tgl 24 / besok / sabtu depan / 31 Okt" jadi tanggal; kartu prospek nunjukin **Sabtu, 24 Okt 2026 · kosong / udah ada N job** + **kalender bulan** (`components/JobCalendar.tsx`). Job = **Tanggal acara** baru di Penawaran & Invoice. Tanggal bisa dipasang manual di Ubah konteks |
+
+Masukan Jualan & Report di halaman yang sama (dibangun bareng):
+
+| Masukan | Yang dibangun |
+|---|---|
+| "Masuk bulan ini Rp 450.000, padahal transaksinya bulan lalu" | Angka itu memang dihitung dari **tanggal pembayaran**; yang salah tanggal pembayarannya (default hari ini). Kartu **Masuk {bulan}** sekarang bisa dibuka: tiap pembayaran + tanggalnya, **tanggal bisa diganti** di situ atau di kartu invoice. Form Catat pembayaran: label **Tanggal uang masuk** + kalimat "masuk hitungan bulan …" |
+| PDF invoice: belum ada logo, jasa apa, T&C; deskripsi item ga ada, jadi semua ditulis di keterangan | **Kop & logo** (`components/BusinessEditor.tsx`, dari Paket atau langsung dari layar cetak): logo PNG (diperkecil, disimpan di `settings/business.logo`), nama, **Jasa apa**, kontak, alamat, rekening, **Syarat & ketentuan** (bagian sendiri di PDF). Item punya **Rincian** (ikut dari deskripsi Paket), dicetak di bawah nama item. **Tanggal acara** dicetak. Layar cetak ngingetin kalau kop masih kosong. Tombol Simpan penawaran bilang kenapa belum bisa |
+| Report Klien kosong padahal ada invoice; harusnya penjualan tim kebaca | Kartu **Penjualan {bulan}** di atas Report Klien (`components/SalesReport.tsx`): uang masuk, ditagih, penawaran disetujui X dari Y, invoice lunas; tabel **per klien**, dan **per sales** buat Leader/Officer guild; rincian uang masuk; pindah bulan. Report Klien (klien yang sosmednya dipegang) tetap di bawahnya, dengan penjelasan bedanya |
+
+Ga ada koleksi atau aturan Firestore baru (`statusAt`, `eventDate`, `description`, `logo`, `tagline`, `address` = field di dokumen yang udah ada). Flow: hunting (ID, log berlabel, paste desktop), journey (kalender, cari ID), sell (rincian uang masuk, kop di PDF, Penjualan di Report Klien).
