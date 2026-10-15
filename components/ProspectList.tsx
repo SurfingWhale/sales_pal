@@ -41,7 +41,7 @@ function Bubble({ e }: { e: ProspectEvent }) {
       <div style={{ maxWidth: "85%", padding: "8px 12px", borderRadius: 12, background: mine ? "#005eb014" : "var(--app-inner)", border: `1px solid ${mine ? "#005eb040" : "var(--app-border)"}` }}>
         <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 3 }}>{head} · {when(e.at)}</div>
         <div style={{ fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{e.text || (e.kind === "reply" ? "(dibales)" : "(isi pesan ga tercatat)")}</div>
-        {e.kind === "post" && e.url && <a href={e.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "var(--brand-text)" }}>Buka post ↗</a>}
+        {e.kind === "post" && e.url && <a href={e.url} target="_blank" rel="noreferrer" className="sp-tap" style={{ display: "inline-flex", alignItems: "center", padding: "4px 0", fontSize: 12, color: "var(--brand-text)" }}>Buka post ↗</a>}
       </div>
     </div>
   );
@@ -274,19 +274,19 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                 {v.status === "dnc" ? (
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
                     <span style={{ fontSize: 12, color: "var(--app-sub)" }}>Minta ga dihubungi sejak {p.dncAt ? longDate(p.dncAt) : "—"}{p.remark ? ` · ${p.remark}` : ""}.</span>
-                    <button onClick={async () => { if (confirm(`Hapus ${who} dari daftar Jangan dihubungi? Kalau post-nya di-share lagi, dia masuk sebagai prospek baru.`)) { await removeProspect(space, p); setClosed(null); } }} style={chip}>Hapus dari daftar</button>
+                    <button onClick={async () => { if (confirm(`Hapus ${who} dari daftar Jangan dihubungi? Kalau post-nya di-share lagi, dia masuk sebagai prospek baru.`)) { await removeProspect(space, p); setClosed(null); } }} style={{ ...chip, minHeight: 36 }}>Hapus dari daftar</button>
                   </div>
                 ) : (
                   <>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
                       <button onClick={() => onCompose(p)} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>{v.status === "baru" ? "✉ Kirim intro" : v.status === "belum" ? "↻ Follow-up" : "✉ Kirim pesan"}</button>
                       <button onClick={() => setEditing({ id: p.id, kind: "reply", text: "", date: "" })} aria-pressed={ed?.kind === "reply"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Dibales</button>
-                      {(post?.url || p.url) && <a href={post?.url || p.url} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>{post?.url ? "Buka post ↗" : "Buka profil ↗"}</a>}
+                      {(post?.url || p.url) && <a href={post?.url || p.url} target="_blank" rel="noreferrer" className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>{post?.url ? "Buka post ↗" : "Buka profil ↗"}</a>}
                       <button onClick={() => setEditing({ id: p.id, kind: "note", text: "", date: "" })} style={{ ...chip, minHeight: 36 }}>📝 Catatan</button>
-                      <button onClick={async () => { if (confirm(`Hapus journey ${who}? Log DM-nya tetap ada.`)) await removeProspect(space, p); }} aria-label={`Hapus journey ${who}`} style={{ ...chip, minHeight: 36, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🗑</button>
+                      <button onClick={async () => { if (confirm(`Hapus journey ${who}? Log DM-nya tetap ada.`)) await removeProspect(space, p); }} aria-label={`Hapus journey ${who}`} style={{ ...chip, minHeight: 36, marginLeft: "auto", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🗑 Hapus</button>
                     </div>
                     <div style={{ fontSize: 12, color: "var(--app-muted)", margin: "10px 0 6px" }}>Hasil (otomatis dihitung dibales)</div>
-                    <div role="group" aria-label={`Hasil untuk ${who}`} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <div role="group" aria-label={`Hasil untuk ${who}`} className="sp-choice-grid">
                       <button disabled={busy} onClick={() => mark(p, "tertarik")} aria-pressed={p.result === "tertarik"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>✅ Tertarik</button>
                       <button disabled={busy} onClick={() => mark(p, "pikir")} aria-pressed={p.result === "pikir"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>🤔 Pikir-pikir</button>
                       <button disabled={busy} onClick={() => setEditing({ id: p.id, kind: "nanti", text: "", date: addDays(on, 7) })} aria-pressed={p.result === "nanti"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>⏳ Hubungi nanti</button>
@@ -298,18 +298,19 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                 )}
 
                 {ed && (
-                  <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)" }}>
+                  <div onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setEditing(null); } }}
+                    style={{ marginTop: 10, padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)" }}>
                     {ed.kind === "reply" && <>
                       <label htmlFor={`reply-${p.id}`} style={label}>Tempel balasannya (opsional)</label>
                       <textarea id={`reply-${p.id}`} autoFocus value={ed.text} onChange={e => setEditing({ ...ed, text: e.target.value })} placeholder="mis. Boleh kak, pricelist-nya berapa?" style={{ ...inputStyle, fontSize: 16, height: 72, resize: "vertical" }} />
                     </>}
                     {ed.kind === "note" && <>
                       <label htmlFor={`note-${p.id}`} style={label}>Catatan</label>
-                      <input id={`note-${p.id}`} autoFocus value={ed.text} onChange={e => setEditing({ ...ed, text: e.target.value })} style={{ ...inputStyle, fontSize: 16 }} />
+                      <input id={`note-${p.id}`} autoFocus value={ed.text} onChange={e => setEditing({ ...ed, text: e.target.value })} placeholder="mis. minta dihubungi lagi habis lebaran" style={{ ...inputStyle, fontSize: 16, minHeight: 44 }} />
                     </>}
                     {ed.kind === "nanti" && <>
                       <label htmlFor={`nanti-${p.id}`} style={label}>Hubungi lagi tanggal</label>
-                      <input id={`nanti-${p.id}`} type="date" value={ed.date} min={on} onChange={e => setEditing({ ...ed, date: e.target.value })} style={{ ...inputStyle, fontSize: 16, maxWidth: 220 }} />
+                      <input id={`nanti-${p.id}`} type="date" value={ed.date} min={on} onChange={e => setEditing({ ...ed, date: e.target.value })} style={{ ...inputStyle, fontSize: 16, minHeight: 44, maxWidth: 240 }} />
                     </>}
                     {(ed.kind === "tolak" || ed.kind === "dnc") && <>
                       {ed.kind === "tolak" && (
@@ -321,9 +322,10 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                       )}
                       {ed.kind === "dnc" && <div style={{ fontSize: 12, color: "var(--app-sub)", marginBottom: 8 }}>Dikunci selamanya: ga muncul di antrian & kampanye. Riwayat percakapannya dihapus, yang disimpan cuma username + tanggal.</div>}
                       <label htmlFor={`why-${p.id}`} style={label}>{ed.kind === "tolak" ? "Alasan (bebas)" : "Alasan (opsional)"}</label>
-                      <input id={`why-${p.id}`} autoFocus value={ed.text} onChange={e => setEditing({ ...ed, text: e.target.value })} style={{ ...inputStyle, fontSize: 16 }} />
+                      <input id={`why-${p.id}`} autoFocus value={ed.text} onChange={e => setEditing({ ...ed, text: e.target.value })} style={{ ...inputStyle, fontSize: 16, minHeight: 44 }} />
                     </>}
-                    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 10 }}>
+                      <button onClick={() => setEditing(null)} style={{ ...btnMuted, minHeight: 44, padding: "8px 16px" }}>Batal</button>
                       <button disabled={busy} onClick={() => {
                         const c = ctx(sessionId);
                         if (ed.kind === "reply") return act(p, replyPatch(p, ed.text, c), firstAnswer(p));
@@ -331,8 +333,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                         if (ed.kind === "nanti") return mark(p, "nanti", { nextAt: ed.date || addDays(on, 7) });
                         if (ed.kind === "tolak") return mark(p, "tolak", { remark: ed.text });
                         return lockDnc(p, ed.text);
-                      }} style={{ ...btnPrimary, padding: "8px 14px", ...(ed.kind === "dnc" ? { background: "#c62828" } : {}) }}>{ed.kind === "dnc" ? "Kunci" : "Simpan"}</button>
-                      <button onClick={() => setEditing(null)} style={{ ...btnMuted, padding: "8px 14px" }}>Batal</button>
+                      }} style={{ ...btnPrimary, minHeight: 44, padding: "8px 16px", opacity: busy ? 0.7 : 1, ...(ed.kind === "dnc" ? { background: "#c62828" } : {}) }}>{busy ? "Menyimpan…" : ed.kind === "dnc" ? "Kunci" : "Simpan"}</button>
                     </div>
                   </div>
                 )}
@@ -357,8 +358,8 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
             <label htmlFor="cv-note" style={label}>Catatan</label>
             <input id="cv-note" value={converting.note} onChange={e => setConverting({ ...converting, note: e.target.value })} placeholder="mis. butuh foto 20 menu, minggu depan" style={{ ...inputStyle, fontSize: 16, marginBottom: 16 }} />
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={convert} disabled={busy || !(converting.phone.trim() || converting.email.trim())} style={{ ...btnPrimary, opacity: converting.phone.trim() || converting.email.trim() ? 1 : 0.5 }}>Simpan jadi Lead</button>
-              <button onClick={() => setConverting(null)} style={btnMuted}>Batal</button>
+              <button onClick={() => setConverting(null)} style={{ ...btnMuted, flex: 1, minHeight: 44 }}>Batal</button>
+              <button onClick={convert} disabled={busy || !(converting.phone.trim() || converting.email.trim())} style={{ ...btnPrimary, flex: 1, minHeight: 44, opacity: converting.phone.trim() || converting.email.trim() ? 1 : 0.5 }}>{busy ? "Menyimpan…" : "Simpan jadi Lead"}</button>
             </div>
             {!(converting.phone.trim() || converting.email.trim()) && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 8 }}>Isi WhatsApp atau email — itu yang bikin dia dihitung konversi.</div>}
           </div>

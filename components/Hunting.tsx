@@ -1,6 +1,6 @@
 "use client";
 
-import { type Dispatch, type SetStateAction, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type CSSProperties, type Dispatch, type SetStateAction, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { deleteDoc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { Invoice, Quote, addDays, daysBetween, longDate, today, useBusiness, useSpaceCollection } from "@/lib/billing";
 import { jobsFrom } from "@/components/JobCalendar";
@@ -23,9 +23,12 @@ import {
   threadsPostLink, view,
 } from "@/lib/prospects";
 import { HuntInbox, bump, createProspect, ctx, recordSend, saveProspect, unfurl, useHuntInbox } from "@/lib/prospectStore";
-import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, subheading } from "@/components/ui";
+import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
 type Filter = "Semua" | "Follow-up" | "Tertarik";
+// An inline editor under a log row: the field on its own line, Batal beside the action.
+const inlineEditor: CSSProperties = { marginTop: 10, padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)" };
+const editorButtons: CSSProperties = { display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap", marginTop: 10 };
 const PAGE = 30;
 
 export interface HuntingSession {
@@ -61,6 +64,10 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   const [pasteMsg, setPasteMsg] = useState("");
   const [referring, setReferring] = useState<{ id: string; who: string } | null>(null);
   const [savingTarget, setSavingTarget] = useState(false);
+  // "Ubah target": a small sheet with Batal/Simpan instead of the browser's prompt().
+  const [goalDraft, setGoalDraft] = useState<string | null>(null);
+  const [goalError, setGoalError] = useState("");
+  const [savingGoal, setSavingGoal] = useState(false);
   const jobs = jobsFrom(useSpaceCollection<Quote>(space, "quotes"), useSpaceCollection<Invoice>(space, "invoices"));
   const targetRef = useRef<HTMLInputElement>(null);
   const topicsRef = useRef<HTMLDivElement>(null);
@@ -347,19 +354,30 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     targetRef.current?.focus();
   }
 
-  async function changeGoal() {
+  function changeGoal() {
     if (!canEdit) return;
-    const v = prompt("Target DM per hari?", String(goal));
-    const n = parseInt(v || "", 10);
-    if (!n || n < 1) return;
-    await setDoc(spaceDoc(space, "settings", "hunting"), { dailyGoal: n }, { merge: true });
+    setGoalError("");
+    setGoalDraft(String(goal));
+  }
+  async function saveGoal() {
+    const n = parseInt(goalDraft || "", 10);
+    if (!(n > 0)) { setGoalError("Isi jumlah DM, minimal 1."); return; }
+    setSavingGoal(true);
+    try {
+      await setDoc(spaceDoc(space, "settings", "hunting"), { dailyGoal: n }, { merge: true });
+      setGoalDraft(null);
+    } catch {
+      setGoalError("Gagal nyimpen. Di guild, target diatur Leader atau Officer.");
+    } finally {
+      setSavingGoal(false);
+    }
   }
 
   const progress = Math.min(1, sentToday / goal);
   const lastSession = journey.sessions.find(x => x.endedAt) || null;
 
   return (
-    <div>
+    <div className="sp-hunt">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
         <div style={{ minWidth: 0, flex: "1 1 240px" }}>
           <div style={heading}>Hunting Mode</div>
@@ -378,13 +396,13 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
 
       {/* Today at a glance */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 20 }}>
-        <button onClick={changeGoal} aria-label={`Hari ini ${sentToday} dari ${goal} DM. Ubah target harian`} style={{ ...card, padding: 12, textAlign: "left", cursor: "pointer", color: "inherit", fontFamily: font }}>
+        <button onClick={changeGoal} disabled={!canEdit} aria-label={`Hari ini ${sentToday} dari ${goal} DM. ${canEdit ? "Ubah target harian" : "Target harian diatur Leader atau Officer"}`} style={{ ...card, padding: 12, textAlign: "left", cursor: canEdit ? "pointer" : "default", color: "inherit", fontFamily: font }}>
           <div style={{ fontSize: 22, fontWeight: 700, color: progress >= 1 ? "var(--ok)" : "#005eb0" }}>{sentToday}<span style={{ fontSize: 13, color: "var(--app-muted)", fontWeight: 600 }}> / {goal}</span></div>
           <div style={{ fontSize: 12, fontWeight: 700, marginTop: 2 }}>DM hari ini</div>
           <div style={{ height: 4, background: "var(--app-inner)", borderRadius: 2, marginTop: 10, overflow: "hidden" }}>
             <div style={{ width: `${progress * 100}%`, height: "100%", background: progress >= 1 ? "var(--ok)" : "#005eb0" }} />
           </div>
-          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>{progress >= 1 ? "Tercapai 🎯" : "Ubah target"}</div>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>{progress >= 1 ? "Tercapai 🎯" : canEdit ? "✎ Ubah target" : "Target tim"}</div>
         </button>
         <div style={{ ...card, padding: 12 }}>
           <div style={{ fontSize: 22, fontWeight: 700, color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))" }}>{week.length ? pct(weekReplied / week.length) : "—"}</div>
@@ -407,10 +425,15 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
           <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
             <input id="hunt-target" ref={targetRef} value={target}
               onPaste={e => { const v = e.clipboardData.getData("text"); if (/https?:\/\//.test(v) && apply(v)) e.preventDefault(); }}
-              onChange={e => { const v = e.target.value; if (!(/https?:\/\//.test(v) && apply(v))) { setTarget(v); if (!v) setUrl(""); } }}
-              placeholder="Tempel link post/profil di sini, atau @akun" autoComplete="off" style={{ ...inputStyle, fontSize: 16, paddingRight: target ? 40 : undefined }} />
+              onChange={e => {
+                const v = e.target.value;
+                if (/https?:\/\//.test(v) && apply(v)) return;
+                // Typed by hand: the last person's link and post don't belong to this name.
+                setTarget(v); setUrl(""); setSource({ kind: "manual" }); setChannel("dm");
+              }}
+              placeholder="Tempel link post/profil di sini, atau @akun" autoComplete="off" style={{ ...inputStyle, fontSize: 16, paddingRight: target ? 44 : undefined, minHeight: 44 }} />
             {target && <button onClick={clearTarget} aria-label="Target lain (kosongin)" title="Target lain"
-              style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", width: 36, height: 36, border: "none", background: "none", color: "var(--app-muted)", fontSize: 18, cursor: "pointer" }}>×</button>}
+              style={{ position: "absolute", right: 2, top: "50%", transform: "translateY(-50%)", width: 40, height: 40, border: "none", background: "none", color: "var(--app-muted)", fontSize: 18, cursor: "pointer" }}>×</button>}
           </div>
           {/* Phones can't paste into a field as easily; a mouse and keyboard can (⌘V), with no extra prompt. */}
           <button onClick={pasteLink} className="touch-only" aria-label="Tempel link profil dari clipboard" style={{ ...chip, flexShrink: 0, minHeight: 44, padding: "0 12px", fontSize: 12, fontWeight: 700, color: "var(--app-text)" }}>📋 Tempel link</button>
@@ -438,7 +461,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         {!cur && target.trim() && !isBlocked && (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", padding: 12, borderRadius: 12, border: "1px dashed var(--app-border)", marginBottom: 16, fontSize: 12 }}>
             <span style={{ color: "var(--app-muted)" }}><b style={{ color: "var(--app-text)" }}>{target.trim()}</b> belum ada di journey. Kirim pesan otomatis nyimpen, atau simpan dulu.</span>
-            <button onClick={saveTarget} disabled={savingTarget} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>＋ Simpan ke journey</button>
+            <button onClick={saveTarget} disabled={savingTarget} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>{savingTarget ? "Menyimpan…" : "＋ Simpan ke journey"}</button>
           </div>
         )}
         {(curPost || source.kind === "post") && !isBlocked && (
@@ -513,27 +536,27 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
                 <span style={badge(huntColor[h.status])}>{huntIcon[h.status]} {h.status}</span>
               </div>
               <div style={{ fontSize: 12, color: "var(--app-sub)", marginTop: 8 }}>{next}</div>
-              <div role="group" aria-label={`Hasil DM ke ${h.target || "target"}`} style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8, alignItems: "center" }}>
-                <span style={{ fontSize: 12, color: "var(--app-muted)" }}>Ubah jadi:</span>
+              <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 10, marginBottom: 6 }}>Ubah jadi</div>
+              <div role="group" aria-label={`Hasil DM ke ${h.target || "target"}`} className="sp-choice-grid">
                 {HUNT_STATUS.filter(s => s !== h.status).map(s => (
                   <button key={s} onClick={() => setStatus(h, s)} aria-label={`Tandai ${huntAction[s]}`}
                     style={{ ...chip, minHeight: 36, fontSize: 12, fontWeight: 600, padding: "4px 10px", borderColor: `${huntColor[s]}60` }}>{huntIcon[s]} {huntAction[s]}</button>
                 ))}
-                <button onClick={() => setReferring(referring?.id === h.id ? null : { id: h.id, who: "" })} aria-expanded={referring?.id === h.id}
+                <button onClick={() => { setNoting(null); setReferring(referring?.id === h.id ? null : { id: h.id, who: "" }); }} aria-expanded={referring?.id === h.id}
                   style={{ ...chip, minHeight: 36, fontSize: 12, fontWeight: 600 }}>↪ Rekomendasiin orang</button>
               </div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8, alignItems: "center" }}>
                 {isStale(h, now) && <button onClick={() => followUp(h)} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", border: "1px solid #ff990060" }}>↻ Follow-up</button>}
                 {h.status === "Tertarik" && !h.leadId && <button onClick={() => makeLead(h)} style={{ ...chip, minHeight: 36, background: "#00a862", color: "#1c2128", border: "none", fontWeight: 700 }}>Jadiin Lead →</button>}
                 {h.leadId && <span style={{ fontSize: 12, color: "var(--ok)", fontWeight: 700 }}>✓ Sudah jadi lead</span>}
-                {h.url && <a href={h.url} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Profil ↗</a>}
+                {h.url && <a href={h.url} target="_blank" rel="noreferrer" className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Profil ↗</a>}
                 {h.status !== "Terkirim" && (
                   <button onClick={() => setReplyFor(replyFor?.id === h.id ? null : { id: h.id, topic: defaultTopic(h.status, h.note), tone: "santai" })}
                     aria-expanded={replyFor?.id === h.id}
                     style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>💡 Balas</button>
                 )}
-                {h.status === "Ditolak" && noting?.id !== h.id && <button onClick={() => setNoting({ id: h.id, note: h.note })} style={chip}>{h.note ? "Ubah alasan" : "+ Alasan"}</button>}
-                <button onClick={() => remove(h)} aria-label={`Hapus DM ke ${h.target || "target"}`} style={{ ...chip, minHeight: 36, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🗑</button>
+                {h.status === "Ditolak" && noting?.id !== h.id && <button onClick={() => { setReferring(null); setNoting({ id: h.id, note: h.note }); }} style={{ ...chip, minHeight: 36 }}>{h.note ? "✎ Ubah alasan" : "+ Alasan"}</button>}
+                <button onClick={() => remove(h)} aria-label={`Hapus DM ke ${h.target || "target"}`} style={{ ...chip, minHeight: 36, marginLeft: "auto", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🗑 Hapus</button>
               </div>
               {replyFor?.id === h.id && h.status !== "Terkirim" && (
                 <div role="region" aria-label={`Saran balasan untuk ${h.target || "target"}`} style={{ marginTop: 10, padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)" }}>
@@ -562,8 +585,8 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
                             {copiedReply === key ? "✓ Tersalin" : "Copy"}
                           </button>
                           {h.platform === "WA"
-                            ? <a href={waLinkFor(h.target, text)} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", fontWeight: 700, background: btnWA.background, color: btnWA.color, border: "none" }}>Kirim WA</a>
-                            : h.url && <a href={h.url} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Buka profil ↗</a>}
+                            ? <a href={waLinkFor(h.target, text)} target="_blank" rel="noreferrer" className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", fontWeight: 700, background: btnWA.background, color: btnWA.color, border: "none" }}>Kirim WA</a>
+                            : h.url && <a href={h.url} target="_blank" rel="noreferrer" className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Buka profil ↗</a>}
                         </div>
                         {copyFail === key && <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 6 }}>Gagal menyalin. Pilih teks di atas, lalu salin manual.</div>}
                       </div>
@@ -575,24 +598,31 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
                       {onOpenScripts && <button onClick={onOpenScripts} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)" }}>Buka Script Library →</button>}
                     </div>
                   )}
+                  <button onClick={() => setReplyFor(null)} style={{ ...chip, width: "100%", minHeight: 40, marginTop: 10, fontWeight: 700, color: "var(--app-text)" }}>Tutup saran balasan</button>
                 </div>
               )}
               {referring?.id === h.id && (
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  <input autoFocus value={referring.who} onChange={e => setReferring({ ...referring, who: e.target.value })}
+                <div style={inlineEditor}>
+                  <label htmlFor={`ref-${h.id}`} style={label}>Siapa yang dia rekomendasiin?</label>
+                  <input id={`ref-${h.id}`} autoFocus value={referring.who} onChange={e => setReferring({ ...referring, who: e.target.value })}
                     onKeyDown={e => { if (e.key === "Enter") saveReferral(); if (e.key === "Escape") setReferring(null); }}
-                    placeholder="@akun atau link yang dia rekomendasiin" aria-label="Akun yang direkomendasiin" style={{ ...inputStyle, fontSize: 16, padding: "8px 12px" }} />
-                  <button onClick={saveReferral} style={{ ...btnPrimary, padding: "8px 14px" }}>Jadiin target</button>
-                  <button onClick={() => setReferring(null)} aria-label="Batal" style={{ ...btnMuted, padding: "8px 12px" }}>×</button>
+                    placeholder="@akun atau link profilnya" aria-label="Akun yang direkomendasiin" style={{ ...inputStyle, fontSize: 16, minHeight: 44 }} />
+                  <div style={editorButtons}>
+                    <button onClick={() => setReferring(null)} style={{ ...btnMuted, minHeight: 44 }}>Batal</button>
+                    <button onClick={saveReferral} disabled={!referring.who.trim()} style={{ ...btnPrimary, minHeight: 44, opacity: referring.who.trim() ? 1 : 0.5 }}>Jadiin target</button>
+                  </div>
                 </div>
               )}
               {noting?.id === h.id && (
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  <input autoFocus value={noting.note} onChange={e => setNoting({ ...noting, note: e.target.value })}
+                <div style={inlineEditor}>
+                  <label htmlFor={`why-${h.id}`} style={label}>Kenapa ditolak? (opsional)</label>
+                  <input id={`why-${h.id}`} autoFocus value={noting.note} onChange={e => setNoting({ ...noting, note: e.target.value })}
                     onKeyDown={e => { if (e.key === "Enter") saveNote(); if (e.key === "Escape") setNoting(null); }}
-                    placeholder="Alasan nolak (opsional), mis. udah punya fotografer" aria-label="Alasan ditolak" style={{ ...inputStyle, fontSize: 16, padding: "8px 12px" }} />
-                  <button onClick={saveNote} style={{ ...btnPrimary, padding: "8px 14px" }}>Simpan</button>
-                  <button onClick={() => setNoting(null)} aria-label="Lewati" style={{ ...btnMuted, padding: "8px 12px" }}>×</button>
+                    placeholder="mis. udah punya fotografer" aria-label="Alasan ditolak" style={{ ...inputStyle, fontSize: 16, minHeight: 44 }} />
+                  <div style={editorButtons}>
+                    <button onClick={() => setNoting(null)} style={{ ...btnMuted, minHeight: 44 }}>Lewati</button>
+                    <button onClick={saveNote} style={{ ...btnPrimary, minHeight: 44 }}>Simpan</button>
+                  </div>
                 </div>
               )}
             </div>
@@ -635,6 +665,24 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       <Campaigns prospects={prospects} templates={templates} strategy={strategy} sessionId={live?.id} />
       <HunterStats prospects={prospects} sessions={journey.sessions} />
 
+      {goalDraft !== null && (
+        <div className="modal-overlay" onClick={() => { if (!savingGoal) setGoalDraft(null); }}>
+          <form noValidate aria-labelledby="goal-h" onClick={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); saveGoal(); }} style={{ ...modalBox, maxWidth: 400 }}>
+            <div id="goal-h" style={{ fontSize: 17, fontWeight: 700, fontFamily: font }}>Target DM per hari</div>
+            <p style={{ margin: "4px 0 16px", fontSize: 13, color: "var(--app-muted)" }}>Berapa DM yang mau kamu kirim tiap hari? Progresnya keliatan di kartu DM hari ini dan di bar sesi.</p>
+            <label htmlFor="goal-n" style={label}>Jumlah DM</label>
+            <input id="goal-n" type="number" inputMode="numeric" min={1} step={1} autoFocus value={goalDraft}
+              onChange={e => { setGoalDraft(e.target.value); setGoalError(""); }} placeholder="Contoh: 20"
+              aria-invalid={Boolean(goalError)} aria-describedby={goalError ? "goal-err" : undefined}
+              style={{ ...inputStyle, fontSize: 16, minHeight: 48 }} />
+            {goalError && <p id="goal-err" role="alert" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--hot)" }}>{goalError}</p>}
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button type="button" onClick={() => setGoalDraft(null)} disabled={savingGoal} style={{ ...btnMuted, flex: 1, minHeight: 44 }}>Batal</button>
+              <button type="submit" disabled={savingGoal} style={{ ...btnPrimary, flex: 1, minHeight: 44, opacity: savingGoal ? 0.7 : 1 }}>{savingGoal ? "Menyimpan…" : "Simpan target"}</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

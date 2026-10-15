@@ -562,9 +562,36 @@ export const flows = [
         await huntRow(page, "@rotiflow").getByRole("button", { name: "Tandai Belum dibales" }).click();
         await page.getByRole("region", { name: /Saran balasan/ }).waitFor({ state: "detached" });
       });
-      await t.step("change the daily goal to 25", async () => {
+      await t.step("change the daily goal to 25 in a sheet with Batal", async () => {
         await page.getByRole("button", { name: /Ubah target harian/ }).click();
+        const sheet = page.getByRole("dialog", { name: /Target DM per hari/ });
+        await sheet.getByRole("button", { name: "Batal" }).click();
+        await sheet.waitFor({ state: "detached" });
+        await page.getByRole("button", { name: /Ubah target harian/ }).click();
+        await page.keyboard.press("Escape");
+        await sheet.waitFor({ state: "detached" });
+        await page.getByRole("button", { name: /Ubah target harian/ }).click();
+        await page.locator("#goal-n").fill("0");
+        await sheet.getByRole("button", { name: "Simpan target" }).click();
+        await sheet.getByRole("alert").getByText("minimal 1").waitFor();
+        await page.locator("#goal-n").fill("25");
+        await sheet.getByRole("button", { name: "Simpan target" }).click();
         await page.getByRole("button", { name: /dari 25 DM/ }).waitFor();
+      });
+      await t.step("a name typed by hand drops the last person's link", async () => {
+        await page.locator("#hunt-target").fill("@tehsenja");
+        if (await page.getByText("🔗 https://www.threads.com/@kopiflow").count()) throw new Error("the old profile link stays with a new name");
+        await page.locator("#hunt-target").fill("");
+      });
+      await t.step("the referral editor has Batal, and status buttons sit in a grid", async () => {
+        await huntRow(page, "@rotiflow").getByRole("button", { name: "↪ Rekomendasiin orang" }).click();
+        await page.getByLabel("Akun yang direkomendasiin").waitFor();
+        await huntRow(page, "@rotiflow").getByRole("button", { name: "Batal", exact: true }).click();
+        await page.getByLabel("Akun yang direkomendasiin").waitFor({ state: "detached" });
+        if (!isWide(page)) {
+          const small = await page.evaluate(() => [...document.querySelectorAll(".sp-hunt button")].filter(b => b.offsetParent && b.getBoundingClientRect().height < 43.5).map(b => (b.getAttribute("aria-label") || b.textContent).trim().slice(0, 30)));
+          if (small.length) throw new Error(`under 44px: ${small.slice(0, 5).join(", ")}`);
+        }
       });
       await t.step("the new lead is in Leads", async () => { await go(page, "Jualan", "Leads"); await expectText(page, "@kopiflow"); });
     },
@@ -891,7 +918,27 @@ export const flows = [
         const after = await page.getByRole("button", { name: "Copy" }).count();
         if (!(before === 8 && after > before)) throw new Error(`copy buttons ${before} → ${after}`);
       });
+      await t.step("Quick Pitch steps aside while scrolling down, and the page ends clear of it", async () => {
+        if (isWide(page)) return;
+        const fab = page.getByRole("button", { name: /Quick Pitch/ });
+        await page.evaluate(() => window.scrollTo(0, 400));
+        await page.waitForTimeout(150);
+        await page.evaluate(() => window.scrollTo(0, 900));
+        await page.waitForTimeout(400);
+        const tucked = await fab.evaluate(b => b.classList.contains("is-tucked"));
+        const atEnd = await page.evaluate(() => window.scrollY + innerHeight >= document.documentElement.scrollHeight - 8);
+        if (!tucked && !atEnd) throw new Error("the button stays over the page while scrolling down");
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        await page.waitForTimeout(400);
+        const covered = await page.evaluate(() => {
+          const f = document.querySelector(".sp-fab").getBoundingClientRect();
+          return [...document.querySelectorAll(".sp-main button, .sp-main a")].filter(e => e.offsetParent).some(e => { const r = e.getBoundingClientRect(); return r.right > f.left && r.left < f.right && r.bottom > f.top && r.top < f.bottom; });
+        });
+        if (covered) throw new Error("the floating button covers the last buttons of the page");
+      });
       await t.step("Quick Pitch opens from the floating button", async () => {
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.waitForTimeout(300);
         await page.getByRole("button", { name: /Quick Pitch/ }).click();
         await expectText(page, "💬 Quick Pitch");
       });

@@ -669,3 +669,20 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   /* The title and its line under it keep clear of the ×. */
   .modal-x-rail + *, .modal-x-rail + * + * { padding-right: 48px; }
 }
+
+/* ---- Hunting (QA 15 Okt) ----
+   Choices that answer one question (a DM's status, a journey's result) sit in
+   a tidy grid instead of wrapping into a pile. */
+.sp-choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+.sp-choice-grid > button { width: 100%; text-align: left; }
+/* A finger needs 44px: every button and link-button in Hunting gets it on touch. */
+@media not ((hover: hover) and (pointer: fine)) {
+  .sp-hunt button, .sp-hunt a.sp-tap { min-height: 44px !important; }
+  .sp-hunt .sp-icon-btn { min-width: 44px !important; }
+}
+/* A mouse sees what it is over. */
+@media (hover: hover) and (pointer: fine) {
+  .sp-hunt button:not(:disabled):hover, .sp-hunt a.sp-tap:hover { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--app-text) 6%, transparent); }
+  .sp-hunt button:disabled { cursor: not-allowed; }
+}
+@media (min-width: 768px) { .sp-choice-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); } }

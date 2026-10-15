@@ -5,7 +5,7 @@ import { addDays, rupiah, today } from "@/lib/billing";
 import { canEditCatalog, useSpace } from "@/lib/space";
 import { HuntSession, Prospect, SMALL, journey, rate, sessionMinutes } from "@/lib/prospects";
 import { COST_CATEGORIES, CostItem, loadClosed, saveCosts, useCosts } from "@/lib/prospectStore";
-import { btnPrimary, card, chip, font, inputStyle } from "@/components/ui";
+import { btnPrimary, card, chip, font, inputStyle, label } from "@/components/ui";
 
 // How the hunter is doing (docs/prd/PRD-009 §8): reached, answered, converted,
 // and what each conversion cost. Under ten, a rate is written "X dari Y".
@@ -43,19 +43,30 @@ export default function HunterStats({ prospects, sessions }: { prospects: Prospe
   const minutes = monthSessions.reduce((a, s) => a + sessionMinutes(s, now), 0);
   const intros = monthSessions.reduce((a, s) => a + (s.counts?.intros || 0), 0);
 
+  const [costMsg, setCostMsg] = useState("");
+  const amountIn = Number(item.amount.replace(/\D/g, ""));
+  const costReady = Boolean(item.name.trim() && amountIn);
   async function addCost() {
-    const amount = Number(item.amount.replace(/\D/g, ""));
-    if (!item.name.trim() || !amount) return;
-    await saveCosts(space, month, [...costs, { id: `c_${Date.now()}`, name: item.name.trim(), category: item.category, amount } as CostItem]);
-    setItem({ name: "", category: COST_CATEGORIES[0], amount: "" });
+    if (!costReady) return;
+    setCostMsg("");
+    try {
+      await saveCosts(space, month, [...costs, { id: `c_${Date.now()}`, name: item.name.trim(), category: item.category, amount: amountIn } as CostItem]);
+      setItem({ name: "", category: COST_CATEGORIES[0], amount: "" });
+    } catch {
+      setCostMsg("Gagal nyimpen biaya. Cek koneksi lalu coba lagi.");
+    }
+  }
+  async function removeCost(c: CostItem) {
+    if (!confirm(`Hapus biaya ${c.name} (${rupiah(c.amount)})?`)) return;
+    await saveCosts(space, month, costs.filter(x => x.id !== c.id)).catch(() => setCostMsg("Gagal menghapus. Coba lagi."));
   }
 
   return (
     <div style={{ ...card, padding: 20, marginBottom: 20 }}>
       <button onClick={() => setOpen(!open)} aria-expanded={open}
-        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", fontFamily: font }}>
+        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", minHeight: 36, background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", fontFamily: font }}>
         <span style={{ fontSize: 14, fontWeight: 700 }}>Performa hunter</span>
-        <span aria-hidden="true" style={{ fontSize: 12, color: "var(--app-muted)" }}>{open ? "Tutup ▴" : "Lihat ▾"}</span>
+        <span aria-hidden="true" style={{ fontSize: 12, fontWeight: 700, color: "var(--brand-text)" }}>{open ? "Tutup ▴" : "Lihat ▾"}</span>
       </button>
       {open && (
         <div style={{ marginTop: 12 }}>
@@ -98,19 +109,29 @@ export default function HunterStats({ prospects, sessions }: { prospects: Prospe
                 <span>{c.name} <span style={{ color: "var(--app-muted)" }}>· {c.category}</span></span>
                 <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <b style={{ fontVariantNumeric: "tabular-nums" }}>{rupiah(c.amount)}</b>
-                  {canEdit && <button onClick={() => saveCosts(space, month, costs.filter(x => x.id !== c.id))} aria-label={`Hapus biaya ${c.name}`} style={{ ...chip, padding: "2px 8px" }}>×</button>}
+                  {canEdit && <button onClick={() => removeCost(c)} aria-label={`Hapus biaya ${c.name}`} title="Hapus biaya" className="sp-icon-btn" style={{ ...chip, minWidth: 32, minHeight: 32, padding: "2px 8px" }}>🗑</button>}
                 </span>
               </div>
             ))}
             {canEdit && (
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                <input aria-label="Nama biaya" value={item.name} onChange={e => setItem({ ...item, name: e.target.value })} placeholder="mis. Vercel Pro" style={{ ...inputStyle, fontSize: 16, flex: "2 1 140px", width: "auto" }} />
-                <select aria-label="Kategori biaya" value={item.category} onChange={e => setItem({ ...item, category: e.target.value })} style={{ ...inputStyle, fontSize: 16, flex: "1 1 110px", width: "auto" }}>
-                  {COST_CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                </select>
-                <input aria-label="Jumlah (Rp)" inputMode="numeric" value={item.amount} onChange={e => setItem({ ...item, amount: e.target.value })} placeholder="Rp" style={{ ...inputStyle, fontSize: 16, flex: "1 1 110px", width: "auto" }} />
-                <button onClick={addCost} style={{ ...btnPrimary, padding: "8px 14px" }}>+ Biaya</button>
-              </div>
+              <form onSubmit={e => { e.preventDefault(); addCost(); }} style={{ marginTop: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Catat biaya bulan ini</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 }}>
+                  <div><label htmlFor="cost-name" style={label}>Nama biaya</label>
+                    <input id="cost-name" value={item.name} onChange={e => setItem({ ...item, name: e.target.value })} placeholder="mis. Langganan hosting" style={{ ...inputStyle, fontSize: 16, minHeight: 44 }} /></div>
+                  <div><label htmlFor="cost-cat" style={label}>Kategori</label>
+                    <select id="cost-cat" value={item.category} onChange={e => setItem({ ...item, category: e.target.value })} style={{ ...inputStyle, fontSize: 16, minHeight: 44 }}>
+                      {COST_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                    </select></div>
+                  <div><label htmlFor="cost-amount" style={label}>Jumlah (Rp)</label>
+                    <input id="cost-amount" inputMode="numeric" value={item.amount} onChange={e => setItem({ ...item, amount: e.target.value })} placeholder="mis. 150000" style={{ ...inputStyle, fontSize: 16, minHeight: 44 }} /></div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+                  <button type="submit" disabled={!costReady} style={{ ...btnPrimary, minHeight: 44, opacity: costReady ? 1 : 0.5 }}>+ Catat biaya</button>
+                  {!costReady && <span style={{ fontSize: 12, color: "var(--app-muted)" }}>Isi nama dan jumlahnya dulu.</span>}
+                </div>
+                <div role="status" style={{ fontSize: 12, color: "var(--hot)", marginTop: costMsg ? 6 : 0 }}>{costMsg}</div>
+              </form>
             )}
           </div>
           <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 12 }}>Di bawah {SMALL}, angka ditulis &quot;X dari Y&quot; — persennya belum bisa dipercaya.</div>

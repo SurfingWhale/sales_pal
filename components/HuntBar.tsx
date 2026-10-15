@@ -52,7 +52,7 @@ export default function HuntBar({ session, queued, sentToday, goal, onOpen, onEn
   }
 
   const progress = Math.min(1, goal ? sentToday / goal : 0);
-  const btn = { minHeight: 36, padding: "0 10px", borderRadius: 8, border: "1px solid #ffffff60", background: "#ffffff1f", color: "#fff", font: "700 12px 'Plus Jakarta Sans', sans-serif", cursor: "pointer", whiteSpace: "nowrap" as const, flexShrink: 0 };
+  const btn = { minHeight: 40, minWidth: 44, padding: "0 10px", borderRadius: 8, border: "1px solid #ffffff60", background: "#ffffff1f", color: "#fff", font: "700 12px 'Plus Jakarta Sans', sans-serif", cursor: "pointer", whiteSpace: "nowrap" as const, flexShrink: 0 };
   return (
     <div role="region" aria-label="Sesi hunting" style={{ position: "relative", zIndex: 2, height: BAR_HEIGHT, background: HUNT_COLOR, color: "#fff", display: "flex", alignItems: "center", gap: 8, padding: "0 12px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       <style>{`@keyframes sp-hunt-pulse{0%,100%{opacity:1}50%{opacity:.35}} .sp-hunt-dot{animation:sp-hunt-pulse 1.6s ease-in-out infinite} @media (prefers-reduced-motion: reduce){.sp-hunt-dot{animation:none}} @media (max-width:520px){.sp-hunt-wide{display:none}}`}</style>
@@ -63,9 +63,9 @@ export default function HuntBar({ session, queued, sentToday, goal, onOpen, onEn
           <span style={{ fontSize: 12, opacity: 0.92, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg || summary}</span>
         </span>
       </button>
-      <button onClick={paste} aria-label="Tempel link dari clipboard" style={btn}>📋<span className="sp-hunt-wide"> Tempel</span></button>
+      <button onClick={paste} aria-label="Tempel link dari clipboard" title="Tempel link dari clipboard" style={btn}>📋<span className="sp-hunt-wide"> Tempel</span></button>
       <button onClick={() => { sendToHunting({ kind: "queue" }); onOpen(); }} aria-label={`Antrian follow-up, ${queued}`} style={btn}>Antrian {queued}</button>
-      <button onClick={onEnd} aria-label="Akhiri sesi hunting" style={{ ...btn, padding: "0 12px" }}>■</button>
+      <button onClick={onEnd} aria-label="Akhiri sesi hunting" title="Akhiri sesi" style={{ ...btn, padding: "0 12px" }}>■<span className="sp-hunt-wide"> Akhiri</span></button>
       <div aria-hidden="true" style={{ position: "absolute", left: 0, bottom: 0, height: 3, width: `${progress * 100}%`, background: "#ffffffb3" }} />
     </div>
   );

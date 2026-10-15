@@ -59,10 +59,10 @@ export default function Campaigns({ prospects, templates, strategy, sessionId }:
     <div style={{ ...card, padding: 20, marginBottom: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 4 }}>
         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>Kampanye</div>
-        {canEdit && <button onClick={() => setDraft({ name: "", templateId: templates[0]?.id || "", segment: "all", groups: ["nunggu", "terhubung"] })} style={chip}>+ Kampanye</button>}
+        {canEdit && <button onClick={() => setDraft({ name: "", templateId: templates[0]?.id || "", segment: "all", groups: ["nunggu", "terhubung"] })} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)" }}>+ Kampanye</button>}
       </div>
       <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>Satu pesan buat sekelompok prospek, dikirim satu-satu. Yang Jangan dihubungi dan yang lagi diparkir otomatis dilewati.</div>
-      {campaigns.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Belum ada kampanye.</div>}
+      {campaigns.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Belum ada kampanye.{canEdit ? " Tap + Kampanye, pilih pesan dan grupnya, lalu kirim satu-satu dari antrian." : ""}</div>}
       {campaigns.map(c => {
         const t = templates.find(x => x.id === c.templateId);
         const left = audience(prospects, c, on, strategy);
@@ -102,7 +102,7 @@ export default function Campaigns({ prospects, templates, strategy, sessionId }:
                     <div style={{ fontSize: 12.5, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: 10 }}>{textFor(t, cur)}</div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       <button onClick={() => send(c, cur, t)} style={{ ...btnPrimary, padding: "8px 14px" }}>Copy & catat</button>
-                      {cur.url && <a href={cur.url} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Buka profil ↗</a>}
+                      {cur.url && <a href={cur.url} target="_blank" rel="noreferrer" className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Buka profil ↗</a>}
                       <button onClick={() => setRunning({ id: c.id, skipped: [...(running?.skipped || []), cur.id] })} style={{ ...chip, minHeight: 36 }}>Lewati</button>
                     </div>
                   </>
@@ -115,7 +115,7 @@ export default function Campaigns({ prospects, templates, strategy, sessionId }:
       <div role="status">{undo && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 10, padding: "10px 12px", borderRadius: 10, background: "#005eb014", border: "1px solid #005eb050", fontSize: 12 }}>
           <span>{undo.label}</span>
-          <button onClick={async () => { const u = undo; setUndo(null); await u.run(); }} style={{ ...chip, minHeight: 32, fontWeight: 700 }}>Batal</button>
+          <button onClick={async () => { const u = undo; setUndo(null); await u.run(); }} aria-label="Batal catat" style={{ ...chip, minHeight: 36, flexShrink: 0, fontWeight: 700, color: "var(--app-text)" }}>Batal</button>
         </div>
       )}</div>
       <div role="status" style={{ fontSize: 12, color: "var(--app-sub)", marginTop: msg ? 8 : 0 }}>{msg}</div>
@@ -148,9 +148,14 @@ export default function Campaigns({ prospects, templates, strategy, sessionId }:
                 );
               })}
             </div>
+            {(!draft.name.trim() || !draft.templateId || !draft.groups.length) && (
+              <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>
+                {!draft.name.trim() ? "Kasih nama kampanyenya dulu." : !draft.templateId ? "Bikin template pesan dulu di Pilih pesan." : "Pilih minimal satu grup penerima."}
+              </div>
+            )}
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={save} disabled={!draft.name.trim() || !draft.templateId || !draft.groups.length} style={{ ...btnPrimary, opacity: draft.name.trim() && draft.templateId && draft.groups.length ? 1 : 0.5 }}>Simpan</button>
-              <button onClick={() => setDraft(null)} style={btnMuted}>Batal</button>
+              <button onClick={() => setDraft(null)} style={{ ...btnMuted, flex: 1, minHeight: 44 }}>Batal</button>
+              <button onClick={save} disabled={!draft.name.trim() || !draft.templateId || !draft.groups.length} style={{ ...btnPrimary, flex: 1, minHeight: 44, opacity: draft.name.trim() && draft.templateId && draft.groups.length ? 1 : 0.5 }}>Simpan kampanye</button>
             </div>
           </div>
         </div>

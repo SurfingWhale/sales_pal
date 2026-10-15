@@ -109,7 +109,7 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
             <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#005eb014", color: "var(--brand-text)", border: "1px solid #005eb040" }}>Segera hadir</span>
           </div>
           <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4, lineHeight: 1.5 }}>
-            Daftar orang yang balas atau mention post Threads lo, sekali tap jadi target DM. Sementara: buka Aktivitas di Threads, Copy link profilnya, lalu 📋 Tempel link di bawah.
+            Daftar orang yang balas atau mention post Threads kamu, sekali tap jadi target DM. Sementara: buka Aktivitas di Threads, salin link profilnya, lalu tempel di kolom Target di bawah.
           </div>
         </div>
       </div>
@@ -131,12 +131,12 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
             <button onClick={scan} disabled={loading} style={{ ...chip, minHeight: 36, fontWeight: 700, background: "#005eb0", color: "#fff", border: "1px solid #005eb0", opacity: loading ? 0.6 : 1 }}>
               {loading ? "Memindai…" : people ? "↻ Pindai lagi" : "Pindai"}
             </button>
-            <button onClick={disconnect} aria-label="Putuskan Threads" style={{ ...chip, minHeight: 36 }}>⋯</button>
+            <button onClick={disconnect} aria-label="Putuskan Threads" title="Putuskan Threads" style={{ ...chip, minHeight: 36 }}>Putuskan</button>
           </div>
         )}
       </div>
       <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>
-        Orang yang balas atau mention post Threads lo. Mereka udah lihat karya lo: DM paling hangat.
+        Orang yang balas atau mention post Threads kamu. Mereka udah lihat karyamu: DM paling hangat.
       </div>
 
       {!conn && (
@@ -152,7 +152,7 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
         <>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>
             <span>{fresh.length} baru · {people.length} orang dari 15 post terakhir</span>
-            {people.length > fresh.length && <button onClick={() => setShowDone(!showDone)} style={chip}>{showDone ? "Sembunyikan yang beres" : "Tampilkan semua"}</button>}
+            {people.length > fresh.length && <button onClick={() => setShowDone(!showDone)} style={{ ...chip, minHeight: 36 }}>{showDone ? "Sembunyikan yang beres" : "Tampilkan semua"}</button>}
           </div>
           {shown.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)", padding: "8px 0" }}>Semua udah ditangani. Posting lagi, lalu pindai 👀</div>}
           {shown.map(p => (
@@ -168,7 +168,7 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
               {p.latest.postText && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>di post: {p.latest.postText}</div>}
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
                 <button onClick={() => onTarget(p.username)} style={{ ...chip, minHeight: 36, fontWeight: 700, background: "#005eb0", color: "#fff", border: "1px solid #005eb0" }}>DM dia →</button>
-                <a href={p.latest.permalink || profileUrl(p.username)} target="_blank" rel="noreferrer" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Lihat ↗</a>
+                <a href={p.latest.permalink || profileUrl(p.username)} target="_blank" rel="noreferrer" className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Lihat ↗</a>
                 <button onClick={() => makeLead(p)} style={{ ...chip, minHeight: 36 }}>Jadiin Lead</button>
                 <button onClick={() => markDone(p)} style={{ ...chip, minHeight: 36 }}>✓ Beres</button>
               </div>
