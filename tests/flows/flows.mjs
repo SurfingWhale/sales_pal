@@ -914,7 +914,7 @@ export const flows = [
       const { page, base } = t;
       const row = (who) => page.getByRole("button", { name: `Journey ${who}`, exact: true });
       const pick = async (f) => { await pane(page, "Journey"); await page.getByRole("group", { name: "Saring prospek" }).getByRole("button", { name: new RegExp(`^${f}`) }).click(); };
-      await t.step("sign up and open Hunting", async () => { await mockUnfurl(page); await signup(t); await go(page, "Hunting"); await expectText(page, "Journey prospek"); });
+      await t.step("sign up and open Hunting", async () => { await mockUnfurl(page); await signup(t); await go(page, "Hunting"); await pane(page, "Journey"); await expectText(page, "Journey prospek"); await pane(page, "Kirim"); });
       await t.step("a post shared from Threads opens as a prospect with its words", async () => {
         // /share redirects to /dashboard, which then rewrites its own URL; waitForURL
         // reads that rewrite as an aborted navigation, so wait on the page instead.
