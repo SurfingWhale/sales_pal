@@ -308,7 +308,7 @@ export const flows = [
         await go(t.page, "Jualan", "Leads");
         await t.page.getByRole("button", { name: /^Tinggi/ }).click();
         await expectText(t.page, "Kopi Flow");
-        await t.page.getByRole("button", { name: /^Semua/ }).click();
+        await t.page.getByRole("group", { name: "Saring menurut potensi" }).getByRole("button", { name: /^Semua/ }).click();
       });
       await t.step("it sits on the lead map as Cepat closing, and opens from there", async () => {
         await go(t.page, "Beranda");
