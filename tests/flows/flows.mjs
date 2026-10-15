@@ -625,6 +625,17 @@ export const flows = [
         await page.getByLabel("Cari prospek pakai ID atau @username").fill("contoh_042");
         await expectText(page, "1 ketemu");
       });
+      await t.step("the month's occupancy opens from one toggle", async () => {
+        await go(page, "Jualan", "Invoice");
+        const cal = page.getByRole("region", { name: "Kalender okupansi" });
+        const toggle = cal.getByRole("button", { name: /^Kalender .* hari terisi/ });
+        await toggle.click();
+        await cal.getByRole("grid", { name: /^Okupansi / }).waitFor();
+        await cal.getByRole("gridcell").filter({ hasText: /job/ }).first().click();
+        await cal.getByRole("status").getByText(/Usaha Contoh/).first().waitFor();
+        await toggle.click();
+        if ((await toggle.getAttribute("aria-expanded")) !== "false") throw new Error("the calendar did not close");
+      });
       await t.step("search finds a lead by part of its phone number", async () => {
         await go(page, "Jualan", "Leads");
         await page.locator("#lead-search").fill("13737");
@@ -929,6 +940,10 @@ export const flows = [
       await t.step("Copy logs the intro at once; Batal takes it back", async () => {
         await page.getByRole("button", { name: "Copy", exact: true }).first().click();
         await expectText(page, "Tercatat: balasan di post ke @tokokue");
+        // The undo bar sits pinned on screen, wherever the page is scrolled.
+        const bar = page.locator(".sp-toast");
+        const r = await bar.boundingBox();
+        if (!r || r.y + r.height > page.viewportSize().height) throw new Error("the undo bar is off screen");
         await page.getByRole("button", { name: "Batal catat" }).click();
         await expectText(page, "Belum ada DM.");
         await row("Toko Kue (@tokokue)").getByText("Baru").waitFor();
