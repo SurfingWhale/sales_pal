@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { signOut, User } from "firebase/auth";
 import { STALL_DAYS, stalledWhat, useStalledDeals } from "@/lib/stalled";
 import { LEVEL_WORD, Level, inPlay, isHigh, scoreLead } from "@/lib/score";
@@ -268,6 +268,29 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [scanError, setScanError] = useState("");
   const [showProfile, setShowProfile] = useState(false);
   const [showBell, setShowBell] = useState(false);
+  // "Atur target": a small sheet with Batal/Simpan instead of the browser's prompt().
+  const bellBtn = useRef<HTMLButtonElement>(null);
+  const bellPop = useRef<HTMLDivElement>(null);
+  // The bell's popover closes like any popover: Escape (focus back on the
+  // bell) or a tap/click anywhere outside it.
+  useEffect(() => {
+    if (!showBell) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || document.querySelector(".modal-overlay")) return;
+      setShowBell(false); bellBtn.current?.focus();
+    };
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (bellPop.current?.contains(t) || bellBtn.current?.contains(t)) return;
+      setShowBell(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("pointerdown", onDown); };
+  }, [showBell]);
+  const [targetDraft, setTargetDraft] = useState<string | null>(null);
+  const [targetError, setTargetError] = useState("");
+  const [savingTarget, setSavingTarget] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<{ latest: string; hasUpdate: boolean; error?: boolean } | null>(null);
   const [clearing, setClearing] = useState(false);
@@ -687,10 +710,22 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     })),
   ].sort((a, b) => a.when.localeCompare(b.when));
 
-  async function setClosingTarget() {
-    const v = prompt("Target closing bulan ini (jumlah deal)?", String(closingTarget || ""));
-    const n = parseInt(v || "", 10);
-    if (n > 0) await setDoc(spaceDoc(space, "settings", "hunting"), { monthlyClosing: n }, { merge: true }).catch(() => alert("Target tim diatur Leader atau Officer."));
+  function setClosingTarget() {
+    setTargetError("");
+    setTargetDraft(closingTarget ? String(closingTarget) : "");
+  }
+  async function saveClosingTarget() {
+    const n = parseInt(targetDraft || "", 10);
+    if (!(n > 0)) { setTargetError("Isi jumlah deal, minimal 1."); return; }
+    setSavingTarget(true);
+    try {
+      await setDoc(spaceDoc(space, "settings", "hunting"), { monthlyClosing: n }, { merge: true });
+      setTargetDraft(null);
+    } catch {
+      setTargetError("Target tim cuma bisa diatur Leader atau Officer.");
+    } finally {
+      setSavingTarget(false);
+    }
   }
 
   // Beranda's four numbers and the lead map (PRD-008 §1).
@@ -736,7 +771,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           .sp-top-in { padding: 0 14px 0 20px; height: 60px; gap: 8px; }
           .sp-brand-word { font-size: 17px !important; }
           .sp-nav { position: fixed; z-index: 60; left: 14px; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); height: 64px; padding: 4px; border-radius: 32px; margin: 0; gap: 0; }
-          .sp-nav-btn { flex: 1; height: auto; flex-direction: column; justify-content: center; gap: 3px; padding: 0; border-radius: 28px; font-size: 11px; }
+          .sp-nav-btn { flex: 1; min-width: 0; height: auto; flex-direction: column; justify-content: center; gap: 3px; padding: 0; border-radius: 28px; font-size: 12px; }
           .sp-nav-btn.is-on { background: var(--tab-on); box-shadow: none; color: var(--brand-text); }
           .sp-nav-icon { display: block; }
           .sp-nav-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -744,9 +779,19 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           .sp-subhint { padding: 6px 16px 0; font-size: 12px; }
           .sp-space { padding: 0 10px 0 12px; font-size: 12px; }
           .sp-space select { max-width: 96px; }
-          .sp-subnav { padding: 6px 16px 0; }
+          .sp-space { min-width: 0; }
+          .sp-subnav { padding: 6px 16px 4px; }
+          /* 40px pills, 44px to the finger: the hit area reaches past the pill. */
+          .sp-sub-btn { position: relative; height: 40px; }
+          .sp-sub-btn::after { content: ""; position: absolute; left: 0; right: 0; top: -2px; bottom: -2px; }
           .sp-main { padding: 16px 16px calc(110px + env(safe-area-inset-bottom, 0px)) !important; }
           .sp-fab { bottom: calc(92px + env(safe-area-inset-bottom, 0px)) !important; }
+        }
+        /* A small phone with the workspace picker: the paw alone says SalesPal,
+           so the bell and the avatar keep their place on screen. */
+        @media (max-width: 420px) {
+          .sp-top-in.has-space .sp-brand-word { display: none; }
+          .sp-top-in.has-space { padding-left: 16px; }
         }
         @media (hover: hover) {
           .sp-nav-btn:hover { color: var(--app-text); }
@@ -770,7 +815,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         )}
         <div className="pb t" aria-hidden="true" style={{ top: 0, height: 96 }}><span /><span /><span /><span /><span /><span /></div>
         <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 96, background: "linear-gradient(to bottom, var(--bar-tint) 0%, var(--bar-tint) 40%, transparent 100%)", pointerEvents: "none" }} />
-        <div className="sp-top-in">
+        <div className={`sp-top-in${spaces.length > 0 ? " has-space" : ""}`}>
           <button onClick={() => setActiveTab("Dashboard")} aria-label="SalesPal, ke Beranda" style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--app-text)", background: "none", border: "none", padding: 0, cursor: "pointer", flexShrink: 0 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-mark.png" alt="" width={18} height={18} style={{ width: 18, height: 18, objectFit: "contain" }} />
@@ -803,7 +848,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                 <Icon name="chevronDown" size={14} stroke={1.8} />
               </label>
             )}
-            <button className="sp-iconbtn glass" aria-label={`Notifikasi${todo.length ? `, ${todo.length} perlu ditindak` : ""}`} aria-expanded={showBell} onClick={() => setShowBell(!showBell)}>
+            <button ref={bellBtn} className="sp-iconbtn glass" aria-haspopup="dialog" aria-label={`Notifikasi${todo.length ? `, ${todo.length} perlu ditindak` : ""}`} aria-expanded={showBell} onClick={() => setShowBell(!showBell)}>
               <Icon name="bell" size={19} stroke={1.6} />
               {todo.some(t => t.when <= now) && <span aria-hidden="true" style={{ position: "absolute", top: 10, right: 11, width: 8, height: 8, borderRadius: "50%", background: "#005eb0", boxShadow: "0 0 0 2px var(--app-bg)" }} />}
             </button>
@@ -815,10 +860,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           </div>
         </div>
         {showBell && (
-          <div role="dialog" aria-label="Notifikasi" className="frost" style={{ position: "absolute", zIndex: 70, right: "max(16px, calc((100vw - 1200px) / 2 + 32px))", top: 64, width: "min(360px, calc(100vw - 32px))", borderRadius: 24, padding: 16, boxShadow: "inset 0 0 0 1px var(--frost-ring), 0 12px 32px var(--frost-float)" }}>
+          <div ref={bellPop} role="dialog" aria-label="Notifikasi" className="frost" style={{ position: "absolute", zIndex: 70, right: "max(16px, calc((100vw - 1200px) / 2 + 32px))", top: 64, width: "min(360px, calc(100vw - 32px))", borderRadius: 24, padding: 16, boxShadow: "inset 0 0 0 1px var(--frost-ring), 0 12px 32px var(--frost-float)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
               <div style={{ fontSize: 15, fontWeight: 600 }}>Notifikasi</div>
-              <button className="sp-iconbtn" onClick={() => setShowBell(false)} aria-label="Tutup" style={{ width: 36, height: 36 }}>
+              <button className="sp-iconbtn" onClick={() => { setShowBell(false); bellBtn.current?.focus(); }} aria-label="Tutup notifikasi" style={{ width: 44, height: 44, marginRight: -8 }}>
                 <span style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--glass-btn)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={12} stroke={2.4} /></span>
               </button>
             </div>
@@ -858,7 +903,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             {space.kind === "guild" && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: -16 }}>Ruang guild {space.name} — {showOwner ? "angka seluruh tim" : "angka kamu di guild ini"}.</div>}
             {seedCount > 0 && (
               <div role="status" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 10, padding: "12px 14px", fontSize: 12.5 }}>
-                <span>Ada <b>{seedCount} data contoh</b> (PT Maju Jaya dkk.) dari versi lama yang ikut kehitung di angka lo.</span>
+                <span>Ada <b>{seedCount} data contoh</b> (PT Maju Jaya dkk.) dari versi lama yang ikut kehitung di angka kamu.</span>
                 <button onClick={removeSeedData} style={{ background: "#005eb0", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Hapus data contoh</button>
               </div>
             )}
@@ -1256,8 +1301,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       {showProfile && (        <div className="modal-overlay" onClick={() => setShowProfile(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Profil & Pengaturan</div>
-              <button onClick={() => setShowProfile(false)} aria-label="Tutup" style={{ background: "transparent", border: "none", color: "var(--app-muted)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
+              <div style={{ fontSize: 17, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Profil & Pengaturan</div>
+              <button onClick={() => setShowProfile(false)} aria-label="Tutup" style={{ flexShrink: 0, width: 44, height: 44, margin: "-10px -10px -10px 0", borderRadius: "50%", background: "transparent", border: "none", color: "var(--app-ink-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={18} stroke={2} /></button>
             </div>
 
             {/* User */}
@@ -1279,7 +1324,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                   <div style={{ fontSize: 12, color: "var(--app-muted)", fontFamily: "monospace", marginTop: 2 }}>{APP_VERSION}</div>
                 </div>
                 <button onClick={checkUpdate} disabled={checkingUpdate} style={{ ...btnPrimary, background: "transparent", color: "var(--brand-text)", border: "1px solid #005eb0", padding: "8px 14px", opacity: checkingUpdate ? 0.6 : 1 }}>
-                  {checkingUpdate ? "Cek..." : "Cek update"}
+                  {checkingUpdate ? "Mengecek…" : "Cek update"}
                 </button>
               </div>
               {updateInfo && (
@@ -1306,15 +1351,36 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
             {/* Clear cache */}
             <button onClick={clearCacheAndReload} disabled={clearing} style={{ width: "100%", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 16, textAlign: "left", cursor: "pointer", fontFamily: "inherit", marginBottom: 12, opacity: clearing ? 0.6 : 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--app-text)" }}>🧹 {clearing ? "Membersihkan..." : "Clear cache & muat ulang"}</div>
-              <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>Hapus cache app & load versi terbaru. Login kamu tetap aman.</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--app-text)" }}>🧹 {clearing ? "Membersihkan…" : "Bersihkan cache & muat ulang"}</div>
+              <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>Hapus cache app & muat versi terbaru. Login kamu tetap aman.</div>
             </button>
 
             {/* Logout */}
-            <button onClick={handleLogout} style={{ width: "100%", background: "transparent", border: "1px solid #ff444440", borderRadius: 12, padding: 14, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={handleLogout} style={{ width: "100%", minHeight: 48, background: "transparent", border: "1px solid #ff444440", borderRadius: 12, padding: 14, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
               Logout
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Atur target closing */}
+      {targetDraft !== null && (
+        <div className="modal-overlay" onClick={() => { if (!savingTarget) setTargetDraft(null); }}>
+          <form aria-labelledby="target-h" onClick={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); saveClosingTarget(); }}
+            style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 400 }}>
+            <div id="target-h" style={{ fontSize: 17, fontWeight: 700 }}>Target closing bulan ini</div>
+            <p style={{ margin: "4px 0 16px", fontSize: 13, color: "var(--app-muted)" }}>Berapa deal yang mau kamu tutup bulan ini? Progresnya keliatan di Beranda.</p>
+            <label htmlFor="target-n" style={{ fontSize: 13, fontWeight: 600, color: "var(--app-sub)", display: "block", marginBottom: 6 }}>Jumlah deal</label>
+            <input id="target-n" type="number" inputMode="numeric" min={1} step={1} autoFocus value={targetDraft}
+              onChange={e => { setTargetDraft(e.target.value); setTargetError(""); }} placeholder="Contoh: 10"
+              aria-invalid={Boolean(targetError)} aria-describedby={targetError ? "target-err" : undefined}
+              style={{ ...inputStyle, fontSize: 16, height: 48 }} />
+            {targetError && <p id="target-err" role="alert" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--hot)" }}>{targetError}</p>}
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button type="button" onClick={() => setTargetDraft(null)} disabled={savingTarget} style={{ ...btnPrimary, flex: 1, minHeight: 44, background: "var(--app-inner)", color: "var(--app-text)" }}>Batal</button>
+              <button type="submit" disabled={savingTarget} style={{ ...btnPrimary, flex: 1, minHeight: 44, opacity: savingTarget ? 0.7 : 1 }}>{savingTarget ? "Menyimpan…" : "Simpan target"}</button>
+            </div>
+          </form>
         </div>
       )}
 

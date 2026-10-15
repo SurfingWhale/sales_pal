@@ -39,15 +39,15 @@ export default function PushToggle() {
             onClick={() => run(state === "on" ? disablePush : enablePush)}
             disabled={busy}
             aria-pressed={state === "on"}
-            style={{ flexShrink: 0, background: state === "on" ? "transparent" : "#005eb0", color: state === "on" ? "var(--brand-text)" : "#fff", border: "1px solid #005eb0", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: busy ? 0.6 : 1 }}
+            style={{ flexShrink: 0, background: state === "on" ? "transparent" : "#005eb0", color: state === "on" ? "var(--brand-text)" : "#fff", border: "1px solid #005eb0", borderRadius: 999, minHeight: 40, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: busy ? 0.6 : 1 }}
           >
-            {busy ? "…" : state === "on" ? "Matikan" : "Nyalain"}
+            {busy ? "Tunggu…" : state === "on" ? "Matikan" : "Nyalain"}
           </button>
         )}
       </div>
       {state === "on" && (
         <button onClick={() => run(async () => `Tes dikirim ke ${await testPush()} perangkat.`)} disabled={busy}
-          style={{ marginTop: 10, background: "none", border: "none", padding: 0, color: "var(--brand-text)", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+          style={{ marginTop: 6, marginLeft: -8, minHeight: 40, background: "none", border: "none", padding: "0 8px", color: "var(--brand-text)", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
           Kirim tes
         </button>
       )}

@@ -712,6 +712,20 @@ export const flows = [
         await page.getByRole("button", { name: /^Report Klien →/ }).click();
         await page.locator(".sp-sub-btn.is-on", { hasText: "Report Klien" }).waitFor();
       });
+      await t.step("Atur target: a sheet with Batal, a reason when empty, then saved", async () => {
+        await go(page, "Beranda");
+        await page.getByRole("button", { name: "Atur target closing" }).click();
+        const sheet = page.getByRole("dialog", { name: /Target closing bulan ini/ });
+        await sheet.getByRole("button", { name: "Batal" }).click();
+        await sheet.waitFor({ state: "detached" });
+        await page.getByRole("button", { name: "Atur target closing" }).click();
+        await sheet.getByRole("button", { name: "Simpan target" }).click();
+        await sheet.getByRole("alert").getByText(/minimal 1/).waitFor();
+        await sheet.getByLabel("Jumlah deal").fill("8");
+        await sheet.getByRole("button", { name: "Simpan target" }).click();
+        await sheet.waitFor({ state: "detached" });
+        await page.getByRole("heading", { level: 1, name: /dari target 8/ }).waitFor();
+      });
       await t.step("the mode is remembered when coming back", async () => {
         await go(page, "Beranda");
         await tab("Report & closing").and(page.locator('[aria-selected="true"]')).waitFor();
@@ -723,6 +737,17 @@ export const flows = [
         await page.getByRole("heading", { name: "Pesan yang pas per tahap" }).waitFor();
         await page.getByRole("button", { name: "Buka Simulator" }).click();
         await page.locator(".sp-sub-btn.is-on", { hasText: "Simulator" }).waitFor();
+      });
+      await t.step("the bell's popover closes with Escape and a tap outside", async () => {
+        const pop = page.getByRole("dialog", { name: "Notifikasi" });
+        await page.getByRole("button", { name: /^Notifikasi/ }).click();
+        await pop.waitFor();
+        await page.keyboard.press("Escape");
+        await pop.waitFor({ state: "detached" });
+        await page.getByRole("button", { name: /^Notifikasi/ }).click();
+        await pop.waitFor();
+        await page.mouse.click(10, (page.viewportSize()?.height || 800) - 160);
+        await pop.waitFor({ state: "detached" });
       });
       await t.step("back to Jualan: start hunting from the strip", async () => {
         await go(page, "Beranda");
@@ -755,6 +780,17 @@ export const flows = [
         await modal(page).locator("#gd-name").fill("Tim Pindah");
         await modal(page).getByRole("button", { name: "Bikin guild" }).click();
         await expectText(page, "Undang orang");
+      });
+      await t.step("with the workspace picker, the header still fits a 320px phone", async () => {
+        const size = page.viewportSize();
+        await page.setViewportSize({ width: 320, height: size.height });
+        try {
+          for (const name of ["Ruang kerja", /^Notifikasi/, "Profil dan pengaturan"]) {
+            const el = name === "Ruang kerja" ? page.locator("#space-pick") : page.getByRole("button", { name });
+            const box = await el.boundingBox();
+            if (!box || box.x < 0 || box.x + box.width > 320) throw new Error(`${name} sits off screen: ${JSON.stringify(box)}`);
+          }
+        } finally { await page.setViewportSize(size); }
       });
       await t.step("in the guild, Leads says a lead is still in Pribadi", async () => {
         await page.locator("#space-pick").selectOption({ label: "🛡️ Tim Pindah" });

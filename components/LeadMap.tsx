@@ -53,7 +53,7 @@ function Blur({ edge, height, z = 2 }: { edge: "t" | "b"; height: number; z?: nu
   return <div className={`pb ${edge}`} aria-hidden="true" style={{ [edge === "t" ? "top" : "bottom"]: 0, height, zIndex: z }}><span /><span /><span /><span /><span /><span /></div>;
 }
 
-export default function LeadMap({ leads, onOpen, onAll }: { leads: MapLead[]; onOpen: (id: string) => void; onAll: () => void }) {
+export default function LeadMap({ leads, onOpen, onAll, onAdd, onImport }: { leads: MapLead[]; onOpen: (id: string) => void; onAll: () => void; onAdd?: () => void; onImport?: () => void }) {
   const [focus, setFocus] = useState<Quadrant | "">("");
   const withQ = useMemo(() => leads.map(l => ({ ...l, q: quadrantOf(l.score, l.value) })), [leads]);
   const chase = withQ.filter(l => l.q === "kejar").sort((a, b) => b.score - a.score || b.value - a.value);
@@ -71,7 +71,13 @@ export default function LeadMap({ leads, onOpen, onAll }: { leads: MapLead[]; on
     return (
       <section aria-labelledby="map-h" style={{ background: "var(--map-bg)", border: "1px solid var(--app-border)", borderRadius: 28, padding: 24 }}>
         <h2 id="map-h" style={{ margin: 0, fontSize: 17, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}><Icon name="map" style={{ color: "var(--brand-text)" }} /> Peta lead</h2>
-        <p style={{ margin: "6px 0 0", fontSize: 14, color: "var(--app-muted)" }}>Belum ada lead yang jalan. Begitu ada, tiap lead jadi satu titik: makin kanan makin berpotensi, makin atas makin besar nilainya.</p>
+        <p style={{ margin: "6px 0 0", fontSize: 14, lineHeight: 1.5, color: "var(--app-muted)" }}>Belum ada lead yang jalan. Begitu ada, tiap lead jadi satu titik: makin kanan makin berpotensi, makin atas makin besar nilainya.</p>
+        {(onAdd || onImport) && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
+            {onAdd && <button onClick={onAdd} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}><Icon name="plus" stroke={1.8} />Tambah lead</button>}
+            {onImport && <button onClick={onImport} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}><Icon name="upload" stroke={1.6} />Import</button>}
+          </div>
+        )}
       </section>
     );
   }
@@ -162,7 +168,7 @@ export default function LeadMap({ leads, onOpen, onAll }: { leads: MapLead[]; on
                 <button onClick={() => onOpen(sel.id)} style={{ flex: 1, height: 42, border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Buka lead</button>
                 {sel.phone
                   ? <a href={waLink(sel.phone, "")} target="_blank" rel="noreferrer" style={{ flex: 1, height: 42, borderRadius: 999, background: "var(--glass-btn)", color: "var(--app-text)", fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>Chat</a>
-                  : <button disabled title="Belum ada nomor" style={{ flex: 1, height: 42, border: 0, borderRadius: 999, background: "var(--glass-btn)", color: "var(--app-muted)", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }}>Chat</button>}
+                  : <button disabled title="Belum ada nomor HP di lead ini" aria-label="Chat, belum ada nomor HP" style={{ flex: 1, height: 42, border: 0, borderRadius: 999, background: "var(--glass-btn)", color: "var(--app-muted)", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }}>Chat</button>}
               </div>
             </div>
           )}
@@ -282,6 +288,9 @@ export default function LeadMap({ leads, onOpen, onAll }: { leads: MapLead[]; on
             </li>
           ))}
         </ul>
+        <button onClick={onAll} style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 44, padding: "0", fontSize: 14, fontWeight: 500, color: "var(--brand-text)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+          Lihat semua {leads.length} lead <Icon name="arrowRight" size={16} />
+        </button>
       </section>
     </>
   );
