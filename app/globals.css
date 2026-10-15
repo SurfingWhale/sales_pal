@@ -912,3 +912,5 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 @media (max-width: 767px) {
   .sp-hunt-panes { top: 66px; }
 }
+.sp-guild-tabs { position: sticky; top: 76px; z-index: 5; }
+@media (max-width: 767px) { .sp-guild-tabs { top: 66px; } }

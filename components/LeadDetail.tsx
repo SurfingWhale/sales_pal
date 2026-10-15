@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import AnimalArt from "@/components/AnimalArt";
 import { createPortal } from "react-dom";
 import Icon, { IconName, MoreDots } from "@/components/Icon";
 import HeatDots from "@/components/HeatDots";
@@ -139,7 +140,7 @@ function ProfileEditor({ profile, phone, onSave, onSavePhone, onClose }: { profi
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {archetypes.map(a => {
               const on = (edit.archetype || guess) === a.id;
-              return <button key={a.id} aria-pressed={on} onClick={() => setEdit({ ...edit, archetype: edit.archetype === a.id ? undefined : a.id })} style={chip(on)}>{a.animal} {a.name}</button>;
+              return <button key={a.id} aria-pressed={on} onClick={() => setEdit({ ...edit, archetype: edit.archetype === a.id ? undefined : a.id })} style={{ ...chip(on), display: "inline-flex", alignItems: "center", gap: 6 }}><AnimalArt id={a.id} size={24} />{a.name}</button>;
             })}
           </div>
         </div>

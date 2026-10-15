@@ -326,7 +326,7 @@ export const flows = [
         await t.page.getByRole("button", { name: "Isi manual" }).first().click();
         await t.page.locator("#pf-need").fill("Foto menu baru buat 2 cabang");
         await t.page.locator("#pf-obj").fill("Harganya kemahalan");
-        await t.page.getByRole("button", { name: "🦁 Singa" }).click();
+        await t.page.getByRole("button", { name: "Singa", exact: true }).click();
         await t.page.getByRole("button", { name: "Simpan profil" }).click();
         await expectText(t.page, "Foto menu baru buat 2 cabang");
         await fullProfile(t.page);
@@ -1305,8 +1305,23 @@ export const flows = [
         await modal(page).getByRole("button", { name: "Bikin guild" }).click();
         await expectText(page, "Undang orang");
       });
+      await t.step("the crest: colour and symbol, then a PNG logo, from the banner", async () => {
+        await page.getByRole("button", { name: "Atur lambang & nama guild" }).click();
+        const sheet = page.getByRole("dialog", { name: "Atur guild" });
+        await sheet.getByRole("radiogroup", { name: "Warna lambang" }).getByRole("radio").nth(2).click();
+        await sheet.getByRole("radio", { name: "Simbol 🦁" }).click();
+        await sheet.getByRole("button", { name: "Simpan" }).click();
+        await sheet.waitFor({ state: "detached" });
+        await page.getByRole("region", { name: "Guild Tim Uji" }).getByRole("img", { name: "Lambang Tim Uji" }).getByText("🦁").waitFor();
+        await page.getByRole("button", { name: "Atur lambang & nama guild" }).click();
+        await sheet.locator('input[type="file"]').setInputFiles(new URL("../../public/brand-logos/visufavor.png", import.meta.url).pathname);
+        await sheet.getByRole("img", { name: "Logo Tim Uji" }).waitFor();
+        await sheet.getByRole("button", { name: "Simpan" }).click();
+        await sheet.waitFor({ state: "detached" });
+        await page.getByRole("region", { name: "Guild Tim Uji" }).getByRole("img", { name: "Logo Tim Uji" }).waitFor();
+      });
       await t.step("leader makes a member invite link", async () => {
-        await page.locator("#inv-role").selectOption("member");
+        await page.getByRole("radiogroup", { name: "Peran undangan" }).getByRole("radio", { name: /^Member/ }).click();
         await page.getByRole("button", { name: "Bikin link undangan" }).click();
         link = await page.locator("#inv-link").inputValue();
         if (!link.includes("/join?g=")) throw new Error(`link ${link}`);

@@ -1,6 +1,7 @@
 "use client";
 
 import { ink } from "@/components/ui";
+import AnimalArt from "@/components/AnimalArt";
 import { useState } from "react";
 import { archetypes, objections, scriptMatrix } from "@/lib/salespal-data";
 
@@ -142,7 +143,7 @@ export default function ScriptLibrary() {
               padding: "0 14px", minHeight: 36, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
             }}
           >
-            {a.animal} {a.name}
+            <AnimalArt id={a.id} size={24} /> {a.name}
           </button>
         ))}
       </div>
@@ -169,7 +170,7 @@ export default function ScriptLibrary() {
                       fontSize: 12, background: `${arch.color}15`, color: ink(arch.color),
                       border: `1px solid ${arch.color}30`, borderRadius: 20, padding: "3px 10px",
                     }}>
-                      {arch.animal} {arch.name}
+                      <AnimalArt id={arch.id} size={18} /> {arch.name}
                     </span>
                     <span style={{
                       fontSize: 12, background: "var(--app-inner)", color: "var(--app-muted)",

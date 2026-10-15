@@ -72,3 +72,11 @@ Rules ga berubah (koleksi guild yang dipakai udah ada; `moved` & `settings/works
 ## Belum ada (sesudah Fase 2)
 
 - Notifikasi lewat email / WhatsApp template (butuh layanan email / WABA).
+
+**Susulan 15 Okt (lambang & tata letak):** "Edit guild logo dll jelek banget; ga bisa milih." Dirapikan pakai skill `better-layout` / `better-ui` (Jakub Krehel):
+- **Lambang guild bisa dipilih**: dari ✎ di banner (Leader & Officer) atau "Atur guild" di Anggota. Lembar **Atur guild** mulai dari pratinjau lambang, lalu **Upload logo PNG** (diperkecil ke 256px), **Warna** (8 pilihan), **Simbol** (inisial atau 10 simbol); di bawahnya nama guild dan **Nama peran** yang dilipat (opsional, cuma Leader). Disimpan di `guilds/{g}/settings/look` (katalog bersama: Leader/Officer ubah, Member baca; Viewer lihat perisai bawaan). **Ga ada perubahan rules.**
+- **Banner ringkas**: lambang 56px, nama, peran, jumlah anggota & level, avatar anggota di kolom nama; dua kotak angka (bulan ini vs target, menuju level berikutnya) berdampingan.
+- Kartu **Data pribadi kamu** ga muncul lagi kalau ga ada yang tersisa. Tab guild nempel di bawah header. Baris anggota pakai avatar.
+- **Lencana & karakter peran** (aset owner, `public/guild/`, dipotong jadi PNG 256px transparan): lencana Leader (mahkota emas), Officer (chevron dobel perak), Member (chevron perunggu), Viewer (mata). Lencana nempel di label peran (banner, baris anggota, nama peran); karakternya jadi avatar sesuai peran (banner, baris anggota). **Undang orang** jadi kartu pilihan peran (karakter + penjelasan hak), ganti dropdown.
+- Karakter ngikutin peran (tiap karakter pakai lencana perannya). Milih karakter sendiri per anggota butuh field baru di `members` = perubahan rules + deploy owner; belum.
+- **Tipe customer jadi karakter** (aset owner, `public/archetypes/`, kabut putih di sekelilingnya dibuang): Burung Hantu, Singa, Lumba-lumba, Kelinci ganti emoji 🦉🦁🐬🐰 di profil lead, Script Library, Simulator, dan kartu prospek Hunting (`components/AnimalArt.tsx`).
