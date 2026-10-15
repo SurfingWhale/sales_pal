@@ -48,7 +48,12 @@ export default function ModalA11y() {
     // its own fields in history.state, so they're copied along.
     let entries = 0;
     let swallow = 0;
-    const push = () => { entries++; window.history.pushState({ ...(window.history.state || {}), spModal: entries }, ""); };
+    // history.back() lands later (WebKit especially). A dialog opened before a
+    // pending back has landed would have its entry eaten by it, so its push
+    // waits until the back is through.
+    let deferred = 0;
+    const pushNow = () => window.history.pushState({ ...(window.history.state || {}), spModal: entries }, "");
+    const push = () => { entries++; if (swallow > 0) deferred++; else pushNow(); };
     const topmost = () => {
       const all = document.querySelectorAll<HTMLElement>(".modal-overlay");
       return all.length ? all[all.length - 1] : null;
@@ -83,6 +88,8 @@ export default function ModalA11y() {
       // Closed by its own button: drop the entry it pushed, quietly.
       while (entries > open) {
         entries--;
+        // Its entry never went in (still waiting on a back): nothing to undo.
+        if (deferred > 0) { deferred--; continue; }
         swallow++;
         window.history.back();
       }
@@ -108,7 +115,11 @@ export default function ModalA11y() {
       else if (!e.shiftKey && (document.activeElement === last || !box.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
     }
     function onPop() {
-      if (swallow > 0) { swallow--; return; }
+      if (swallow > 0) {
+        swallow--;
+        if (swallow === 0) for (; deferred > 0; deferred--) pushNow();
+        return;
+      }
       const overlay = topmost();
       if (!overlay || entries === 0) return;
       entries--;

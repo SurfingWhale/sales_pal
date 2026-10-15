@@ -647,6 +647,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
      (sheets that open from the bottom) and the print/lead pages keep their own shape. */
   .modal-overlay:not(.print-overlay):not(.sp-leadpage):not([style*="flex-end"]) {
     padding: 0 !important; align-items: stretch !important; background: var(--app-card) !important;
+    overflow: hidden !important; /* the sheet scrolls, never the scrim behind it */
   }
   .modal-overlay:not(.print-overlay):not(.sp-leadpage):not([style*="flex-end"]) > [aria-modal] {
     max-width: none !important; width: 100% !important; height: 100dvh; max-height: 100dvh !important;
