@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Business, Invoice, Quote, balance, dpAmount, longDate, paid, rupiah, subtotal, total } from "@/lib/billing";
 import { canEditCatalog, useSpace } from "@/lib/space";
 import { fullDay } from "@/lib/when";
 import BusinessEditor from "@/components/BusinessEditor";
+import { Doc, buildPdf, pdfName, sharePdf } from "@/lib/pdfDoc";
 import { btnMuted, btnPrimary, chip } from "@/components/ui";
 
 // A quote or invoice as a sheet of paper. It is always black on white, whatever
@@ -28,6 +29,26 @@ export default function PrintSheet(props: Props) {
   const space = useSpace();
   const [kop, setKop] = useState(false);
   const canEdit = canEditCatalog(space);
+  const doc = (isQuote ? { kind: "quote", data: q! } : { kind: "invoice", data: inv! }) as Doc;
+  const [pdf, setPdf] = useState<Blob | null>(null);
+  const [pdfMsg, setPdfMsg] = useState("");
+
+  // Built as soon as the sheet opens (and again after the letterhead changes),
+  // so the tap can go straight to the share sheet.
+  useEffect(() => {
+    let live = true;
+    setPdf(null);
+    buildPdf(doc, b).then(x => { if (live) setPdf(x); }, () => { if (live) setPdfMsg("PDF gagal dibuat. Coba tutup lalu buka lagi."); });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, b]);
+
+  async function save() {
+    if (!pdf) return;
+    setPdfMsg("");
+    const r = await sharePdf(pdf, pdfName(doc));
+    setPdfMsg(r === "downloaded" ? `${pdfName(doc)} tersimpan di Downloads.` : r === "shared" ? "PDF dikirim." : "");
+  }
 
   const cell: React.CSSProperties = { padding: "8px 6px", borderBottom: `1px solid ${rule}`, fontSize: 12, verticalAlign: "top" };
   const right: React.CSSProperties = { ...cell, textAlign: "right", whiteSpace: "nowrap" };
@@ -38,9 +59,11 @@ export default function PrintSheet(props: Props) {
       <div onClick={e => e.stopPropagation()} className="print-frame" style={{ width: "100%", maxWidth: 720, maxHeight: "92vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
         <div className="no-print" style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
           {canEdit && <button onClick={() => setKop(true)} style={{ ...chip, minHeight: 44, marginRight: "auto", background: "var(--app-card)", color: "var(--app-text)", fontWeight: 700 }}>Kop & logo</button>}
-          <button onClick={() => window.print()} style={btnPrimary}>Cetak / PDF</button>
+          <button onClick={save} disabled={!pdf} aria-busy={!pdf} style={{ ...btnPrimary, opacity: pdf ? 1 : 0.6 }}>{pdf ? "Simpan / kirim PDF" : "Menyiapkan PDF…"}</button>
+          <button onClick={() => window.print()} className="pointer-only" style={btnMuted}>Cetak</button>
           <button onClick={onClose} style={btnMuted}>Tutup</button>
         </div>
+        <div className="no-print" role="status" style={{ fontSize: 12, color: "#fff", textAlign: "right" }}>{pdfMsg}</div>
         {!b.name && (
           <div className="no-print" role="status" style={{ padding: 12, borderRadius: 10, background: "var(--app-card)", border: "1px solid #ff990060", fontSize: 12, color: "var(--app-text)" }}>
             Kop masih kosong: nama bisnis, logo, dan syarat & ketentuan belum diisi. {canEdit ? "Tekan Kop & logo." : "Minta Leader/Officer guild ngisi di Paket → Kop & logo."}
