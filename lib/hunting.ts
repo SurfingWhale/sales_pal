@@ -15,6 +15,10 @@ export type HuntStatus = (typeof HUNT_STATUS)[number];
 export const huntIcon: Record<HuntStatus, string> = {
   Terkirim: "📤", Dibales: "💬", Tertarik: "✅", Ditolak: "❌", Ghosting: "👻",
 };
+// What each status means, said out loud on the Log DM buttons.
+export const huntAction: Record<HuntStatus, string> = {
+  Terkirim: "Belum dibales", Dibales: "Dibales", Tertarik: "Tertarik", Ditolak: "Ditolak", Ghosting: "Ga dibales",
+};
 export const huntColor: Record<HuntStatus, string> = {
   Terkirim: "#8a94a6", Dibales: "#005eb0", Tertarik: "#00a862", Ditolak: "#ff4444", Ghosting: "#a78bfa",
 };
@@ -42,6 +46,7 @@ export interface Hunt {
   channel?: "post" | "dm";
   campaignId?: string;
   sessionId?: string;
+  statusAt?: number;     // when the status last changed: "dibales 3 hari setelah DM"
 }
 
 export const DEFAULT_GOAL = 20;

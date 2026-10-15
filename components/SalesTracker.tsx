@@ -31,6 +31,7 @@ import Invoices from "@/components/Invoices";
 import Hunting from "@/components/Hunting";
 import HuntBar from "@/components/HuntBar";
 import ClientHub from "@/components/ClientHub";
+import SalesReport from "@/components/SalesReport";
 import GuildHub from "@/components/GuildHub";
 import LeadSources from "@/components/LeadSources";
 import ModalA11y from "@/components/ModalA11y";
@@ -979,7 +980,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           journey={{ prospects, ready: prospectsReady, strategy, live: huntSession.live, sessions: huntSession.sessions, start: huntSession.start, end: huntSession.end }} />}
 
         {/* REPORT KLIEN (PRD-005) */}
-        {activeTab === "Report Klien" && <ClientHub />}
+        {activeTab === "Report Klien" && <><SalesReport quotes={quotes} invoices={invoices} /><ClientHub /></>}
 
         {/* GUILD (PRD-007) */}
         {activeTab === "Guild" && <GuildHub uid={uid} onUseSpace={g => { chooseSpace(g); setSelectedLead(null); }} name={user.displayName || (user.email || "").split("@")[0]} email={user.email || ""} />}

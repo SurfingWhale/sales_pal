@@ -4,6 +4,7 @@ import { useState } from "react";
 import { setDoc, deleteDoc } from "firebase/firestore";
 import { canEditCatalog, spaceDoc, useSpace } from "@/lib/space";
 import { Business, Service, rupiah } from "@/lib/billing";
+import BusinessEditor from "@/components/BusinessEditor";
 import { btnGhost, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
 const CATEGORIES = ["F&B", "Photography", "Sports", "Video", "Design", "Other"];
@@ -42,12 +43,6 @@ export default function Services({ services, business }: { services: Service[]; 
     await deleteDoc(spaceDoc(space, "services", id));
   }
 
-  async function saveProfile() {
-    if (!profile) return;
-    await setDoc(spaceDoc(space, "settings", "business"), profile);
-    setProfile(null);
-  }
-
   const profileReady = business.name && business.bank && business.accountNo;
 
   return (
@@ -58,7 +53,7 @@ export default function Services({ services, business }: { services: Service[]; 
           <div style={subheading}>Daftar jasa yang lo jual. Dipakai buat nyusun penawaran.</div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {canEdit && <button onClick={() => setProfile(business)} style={btnGhost}>Info bisnis</button>}
+          {canEdit && <button onClick={() => setProfile(business)} style={btnGhost}>Kop & logo</button>}
           {canEdit && <button onClick={() => setEditing(BLANK)} style={btnPrimary}>+ Paket</button>}
         </div>
       </div>
@@ -148,37 +143,7 @@ export default function Services({ services, business }: { services: Service[]; 
         </div>
       )}
 
-      {profile && (
-        <div className="modal-overlay" onClick={() => setProfile(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 480 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 6 }}>Info bisnis</div>
-            <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Muncul di kop penawaran & invoice, dan di akhir pesan WA.</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {([
-                ["name", "Nama brand / bisnis", "1/-1"],
-                ["phone", "WhatsApp", "auto"],
-                ["email", "Email", "auto"],
-                ["bank", "Bank", "auto"],
-                ["accountNo", "No. rekening", "auto"],
-                ["accountName", "Atas nama", "1/-1"],
-              ] as [keyof Business, string, string][]).map(([k, l, col]) => (
-                <div key={k} style={{ gridColumn: col }}>
-                  <label style={label}>{l}</label>
-                  <input value={profile[k]} onChange={e => setProfile({ ...profile, [k]: e.target.value })} style={inputStyle} placeholder={l} />
-                </div>
-              ))}
-              <div style={{ gridColumn: "1/-1" }}>
-                <label style={label}>Catatan kaki (syarat & ketentuan)</label>
-                <textarea value={profile.footer} onChange={e => setProfile({ ...profile, footer: e.target.value })} style={{ ...inputStyle, resize: "vertical", height: 80 }} placeholder="DP tidak dapat dikembalikan. Jadwal dikunci setelah DP masuk." />
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={saveProfile} style={btnPrimary}>Simpan</button>
-              <button onClick={() => setProfile(null)} style={btnMuted}>Batal</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {profile && <BusinessEditor business={profile} onClose={() => setProfile(null)} />}
     </div>
   );
 }

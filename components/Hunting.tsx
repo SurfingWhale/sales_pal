@@ -2,11 +2,12 @@
 
 import { type Dispatch, type SetStateAction, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { deleteDoc, getDoc, setDoc, updateDoc } from "firebase/firestore";
-import { addDays, daysBetween, longDate, today, useBusiness, useSpaceCollection } from "@/lib/billing";
+import { Invoice, Quote, addDays, daysBetween, longDate, today, useBusiness, useSpaceCollection } from "@/lib/billing";
+import { jobsFrom } from "@/components/JobCalendar";
 import { canEditCatalog, spaceDoc, stamp, useSpace } from "@/lib/space";
 import {
   HUNT_STATUS, Hunt, HuntStatus, MIN_SAMPLE, PLATFORMS, STALE_DAYS, PitchTemplate, Platform,
-  fill, waLinkFor, huntColor, huntIcon, isStale, parseProfile, pct, platformSource, responded, scoreTemplates, verdict,
+  fill, waLinkFor, huntAction, huntColor, huntIcon, isStale, parseProfile, pct, platformSource, responded, scoreTemplates, verdict,
 } from "@/lib/hunting";
 import ThreadsRadar from "@/components/ThreadsRadar";
 import ProspectList, { ProspectFilter } from "@/components/ProspectList";
@@ -58,6 +59,9 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   const [limit, setLimit] = useState(PAGE);
   const [url, setUrl] = useState("");
   const [pasteMsg, setPasteMsg] = useState("");
+  const [referring, setReferring] = useState<{ id: string; who: string } | null>(null);
+  const [savingTarget, setSavingTarget] = useState(false);
+  const jobs = jobsFrom(useSpaceCollection<Quote>(space, "quotes"), useSpaceCollection<Invoice>(space, "invoices"));
   const targetRef = useRef<HTMLInputElement>(null);
   const topicsRef = useRef<HTMLDivElement>(null);
 
@@ -228,17 +232,50 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         target: who, platform, url: url || undefined, templateId: t.id, templateTitle: t.title, text, channel: ch,
         source: cur ? undefined : source,
       }, cur, live?.id, strategy);
-      setTarget("");
-      setUrl("");
-      setSource({ kind: "manual" });
-      setChannel("dm");
-      targetRef.current?.focus();
+      // The person stays on screen: their post and context are still the guide
+      // for the next message (QA 11 Okt). "Target lain" clears it.
       const entry = { label: `Tercatat: ${how === "wa" ? "WA" : ch === "post" ? "balasan di post" : "DM"} ke ${who}`, run: back };
       setUndo(entry);
       setTimeout(() => setUndo(u => (u?.run === back ? null : u)), 5000);
     } catch {
       setPasteMsg("Pesan tersalin, tapi gagal dicatat. Cek koneksi lalu kirim ulang.");
     }
+  }
+
+  function clearTarget() {
+    setTarget(""); setUrl(""); setSource({ kind: "manual" }); setChannel("dm"); setPasteMsg("");
+    targetRef.current?.focus();
+  }
+
+  // A typed @name or profile link becomes a journey without sending anything yet.
+  async function saveTarget() {
+    const who = target.trim();
+    if (!who || cur || isBlocked) return;
+    setSavingTarget(true);
+    try {
+      await createProspect(space, curId, newProspect({ platform, handle: who, url: url || undefined, source }, ctx(live?.id)));
+      bump(space, live?.id, "prospects");
+    } catch {
+      setPasteMsg("Gagal nyimpen prospek. Cek koneksi.");
+    } finally {
+      setSavingTarget(false);
+    }
+  }
+
+  // "Dia rekomendasiin orang lain": the answer counts as a reply, and the new
+  // person is ready as the next target.
+  async function saveReferral() {
+    if (!referring) return;
+    const h = hunts.find(x => x.id === referring.id);
+    const who = referring.who.trim();
+    setReferring(null);
+    if (!h || !who) return;
+    const note = `Rekomendasiin ${who}`;
+    await updateDoc(spaceDoc(space, "hunts", h.id), { status: h.status === "Terkirim" || h.status === "Ghosting" ? "Dibales" : h.status, note, statusAt: Date.now() });
+    if (h.status === "Terkirim" || h.status === "Ghosting") syncProspect(h, "Dibales", note);
+    if (!apply(who)) { setTarget(who); setPlatform(h.platform); }
+    setPasteMsg(`${who} siap jadi target (rekomendasi dari ${h.target}).`);
+    targetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   async function takeBack() {
@@ -260,7 +297,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     if (status === "Ditolak") setNoting({ id: h.id, note: h.note });
     // An open Balas cepat follows the new status; back at Terkirim there is nothing to answer.
     setReplyFor(r => (r?.id !== h.id ? r : status === "Terkirim" ? null : { ...r, topic: defaultTopic(status, h.note) }));
-    await updateDoc(spaceDoc(space, "hunts", h.id), { status });
+    await updateDoc(spaceDoc(space, "hunts", h.id), { status, statusAt: Date.now() });
     syncProspect(h, status, h.note);
   }
 
@@ -367,10 +404,16 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       <div style={{ ...card, padding: 20, marginBottom: 20 }}>
         <label htmlFor="hunt-target" style={label}>Target</label>
         <div style={{ display: "flex", gap: 8, marginBottom: pasteMsg || url ? 6 : 12 }}>
-          <input id="hunt-target" ref={targetRef} value={target}
-            onChange={e => { const v = e.target.value; if (!(/https?:\/\//.test(v) && apply(v))) { setTarget(v); if (!v) setUrl(""); } }}
-            placeholder="@akun, atau tempel link profil" autoComplete="off" style={{ ...inputStyle, fontSize: 16 }} />
-          <button onClick={pasteLink} aria-label="Tempel link profil dari clipboard" style={{ ...chip, flexShrink: 0, minHeight: 44, padding: "0 12px", fontSize: 12, fontWeight: 700, color: "var(--app-text)" }}>📋 Tempel link</button>
+          <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+            <input id="hunt-target" ref={targetRef} value={target}
+              onPaste={e => { const v = e.clipboardData.getData("text"); if (/https?:\/\//.test(v) && apply(v)) e.preventDefault(); }}
+              onChange={e => { const v = e.target.value; if (!(/https?:\/\//.test(v) && apply(v))) { setTarget(v); if (!v) setUrl(""); } }}
+              placeholder="Tempel link post/profil di sini, atau @akun" autoComplete="off" style={{ ...inputStyle, fontSize: 16, paddingRight: target ? 40 : undefined }} />
+            {target && <button onClick={clearTarget} aria-label="Target lain (kosongin)" title="Target lain"
+              style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", width: 36, height: 36, border: "none", background: "none", color: "var(--app-muted)", fontSize: 18, cursor: "pointer" }}>×</button>}
+          </div>
+          {/* Phones can't paste into a field as easily; a mouse and keyboard can (⌘V), with no extra prompt. */}
+          <button onClick={pasteLink} className="touch-only" aria-label="Tempel link profil dari clipboard" style={{ ...chip, flexShrink: 0, minHeight: 44, padding: "0 12px", fontSize: 12, fontWeight: 700, color: "var(--app-text)" }}>📋 Tempel link</button>
         </div>
         {url && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>🔗 {url}</div>}
         <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginBottom: pasteMsg ? 12 : 0 }}>{pasteMsg}</div>
@@ -389,8 +432,14 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
           </div>
         )}
         {cur && (
-          <CustomerContext p={cur} v={view(cur, now, strategy)} strategy={strategy} stage={stageFor(cur, view(cur, now, strategy))} now={now}
+          <CustomerContext p={cur} v={view(cur, now, strategy)} strategy={strategy} stage={stageFor(cur, view(cur, now, strategy))} now={now} jobs={jobs}
             onSave={c => saveProspect(space, cur, { context: c, updatedAt: Date.now() })} />
+        )}
+        {!cur && target.trim() && !isBlocked && (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", padding: 12, borderRadius: 12, border: "1px dashed var(--app-border)", marginBottom: 16, fontSize: 12 }}>
+            <span style={{ color: "var(--app-muted)" }}><b style={{ color: "var(--app-text)" }}>{target.trim()}</b> belum ada di journey. Kirim pesan otomatis nyimpen, atau simpan dulu.</span>
+            <button onClick={saveTarget} disabled={savingTarget} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>＋ Simpan ke journey</button>
+          </div>
         )}
         {(curPost || source.kind === "post") && !isBlocked && (
           <div role="radiogroup" aria-label="Kirim lewat" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
@@ -441,23 +490,39 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         )}
         {shown.slice(0, limit).map(h => {
           const age = daysBetween(h.date, now);
+          const sentAt = new Date(h.createdAt);
+          const clock = `${String(sentAt.getHours()).padStart(2, "0")}.${String(sentAt.getMinutes()).padStart(2, "0")}`;
+          const after = h.statusAt && h.status !== "Terkirim" ? Math.max(0, Math.round((h.statusAt - h.createdAt) / 86_400_000)) : null;
+          const next =
+            h.status === "Terkirim" ? (age >= STALE_DAYS ? `Udah ${age} hari belum dibales. Follow-up sekali, kalau tetap diam tandai Ga dibales.` : "Nunggu balasan. Begitu dia bales, tandai di bawah.")
+            : h.status === "Dibales" ? "Dia bales. Lanjut ngobrol, lalu tandai Tertarik atau Ditolak."
+            : h.status === "Tertarik" ? (h.leadId ? "Udah jadi lead, lanjut di Jualan → Leads." : "Tertarik: jadiin lead biar masuk pipeline.")
+            : h.status === "Ditolak" ? "Ditolak. Catat alasannya, buka Balas buat jawab keberatannya."
+            : "Ga dibales. Diparkir; coba lagi nanti lewat kampanye.";
           return (
             <div key={h.id} style={{ padding: "12px 0", borderTop: "1px solid var(--app-inner)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.target || "Tanpa nama"}</div>
                   <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>
-                    {h.platform} · {h.templateTitle} · {age === 0 ? "hari ini" : age === 1 ? "kemarin" : longDate(h.date)}
+                    {h.platform} · {h.templateTitle} · {h.channel === "post" ? "balas di post" : "DM"} {age === 0 ? "hari ini" : age === 1 ? "kemarin" : longDate(h.date)} {clock}
+                    {after !== null && ` · ${h.status.toLowerCase()} ${after === 0 ? "di hari yang sama" : `${after} hari kemudian`}`}
                   </div>
                   {h.note && <div style={{ fontSize: 12, color: "var(--app-sub)", marginTop: 4 }}>“{h.note}”</div>}
                 </div>
                 <span style={badge(huntColor[h.status])}>{huntIcon[h.status]} {h.status}</span>
               </div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
+              <div style={{ fontSize: 12, color: "var(--app-sub)", marginTop: 8 }}>{next}</div>
+              <div role="group" aria-label={`Hasil DM ke ${h.target || "target"}`} style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8, alignItems: "center" }}>
+                <span style={{ fontSize: 12, color: "var(--app-muted)" }}>Ubah jadi:</span>
                 {HUNT_STATUS.filter(s => s !== h.status).map(s => (
-                  <button key={s} onClick={() => setStatus(h, s)} aria-label={`Tandai ${s}`} title={s}
-                    style={{ ...chip, minWidth: 40, minHeight: 36, fontSize: 14, padding: "4px 8px" }}>{huntIcon[s]}</button>
+                  <button key={s} onClick={() => setStatus(h, s)} aria-label={`Tandai ${huntAction[s]}`}
+                    style={{ ...chip, minHeight: 36, fontSize: 12, fontWeight: 600, padding: "4px 10px", borderColor: `${huntColor[s]}60` }}>{huntIcon[s]} {huntAction[s]}</button>
                 ))}
+                <button onClick={() => setReferring(referring?.id === h.id ? null : { id: h.id, who: "" })} aria-expanded={referring?.id === h.id}
+                  style={{ ...chip, minHeight: 36, fontSize: 12, fontWeight: 600 }}>↪ Rekomendasiin orang</button>
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
                 {isStale(h, now) && <button onClick={() => followUp(h)} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", border: "1px solid #ff990060" }}>↻ Follow-up</button>}
                 {h.status === "Tertarik" && !h.leadId && <button onClick={() => makeLead(h)} style={{ ...chip, minHeight: 36, background: "#00a862", color: "#1c2128", border: "none", fontWeight: 700 }}>Jadiin Lead →</button>}
                 {h.leadId && <span style={{ fontSize: 12, color: "var(--ok)", fontWeight: 700 }}>✓ Sudah jadi lead</span>}
@@ -510,6 +575,15 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
                       {onOpenScripts && <button onClick={onOpenScripts} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)" }}>Buka Script Library →</button>}
                     </div>
                   )}
+                </div>
+              )}
+              {referring?.id === h.id && (
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <input autoFocus value={referring.who} onChange={e => setReferring({ ...referring, who: e.target.value })}
+                    onKeyDown={e => { if (e.key === "Enter") saveReferral(); if (e.key === "Escape") setReferring(null); }}
+                    placeholder="@akun atau link yang dia rekomendasiin" aria-label="Akun yang direkomendasiin" style={{ ...inputStyle, fontSize: 16, padding: "8px 12px" }} />
+                  <button onClick={saveReferral} style={{ ...btnPrimary, padding: "8px 14px" }}>Jadiin target</button>
+                  <button onClick={() => setReferring(null)} aria-label="Batal" style={{ ...btnMuted, padding: "8px 12px" }}>×</button>
                 </div>
               )}
               {noting?.id === h.id && (

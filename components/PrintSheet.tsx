@@ -1,8 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Business, Invoice, Quote, balance, dpAmount, longDate, paid, rupiah, subtotal, total } from "@/lib/billing";
-import { btnMuted, btnPrimary } from "@/components/ui";
+import { canEditCatalog, useSpace } from "@/lib/space";
+import { fullDay } from "@/lib/when";
+import BusinessEditor from "@/components/BusinessEditor";
+import { btnMuted, btnPrimary, chip } from "@/components/ui";
 
 // A quote or invoice as a sheet of paper. It is always black on white, whatever
 // the app theme, because it is what the client receives. "Cetak / PDF" prints
@@ -21,6 +25,9 @@ export default function PrintSheet(props: Props) {
   const isQuote = kind === "quote";
   const inv = !isQuote ? (props.data as Invoice) : null;
   const q = isQuote ? (props.data as Quote) : null;
+  const space = useSpace();
+  const [kop, setKop] = useState(false);
+  const canEdit = canEditCatalog(space);
 
   const cell: React.CSSProperties = { padding: "8px 6px", borderBottom: `1px solid ${rule}`, fontSize: 12, verticalAlign: "top" };
   const right: React.CSSProperties = { ...cell, textAlign: "right", whiteSpace: "nowrap" };
@@ -29,17 +36,29 @@ export default function PrintSheet(props: Props) {
   return createPortal(
     <div className="modal-overlay print-overlay" onClick={onClose}>
       <div onClick={e => e.stopPropagation()} className="print-frame" style={{ width: "100%", maxWidth: 720, maxHeight: "92vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-        <div className="no-print" style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+        <div className="no-print" style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
+          {canEdit && <button onClick={() => setKop(true)} style={{ ...chip, minHeight: 44, marginRight: "auto", background: "var(--app-card)", color: "var(--app-text)", fontWeight: 700 }}>Kop & logo</button>}
           <button onClick={() => window.print()} style={btnPrimary}>Cetak / PDF</button>
           <button onClick={onClose} style={btnMuted}>Tutup</button>
         </div>
+        {!b.name && (
+          <div className="no-print" role="status" style={{ padding: 12, borderRadius: 10, background: "var(--app-card)", border: "1px solid #ff990060", fontSize: 12, color: "var(--app-text)" }}>
+            Kop masih kosong: nama bisnis, logo, dan syarat & ketentuan belum diisi. {canEdit ? "Tekan Kop & logo." : "Minta Leader/Officer guild ngisi di Paket → Kop & logo."}
+          </div>
+        )}
 
         <div className="print-root" style={{ background: "#fff", color: ink, borderRadius: 8, padding: "40px 36px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 24, flexWrap: "wrap", marginBottom: 32 }}>
-            <div>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>{b.name || "—"}</div>
-              <div style={{ fontSize: 12, color: soft, marginTop: 4, lineHeight: 1.6 }}>
-                {[b.phone, b.email].filter(Boolean).join(" · ")}
+            <div style={{ display: "flex", gap: 14, alignItems: "center", minWidth: 0 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {b.logo && <img src={b.logo} alt="" style={{ maxHeight: 64, maxWidth: 140, objectFit: "contain" }} />}
+              <div style={{ minWidth: 0 }}>
+                {b.name && <div style={{ fontSize: 20, fontWeight: 700 }}>{b.name}</div>}
+                {b.tagline && <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{b.tagline}</div>}
+                <div style={{ fontSize: 12, color: soft, marginTop: 4, lineHeight: 1.6 }}>
+                  {[b.phone, b.email].filter(Boolean).join(" · ")}
+                  {b.address && <div>{b.address}</div>}
+                </div>
               </div>
             </div>
             <div style={{ textAlign: "right" }}>
@@ -59,6 +78,7 @@ export default function PrintSheet(props: Props) {
               <div><span style={{ color: soft }}>Tanggal:</span> {longDate(data.date)}</div>
               {q && <div><span style={{ color: soft }}>Berlaku s/d:</span> {longDate(q.validUntil)}</div>}
               {inv && <div><span style={{ color: soft }}>Jatuh tempo:</span> {longDate(inv.dueDate)}</div>}
+              {data.eventDate && <div><span style={{ color: soft }}>Tanggal acara:</span> {fullDay(data.eventDate)}</div>}
             </div>
           </div>
 
@@ -74,7 +94,10 @@ export default function PrintSheet(props: Props) {
               {data.items.map((it, i) => (
                 <tr key={i}>
                   <td style={{ ...cell, width: 24, color: soft }}>{i + 1}</td>
-                  <td style={cell}>{it.name}</td>
+                  <td style={cell}>
+                    <div style={{ fontWeight: 600 }}>{it.name}</div>
+                    {it.description?.trim() && <div style={{ fontSize: 11, color: soft, marginTop: 3, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{it.description.trim()}</div>}
+                  </td>
                   <td style={right}>{it.qty}</td>
                   <td style={right}>{rupiah(it.price)}</td>
                   <td style={right}>{rupiah(it.qty * it.price)}</td>
@@ -112,13 +135,21 @@ export default function PrintSheet(props: Props) {
             </div>
           )}
 
-          {(data.notes || b.footer) && (
+          {data.notes && (
             <div style={{ marginTop: 28, fontSize: 11, color: soft, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
-              {[data.notes, b.footer].filter(Boolean).join("\n\n")}
+              <div style={{ fontSize: 10, letterSpacing: "1px", marginBottom: 2 }}>CATATAN</div>
+              {data.notes}
+            </div>
+          )}
+          {b.footer && (
+            <div style={{ marginTop: 20, fontSize: 11, color: soft, lineHeight: 1.7, whiteSpace: "pre-wrap", borderTop: `1px solid ${rule}`, paddingTop: 12 }}>
+              <div style={{ fontSize: 10, letterSpacing: "1px", marginBottom: 2 }}>SYARAT & KETENTUAN</div>
+              {b.footer}
             </div>
           )}
         </div>
       </div>
+      {kop && <div onClick={e => e.stopPropagation()}><BusinessEditor business={b} onClose={() => setKop(false)} /></div>}
     </div>,
     document.body
   );

@@ -6,6 +6,7 @@
 export interface PostContext {
   need?: string;       // "foto katalog f&b"
   when?: string;       // "besok, jam 1-5 sore"
+  date?: string;       // YYYY-MM-DD, set by hand when the words aren't enough (lib/when.ts reads them otherwise)
   where?: string;      // "Sentul"
   budget?: string;     // "ramah utk umk"
   business?: string;   // "f&b · umk"
