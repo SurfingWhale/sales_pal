@@ -627,3 +627,45 @@ footer p { font-size: 12px; color: #8b949e; }
 @media not ((hover: hover) and (pointer: fine)) {
   .pointer-only { display: none !important; }
 }
+
+/* ---- Forms that feel like the phone's own (QA 15 Okt) ----
+   Date and time fields: iOS gives them a native width and look that spill out
+   of their column; make them behave like any other field. */
+input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"] {
+  -webkit-appearance: none; appearance: none;
+  min-width: 0; max-width: 100%; display: block; box-sizing: border-box;
+}
+input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-date-and-time-value { text-align: left; min-height: 1.3em; }
+.modal-overlay input, .modal-overlay select, .modal-overlay textarea { box-sizing: border-box; min-width: 0; max-width: 100%; }
+
+@media (max-width: 640px) {
+  /* Every dialog is a full-screen sheet, like a native form; the bottom sheets
+     (sheets that open from the bottom) and the print/lead pages keep their own shape. */
+  .modal-overlay:not(.print-overlay):not(.sp-leadpage):not([style*="flex-end"]) {
+    padding: 0 !important; align-items: stretch !important; background: var(--app-card) !important;
+  }
+  .modal-overlay:not(.print-overlay):not(.sp-leadpage):not([style*="flex-end"]) > [aria-modal] {
+    max-width: none !important; width: 100% !important; height: 100dvh; max-height: 100dvh !important;
+    border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
+  }
+  .modal-overlay:not(.print-overlay):not(.sp-leadpage):not([style*="flex-end"]) > [aria-modal]:not([data-own-layout]) {
+    padding: calc(env(safe-area-inset-top, 0px) + 20px) 20px calc(env(safe-area-inset-bottom, 0px) + 28px) !important;
+    overflow-y: auto !important; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  }
+
+  /* Fields: one comfortable size, room to tap, labels you can read. */
+  .modal-overlay input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  .modal-overlay select {
+    min-height: 48px; padding: 12px 14px !important; border-radius: 12px !important; line-height: 1.3;
+  }
+  .modal-overlay textarea { padding: 12px 14px !important; border-radius: 12px !important; line-height: 1.45; }
+  .modal-overlay label { font-size: 13px !important; font-weight: 600; color: var(--app-sub) !important; margin-bottom: 6px !important; }
+  /* Side-by-side fields stack: one field per row reads and types better. */
+  .modal-overlay [aria-modal] div[style*="grid-template-columns: 1fr 1fr"],
+  .modal-overlay [aria-modal] div[style*="grid-template-columns:1fr 1fr"] { grid-template-columns: minmax(0, 1fr) !important; }
+  .modal-overlay [aria-modal] [style*="grid-column: auto"] { grid-column: 1 / -1 !important; }
+  .modal-overlay [aria-modal] button { min-height: 44px; font-size: 14px !important; }
+  .modal-x-rail .modal-x { margin: -8px -6px 0 0; font-size: 22px !important; min-height: 40px; }
+  /* The title and its line under it keep clear of the ×. */
+  .modal-x-rail + *, .modal-x-rail + * + * { padding-right: 48px; }
+}
