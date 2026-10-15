@@ -387,6 +387,7 @@ export const flows = [
   },
   {
     name: "whatsapp: a chat shared from Android becomes a new lead's profile",
+    serviceWorker: true,
     async run(t) {
       const { page, base } = t;
       await t.step("sign up", () => signup(t));
@@ -648,7 +649,7 @@ export const flows = [
             // A phone form: the sheet fills the screen, and no field crowds another.
             const bad = await top().evaluate((ov) => {
               const box = ov.querySelector("[aria-modal]");
-              const vw = window.innerWidth, out = [];
+              const vw = document.documentElement.clientWidth, out = [];
               const r0 = box.getBoundingClientRect();
               if (ov.matches(":not(.print-overlay):not(.sp-leadpage):not([style*='flex-end'])") && (r0.width < vw - 1 || r0.left > 1)) out.push(`sheet is ${Math.round(r0.width)}px of ${vw}`);
               const fields = [...box.querySelectorAll("input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea")].filter(e => e.offsetParent);

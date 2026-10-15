@@ -59,6 +59,11 @@ function uxProbe() {
 // The HIG audit of what's on screen now.
 async function audit(page, touch) {
   if (!/^https?:/.test(page.url())) return [];
+  // Judge the screen at rest: a dialog fading in reads as low contrast.
+  await page.evaluate(() => Promise.race([
+    Promise.all(document.getAnimations().map(a => a.finished.catch(() => undefined))),
+    new Promise(r => setTimeout(r, 1500)),
+  ])).catch(() => undefined);
   const found = await page.evaluate((touch) => {
     const out = [];
     const vw = innerWidth, vh = innerHeight;
@@ -157,13 +162,22 @@ async function main() {
   const browser = await engine.launch();
   const results = [];
   for (const f of flows.filter(f => f.name.toLowerCase().includes(filter.toLowerCase()))) {
-    const opts = contextFor();
+    // WebKit sends a page's fetches through its service worker, out of reach of
+    // page.route mocks; only the flow that tests the worker keeps it.
+    const opts = { ...contextFor(), ...(DEVICE && !f.serviceWorker ? { serviceWorkers: "block" } : {}) };
     const ctx = await browser.newContext(opts);
     // Chromium knows the clipboard permissions; WebKit rejects them when the page opens.
     if (!DEVICE) await ctx.grantPermissions(["clipboard-read", "clipboard-write"], { origin: BASE });
     const ux = { taps: 0, ms: [], native: [], audits: [] };
     await ctx.exposeBinding("__ux", (_src, k, v) => { if (k === "tap") ux.taps++; else if (k === "ms") ux.ms.push(v); else if (k === "native") ux.native.push(v); });
     await ctx.addInitScript(uxProbe);
+    // Headless WebKit refuses clipboard access without a real user; give it an
+    // in-memory clipboard so Copy / Tempel are still exercised. The real
+    // clipboard is checked on a device (salespal-uat S1–S7).
+    if (DEVICE) await ctx.addInitScript(() => {
+      let buf = "";
+      try { Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (t) => { buf = String(t); }, readText: async () => buf } }); } catch { /* keep the real one */ }
+    });
     const page = await ctx.newPage();
     const errors = [];
     page.on("pageerror", e => errors.push(e.message));
