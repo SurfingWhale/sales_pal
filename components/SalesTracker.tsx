@@ -1366,7 +1366,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       {/* Atur target closing */}
       {targetDraft !== null && (
         <div className="modal-overlay" onClick={() => { if (!savingTarget) setTargetDraft(null); }}>
-          <form aria-labelledby="target-h" onClick={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); saveClosingTarget(); }}
+          <form noValidate aria-labelledby="target-h" onClick={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); saveClosingTarget(); }}
             style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 400 }}>
             <div id="target-h" style={{ fontSize: 17, fontWeight: 700 }}>Target closing bulan ini</div>
             <p style={{ margin: "4px 0 16px", fontSize: 13, color: "var(--app-muted)" }}>Berapa deal yang mau kamu tutup bulan ini? Progresnya keliatan di Beranda.</p>
