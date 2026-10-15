@@ -1321,7 +1321,7 @@ export const flows = [
         await page.getByRole("region", { name: "Guild Tim Uji" }).getByRole("img", { name: "Logo Tim Uji" }).waitFor();
       });
       await t.step("leader makes a member invite link", async () => {
-        await page.locator("#inv-role").selectOption("member");
+        await page.getByRole("radiogroup", { name: "Peran undangan" }).getByRole("radio", { name: /^Member/ }).click();
         await page.getByRole("button", { name: "Bikin link undangan" }).click();
         link = await page.locator("#inv-link").inputValue();
         if (!link.includes("/join?g=")) throw new Error(`link ${link}`);

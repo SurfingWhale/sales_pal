@@ -23,6 +23,30 @@ import { badge, btnGhost, btnMuted, btnPrimary, btnWA, card, chip, font, heading
 
 type View = "pipeline" | "report" | "aktivitas" | "anggota";
 const ROLE_COLOR: Record<Role, string> = { leader: "#b45309", officer: "#7c3aed", member: "#005eb0", viewer: "#64748b" };
+// The owner's art (public/guild): a badge per role, and a character wearing it.
+const BADGE = (r: Role) => `/guild/badge-${r}.png`;
+const PERSON = (r: Role) => `/guild/char-${r}.png`;
+
+function RoleBadge({ guild, role, size = 20 }: { guild: Guild | null; role: Role; size?: number }) {
+  return (
+    <span style={{ ...badge(ROLE_COLOR[role]), display: "inline-flex", alignItems: "center", gap: 4, paddingInlineStart: 4 }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={BADGE(role)} alt="" width={size} height={size} style={{ display: "block" }} />
+      {titleOf(guild, role)}
+    </span>
+  );
+}
+
+function Avatar({ role, size, ring }: { role: Role; size: number; ring?: boolean }) {
+  return (
+    <span aria-hidden="true" style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, overflow: "hidden", display: "inline-flex", alignItems: "flex-end", justifyContent: "center",
+      background: `color-mix(in srgb, ${ROLE_COLOR[role]} 18%, var(--app-card))`, border: ring ? "2px solid var(--app-card)" : `1px solid ${ROLE_COLOR[role]}40` }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={PERSON(role)} alt="" width={size} height={size} style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", transform: "scale(1.12) translateY(6%)" }} />
+    </span>
+  );
+}
+
 const fmtN = (n: number) => Math.round(n).toLocaleString("id-ID");
 const n0 = (s: string) => parseInt(s.replace(/\D/g, ""), 10) || 0;
 
@@ -141,7 +165,8 @@ export default function GuildHub({ uid, name, email, onUseSpace }: { uid: string
       <div className="sp-team" style={{ paddingBottom: 72 }}>
         {header}
         <div style={{ ...card, padding: "36px 22px", textAlign: "center", maxWidth: 720, marginInline: "auto" }}>
-          <div style={{ fontSize: 34, marginBottom: 10 }}>🛡️</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={BADGE("leader")} alt="" width={88} height={88} style={{ display: "block", margin: "0 auto 10px" }} />
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ikut guild mana pun</div>
           <div style={{ fontSize: 12.5, color: "var(--app-muted)", marginBottom: 18, maxWidth: 440, marginInline: "auto", lineHeight: 1.6 }}>
             Bikin guild buat tim kamu (atau tim sales klien), terus undang orangnya lewat link. Leader & Officer lihat semua deal dan report tiap orang; Member kerjain deal-nya sendiri; Viewer cuma lihat report.
@@ -297,14 +322,13 @@ function GuildBanner({ guild, me, members, deals, targets, look, onEdit }: { gui
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 18, fontWeight: 800, fontFamily: font, lineHeight: 1.25, overflowWrap: "anywhere" }}>{guild.name}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
-            <span style={badge(ROLE_COLOR[me.role])}>{titleOf(guild, me.role)}</span>
+            <RoleBadge guild={guild} role={me.role} />
             <span style={{ fontSize: 12, color: "var(--app-muted)" }}>{members.length} anggota{sees ? ` · Level ${lv}` : ""}</span>
           </div>
           <div role="group" aria-label={`Anggota: ${people.map(m => `${m.name} (${titleOf(guild, m.role)})`).join(", ")}`} style={{ display: "flex", alignItems: "center", marginTop: 8 }}>
             {shown.map((m, i) => (
-              <span key={m.uid} title={`${m.name} · ${titleOf(guild, m.role)}`} aria-hidden="true"
-                style={{ width: 28, height: 28, borderRadius: "50%", marginInlineStart: i ? -6 : 0, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff", background: ROLE_COLOR[m.role], border: "2px solid var(--app-card)" }}>
-                {(m.name || "?").trim()[0]?.toUpperCase()}
+              <span key={m.uid} title={`${m.name} · ${titleOf(guild, m.role)}`} style={{ marginInlineStart: i ? -8 : 0, display: "inline-flex" }}>
+                <Avatar role={m.role} size={32} ring />
               </span>
             ))}
             {people.length > shown.length && <span style={{ fontSize: 12, color: "var(--app-muted)", marginInlineStart: 8 }}>+{people.length - shown.length}</span>}
@@ -421,7 +445,10 @@ function GuildSettings({ gid, guild, me, uid, look, onClose }: { gid: string; gu
               <div style={{ fontSize: 12, color: "var(--app-muted)", margin: "4px 0 12px" }}>Ganti sesuai istilah tim, mis. Officer jadi Supervisor. Hak aksesnya tetap.</div>
               {ROLES.map(r => (
                 <div key={r} style={{ marginBottom: 12 }}>
-                  <label htmlFor={`gs-${r}`} style={label}>{titleOf(null, r)}</label>
+                  <label htmlFor={`gs-${r}`} style={{ ...label, display: "flex", alignItems: "center", gap: 6 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={BADGE(r)} alt="" width={22} height={22} />{titleOf(null, r)}
+                  </label>
                   <input id={`gs-${r}`} value={f.titles[r]} onChange={e => setF({ ...f, titles: { ...f.titles, [r]: e.target.value } })} placeholder={titleOf(null, r)} maxLength={30} style={inputStyle} />
                   <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>{ROLE_HINT[r]}</div>
                 </div>
@@ -668,7 +695,7 @@ function Members({ gid, guild, me, members, invites, uid, onSettings }: { gid: s
           const options = rolesFor(m);
           return (
             <div key={m.uid} className="sp-member" style={{ ...card, padding: "12px 14px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: "50%", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800, color: "#fff", background: ROLE_COLOR[m.role] }}>{(m.name || "?").trim()[0]?.toUpperCase()}</span>
+              <Avatar role={m.role} size={44} />
               <div style={{ minWidth: 0, flex: "1 1 160px" }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}{m.uid === me.uid ? " (kamu)" : ""}</div>
                 <div style={{ fontSize: 12, color: "var(--app-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.email}</div>
@@ -680,7 +707,7 @@ function Members({ gid, guild, me, members, invites, uid, onSettings }: { gid: s
                     {Array.from(new Set([m.role, ...options])).map(r => <option key={r} value={r}>{titleOf(guild, r)}</option>)}
                   </select>
                 </>
-              ) : <span style={badge(ROLE_COLOR[m.role])}>{titleOf(guild, m.role)}</span>}
+              ) : <RoleBadge guild={guild} role={m.role} />}
               {canRemove(m) && (
                 <button onClick={() => setKicking(m)} aria-label={`Keluarkan ${m.name}`} style={{ ...chip, fontSize: 13, color: "color-mix(in srgb, #dc2626 70%, var(--app-text))", borderColor: "#dc262640" }}>Keluarkan</button>
               )}
@@ -694,14 +721,21 @@ function Members({ gid, guild, me, members, invites, uid, onSettings }: { gid: s
         <div style={{ ...card, padding: 16 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>Undang orang</div>
           <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>Link berlaku 7 hari, buat siapa pun yang login pakai Gmail/email. Kirim ke orangnya lewat WA.</div>
-          <div className="sp-invite-row">
-            <label htmlFor="inv-role" style={{ position: "absolute", left: -9999 }}>Peran undangan</label>
-            <select id="inv-role" value={inviteRole} onChange={e => setInviteRole(e.target.value as Role)} style={{ ...inputStyle, width: "auto" }}>
-              {invitable(me.role).map(r => <option key={r} value={r}>{titleOf(guild, r)}</option>)}
-            </select>
-            <button onClick={makeInvite} disabled={inviting} style={{ ...btnPrimary, opacity: inviting ? 0.6 : 1 }}>{inviting ? "Membuat link…" : "Bikin link undangan"}</button>
+          <div role="radiogroup" aria-label="Peran undangan" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: 8, marginBottom: 12 }}>
+            {invitable(me.role).map(r => (
+              <button key={r} type="button" role="radio" aria-checked={inviteRole === r} onClick={() => setInviteRole(r)}
+                style={{ display: "flex", gap: 10, alignItems: "center", textAlign: "start", padding: 10, minHeight: 64, borderRadius: 12, cursor: "pointer", fontFamily: "inherit", color: "var(--app-text)",
+                  background: inviteRole === r ? `color-mix(in srgb, ${ROLE_COLOR[r]} 10%, var(--app-card))` : "var(--app-card)",
+                  border: `${inviteRole === r ? 2 : 1}px solid ${inviteRole === r ? ROLE_COLOR[r] : "var(--app-border)"}` }}>
+                <Avatar role={r} size={44} />
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 14, fontWeight: 700 }}>{titleOf(guild, r)}</span>
+                  <span style={{ display: "block", fontSize: 12, color: "var(--app-muted)", lineHeight: 1.4 }}>{ROLE_HINT[r]}</span>
+                </span>
+              </button>
+            ))}
           </div>
-          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 8 }}>{ROLE_HINT[inviteRole]}</div>
+          <button onClick={makeInvite} disabled={inviting} style={{ ...btnPrimary, width: "100%", minHeight: 48, opacity: inviting ? 0.6 : 1 }}>{inviting ? "Membuat link…" : `Bikin link undangan ${titleOf(guild, inviteRole)}`}</button>
           {link && (
             <div style={{ marginTop: 12 }}>
               <label htmlFor="inv-link" style={label}>Link undangan</label>
