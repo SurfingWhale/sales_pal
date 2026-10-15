@@ -892,3 +892,16 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+/* An undo bar pinned where the thumb is: above the floating nav on phones,
+   bottom centre on a laptop. */
+.sp-toast {
+  position: fixed; z-index: 90; left: 16px; right: 16px; margin: 0 auto; max-width: 480px;
+  bottom: 24px;
+  display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 16px;
+  border-radius: 16px; background: #1c2128; color: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.24);
+  animation: sp-sheet-in .2s cubic-bezier(.2,.8,.2,1);
+}
+@media (max-width: 767px) {
+  .sp-toast { bottom: calc(env(safe-area-inset-bottom, 0px) + 96px); }
+}

@@ -31,6 +31,7 @@ import Quotes, { LeadRef } from "@/components/Quotes";
 import Invoices from "@/components/Invoices";
 import Hunting from "@/components/Hunting";
 import HuntBar from "@/components/HuntBar";
+import OccupancyCalendar from "@/components/OccupancyCalendar";
 import FollowUpRun from "@/components/FollowUpRun";
 import { SORTS, Sort, VIEWS, View as LeadView, followUpQueue, inView, matches, sortLeads } from "@/lib/leadQuery";
 import ClientHub from "@/components/ClientHub";
@@ -1051,6 +1052,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         {/* GUILD (PRD-007) */}
         {activeTab === "Guild" && <GuildHub uid={uid} onUseSpace={g => { chooseSpace(g); setSelectedLead(null); }} name={user.displayName || (user.email || "").split("@")[0]} email={user.email || ""} />}
 
+        {(activeTab === "Penawaran" || activeTab === "Invoice") && <OccupancyCalendar quotes={quotes} invoices={invoices} />}
         {activeTab === "Penawaran" && (
           <Quotes quotes={quotes} invoices={invoices} services={services} business={business}
             leads={leads.map(l => ({ id: l.id, name: l.name, contact: l.contact, phone: l.phone }))}

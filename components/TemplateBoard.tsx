@@ -22,6 +22,8 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
   const [ask, askSheet] = useConfirm();
   const space = useSpace();
   const [editing, setEditing] = useState<PitchTemplate | null>(null);
+  // Long messages show four lines and "Lihat selengkapnya" (QA 15 Okt).
+  const [full, setFull] = useState<Set<string>>(new Set());
   const board = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLTextAreaElement>(null);
 
@@ -64,7 +66,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
         <div style={{ fontSize: 13, fontWeight: 700 }}>Pilih pesan</div>
         {canEdit && <button onClick={() => setEditing({ id: "", title: "", body: "", stage })} style={chip}>+ Template</button>}
       </div>
-      <div ref={board} role="list" aria-label="Template per tahap" style={{ display: "flex", gap: 12, overflowX: "auto", scrollSnapType: "x proximity", paddingBottom: 6, scrollbarWidth: "thin" }}>
+      <div ref={board} role="list" aria-label="Template per tahap" style={{ display: "flex", alignItems: "flex-start", gap: 12, overflowX: "auto", scrollSnapType: "x proximity", paddingBottom: 6, scrollbarWidth: "thin" }}>
         {STAGES.map((s, i) => {
           const list = templates.filter(t => stageOf(t) === s.id);
           const on = s.id === stage;
@@ -102,7 +104,24 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
                       {canEdit && <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} title="Edit template" className="sp-icon-btn" style={{ ...chip, flexShrink: 0, minWidth: 32, minHeight: 32, padding: "2px 8px", margin: "-6px -6px 0 0" }}>✎</button>}
                     </div>
                     {sc && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>{sc.sent} terkirim · dibales {pct(sc.responseRate)} · tertarik {pct(sc.winRate)}</div>}
-                    <div style={{ fontSize: 12.5, color: "var(--app-sub)", lineHeight: 1.6, whiteSpace: "pre-wrap", marginBottom: 8, flex: 1 }}>{fillTemplate(t.body, data)}</div>
+                    {(() => {
+                      const text = fillTemplate(t.body, data);
+                      const long = text.length > 160 || text.split("\n").length > 4;
+                      const shown = !long || full.has(t.id);
+                      return (
+                        <>
+                          <div id={`tpl-text-${t.id}`} style={{ fontSize: 14, color: "var(--app-sub)", lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: long ? 4 : 10,
+                            ...(shown ? {} : { display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }) }}>{text}</div>
+                          {long && (
+                            <button onClick={() => setFull(f => { const n = new Set(f); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })}
+                              aria-expanded={shown} aria-controls={`tpl-text-${t.id}`}
+                              style={{ alignSelf: "flex-start", background: "none", border: 0, padding: "0 0 8px", minHeight: 32, color: "var(--brand-text)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                              {shown ? "Ringkas ▴" : "Lihat selengkapnya ▾"}
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()}
                     {missing.length > 0 && sampleName && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>Kosong buat orang ini: {missing.map(k => `{${k}}`).join(", ")}</div>}
                     <div style={{ display: "flex", gap: 8 }}>
                       <button onClick={() => onPick(t, "copy")} disabled={blocked} style={{ ...chip, flex: 1, minHeight: 40, fontSize: 12, fontWeight: 700, color: copiedId === t.id ? "var(--ok)" : "var(--app-text)", border: `1px solid ${copiedId === t.id ? "var(--ok)" : "var(--app-border)"}` }}>

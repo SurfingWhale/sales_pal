@@ -4,6 +4,7 @@ import { type CSSProperties, type Dispatch, type SetStateAction, useEffect, useL
 import { deleteDoc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { Invoice, Quote, addDays, daysBetween, longDate, today, useBusiness, useSpaceCollection } from "@/lib/billing";
 import { jobsFrom } from "@/components/JobCalendar";
+import OccupancyCalendar from "@/components/OccupancyCalendar";
 import { canEditCatalog, spaceDoc, stamp, useSpace } from "@/lib/space";
 import {
   HUNT_STATUS, Hunt, HuntStatus, MIN_SAMPLE, PLATFORMS, STALE_DAYS, PitchTemplate, Platform,
@@ -70,7 +71,9 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   const [goalDraft, setGoalDraft] = useState<string | null>(null);
   const [goalError, setGoalError] = useState("");
   const [savingGoal, setSavingGoal] = useState(false);
-  const jobs = jobsFrom(useSpaceCollection<Quote>(space, "quotes"), useSpaceCollection<Invoice>(space, "invoices"));
+  const allQuotes = useSpaceCollection<Quote>(space, "quotes");
+  const allInvoices = useSpaceCollection<Invoice>(space, "invoices");
+  const jobs = jobsFrom(allQuotes, allInvoices);
   const targetRef = useRef<HTMLInputElement>(null);
   const topicsRef = useRef<HTMLDivElement>(null);
 
@@ -261,7 +264,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       // for the next message (QA 11 Okt). "Target lain" clears it.
       const entry = { label: `Tercatat: ${how === "wa" ? "WA" : ch === "post" ? "balasan di post" : "DM"} ke ${who}`, run: back };
       setUndo(entry);
-      setTimeout(() => setUndo(u => (u?.run === back ? null : u)), 5000);
+      setTimeout(() => setUndo(u => (u?.run === back ? null : u)), 10000);
     } catch {
       setPasteMsg("Pesan tersalin, tapi gagal dicatat. Cek koneksi lalu kirim ulang.");
     }
@@ -434,6 +437,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         </div>
       </div>
 
+      <OccupancyCalendar quotes={allQuotes} invoices={allInvoices} />
       <ThreadsRadar uid={space.me.uid} hunts={hunts} onTarget={targetFromRadar} />
 
       {/* The hunt itself: who, where, which message */}
@@ -499,9 +503,12 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         {/* Mounted before its text, so screen readers announce "Tercatat". */}
         <div role="status">
           {undo && (
-            <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 12, background: "#005eb014", border: "1px solid #005eb050", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <div style={{ fontSize: 12, minWidth: 0 }}>{undo.label}</div>
-              <button onClick={takeBack} aria-label="Batal catat" style={{ ...btnMuted, minHeight: 40, padding: "8px 14px", flexShrink: 0 }}>Batal</button>
+            // Pinned above the bottom nav, so a wrong tap can be taken back
+            // without scrolling to find it (QA 15 Okt).
+            <div className="sp-toast">
+              <div style={{ fontSize: 14, minWidth: 0, flex: 1 }}>{undo.label}</div>
+              <button onClick={takeBack} aria-label="Batal catat" style={{ ...btnMuted, minHeight: 44, padding: "8px 16px", flexShrink: 0, background: "#fff", color: "#141414" }}>Batal</button>
+              <button onClick={() => setUndo(null)} aria-label="Tutup pemberitahuan" style={{ width: 44, height: 44, border: 0, background: "transparent", color: "#fff", fontSize: 20, cursor: "pointer", flexShrink: 0 }}>×</button>
             </div>
           )}
         </div>
