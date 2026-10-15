@@ -1,6 +1,6 @@
 # PRD-010 — Standar "native": iPhone 12 (PWA) & Mac
 
-- **Status:** Dibangun 2026-10-15 — kriteria, harness WebKit + audit HIG di tiap langkah, CI GitHub Actions, akun ukuran produksi, perbaikan sampai audit nol temuan. Belum: data lapangan (Speed Insights perlu dinyalain di Vercel) dan uji owner di iPhone beneran (UAT S1–S7).
+- **Status:** Dibangun 2026-10-15 — kriteria, harness WebKit + audit HIG di tiap langkah, CI GitHub Actions, akun ukuran produksi, perbaikan sampai audit nol temuan. CI WebKit (iPhone 12 + Safari) hijau sejak run #7. Belum: data lapangan (Speed Insights perlu dinyalain di Vercel) dan uji owner di iPhone beneran (UAT S1–S7).
 - **Tanggal:** 2026-10-15
 - **Konteks:** Owner nguji PWA terpasang di iPhone 12 dan Mac: ga ada tombol Batal, dialog ga bisa ditutup, form sempit, tombol rebutan tempat, ukuran huruf ga nyaman, `Cetak / PDF` ga ngapa-ngapain. Enam putaran perbaikan per area (#52) nutup banyak hal, tapi semua dites di **Chromium pakai mouse** — padahal iPhone jalan di **WebKit**, sentuh, keyboard di layar. PRD ini bikin "native" jadi sesuatu yang **diukur**, bukan dirasa.
 - **Standar yang berlaku:** [`docs/standards/native.md`](../standards/native.md) (ringkas, dipakai tiap perubahan UI); skill `native-standard` di claude-config buat project lain.
@@ -54,7 +54,22 @@ Yang dibenerin karena audit:
 - **ARIA:** grup avatar anggota guild dapet `role="group"`; kartu template yang dikunci (DNC) ga lagi pakai `opacity` yang nurunin kontras.
 - **Gerak (K9):** lembar naik dari bawah di HP (220 ms), dialog muncul halus di Mac (180 ms), tombol mengecil dikit pas ditekan di layar sentuh; semua mati di *Reduce Motion*.
 
-Hasil WebKit (iPhone 12 & Safari) dicatat dari run GitHub Actions pertama — lihat §6.
+### Hasil WebKit (GitHub Actions `native`, 15 Okt)
+
+| Run | iPhone 12 (WebKit) | Desktop Safari (WebKit) | Chromium HP | Chromium desktop |
+|---|---|---|---|---|
+| #3 | ga bisa mulai (izin clipboard Chromium ditolak WebKit) | sama | 17/17, audit gagal | 17/17, 66 temuan |
+| #4 | 14/17 | 14/17, 13 temuan | 17/17, 53 temuan | 17/17, gagal |
+| #5 | 16/17 | 16/17 | ✅ | ✅ |
+| #6 | 16/17 | 16/17 | ✅ | ✅ |
+| **#7** | ✅ **17/17, audit 0** | ✅ **17/17, audit 0** | ✅ | ✅ |
+
+Yang ketemu cuma karena WebKit, dan dibenerin:
+- **Bug app (Safari):** dua `history.back()` beruntun digabung Safari jadi satu langkah. Nutup form yang udah diisi (form + "Buang perubahan?") bikin back berikutnya ketelen, dan dialog berikutnya ga bisa ditutup pakai back. Sekarang `history.go(-n)` sekali, satu perjalanan history per waktu (`components/ModalA11y.tsx`).
+- **Bug app (dua engine):** dialog yang dibuka sebelum back sebelumnya mendarat kehilangan entri history-nya. Sekarang push-nya nunggu.
+- **Lapisan gelap di belakang lembar HP** bisa discroll pas animasi; sekarang `overflow: hidden`.
+- **Audit diukur pas layar diam:** kontras dialog yang lagi fade-in kebaca rendah (63 "temuan" palsu di CI) — audit sekarang nunggu animasi selesai.
+- **Batas alat tes, bukan app:** WebKit ngelewatin mock lewat service worker (diblok kecuali flow share-target), clipboard WebKit headless diganti clipboard di memori (clipboard asli dicek di UAT S1–S7), scrollbar 4px WebKit-Linux (iOS ga punya).
 
 ## 5. Repo "desain" yang dinilai (15 Okt)
 
@@ -69,7 +84,7 @@ Owner ngirim 10 repo yang katanya bikin agent jadi desainer UI. Dinilai pakai kr
 
 ## 6. Bukti di luar kita (yang masih harus terjadi)
 
-1. **CI WebKit hijau** di GitHub Actions (`native`): iPhone 12 & Desktop Safari.
+1. ✅ **CI WebKit hijau** di GitHub Actions (`native` run #7, 15 Okt): iPhone 12 & Desktop Safari 17/17, audit HIG 0. Tiap push berikutnya harus tetap hijau.
 2. **Data lapangan 7 hari** dari Speed Insights: INP HP < 200 ms; error runtime tetap 0.
 3. **Owner** nyelesain 5 pekerjaan inti di iPhone sendiri tanpa nanya, dicentang di `salespal-uat` (S1–S7), idealnya direkam layar.
 

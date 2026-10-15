@@ -261,6 +261,7 @@ async function main() {
   }
   writeFileSync(OUT + "report.md", lines.join("\n"));
   console.log(`\n${passed}/${results.length} flows passed — tests/flows/out/report.md`);
+  console.log(`${sizeLabel}: ${allMs.length} taps · tap → next frame p75 ${pct(allMs, 0.75)} ms, p95 ${pct(allMs, 0.95)} ms, max ${Math.max(0, ...allMs)} ms · HIG audit: ${unique.size} finding(s)`);
   if (unique.size) {
     console.log(`✗ HIG audit: ${unique.size} unique finding(s):`);
     for (const u of [...unique.values()].slice(0, 120)) console.log(`  - ${u.f} — first at ${u.where}${u.n > 1 ? ` (${u.n}×)` : ""}`);
