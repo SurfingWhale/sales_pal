@@ -59,7 +59,8 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
       ...rest,
       number,
       leadName: rest.leadName.trim(),
-      items: rest.items.filter(i => i.name.trim()).map(i => ({ name: i.name.trim(), qty: i.qty || 1, price: i.price || 0 })),
+      items: rest.items.filter(i => i.name.trim()).map(i => ({ name: i.name.trim(), qty: i.qty || 1, price: i.price || 0, ...(i.description?.trim() ? { description: i.description.trim() } : {}) })),
+      eventDate: rest.eventDate || "",
     }, rest as { ownerUid?: string; ownerName?: string }));
     setEditing(null);
   }
@@ -98,6 +99,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
       quoteId: q.id, leadId: q.leadId, leadName: q.leadName, contact: q.contact, phone: q.phone,
       items: q.items, discount: q.discount, dpPercent: q.dpPercent, notes: q.notes,
       date: d, dueDate: addDays(d, 7), payments: [],
+      ...(q.eventDate ? { eventDate: q.eventDate } : {}),
     };
     await setDoc(spaceDoc(space, "invoices", id), stamp(space, inv, q as { ownerUid?: string; ownerName?: string }));
     await updateDoc(spaceDoc(space, "quotes", q.id), { invoiceId: id });
@@ -116,7 +118,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
     if (!editing) return;
     const s = services.find(x => x.id === id);
     if (!s) return;
-    setEditing({ ...editing, items: [...editing.items, { name: s.name, qty: 1, price: s.price }] });
+    setEditing({ ...editing, items: [...editing.items, { name: s.name, qty: 1, price: s.price, ...(s.description?.trim() ? { description: s.description.trim() } : {}) }] });
   }
 
   function setItem(i: number, patch: Partial<LineItem>) {
@@ -182,7 +184,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                     <div style={{ fontSize: 12, color: "var(--app-muted)", fontFamily: "monospace" }}>{q.number} · {longDate(q.date)}</div>
                     <div style={{ fontSize: 15, fontWeight: 700, fontFamily: font, marginTop: 2 }}>{q.leadName}</div>
                     <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>
-                      {q.items.map(i => i.name).join(", ")}
+                      {q.items.map(i => i.name).join(", ")}{q.eventDate ? ` · acara ${longDate(q.eventDate)}` : ""}
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
@@ -266,11 +268,13 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
             {editing.items.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)", padding: "12px 0" }}>Belum ada item.</div>}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {editing.items.map((it, i) => (
-                <div key={i} style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                  <input value={it.name} onChange={e => setItem(i, { name: e.target.value })} style={{ ...inputStyle, padding: "8px 10px", flex: "1 1 260px", width: "auto", minWidth: 0 }} placeholder="Deskripsi" aria-label="Deskripsi item" />
+                <div key={i} style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", padding: 10, borderRadius: 10, border: "1px solid var(--app-border)" }}>
+                  <input value={it.name} onChange={e => setItem(i, { name: e.target.value })} style={{ ...inputStyle, padding: "8px 10px", flex: "1 1 260px", width: "auto", minWidth: 0 }} placeholder="Nama jasa / produk" aria-label="Nama item" />
                   <input inputMode="numeric" value={it.qty || ""} onChange={e => setItem(i, { qty: num(e.target.value) })} style={{ ...inputStyle, padding: "8px 6px", textAlign: "center", flex: "0 0 56px" }} aria-label="Qty" />
                   <input inputMode="numeric" value={it.price ? it.price.toLocaleString("id-ID") : ""} onChange={e => setItem(i, { price: num(e.target.value) })} style={{ ...inputStyle, padding: "8px 10px", textAlign: "right", flex: "1 1 110px", width: "auto", minWidth: 0 }} placeholder="Harga" aria-label="Harga" />
                   <button onClick={() => setEditing({ ...editing, items: editing.items.filter((_, n) => n !== i) })} aria-label="Hapus item" style={{ ...chip, padding: "8px 0", flex: "0 0 36px", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}>×</button>
+                  <textarea value={it.description || ""} onChange={e => setItem(i, { description: e.target.value })} aria-label="Rincian item"
+                    placeholder={"Rincian (muncul di PDF), mis.\n• Foto event 2 jam, 50 foto edit\n• 1 reel recap"} style={{ ...inputStyle, padding: "8px 10px", fontSize: 13, height: 64, resize: "vertical", flex: "1 1 100%" }} />
                 </div>
               ))}
             </div>
@@ -288,6 +292,10 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                 <label style={label}>Berlaku s/d</label>
                 <input type="date" value={editing.validUntil} onChange={e => setEditing({ ...editing, validUntil: e.target.value })} style={inputStyle} />
               </div>
+              <div>
+                <label htmlFor="q-event" style={label}>Tanggal acara</label>
+                <input id="q-event" type="date" value={editing.eventDate || ""} onChange={e => setEditing({ ...editing, eventDate: e.target.value })} style={inputStyle} />
+              </div>
               <div style={{ gridColumn: "1/-1" }}>
                 <label style={label}>Catatan untuk klien</label>
                 <textarea value={editing.notes} onChange={e => setEditing({ ...editing, notes: e.target.value })} style={{ ...inputStyle, resize: "vertical", height: 70 }} placeholder="Jadwal shoot, lokasi, jumlah revisi…" />
@@ -301,10 +309,15 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
               <b style={{ color: "var(--ok)" }}>Total {rupiah(total(editing))}</b>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+            <div style={{ display: "flex", gap: 10, marginTop: 20, alignItems: "center", flexWrap: "wrap" }}>
               <button onClick={save} disabled={!editing.leadName.trim() || editing.items.length === 0}
                 style={{ ...btnPrimary, opacity: !editing.leadName.trim() || editing.items.length === 0 ? 0.5 : 1 }}>Simpan</button>
               <button onClick={() => setEditing(null)} style={btnMuted}>Batal</button>
+              {(!editing.leadName.trim() || editing.items.length === 0) && (
+                <span role="status" style={{ fontSize: 12, color: "var(--app-muted)" }}>
+                  {!editing.leadName.trim() ? "Isi nama klien dulu." : "Tambah minimal satu item."}
+                </span>
+              )}
             </div>
           </div>
         </div>

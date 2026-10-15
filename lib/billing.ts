@@ -22,6 +22,7 @@ export interface LineItem {
   name: string;
   qty: number;
   price: number;
+  description?: string;   // what's included, printed under the name
 }
 
 export const QUOTE_STATUS = ["Draft", "Terkirim", "Disetujui", "Ditolak"] as const;
@@ -43,6 +44,9 @@ export interface Quote {
   status: QuoteStatus;
   sentAt?: string;
   invoiceId?: string;
+  eventDate?: string;     // the shoot / event day, for the job calendar
+  ownerUid?: string;
+  ownerName?: string;
 }
 
 export interface Payment {
@@ -66,6 +70,9 @@ export interface Invoice {
   date: string;
   dueDate: string;
   payments: Payment[];
+  eventDate?: string;
+  ownerUid?: string;      // guild: the seller (lib/space.ts stamp)
+  ownerName?: string;
 }
 
 export interface Business {
@@ -75,10 +82,13 @@ export interface Business {
   bank: string;
   accountNo: string;
   accountName: string;
-  footer: string;
+  footer: string;          // syarat & ketentuan, printed under every quote and invoice
+  tagline?: string;        // what you do, under the name: "Fotografi & video event"
+  logo?: string;           // small PNG/JPEG data URL (lib/image.ts), max ~120 KB
+  address?: string;
 }
 
-export const EMPTY_BUSINESS: Business = { name: "", phone: "", email: "", bank: "", accountNo: "", accountName: "", footer: "" };
+export const EMPTY_BUSINESS: Business = { name: "", phone: "", email: "", bank: "", accountNo: "", accountName: "", footer: "", tagline: "", logo: "", address: "" };
 
 // ---- dates & money -------------------------------------------------------
 
@@ -182,7 +192,10 @@ export function waLink(phone: string, text: string): string {
 }
 
 function itemLines(items: LineItem[]): string[] {
-  return items.map((i, n) => `${n + 1}. ${i.name} — ${i.qty} × ${rupiah(i.price)} = ${rupiah(i.qty * i.price)}`);
+  return items.flatMap((i, n) => [
+    `${n + 1}. ${i.name} — ${i.qty} × ${rupiah(i.price)} = ${rupiah(i.qty * i.price)}`,
+    ...(i.description?.trim() ? i.description.trim().split("\n").map(l => `   ${l}`) : []),
+  ]);
 }
 
 function signOff(b: Business): string[] {

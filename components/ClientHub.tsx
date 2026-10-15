@@ -92,7 +92,7 @@ export default function ClientHub() {
           <div style={{ fontSize: 32, marginBottom: 10 }}>🧾</div>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ada klien</div>
           <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 18, maxWidth: 420, marginInline: "auto" }}>
-            Tambah klien yang lo pegang sosmednya (mis. toko aksesoris). Chat, deal, angka konten, dan report-nya disimpan per klien.
+            Ini buat klien yang sosmednya lo pegang (mis. toko aksesoris): chat, deal, angka konten, dan report bulanannya. Penjualan jasa lo sendiri ada di kartu Penjualan di atas.
           </div>
           <button onClick={() => setEditClient({ id: "", name: "", threshold: "5.000.000" })} style={btnPrimary}>+ Tambah klien</button>
         </div>
