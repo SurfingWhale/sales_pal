@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { deleteDoc, setDoc } from "firebase/firestore";
 import { spaceDoc, useSpace } from "@/lib/space";
 import { PitchTemplate, TemplateScore, pct } from "@/lib/hunting";
@@ -8,16 +8,17 @@ import { FillData, SAMPLE, STAGES, STARTERS, Stage, VARIABLES, fillTemplate, mis
 import { btnMuted, btnPrimary, btnWA, chip, font, inputStyle, label, modalBox } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmSheet";
 
-// The message deck as a kanban of the conversation (docs/prd/PRD-009 §13):
-// one column per stage, the column that fits this person lit up, and every
-// template filled in with what their post said.
+// The message deck by stage of the conversation (docs/prd/PRD-009 §13): the
+// stage that fits this person picked, and every template filled in with what
+// their post said (or the workspace's defaults when it didn't say).
 
-export default function TemplateBoard({ templates, scores, data, stage, blocked, copiedId, copyFail, onPick, canEdit, sampleName, send = { how: "wa", label: "Kirim WA" } }: {
+export default function TemplateBoard({ templates, scores, data, stage, blocked, copiedId, copyFail, onPick, canEdit, sampleName, send = { how: "wa", label: "Kirim WA" }, extra }: {
   templates: PitchTemplate[]; scores: TemplateScore[]; data: FillData; stage: Stage; blocked: boolean;
   copiedId: string | null; copyFail: string | null; onPick: (t: PitchTemplate, how: "copy" | "wa" | "open") => void;
   // The second button: WhatsApp, or copy and open the DM / post (Hunting decides by platform).
   send?: { how: "wa" | "open"; label: string };
   canEdit: boolean; sampleName: string;
+  extra?: ReactNode;                         // more header buttons (Hunting: "Default kosong")
 }) {
   const [ask, askSheet] = useConfirm();
   const space = useSpace();
@@ -27,12 +28,18 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
   const board = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLTextAreaElement>(null);
 
-  // Bring the column that fits into view, inside the board only.
+  // The stage that fits, until another chip is tapped; a new person resets it.
+  const [picked, setPicked] = useState<Stage | null>(null);
+  useEffect(() => setPicked(null), [stage, sampleName]);
+  const shown = picked || stage;
+  // Keep the picked chip in view, inside the chip row only.
   useEffect(() => {
     const b = board.current;
-    const col = b?.querySelector<HTMLElement>(`[data-stage="${stage}"]`);
-    if (b && col) b.scrollTo({ left: Math.max(0, col.offsetLeft - b.offsetLeft - 4), behavior: "smooth" });
-  }, [stage]);
+    const c = b?.querySelector<HTMLElement>(`[data-stage="${shown}"]`);
+    if (!b || !c) return;
+    const r = b.getBoundingClientRect(), x = c.getBoundingClientRect();
+    if (x.left < r.left || x.right > r.right) b.scrollTo({ left: b.scrollLeft + x.left - r.left - 4, behavior: "smooth" });
+  }, [shown]);
 
   async function save() {
     if (!editing || !editing.title.trim() || !editing.body.trim() || !canEdit) return;
@@ -59,85 +66,92 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
 
   const preview = (b: string) => fillTemplate(b, data.nama || data.kebutuhan ? data : SAMPLE);
 
+  const s = STAGES.find(x => x.id === shown) || STAGES[0];
+  const list = templates.filter(t => stageOf(t) === s.id);
+  const si = STAGES.findIndex(x => x.id === s.id);
+
   return (
     <>
       {askSheet}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
         <div style={{ fontSize: 13, fontWeight: 700 }}>Pilih pesan</div>
-        {canEdit && <button onClick={() => setEditing({ id: "", title: "", body: "", stage })} style={chip}>+ Template</button>}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {extra}
+          {canEdit && <button onClick={() => setEditing({ id: "", title: "", body: "", stage: s.id })} style={chip}>+ Template</button>}
+        </div>
       </div>
-      <div ref={board} role="list" aria-label="Template per tahap" style={{ display: "flex", alignItems: "flex-start", gap: 12, overflowX: "auto", scrollSnapType: "x proximity", paddingBottom: 6, scrollbarWidth: "thin" }}>
-        {STAGES.map((s, i) => {
-          const list = templates.filter(t => stageOf(t) === s.id);
-          const on = s.id === stage;
+      {/* One stage at a time (QA 15 Okt: "mesti scroll panjang"): the stages are
+          chips, the one that fits this person picked and marked; its messages
+          stack below, so the board is never wider than the phone. */}
+      <div ref={board} role="tablist" aria-label="Tahap pesan" style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", paddingBottom: 4, marginBottom: 6 }}>
+        {STAGES.map((x, i) => {
+          const n = templates.filter(t => stageOf(t) === x.id).length;
+          const sel = x.id === s.id, fit = x.id === stage;
           return (
-            <section key={s.id} role="listitem" data-stage={s.id} aria-label={`Tahap ${i + 1}: ${s.label}${on ? ", cocok sekarang" : ""}`}
-              style={{ flex: "0 0 min(272px, 86%)", minWidth: 0, scrollSnapAlign: "start", borderRadius: 14, padding: 10, background: on ? "#005eb00f" : "transparent", border: `1px solid ${on ? "#005eb0" : "var(--app-border)"}`, display: "flex", flexDirection: "column", gap: 10 }}>
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}><span style={{ color: "var(--app-muted)" }}>{i + 1} ·</span> {s.label}</div>
-                  {on && <span style={{ fontSize: 12, fontWeight: 700, color: "var(--brand-text)" }}>Cocok sekarang</span>}
-                </div>
-                <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{s.when}</div>
-              </div>
-              {list.length === 0 && (
-                <div style={{ fontSize: 12, color: "var(--app-muted)", padding: "8px 2px" }}>
-                  Belum ada template.
-                  {canEdit && (
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                      <button onClick={() => addStarter(s.id)} style={{ ...chip, minHeight: 34, fontWeight: 700, color: "var(--brand-text)" }}>+ Pakai contoh</button>
-                      <button onClick={() => setEditing({ id: "", title: "", body: "", stage: s.id })} style={{ ...chip, minHeight: 34 }}>Tulis sendiri</button>
-                    </div>
-                  )}
-                </div>
-              )}
-              {list.length > 0 && canEdit && !list.some(t => t.title === STARTERS[s.id].title) && (
-                <button onClick={() => addStarter(s.id)} style={{ ...chip, minHeight: 34, alignSelf: "flex-start", color: "var(--brand-text)", order: 1 }}>+ Pakai contoh personal</button>
-              )}
-              {list.map(t => {
-                const sc = scores.find(x => x.templateId === t.id);
-                const missing = missingIn(t.body, data);
-                return (
-                  <div key={t.id} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", filter: blocked ? "grayscale(1)" : undefined }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700 }}>{t.title}</div>
-                      {canEdit && <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} title="Edit template" className="sp-icon-btn" style={{ ...chip, flexShrink: 0, minWidth: 32, minHeight: 32, padding: "2px 8px", margin: "-6px -6px 0 0" }}>✎</button>}
-                    </div>
-                    {sc && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>{sc.sent} terkirim · dibales {pct(sc.responseRate)} · tertarik {pct(sc.winRate)}</div>}
-                    {(() => {
-                      const text = fillTemplate(t.body, data);
-                      const long = text.length > 160 || text.split("\n").length > 4;
-                      const shown = !long || full.has(t.id);
-                      return (
-                        <>
-                          <div id={`tpl-text-${t.id}`} style={{ fontSize: 14, color: "var(--app-sub)", lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: long ? 4 : 10,
-                            ...(shown ? {} : { display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }) }}>{text}</div>
-                          {long && (
-                            <button onClick={() => setFull(f => { const n = new Set(f); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })}
-                              aria-expanded={shown} aria-controls={`tpl-text-${t.id}`}
-                              style={{ alignSelf: "flex-start", background: "none", border: 0, padding: "0 0 8px", minHeight: 32, color: "var(--brand-text)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                              {shown ? "Ringkas ▴" : "Lihat selengkapnya ▾"}
-                            </button>
-                          )}
-                        </>
-                      );
-                    })()}
-                    {missing.length > 0 && sampleName && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>Kosong buat orang ini: {missing.map(k => `{${k}}`).join(", ")}</div>}
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={() => onPick(t, "copy")} disabled={blocked} style={{ ...chip, flex: 1, minHeight: 40, fontSize: 12, fontWeight: 700, color: copiedId === t.id ? "var(--ok)" : "var(--app-text)", border: `1px solid ${copiedId === t.id ? "var(--ok)" : "var(--app-border)"}` }}>
-                        {copiedId === t.id ? "✓ Tersalin" : "Copy"}
-                      </button>
-                      <button onClick={() => onPick(t, send.how)} disabled={blocked}
-                        style={{ ...(send.how === "wa" ? btnWA : { ...btnWA, background: "#005eb0", color: "#fff" }), flex: 1, minHeight: 40, padding: "8px", fontSize: 12 }}>{send.label}</button>
-                    </div>
-                    {copyFail === t.id && <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 8 }}>Gagal menyalin. Pilih teks di atas, lalu salin manual.</div>}
-                  </div>
-                );
-              })}
-            </section>
+            <button key={x.id} role="tab" aria-selected={sel} aria-controls="tpl-stage" data-stage={x.id} onClick={() => setPicked(x.id)}
+              aria-label={`${i + 1}. ${x.label}, ${n} pesan${fit ? ", cocok sekarang" : ""}`}
+              style={{ ...chip, flexShrink: 0, minHeight: 40, fontWeight: 700, whiteSpace: "nowrap",
+                ...(sel ? { background: "#005eb0", color: "#fff", border: "1px solid #005eb0" } : fit ? { color: "var(--brand-text)", border: "1px solid #005eb0" } : {}) }}>
+              {fit && <span aria-hidden="true">● </span>}{i + 1}. {x.label}<span aria-hidden="true" style={{ opacity: 0.75, fontWeight: 600 }}> {n}</span>
+            </button>
           );
         })}
       </div>
+      <section id="tpl-stage" role="tabpanel" aria-label={`Tahap ${si + 1}: ${s.label}${s.id === stage ? ", cocok sekarang" : ""}`}>
+        <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 10 }}>
+          {s.id === stage ? <b style={{ color: "var(--brand-text)" }}>Cocok sekarang · </b> : null}{s.when}
+        </div>
+        {list.length === 0 && (
+          <div style={{ fontSize: 13, color: "var(--app-muted)", padding: 12, borderRadius: 12, border: "1px dashed var(--app-border)" }}>
+            Belum ada template buat tahap ini.
+            {canEdit && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                <button onClick={() => addStarter(s.id)} style={{ ...chip, minHeight: 34, fontWeight: 700, color: "var(--brand-text)" }}>+ Pakai contoh</button>
+                <button onClick={() => setEditing({ id: "", title: "", body: "", stage: s.id })} style={{ ...chip, minHeight: 34 }}>Tulis sendiri</button>
+              </div>
+            )}
+          </div>
+        )}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 280px), 1fr))", gap: 10, alignItems: "start" }}>
+          {list.map(t => {
+            const sc = scores.find(x => x.templateId === t.id);
+            const missing = missingIn(t.body, data);
+            const text = fillTemplate(t.body, data);
+            const long = text.length > 160 || text.split("\n").length > 4;
+            const open = !long || full.has(t.id);
+            return (
+              <div key={t.id} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", filter: blocked ? "grayscale(1)" : undefined }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{t.title}</div>
+                  {canEdit && <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} title="Edit template" className="sp-icon-btn" style={{ ...chip, flexShrink: 0, minWidth: 32, minHeight: 32, padding: "2px 8px", margin: "-6px -6px 0 0" }}>✎</button>}
+                </div>
+                {sc && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>{sc.sent} terkirim · dibales {pct(sc.responseRate)} · tertarik {pct(sc.winRate)}</div>}
+                <div id={`tpl-text-${t.id}`} style={{ fontSize: 14, color: "var(--app-sub)", lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: long ? 4 : 10,
+                  ...(open ? {} : { display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }) }}>{text}</div>
+                {long && (
+                  <button onClick={() => setFull(f => { const n = new Set(f); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })}
+                    aria-expanded={open} aria-controls={`tpl-text-${t.id}`}
+                    style={{ alignSelf: "flex-start", background: "none", border: 0, padding: "0 0 8px", minHeight: 32, color: "var(--brand-text)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                    {open ? "Ringkas ▴" : "Lihat selengkapnya ▾"}
+                  </button>
+                )}
+                {missing.length > 0 && sampleName && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>Kosong buat orang ini: {missing.map(k => `{${k}}`).join(", ")}, bagiannya dilewati.</div>}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => onPick(t, "copy")} disabled={blocked} style={{ ...chip, flex: 1, minHeight: 40, fontSize: 12, fontWeight: 700, color: copiedId === t.id ? "var(--ok)" : "var(--app-text)", border: `1px solid ${copiedId === t.id ? "var(--ok)" : "var(--app-border)"}` }}>
+                    {copiedId === t.id ? "✓ Tersalin" : "Copy"}
+                  </button>
+                  <button onClick={() => onPick(t, send.how)} disabled={blocked}
+                    style={{ ...(send.how === "wa" ? btnWA : { ...btnWA, background: "#005eb0", color: "#fff" }), flex: 1, minHeight: 40, padding: "8px", fontSize: 12 }}>{send.label}</button>
+                </div>
+                {copyFail === t.id && <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 8 }}>Gagal menyalin. Pilih teks di atas, lalu salin manual.</div>}
+              </div>
+            );
+          })}
+        </div>
+        {list.length > 0 && canEdit && !list.some(t => t.title === STARTERS[s.id].title) && (
+          <button onClick={() => addStarter(s.id)} style={{ ...chip, minHeight: 34, marginTop: 10, color: "var(--brand-text)" }}>+ Pakai contoh personal</button>
+        )}
+      </section>
 
       {editing && (
         <div className="modal-overlay" onClick={() => setEditing(null)}>

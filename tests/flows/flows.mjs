@@ -9,6 +9,8 @@ const OWNER_EMAIL = readFileSync(new URL("../../firestore.rules", import.meta.ur
 
 // ---------- helpers ----------
 // One DM in Hunting's log: the row that holds this target and its delete button.
+// Hunting shows one part at a time: Kirim, Journey, Log DM, Performa.
+const pane = (page, name) => page.getByRole("tablist", { name: "Bagian Hunting" }).getByRole("tab", { name: new RegExp(`^${name}`) }).click();
 const huntRow = (page, target) => page.locator("div").filter({ has: page.getByText(target, { exact: true }) }).filter({ has: page.getByRole("button", { name: /^Hapus DM/ }) }).last();
 
 // ---- Production-size account (PRD-010): written straight into the emulator
@@ -608,6 +610,7 @@ export const flows = [
         await t.step(`${place}${tab ? ` → ${tab}` : ""} opens with its data`, async () => {
           const t0 = Date.now();
           await go(page, place, tab);
+          if (place === "Hunting") await pane(page, "Journey");
           await page.getByText(want).first().waitFor({ timeout: 15000 });
           const ms = Date.now() - t0;
           if (ms > 8000) throw new Error(`took ${ms} ms to show`);
@@ -622,6 +625,7 @@ export const flows = [
       });
       await t.step("find a prospect by ID among 60", async () => {
         await go(page, "Hunting");
+        await pane(page, "Journey");
         await page.getByLabel("Cari prospek pakai ID atau @username").fill("contoh_042");
         await expectText(page, "1 ketemu");
       });
@@ -790,14 +794,18 @@ export const flows = [
       });
       await t.step("copy a template: it is logged at once", async () => {
         await page.getByRole("button", { name: "Copy", exact: true }).first().click();
-        await page.getByRole("link", { name: "Profil ↗" }).first().waitFor();
         await page.getByRole("button", { name: "Batal catat" }).waitFor();
       });
-      await t.step("the person stays on screen after the send, with an ID", async () => {
+      await t.step("the person stays on screen after the send, short, with an ID under Detail", async () => {
         if (await page.locator("#hunt-target").inputValue() !== "@kopiflow") throw new Error("target cleared after sending");
-        await page.getByRole("button", { name: /Salin ID prospek Threads_kopiflow/ }).waitFor();
+        const card = page.getByLabel("Prospek @kopiflow");
+        await card.getByRole("button", { name: "Detail ▾" }).click();
+        await card.getByRole("button", { name: /Salin ID prospek Threads_kopiflow/ }).waitFor();
+        await card.getByRole("button", { name: "Ringkas ▴" }).click();
       });
       await t.step("the log row says when it went out and what to do next", async () => {
+        await pane(page, "Log DM");
+        await page.getByRole("link", { name: "Profil ↗" }).first().waitFor();
         await huntRow(page, "@kopiflow").getByText(/(DM|balas di post) hari ini \d{2}\.\d{2}/).waitFor();
         await huntRow(page, "@kopiflow").getByText("Nunggu balasan. Begitu dia bales, tandai di bawah.").waitFor();
         await huntRow(page, "@kopiflow").getByRole("button", { name: "Tandai Ga dibales" }).waitFor();
@@ -808,8 +816,10 @@ export const flows = [
         await expectText(page, "✓ Sudah jadi lead");
       });
       await t.step("log a second DM, decline it with a reason", async () => {
+        await pane(page, "Kirim");
         await page.locator("#hunt-target").fill("@rotiflow");
-        await page.getByRole("button", { name: "Copy", exact: true }).nth(1).click();
+        await page.getByRole("button", { name: "Copy", exact: true }).first().click();
+        await pane(page, "Log DM");
         await page.getByRole("button", { name: "Hapus DM ke @rotiflow" }).click();
         // Asked in the app, not the browser's confirm(): Batal keeps the row.
         const ask = page.getByRole("dialog", { name: "Hapus catatan DM?" });
@@ -843,12 +853,25 @@ export const flows = [
       });
       await t.step("a Threads target: Copy & DM opens Instagram's DM to that username", async () => {
         await page.context().route("https://ig.me/**", r => r.fulfill({ status: 200, contentType: "text/html", body: "<title>ig</title>" }));
+        await pane(page, "Kirim");
         await page.locator("#hunt-target").fill("@dmflow");
         await page.getByRole("radiogroup", { name: "Platform" }).getByRole("radio", { name: "Threads" }).click();
         const [pop] = await Promise.all([page.waitForEvent("popup"), page.getByRole("button", { name: "Copy & DM (via IG)" }).first().click()]);
         if (!pop.url().startsWith("https://ig.me/m/dmflow")) throw new Error(`opened ${pop.url()}`);
         await pop.close();
         await page.getByRole("button", { name: "Batal catat" }).waitFor();
+      });
+      await t.step("a field the post didn't fill uses the default, set once", async () => {
+        await page.getByRole("tablist", { name: "Tahap pesan" }).getByRole("tab", { name: /^1\. Intro/ }).click();
+        await page.getByRole("button", { name: "+ Pakai contoh personal" }).click();
+        const panel = page.getByRole("tabpanel", { name: /Tahap 1: Intro/ });
+        await panel.getByText(/Halo dmflow! Aku biasa pegang/).waitFor();
+        await page.getByRole("button", { name: "Default kalau kosong" }).click();
+        const sheet = page.getByRole("dialog", { name: "Default kalau kosong" });
+        await sheet.locator("#def-kebutuhan").fill("dokumentasi acara");
+        await sheet.getByRole("button", { name: "Simpan default" }).click();
+        await sheet.waitFor({ state: "detached" });
+        await panel.getByText(/Halo dmflow! Aku liat kamu lagi nyari dokumentasi acara\. Aku biasa/).waitFor();
       });
       await t.step("change the daily goal to 25 in a sheet with Batal", async () => {
         await page.getByRole("button", { name: /Ubah target harian/ }).click();
@@ -872,6 +895,7 @@ export const flows = [
         await page.locator("#hunt-target").fill("");
       });
       await t.step("the referral editor has Batal, and status buttons sit in a grid", async () => {
+        await pane(page, "Log DM");
         await huntRow(page, "@rotiflow").getByRole("button", { name: "↪ Rekomendasiin orang" }).click();
         await page.getByLabel("Akun yang direkomendasiin").waitFor();
         await huntRow(page, "@rotiflow").getByRole("button", { name: "Batal", exact: true }).click();
@@ -889,8 +913,8 @@ export const flows = [
     async run(t) {
       const { page, base } = t;
       const row = (who) => page.getByRole("button", { name: `Journey ${who}`, exact: true });
-      const pick = async (f) => { await page.getByRole("group", { name: "Saring prospek" }).getByRole("button", { name: new RegExp(`^${f}`) }).click(); };
-      await t.step("sign up and open Hunting", async () => { await mockUnfurl(page); await signup(t); await go(page, "Hunting"); await expectText(page, "Journey prospek"); });
+      const pick = async (f) => { await pane(page, "Journey"); await page.getByRole("group", { name: "Saring prospek" }).getByRole("button", { name: new RegExp(`^${f}`) }).click(); };
+      await t.step("sign up and open Hunting", async () => { await mockUnfurl(page); await signup(t); await go(page, "Hunting"); await pane(page, "Journey"); await expectText(page, "Journey prospek"); await pane(page, "Kirim"); });
       await t.step("a post shared from Threads opens as a prospect with its words", async () => {
         // /share redirects to /dashboard, which then rewrites its own URL; waitForURL
         // reads that rewrite as an aborted navigation, so wait on the page instead.
@@ -904,8 +928,10 @@ export const flows = [
         const card = page.getByLabel("Prospek @tokokue");
         await card.getByText("foto katalog", { exact: true }).waitFor();
         await card.getByText("budget ramah UMKM", { exact: true }).waitFor();
+        await card.getByRole("button", { name: "Detail ▾" }).click();
         await card.getByText("Saran tahap:").waitFor();
-        await page.getByRole("listitem", { name: "Tahap 1: Intro, cocok sekarang" }).waitFor();
+        await card.getByRole("button", { name: "Ringkas ▴" }).click();
+        await page.getByRole("tabpanel", { name: "Tahap 1: Intro, cocok sekarang" }).waitFor();
         await card.getByRole("button", { name: "✎ Ubah konteks" }).click();
         await page.locator("#ctx-when").fill("besok jam 1-5 sore");
         await page.getByRole("button", { name: "Simpan konteks" }).click();
@@ -919,11 +945,13 @@ export const flows = [
         await card.getByRole("button", { name: "Tutup kalender" }).click();
       });
       await t.step("an empty stage takes an example, filled in with their need", async () => {
-        const offer = page.getByRole("listitem", { name: /Tahap 4: Penawaran/ });
+        await page.getByRole("tablist", { name: "Tahap pesan" }).getByRole("tab", { name: /^4\. Penawaran/ }).click();
+        const offer = page.getByRole("tabpanel", { name: /Tahap 4: Penawaran/ });
         await offer.getByRole("button", { name: "+ Pakai contoh" }).click();
         await offer.getByText(/dua pilihan paket buat foto katalog besok jam 1-5 sore/).waitFor();
       });
       await t.step("a new template shows its stage, the words it can use, and a preview", async () => {
+        await page.getByRole("tablist", { name: "Tahap pesan" }).getByRole("tab", { name: /^1\. Intro, .*cocok sekarang/ }).click();
         await page.getByRole("button", { name: "+ Template" }).click();
         const dlg = page.getByRole("dialog", { name: "Template baru" });
         await dlg.getByRole("radio", { name: "1. Intro", checked: true }).waitFor();
@@ -945,7 +973,9 @@ export const flows = [
         const r = await bar.boundingBox();
         if (!r || r.y + r.height > page.viewportSize().height) throw new Error("the undo bar is off screen");
         await page.getByRole("button", { name: "Batal catat" }).click();
+        await pane(page, "Log DM");
         await expectText(page, "Belum ada DM.");
+        await pane(page, "Journey");
         await row("Toko Kue (@tokokue)").getByText("Baru").waitFor();
       });
       await t.step("send it for real from the journey; the bar counts it", async () => {
@@ -978,6 +1008,7 @@ export const flows = [
         await page.getByRole("region", { name: "Sesi hunting" }).getByText(/1 data/).waitFor();
       });
       await t.step("the DM log follows the journey", async () => {
+        await pane(page, "Log DM");
         await huntRow(page, "@tokokue").getByText("Tertarik").first().waitFor();
       });
       await t.step("pasted from the bar; asking not to be contacted locks them", async () => {
@@ -990,6 +1021,7 @@ export const flows = [
         await page.getByRole("button", { name: "🚫 Menolak dihubungi" }).click();
         await page.getByRole("button", { name: "Kunci" }).click();
         await row("@rotikeju").waitFor({ state: "detached" });
+        await pane(page, "Kirim");
         await page.getByRole("alert").getByText("minta ga dihubungi").waitFor();
         if (!(await page.getByRole("button", { name: "Copy", exact: true }).first().isDisabled())) throw new Error("Copy still works for a DNC prospect");
         await pick("DNC");
@@ -1008,6 +1040,7 @@ export const flows = [
         await expectText(page, "Sesi terakhir:");
       });
       await t.step("performa hunter counts the conversion", async () => {
+        await pane(page, "Performa");
         await page.getByRole("button", { name: /Performa hunter/ }).click();
         await page.getByText("Konversi NTB → ETB").waitFor();
       });

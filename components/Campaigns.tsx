@@ -5,7 +5,7 @@ import { deleteDoc, setDoc } from "firebase/firestore";
 import { today, useBusiness, useSpaceCollection } from "@/lib/billing";
 import { canEditCatalog, spaceDoc, useSpace } from "@/lib/space";
 import { PitchTemplate } from "@/lib/hunting";
-import { dataFor, fillTemplate } from "@/lib/templates";
+import { FillDefaults, dataFor, fillTemplate } from "@/lib/templates";
 import { Campaign, GROUPS, GROUP_LABEL, Group, Prospect, Segment, Strategy, audience, rate, sentIn } from "@/lib/prospects";
 import { clean, recordSend } from "@/lib/prospectStore";
 import { btnMuted, btnPrimary, card, chip, font, inputStyle, label, modalBox } from "@/components/ui";
@@ -17,8 +17,9 @@ import { useConfirm } from "@/components/ConfirmSheet";
 
 type Draft = { name: string; templateId: string; segment: Segment | "all"; groups: Group[] };
 
-export default function Campaigns({ prospects, templates, strategy, sessionId }: {
+export default function Campaigns({ prospects, templates, strategy, sessionId, defaults }: {
   prospects: Prospect[]; templates: PitchTemplate[]; strategy: Strategy; sessionId?: string;
+  defaults?: FillDefaults;                     // what an empty field says (Hunting's "Default kosong")
 }) {
   const [ask, askSheet] = useConfirm();
   const space = useSpace();
@@ -26,7 +27,7 @@ export default function Campaigns({ prospects, templates, strategy, sessionId }:
   const campaigns = useSpaceCollection<Campaign>(space, "campaigns").slice().sort((a, b) => b.createdAt - a.createdAt);
   const business = useBusiness(space);
   // The same message, in each person's own words (lib/templates.ts).
-  const textFor = (t: PitchTemplate, p: Prospect) => fillTemplate(t.body, dataFor(p.handle, p, business.name));
+  const textFor = (t: PitchTemplate, p: Prospect) => fillTemplate(t.body, dataFor(p.handle, p, business.name, defaults));
   const [draft, setDraft] = useState<Draft | null>(null);
   const [running, setRunning] = useState<{ id: string; skipped: string[] } | null>(null);
   const [undo, setUndo] = useState<{ label: string; run: () => Promise<void> } | null>(null);

@@ -99,14 +99,23 @@ function nameOf(target: string, p?: Prospect): string {
   return !t || /^\+?[0-9][0-9 -]{6,}$/.test(t) ? "" : t;
 }
 
-export function dataFor(target: string, p: (Prospect & { context?: PostContext }) | undefined, business?: string): FillData {
+// What to say when a post didn't tell (QA 15 Okt: "field kosong dikasih default,
+// jadi jawabannya general"). Set in Hunting → Default kosong; the business's
+// "Jasa apa" stands in for an unset need.
+export interface FillDefaults { kebutuhan?: string; waktu?: string; lokasi?: string }
+
+export function defaultsWith(d: FillDefaults | undefined, tagline?: string): FillDefaults {
+  return { ...d, kebutuhan: (d?.kebutuhan || "").trim() || (tagline || "").trim().toLowerCase() };
+}
+
+export function dataFor(target: string, p: (Prospect & { context?: PostContext }) | undefined, business?: string, defaults: FillDefaults = {}): FillData {
   const post = p ? [...(p.history || [])].reverse().find(e => e.kind === "post")?.text : undefined;
   const c = p?.context;
   return {
     nama: nameOf(target, p),
-    kebutuhan: c?.need || "",
-    waktu: c?.when || "",
-    lokasi: c?.where || "",
+    kebutuhan: c?.need || defaults.kebutuhan || "",
+    waktu: c?.when || defaults.waktu || "",
+    lokasi: c?.where || defaults.lokasi || "",
     post: post ? `“${post.length > 80 ? post.slice(0, 77).trimEnd() + "…" : post}”` : "",
     bisnis: (business || "").trim(),
   };
