@@ -6,6 +6,7 @@ import Icon from "@/components/Icon";
 import { canEditCatalog, spaceCol, spaceDoc, useSpace } from "@/lib/space";
 import { WA_INK } from "@/components/ui";
 import { fillTemplate } from "@/lib/templates";
+import { useConfirm } from "@/components/ConfirmSheet";
 
 interface Template {
   id: string;
@@ -21,6 +22,7 @@ const SEED: Omit<Template, "id">[] = [
 ];
 
 export default function QuickPitch({ hideButton = false }: { hideButton?: boolean }) {
+  const [ask, askSheet] = useConfirm();
   const space = useSpace();
   const canEdit = canEditCatalog(space);
   const spaceKey = `${space.kind}:${space.id}`;
@@ -81,9 +83,8 @@ export default function QuickPitch({ hideButton = false }: { hideButton?: boolea
     await setDoc(spaceDoc(space, "pitchTemplates", id), { title: editing.title.trim(), body: editing.body.trim(), ...(editing.stage ? { stage: editing.stage } : {}) });
     setEditing(null);
   }
-  async function remove(t: Template) {
-    if (!confirm(`Hapus template ${t.title}? Angka DM yang udah kecatat tetap ada.`)) return;
-    await deleteDoc(spaceDoc(space, "pitchTemplates", t.id));
+  function remove(t: Template) {
+    ask(`Hapus template ${t.title}?`, "Angka DM yang udah kecatat tetap ada.", () => deleteDoc(spaceDoc(space, "pitchTemplates", t.id)));
   }
 
   const inputStyle: React.CSSProperties = {
@@ -97,6 +98,7 @@ export default function QuickPitch({ hideButton = false }: { hideButton?: boolea
 
   return (
     <>
+      {askSheet}
       {/* Floating action button */}
       {!hideButton && <style>{`
         /* The page ends clear of the floating button, above the bottom nav. */

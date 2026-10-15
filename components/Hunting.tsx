@@ -24,6 +24,7 @@ import {
 } from "@/lib/prospects";
 import { HuntInbox, bump, createProspect, ctx, recordSend, saveProspect, unfurl, useHuntInbox } from "@/lib/prospectStore";
 import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
+import { useConfirm } from "@/components/ConfirmSheet";
 
 type Filter = "Semua" | "Follow-up" | "Tertarik";
 // An inline editor under a log row: the field on its own line, Batal beside the action.
@@ -42,6 +43,7 @@ export interface HuntingSession {
 }
 
 export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts: Hunt[]; goal: number; onOpenScripts?: () => void; journey: HuntingSession }) {
+  const [ask, askSheet] = useConfirm();
   const space = useSpace();
   const canEdit = canEditCatalog(space);
   const { prospects, strategy, live } = journey;
@@ -342,9 +344,8 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     targetRef.current?.focus({ preventScroll: true });
   }
 
-  async function remove(h: Hunt) {
-    if (!confirm(`Hapus catatan DM ke ${h.target || "target ini"}?`)) return;
-    await deleteDoc(spaceDoc(space, "hunts", h.id));
+  function remove(h: Hunt) {
+    ask("Hapus catatan DM?", `Catatan DM ke ${h.target || "target ini"} dihapus dari log.`, () => deleteDoc(spaceDoc(space, "hunts", h.id)));
   }
 
   function followUp(h: Hunt) {
@@ -378,6 +379,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
 
   return (
     <div className="sp-hunt">
+      {askSheet}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
         <div style={{ minWidth: 0, flex: "1 1 240px" }}>
           <div style={heading}>Hunting Mode</div>

@@ -47,3 +47,18 @@ export default function ConfirmSheet({ title, children, action = "Hapus", busyLa
     document.body
   );
 }
+
+// The same sheet as a one-liner where a component used to call confirm():
+// `const [ask, askSheet] = useConfirm();` then
+// `ask("Hapus X?", "Penjelasan.", async () => { ... })` and render {askSheet}.
+type Ask = { title: string; body: ReactNode; run: () => Promise<void> | void; action?: string; busyLabel?: string };
+export function useConfirm() {
+  const [q, setQ] = useState<Ask | null>(null);
+  const ask = (title: string, body: ReactNode, run: Ask["run"], action?: string, busyLabel?: string) => setQ({ title, body, run, action, busyLabel });
+  const sheet = q ? (
+    <ConfirmSheet title={q.title} action={q.action} busyLabel={q.busyLabel} onConfirm={async () => { await q.run(); }} onClose={() => setQ(null)}>
+      {q.body}
+    </ConfirmSheet>
+  ) : null;
+  return [ask, sheet] as const;
+}

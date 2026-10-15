@@ -153,7 +153,7 @@ export default function LandingPage() {
       {/* FEATURES */}
       <div className="sec">
         <div className="sec-tag">Core Features</div>
-        <h2 className="sec-title">Semua yang lo butuhin buat menang di sales.</h2>
+        <h2 className="sec-title">Semua yang kamu butuhin buat menang di sales.</h2>
         <div className="feat-grid">
           {features.map((f) => (
             <div key={f.title} className="feat-card">
@@ -204,8 +204,8 @@ export default function LandingPage() {
       {/* STATS */}
       <div className="stats-section">
         <div className="stats-grid">
-          <div className="stat-card"><div className="sv b">5–15%</div><div className="sl">Cold email reply rate yang harus lo kejar</div></div>
-          <div className="stat-card"><div className="sv g">40%+</div><div className="sl">Meeting rate dari setiap reply yang lo dapat</div></div>
+          <div className="stat-card"><div className="sv b">5–15%</div><div className="sl">Cold email reply rate yang harus kamu kejar</div></div>
+          <div className="stat-card"><div className="sv g">40%+</div><div className="sl">Meeting rate dari setiap reply yang kamu dapat</div></div>
           <div className="stat-card"><div className="sv w">7×</div><div className="sl">Touchpoints rata-rata sebelum deal closed</div></div>
           <div className="stat-card"><div className="sv b">+30%</div><div className="sl">Win rate naik pakai AI-personalized proposal</div></div>
         </div>
@@ -216,7 +216,7 @@ export default function LandingPage() {
         <div className="cta-box">
           <div className="cta-left">
             <h2>Udah cukup<br />prospek manual<br />tanpa sistem.</h2>
-            <p>SALESPAL ngasih lo unfair advantage. Mulai tracking, mulai closing, mulai winning — sekarang.</p>
+            <p>SALESPAL ngasih kamu unfair advantage. Mulai tracking, mulai closing, mulai winning — sekarang.</p>
           </div>
           <div className="cta-right">
             <Link href="/login" className="btn-primary" style={{ fontSize: 16, padding: "18px 40px" }}>

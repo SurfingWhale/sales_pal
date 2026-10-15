@@ -9,6 +9,7 @@ import { dataFor, fillTemplate } from "@/lib/templates";
 import { Campaign, GROUPS, GROUP_LABEL, Group, Prospect, Segment, Strategy, audience, rate, sentIn } from "@/lib/prospects";
 import { clean, recordSend } from "@/lib/prospectStore";
 import { btnMuted, btnPrimary, card, chip, font, inputStyle, label, modalBox } from "@/components/ui";
+import { useConfirm } from "@/components/ConfirmSheet";
 
 // A campaign is one message for a group of prospects (docs/prd/PRD-009 §7).
 // There is no sending in bulk — the platforms have no API for it — so it runs
@@ -19,6 +20,7 @@ type Draft = { name: string; templateId: string; segment: Segment | "all"; group
 export default function Campaigns({ prospects, templates, strategy, sessionId }: {
   prospects: Prospect[]; templates: PitchTemplate[]; strategy: Strategy; sessionId?: string;
 }) {
+  const [ask, askSheet] = useConfirm();
   const space = useSpace();
   const canEdit = canEditCatalog(space);
   const campaigns = useSpaceCollection<Campaign>(space, "campaigns").slice().sort((a, b) => b.createdAt - a.createdAt);
@@ -57,6 +59,7 @@ export default function Campaigns({ prospects, templates, strategy, sessionId }:
 
   return (
     <div style={{ ...card, padding: 20, marginBottom: 20 }}>
+      {askSheet}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 4 }}>
         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>Kampanye</div>
         {canEdit && <button onClick={() => setDraft({ name: "", templateId: templates[0]?.id || "", segment: "all", groups: ["nunggu", "terhubung"] })} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)" }}>+ Kampanye</button>}
@@ -88,7 +91,7 @@ export default function Campaigns({ prospects, templates, strategy, sessionId }:
               </div>
               <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                 {t && left.length > 0 && <button onClick={() => setRunning(isRunning ? null : { id: c.id, skipped: [] })} aria-pressed={isRunning} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>{isRunning ? "Tutup" : "Mulai antrian"}</button>}
-                {canEdit && <button onClick={async () => { if (confirm(`Hapus kampanye ${c.name}? Riwayat kirimnya tetap ada di journey.`)) await deleteDoc(spaceDoc(space, "campaigns", c.id)); }} aria-label={`Hapus kampanye ${c.name}`} style={{ ...chip, minHeight: 36 }}>🗑</button>}
+                {canEdit && <button onClick={() => ask(`Hapus kampanye ${c.name}?`, "Riwayat kirimnya tetap ada di journey.", () => deleteDoc(spaceDoc(space, "campaigns", c.id)))} aria-label={`Hapus kampanye ${c.name}`} style={{ ...chip, minHeight: 36 }}>🗑</button>}
               </div>
             </div>
             {isRunning && t && (

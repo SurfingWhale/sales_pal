@@ -79,8 +79,8 @@ export default function BusinessEditor({ business, onClose }: { business: Busine
           </div>
         </div>
 
-        <div role="group" aria-label="Logo brand lo" style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>Atau pilih logo brand lo:</div>
+        <div role="group" aria-label="Logo brand kamu" style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>Atau pilih logo brand kamu:</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {BRANDS.map(br => (
               <button key={br.id} onClick={() => pickBrand(br)} aria-label={`Pakai logo ${br.name}`}

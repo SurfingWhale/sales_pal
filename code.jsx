@@ -3,10 +3,10 @@ import { useState, useEffect } from "react";
 const TABS = ["Dashboard", "Leads", "Outreach", "Rejection Log", "AI Playbook"];
 
 const INITIAL_LEADS = [
-  { id: 1, name: "PT Maju Jaya", contact: "Budi Santoso", source: "GMaps", status: "Hot", score: 92, email: "budi@majujaya.com", phone: "0812-3456-7890", category: "F&B", notes: "Interested in digital menu", lastContact: "2025-04-20", value: 15000000 },
-  { id: 2, name: "Toko Elektronik Sinar", contact: "Dewi Rahayu", source: "DM IG", status: "Warm", score: 74, email: "dewi@sinar.co.id", phone: "0813-9876-5432", category: "Retail", notes: "Follow up minggu depan", lastContact: "2025-04-18", value: 8500000 },
-  { id: 3, name: "Klinik Sehat Prima", contact: "Dr. Andi", source: "Cold Email", status: "Cold", score: 45, email: "andi@kliniksehat.com", phone: "0877-1234-5678", category: "Health", notes: "Belum respon email ke-2", lastContact: "2025-04-10", value: 22000000 },
-  { id: 4, name: "Rumah Makan Padang Sederhana", contact: "Pak Rusdi", source: "GMaps", status: "Closed", score: 100, email: "rusdi@sederhana.id", phone: "0811-2233-4455", category: "F&B", notes: "Deal signed!", lastContact: "2025-04-22", value: 12000000 },
+  { id: 1, name: "PT Maju Jaya", contact: "Budi", source: "GMaps", status: "Hot", score: 92, email: "budi@contoh.id", phone: "0812-0000-0001", category: "F&B", notes: "Interested in digital menu", lastContact: "2025-04-20", value: 15000000 },
+  { id: 2, name: "Toko Elektronik Sinar", contact: "Dewi", source: "DM IG", status: "Warm", score: 74, email: "dewi@contoh.id", phone: "0812-0000-0002", category: "Retail", notes: "Follow up minggu depan", lastContact: "2025-04-18", value: 8500000 },
+  { id: 3, name: "Klinik Sehat Prima", contact: "Dr. Andi", source: "Cold Email", status: "Cold", score: 45, email: "andi@contoh.id", phone: "0812-0000-0003", category: "Health", notes: "Belum respon email ke-2", lastContact: "2025-04-10", value: 22000000 },
+  { id: 4, name: "Rumah Makan Padang Contoh", contact: "Pak Rusdi", source: "GMaps", status: "Closed", score: 100, email: "rusdi@contoh.id", phone: "0812-0000-0004", category: "F&B", notes: "Deal signed!", lastContact: "2025-04-22", value: 12000000 },
 ];
 
 const INITIAL_OUTREACH = [

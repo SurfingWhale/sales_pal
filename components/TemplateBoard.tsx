@@ -6,6 +6,7 @@ import { spaceDoc, useSpace } from "@/lib/space";
 import { PitchTemplate, TemplateScore, pct } from "@/lib/hunting";
 import { FillData, SAMPLE, STAGES, STARTERS, Stage, VARIABLES, fillTemplate, missingIn, stageOf } from "@/lib/templates";
 import { btnMuted, btnPrimary, btnWA, chip, font, inputStyle, label, modalBox } from "@/components/ui";
+import { useConfirm } from "@/components/ConfirmSheet";
 
 // The message deck as a kanban of the conversation (docs/prd/PRD-009 §13):
 // one column per stage, the column that fits this person lit up, and every
@@ -16,6 +17,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
   copiedId: string | null; copyFail: string | null; onPick: (t: PitchTemplate, how: "copy" | "wa") => void;
   canEdit: boolean; sampleName: string;
 }) {
+  const [ask, askSheet] = useConfirm();
   const space = useSpace();
   const [editing, setEditing] = useState<PitchTemplate | null>(null);
   const board = useRef<HTMLDivElement>(null);
@@ -55,6 +57,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
 
   return (
     <>
+      {askSheet}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 700 }}>Pilih pesan</div>
         {canEdit && <button onClick={() => setEditing({ id: "", title: "", body: "", stage })} style={chip}>+ Template</button>}
@@ -162,7 +165,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
             {(!editing.title.trim() || !editing.body.trim()) && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>Isi judul dan isi pesan dulu buat nyimpen.</div>}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {editing.id && (
-                <button onClick={async () => { if (confirm(`Hapus template ${editing.title}? Angka DM yang udah kecatat tetap ada.`)) { await deleteDoc(spaceDoc(space, "pitchTemplates", editing.id)); setEditing(null); } }}
+                <button onClick={() => { const id = editing.id; ask(`Hapus template ${editing.title}?`, "Angka DM yang udah kecatat tetap ada.", async () => { await deleteDoc(spaceDoc(space, "pitchTemplates", id)); setEditing(null); }); }}
                   style={{ ...btnMuted, minHeight: 44, background: "transparent", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🗑 Hapus</button>
               )}
               <div style={{ display: "flex", gap: 10, marginLeft: "auto", flex: "1 1 220px", justifyContent: "flex-end" }}>

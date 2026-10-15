@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { archetypes, objections, scriptMatrix } from "@/lib/salespal-data";
 
 type Step = "archetype" | "objection" | "result";
@@ -10,18 +10,33 @@ export default function SalesSimulator() {
   const [selectedArchetype, setSelectedArchetype] = useState<string | null>(null);
   const [selectedObjection, setSelectedObjection] = useState<string | null>(null);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [copyFail, setCopyFail] = useState<number | null>(null);
+  const top = useRef<HTMLDivElement>(null);
 
-  function copyScript(text: string, idx: number) {
-    navigator.clipboard.writeText(text);
-    setCopiedIdx(idx);
-    setTimeout(() => setCopiedIdx(null), 2000);
+  async function copyScript(text: string, idx: number) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyFail(null); setCopiedIdx(idx);
+      setTimeout(() => setCopiedIdx(i => (i === idx ? null : i)), 2000);
+    } catch {
+      setCopiedIdx(null); setCopyFail(idx);
+    }
+  }
+
+  // Each step starts at its top: the card tapped was often far down a phone's page.
+  function goStep(next: Step) {
+    setStep(next); setCopyFail(null);
+    requestAnimationFrame(() => {
+      const el = top.current;
+      if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ block: "start" });
+    });
   }
 
   function reset() {
-    setStep("archetype");
     setSelectedArchetype(null);
     setSelectedObjection(null);
     setCopiedIdx(null);
+    goStep("archetype");
   }
 
   const archetype = archetypes.find(a => a.id === selectedArchetype);
@@ -34,54 +49,54 @@ export default function SalesSimulator() {
   const stepIdx = stepOrder.indexOf(step);
 
   return (
-    <div>
+    <div className="sp-learn sp-sim" ref={top} style={{ scrollMarginTop: 120 }}>
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Sales Simulator</div>
-        <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 4 }}>Pilih tipe nasabah + skenario → dapat script terbaik siap pakai</div>
+        <div style={{ color: "var(--app-muted)", fontSize: 13, marginTop: 4 }}>Latihan jawab customer sebelum ketemu beneran: pilih tipenya dan apa yang dia bilang, dapat script siap pakai.</div>
       </div>
 
       {/* Step indicator */}
-      <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 32 }}>
-        {(["Tipe Nasabah", "Skenario", "Script"] as const).map((label, i) => {
+      <ol aria-label="Langkah" style={{ display: "flex", alignItems: "center", gap: 0, margin: "0 0 28px", padding: 0, listStyle: "none" }}>
+        {(["Tipe customer", "Skenario", "Script"] as const).map((label, i) => {
           const isActive = stepIdx === i;
           const isDone = stepIdx > i;
           return (
-            <div key={label} style={{ display: "flex", alignItems: "center", flex: i < 2 ? 1 : undefined }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
+            <li key={label} aria-current={isActive ? "step" : undefined} style={{ display: "flex", alignItems: "center", flex: i < 2 ? 1 : undefined, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap", flexShrink: 0 }}>
                 <div style={{
                   width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
                   background: isActive ? "#005eb0" : isDone ? "#005eb030" : "var(--app-inner)",
                   border: `2px solid ${isActive || isDone ? "#005eb0" : "var(--app-border)"}`,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 12, fontWeight: 700,
-                  color: isActive ? "#000" : isDone ? "#005eb0" : "var(--app-muted)",
+                  color: isActive ? "#fff" : isDone ? "var(--brand-text)" : "var(--app-muted)",
                 }}>
                   {isDone ? "✓" : i + 1}
                 </div>
-                <span style={{ fontSize: 12, color: isActive ? "var(--app-text)" : isDone ? "var(--app-muted)" : "var(--app-muted)", fontWeight: isActive ? 700 : 400 }}>
+                <span className={isActive ? undefined : "sp-step-label"} style={{ fontSize: 13, color: isActive ? "var(--app-text)" : "var(--app-muted)", fontWeight: isActive ? 700 : 400, overflow: "hidden", textOverflow: "ellipsis" }}>
                   {label}
                 </span>
               </div>
               {i < 2 && (
-                <div style={{ flex: 1, height: 1, background: isDone ? "#005eb050" : "var(--app-border)", margin: "0 12px" }} />
+                <div aria-hidden="true" style={{ flex: 1, minWidth: 12, height: 1, background: isDone ? "#005eb050" : "var(--app-border)", margin: "0 10px" }} />
               )}
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ol>
 
       {/* STEP 1: Choose Archetype */}
       {step === "archetype" && (
         <div>
-          <div style={{ fontSize: 13, color: "var(--app-muted)", marginBottom: 20 }}>Nasabah lo lebih mirip yang mana?</div>
+          <div style={{ fontSize: 14, color: "var(--app-muted)", marginBottom: 16 }}>Customer kamu lebih mirip yang mana?</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
             {archetypes.map(a => (
               <button
                 key={a.id}
-                onClick={() => { setSelectedArchetype(a.id); setStep("objection"); }}
+                onClick={() => { setSelectedArchetype(a.id); goStep("objection"); }}
                 style={{
                   background: "var(--app-card)", border: `2px solid ${a.color}25`,
-                  borderRadius: 16, padding: 24, textAlign: "left",
+                  borderRadius: 16, padding: "clamp(16px, 4vw, 24px)", textAlign: "left",
                   cursor: "pointer", color: "inherit", fontFamily: "inherit",
                   transition: "background-color 0.15s, color 0.15s, border-color 0.15s",
                 }}
@@ -94,7 +109,7 @@ export default function SalesSimulator() {
                   (e.currentTarget as HTMLElement).style.background = "var(--app-card)";
                 }}
               >
-                <div style={{ fontSize: 38, marginBottom: 12 }}>{a.animal}</div>
+                <div aria-hidden="true" style={{ fontSize: 34, marginBottom: 10 }}>{a.animal}</div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: a.color, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 6 }}>{a.name}</div>
                 <div style={{ fontSize: 12, color: "var(--app-muted)", lineHeight: 1.6, marginBottom: 14 }}>{a.comStyle}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -102,7 +117,7 @@ export default function SalesSimulator() {
                     <span key={t} style={{ fontSize: 12, background: `${a.color}15`, color: a.color, border: `1px solid ${a.color}30`, borderRadius: 20, padding: "2px 8px" }}>{t}</span>
                   ))}
                 </div>
-                <div style={{ marginTop: 16, fontSize: 12, color: "var(--app-muted)", borderTop: "1px solid #161b22", paddingTop: 12 }}>
+                <div style={{ marginTop: 16, fontSize: 12, color: "var(--app-muted)", borderTop: "1px solid var(--app-border)", paddingTop: 12 }}>
                   <span style={{ color: "var(--app-dim)" }}>Kata kunci: </span>
                   {a.triggerWords.slice(0, 3).join(", ")}...
                 </div>
@@ -121,25 +136,26 @@ export default function SalesSimulator() {
             borderRadius: 12, padding: "14px 20px", marginBottom: 28,
             display: "flex", alignItems: "center", gap: 14,
           }}>
-            <span style={{ fontSize: 28 }}>{archetype.animal}</span>
-            <div style={{ flex: 1 }}>
+            <span aria-hidden="true" style={{ fontSize: 28 }}>{archetype.animal}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: archetype.color }}>{archetype.name}</div>
               <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{archetype.strategy}</div>
             </div>
             <button
-              onClick={() => setStep("archetype")}
-              style={{ background: "transparent", border: "1px solid var(--app-border)", color: "var(--app-muted)", borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}
+              onClick={() => goStep("archetype")}
+              aria-label={`Ganti tipe customer (sekarang ${archetype.name})`}
+              style={{ flexShrink: 0, background: "var(--app-card)", border: "1px solid var(--app-border)", color: "var(--app-text)", borderRadius: 999, padding: "0 16px", minHeight: 40, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
             >
               Ganti
             </button>
           </div>
 
-          <div style={{ fontSize: 13, color: "var(--app-muted)", marginBottom: 16 }}>Apa yang nasabah bilang / lakukan?</div>
+          <div style={{ fontSize: 14, color: "var(--app-muted)", marginBottom: 16 }}>Apa yang customer bilang atau lakukan?</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12 }}>
             {objections.map(o => (
               <button
                 key={o.id}
-                onClick={() => { setSelectedObjection(o.id); setStep("result"); }}
+                onClick={() => { setSelectedObjection(o.id); goStep("result"); }}
                 style={{
                   background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12,
                   padding: "18px 16px", textAlign: "left", cursor: "pointer",
@@ -148,7 +164,7 @@ export default function SalesSimulator() {
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "#005eb0"; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--app-border)"; }}
               >
-                <div style={{ fontSize: 26, marginBottom: 10 }}>{o.icon}</div>
+                <div aria-hidden="true" style={{ fontSize: 26, marginBottom: 10 }}>{o.icon}</div>
                 <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 6 }}>{o.label}</div>
                 <div style={{ fontSize: 12, color: "var(--app-dim)", fontStyle: "italic", lineHeight: 1.5 }}>{o.example}</div>
               </button>
@@ -161,31 +177,33 @@ export default function SalesSimulator() {
       {step === "result" && archetype && objection && (
         <div>
           {/* Context chips */}
-          <div style={{ display: "flex", gap: 10, marginBottom: 28, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}>
             <button
-              onClick={() => setStep("archetype")}
-              style={{ display: "flex", alignItems: "center", gap: 8, background: `${archetype.color}0d`, border: `1px solid ${archetype.color}30`, borderRadius: 20, padding: "6px 14px", cursor: "pointer", color: "inherit", fontFamily: "inherit" }}
+              onClick={() => goStep("archetype")}
+              aria-label={`Ganti tipe customer (sekarang ${archetype.name})`}
+              style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 40, background: `${archetype.color}0d`, border: `1px solid ${archetype.color}30`, borderRadius: 20, padding: "0 14px", cursor: "pointer", color: "inherit", fontFamily: "inherit" }}
             >
-              <span>{archetype.animal}</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: archetype.color }}>{archetype.name}</span>
-              <span style={{ fontSize: 12, color: "var(--app-dim)" }}>✕</span>
+              <span aria-hidden="true">{archetype.animal}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: archetype.color }}>{archetype.name}</span>
+              <span style={{ fontSize: 12, color: "var(--app-muted)" }}>· ganti</span>
             </button>
             <button
-              onClick={() => setStep("objection")}
-              style={{ display: "flex", alignItems: "center", gap: 8, background: "#005eb01a", border: "1px solid #005eb030", borderRadius: 20, padding: "6px 14px", cursor: "pointer", color: "inherit", fontFamily: "inherit" }}
+              onClick={() => goStep("objection")}
+              aria-label={`Ganti skenario (sekarang ${objection.label})`}
+              style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 40, background: "#005eb01a", border: "1px solid #005eb030", borderRadius: 20, padding: "0 14px", cursor: "pointer", color: "inherit", fontFamily: "inherit" }}
             >
-              <span>{objection.icon}</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ok)" }}>{objection.label}</span>
-              <span style={{ fontSize: 12, color: "var(--app-dim)" }}>✕</span>
+              <span aria-hidden="true">{objection.icon}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--brand-text)" }}>{objection.label}</span>
+              <span style={{ fontSize: 12, color: "var(--app-muted)" }}>· ganti</span>
             </button>
           </div>
 
-          <div style={{ fontSize: 13, color: "var(--app-muted)", marginBottom: 20 }}>✨ Script yang direkomendasikan:</div>
+          <div style={{ fontSize: 14, color: "var(--app-muted)", marginBottom: 16 }}>✨ Script yang direkomendasikan:</div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {scripts.map((s, i) => (
-              <div key={i} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 14, padding: 24 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+              <div key={i} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 14, padding: "clamp(14px, 4vw, 24px)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 }}>
                   <span style={{
                     fontSize: 12, fontWeight: 700, letterSpacing: "1px",
                     background: s.tone === "formal" ? "#a78bfa20" : "#00ccff20",
@@ -198,25 +216,26 @@ export default function SalesSimulator() {
                   <button
                     onClick={() => copyScript(s.script, i)}
                     style={{
-                      background: copiedIdx === i ? "#005eb020" : "transparent",
-                      border: `1px solid ${copiedIdx === i ? "#005eb0" : "var(--app-border)"}`,
-                      color: copiedIdx === i ? "#005eb0" : "var(--app-muted)",
-                      borderRadius: 6, padding: "5px 14px", fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+                      background: copiedIdx === i ? "#00a8621a" : "transparent",
+                      border: `1px solid ${copiedIdx === i ? "var(--ok)" : "var(--app-border)"}`,
+                      color: copiedIdx === i ? "var(--ok)" : "var(--app-text)",
+                      borderRadius: 8, padding: "0 16px", minHeight: 44, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
                     }}
                   >
-                    {copiedIdx === i ? "✓ Tersalin!" : "Copy Script"}
+                    {copiedIdx === i ? "✓ Tersalin" : "Copy"}
                   </button>
                 </div>
+                {copyFail === i && <p role="alert" style={{ margin: "0 0 10px", fontSize: 13, color: "var(--hot)" }}>Gagal nyalin otomatis. Tekan lama teks script-nya, lalu salin manual.</p>}
                 <div style={{
-                  background: "var(--app-inner)", borderRadius: 10, padding: "16px 20px",
-                  fontSize: 13, lineHeight: 1.8, fontStyle: "italic", color: "var(--app-text)",
+                  background: "var(--app-inner)", borderRadius: 10, padding: "12px 16px",
+                  fontSize: 15, lineHeight: 1.6, fontStyle: "italic", color: "var(--app-text)",
                   marginBottom: 14, borderLeft: `3px solid ${archetype.color}`,
                 }}>
                   &ldquo;{s.script}&rdquo;
                 </div>
                 <div style={{ background: "#005eb01a", borderRadius: 8, padding: "10px 14px", border: "1px solid #005eb015" }}>
-                  <span style={{ fontSize: 12, color: "var(--ok)", fontWeight: 700, letterSpacing: "1px" }}>💡 WHY IT WORKS&nbsp;&nbsp;</span>
-                  <span style={{ fontSize: 12, color: "color-mix(in srgb, #8b949e 55%, var(--app-text))" }}>{s.tips}</span>
+                  <span style={{ fontSize: 12, color: "var(--ok)", fontWeight: 700, letterSpacing: "1px" }}>💡 KENAPA AMPUH&nbsp;&nbsp;</span>
+                  <span style={{ fontSize: 13, color: "var(--app-sub)" }}>{s.tips}</span>
                 </div>
               </div>
             ))}
@@ -226,11 +245,11 @@ export default function SalesSimulator() {
             onClick={reset}
             style={{
               marginTop: 28, background: "#005eb0",
-              color: "#fff", border: "none", borderRadius: 8, padding: "12px 28px",
+              color: "#fff", border: "none", borderRadius: 999, padding: "0 24px", minHeight: 48,
               fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif",
             }}
           >
-            ↺ Simulasi Baru
+            ↺ Simulasi baru
           </button>
         </div>
       )}

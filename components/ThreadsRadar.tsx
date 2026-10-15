@@ -8,6 +8,7 @@ import { today, useUserCollection } from "@/lib/billing";
 import type { Hunt } from "@/lib/hunting";
 import { RadarItem, RadarPerson, THREADS_SCOPES, ThreadsConnection, groupRadar, needsRefresh, profileUrl } from "@/lib/threads";
 import { card, chip, font } from "@/components/ui";
+import { useConfirm } from "@/components/ConfirmSheet";
 
 const APP_ID = process.env.NEXT_PUBLIC_THREADS_APP_ID || "";
 
@@ -19,6 +20,7 @@ function ago(iso: string): string {
 }
 
 export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hunts: Hunt[]; onTarget: (username: string) => void }) {
+  const [ask, askSheet] = useConfirm();
   const [conn, setConn] = useState<ThreadsConnection | null | undefined>(undefined);
   const [people, setPeople] = useState<RadarPerson[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -90,11 +92,12 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
     await markDone(p);
   }
 
-  async function disconnect() {
-    if (!confirm("Putuskan Threads dari SalesPal?")) return;
-    await authFetch("/api/threads/token", { method: "DELETE" }).catch(() => {});
-    await deleteDoc(ref);
-    setPeople(null);
+  function disconnect() {
+    ask("Putuskan Threads?", "SalesPal berhenti baca Threads kamu. Bisa disambung lagi kapan aja.", async () => {
+      await authFetch("/api/threads/token", { method: "DELETE" }).catch(() => {});
+      await deleteDoc(ref);
+      setPeople(null);
+    }, "Putuskan", "Memutus…");
   }
 
   // Not set up yet (docs/prd/PRD-003-threads-radar.md): say what is coming,
@@ -124,6 +127,7 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
 
   return (
     <div style={{ ...card, padding: 20, marginBottom: 20 }}>
+      {askSheet}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>📡 Radar Threads</div>
         {conn && (

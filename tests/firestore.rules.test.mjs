@@ -18,7 +18,7 @@ const other = env.authenticatedContext("u9", { email: "x@y.com", email_verified:
 const good = () => ({
   v: 1, site: "visufavor", siteUrl: "https://visufavor.vercel.app/",
   offer: { code: "VISU10-7K2QF", kind: "discount", value: 10 },
-  contact: { name: "Rani", email: "rani@mail.com", whatsapp: "+62 812 3456 7890", business: "Warung Rani" },
+  contact: { name: "Rani", email: "rani@contoh.id", whatsapp: "+62 812 3456 7890", business: "Warung Rani" },
   answers: { need: "Menu photos", timing: "This month", heardFrom: "Instagram" },
   attribution: { utm_source: "instagram", utm_medium: "paid", utm_campaign: "sept-boost", fbclid: "abc", landing: "/", firstSeenAt: "2026-09-24T10:00:00Z" },
   account: { provider: "google.com", uid: "g123", project: "visufavor" },
@@ -30,7 +30,7 @@ const t = async (name, p) => { try { await p; pass++; console.log("  ok  ", name
 console.log("public (not signed in to SalesPal):");
 await t("adds a valid lead", assertSucceeds(addDoc(collection(anon, "inbound_leads"), good())));
 await t("adds with only name + WhatsApp", assertSucceeds(addDoc(collection(anon, "inbound_leads"), { v: 1, site: "untmd-sports", contact: { name: "A", whatsapp: "08123456789" }, createdAt: serverTimestamp(), status: "new" })));
-await t("adds a member sign-up (no offer, no answers)", assertSucceeds(addDoc(collection(anon, "inbound_leads"), { v: 1, site: "visufavor", siteUrl: "https://visufavor.vercel.app/", contact: { name: "Rani", email: "rani@mail.com" }, attribution: { utm_source: "instagram", landing: "/" }, account: { provider: "password", uid: "e456", project: "visufavor" }, createdAt: serverTimestamp(), status: "new" })));
+await t("adds a member sign-up (no offer, no answers)", assertSucceeds(addDoc(collection(anon, "inbound_leads"), { v: 1, site: "visufavor", siteUrl: "https://visufavor.vercel.app/", contact: { name: "Rani", email: "rani@contoh.id" }, attribution: { utm_source: "instagram", landing: "/" }, account: { provider: "password", uid: "e456", project: "visufavor" }, createdAt: serverTimestamp(), status: "new" })));
 await t("cannot read leads", assertFails(getDocs(collection(anon, "inbound_leads"))));
 await t("cannot add unknown site", assertFails(addDoc(collection(anon, "inbound_leads"), { ...good(), site: "evil" })));
 await t("cannot add extra field", assertFails(addDoc(collection(anon, "inbound_leads"), { ...good(), admin: true })));

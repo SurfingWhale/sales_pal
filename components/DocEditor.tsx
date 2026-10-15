@@ -145,7 +145,7 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
             {d.items.length === 0 && <div style={{ fontSize: 13, color: "var(--app-muted)", padding: "4px 0" }}>Belum ada item.</div>}
             <div ref={itemsRef} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {d.items.map((it, i) => (
-                <div key={i} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 72px minmax(0, 1fr)", gap: 8, padding: "8px 12px 12px", borderRadius: 12, background: "var(--app-inner)" }}>
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "72px minmax(0, 1fr)", gap: 8, padding: "8px 12px 12px", borderRadius: 12, background: "var(--app-inner)" }}>
                   <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, alignItems: "center" }}>
                     <span style={{ fontSize: 13, fontWeight: 700, color: "var(--app-muted)" }}>Item {i + 1}</span>
                     <button onClick={() => set({ items: d.items.filter((_, n) => n !== i) })} aria-label={`Hapus item ${i + 1}`} style={{ marginLeft: "auto", background: "none", border: "none", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", padding: "4px 0 4px 12px", minHeight: 32 }}>Hapus</button>
@@ -153,7 +153,7 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
                   <input value={it.name} onChange={e => setItem(i, { name: e.target.value })} style={{ ...inputStyle, gridColumn: "1 / -1" }} placeholder="Nama jasa, mis. Event photography" aria-label="Nama item" />
                   <textarea value={it.description || ""} onChange={e => setItem(i, { description: e.target.value })} aria-label="Rincian item"
                     placeholder={"Rincian, mis. 20 menu, 2 angle per menu, edit warna"} style={{ ...inputStyle, gridColumn: "1 / -1", height: 72, resize: "vertical" }} />
-                  <div style={{ fontSize: 12, color: "var(--app-muted)", alignSelf: "center" }}>Qty × harga</div>
+                  <div style={{ gridColumn: "1 / -1", fontSize: 12, color: "var(--app-muted)", marginBottom: -4 }}>Qty × harga satuan</div>
                   <input inputMode="numeric" value={it.qty || ""} onChange={e => setItem(i, { qty: num(e.target.value) })} style={{ ...inputStyle, textAlign: "center" }} aria-label="Qty" />
                   <input inputMode="numeric" value={it.price ? it.price.toLocaleString("id-ID") : ""} onChange={e => setItem(i, { price: num(e.target.value) })} style={{ ...inputStyle, textAlign: "right" }} placeholder="Harga" aria-label="Harga" />
                 </div>

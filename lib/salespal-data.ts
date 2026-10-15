@@ -142,7 +142,7 @@ export const scriptMatrix: Record<string, Record<string, Script[]>> = {
     ],
     busy: [
       { script: "Tentu, saya sangat mengerti. Tidak perlu terburu-buru. Kalau sudah ada waktu, saya akan follow up kembali.", tips: "Tunjukkan empati dan fleksibilitas penuh.", tone: "formal" },
-      { script: "Oh iya gak apa-apa! Santai aja. Nanti saya follow up ya kalau udah agak longgar 😊", tips: "Jangan force — tunjukkan lo respect jadwal mereka.", tone: "santai" },
+      { script: "Oh iya gak apa-apa! Santai aja. Nanti saya follow up ya kalau udah agak longgar 😊", tips: "Jangan force — tunjukkan kamu respect jadwal mereka.", tone: "santai" },
     ],
     price: [
       { script: "Saya mengerti. Banyak klien kami awalnya berpikir hal yang sama, namun setelah mencoba merasakan perbedaannya. Boleh saya ceritakan salah satu?", tips: "Gunakan social proof dan storytelling nyata.", tone: "formal" },

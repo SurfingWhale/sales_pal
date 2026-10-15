@@ -838,3 +838,16 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   .sp-tabs::-webkit-scrollbar { display: none; }
   .sp-tabs > button { flex: 0 0 auto !important; white-space: nowrap; padding: 9px 12px !important; }
 }
+
+/* ---- Belajar: Script Library, Simulator, AI Playbook (QA 15 Okt) ---- */
+@media (max-width: 640px), not ((hover: hover) and (pointer: fine)) {
+  .sp-learn button, .sp-learn select, .sp-learn input { min-height: 44px !important; }
+  .sp-learn input, .sp-learn select { font-size: 16px !important; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .sp-learn button:not(:disabled):hover { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--app-text) 5%, transparent); }
+}
+/* Wide screens: script cards keep a readable line length. */
+@media (min-width: 1100px) { .sp-learn { max-width: 1040px; } }
+/* A narrow phone shows only the current step's name. */
+@media (max-width: 400px) { .sp-sim .sp-step-label { display: none; } }

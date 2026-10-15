@@ -58,7 +58,7 @@ export default function Services({ services, business }: { services: Service[]; 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
           <div style={heading}>Paket & Harga</div>
-          <div style={subheading}>Daftar jasa yang lo jual. Dipakai buat nyusun penawaran.</div>
+          <div style={subheading}>Daftar jasa yang kamu jual. Dipakai buat nyusun penawaran.</div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {canEdit && <button onClick={() => setProfile(business)} style={btnGhost}>Kop & logo</button>}
@@ -88,7 +88,7 @@ export default function Services({ services, business }: { services: Service[]; 
         <div style={{ ...card, padding: "56px 24px", textAlign: "center" }}>
           <div style={{ fontSize: 34, marginBottom: 12 }}>🏷️</div>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ada paket</div>
-          <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>{canEdit ? "Tulis paket jasa lo sekali, pakai terus di tiap penawaran." : "Paket tim diatur Leader atau Officer guild."}</div>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>{canEdit ? "Tulis paket jasa kamu sekali, pakai terus di tiap penawaran." : "Paket tim diatur Leader atau Officer guild."}</div>
           {canEdit && <button onClick={() => edit(BLANK)} style={btnPrimary}>+ Tambah paket pertama</button>}
         </div>
       ) : (

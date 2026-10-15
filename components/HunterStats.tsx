@@ -6,6 +6,7 @@ import { canEditCatalog, useSpace } from "@/lib/space";
 import { HuntSession, Prospect, SMALL, journey, rate, sessionMinutes } from "@/lib/prospects";
 import { COST_CATEGORIES, CostItem, loadClosed, saveCosts, useCosts } from "@/lib/prospectStore";
 import { btnPrimary, card, chip, font, inputStyle, label } from "@/components/ui";
+import { useConfirm } from "@/components/ConfirmSheet";
 
 // How the hunter is doing (docs/prd/PRD-009 §8): reached, answered, converted,
 // and what each conversion cost. Under ten, a rate is written "X dari Y".
@@ -21,6 +22,7 @@ function Tile({ k, v, sub }: { k: string; v: string; sub?: string }) {
 }
 
 export default function HunterStats({ prospects, sessions }: { prospects: Prospect[]; sessions: HuntSession[] }) {
+  const [ask, askSheet] = useConfirm();
   const space = useSpace();
   const canEdit = canEditCatalog(space);
   const [open, setOpen] = useState(false);
@@ -56,13 +58,13 @@ export default function HunterStats({ prospects, sessions }: { prospects: Prospe
       setCostMsg("Gagal nyimpen biaya. Cek koneksi lalu coba lagi.");
     }
   }
-  async function removeCost(c: CostItem) {
-    if (!confirm(`Hapus biaya ${c.name} (${rupiah(c.amount)})?`)) return;
-    await saveCosts(space, month, costs.filter(x => x.id !== c.id)).catch(() => setCostMsg("Gagal menghapus. Coba lagi."));
+  function removeCost(c: CostItem) {
+    ask("Hapus biaya?", `${c.name} (${rupiah(c.amount)}) dihapus dari biaya bulan ini.`, () => saveCosts(space, month, costs.filter(x => x.id !== c.id)));
   }
 
   return (
     <div style={{ ...card, padding: 20, marginBottom: 20 }}>
+      {askSheet}
       <button onClick={() => setOpen(!open)} aria-expanded={open}
         style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", minHeight: 36, background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", fontFamily: font }}>
         <span style={{ fontSize: 14, fontWeight: 700 }}>Performa hunter</span>

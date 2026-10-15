@@ -13,6 +13,7 @@ import {
 } from "@/lib/prospects";
 import { Counter, bump, clean, ctx, loadClosed, removeProspect, saveProspect, syncHunt } from "@/lib/prospectStore";
 import { badge, btnPrimary, btnMuted, card, chip, font, inputStyle, label, modalBox } from "@/components/ui";
+import { useConfirm } from "@/components/ConfirmSheet";
 
 // Every person hunted, one journey each (docs/prd/PRD-009 §6): where they
 // stand, what was said both ways, and the one-tap answer that moves them on.
@@ -73,6 +74,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   prospects: Prospect[]; ready: boolean; hunts: Hunt[]; strategy: Strategy; sessionId?: string;
   filter: ProspectFilter; setFilter: (f: ProspectFilter) => void; onCompose: (p: Prospect) => void;
 }) {
+  const [ask, askSheet] = useConfirm();
   const space = useSpace();
   const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -195,6 +197,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
 
   return (
     <div id="journey-prospek" style={{ ...card, padding: 20, marginBottom: 20 }}>
+      {askSheet}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>Journey prospek</div>
         <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{prospects.length} orang aktif</div>
@@ -274,7 +277,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                 {v.status === "dnc" ? (
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
                     <span style={{ fontSize: 12, color: "var(--app-sub)" }}>Minta ga dihubungi sejak {p.dncAt ? longDate(p.dncAt) : "—"}{p.remark ? ` · ${p.remark}` : ""}.</span>
-                    <button onClick={async () => { if (confirm(`Hapus ${who} dari daftar Jangan dihubungi? Kalau post-nya di-share lagi, dia masuk sebagai prospek baru.`)) { await removeProspect(space, p); setClosed(null); } }} style={{ ...chip, minHeight: 36 }}>Hapus dari daftar</button>
+                    <button onClick={() => ask(`Hapus ${who} dari daftar Jangan dihubungi?`, "Kalau post-nya di-share lagi, dia masuk sebagai prospek baru.", async () => { await removeProspect(space, p); setClosed(null); })} style={{ ...chip, minHeight: 36 }}>Hapus dari daftar</button>
                   </div>
                 ) : (
                   <>
@@ -283,7 +286,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                       <button onClick={() => setEditing({ id: p.id, kind: "reply", text: "", date: "" })} aria-pressed={ed?.kind === "reply"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Dibales</button>
                       {(post?.url || p.url) && <a href={post?.url || p.url} target="_blank" rel="noreferrer" className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>{post?.url ? "Buka post ↗" : "Buka profil ↗"}</a>}
                       <button onClick={() => setEditing({ id: p.id, kind: "note", text: "", date: "" })} style={{ ...chip, minHeight: 36 }}>📝 Catatan</button>
-                      <button onClick={async () => { if (confirm(`Hapus journey ${who}? Log DM-nya tetap ada.`)) await removeProspect(space, p); }} aria-label={`Hapus journey ${who}`} style={{ ...chip, minHeight: 36, marginLeft: "auto", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🗑 Hapus</button>
+                      <button onClick={() => ask(`Hapus journey ${who}?`, "Log DM-nya tetap ada.", () => removeProspect(space, p))} aria-label={`Hapus journey ${who}`} style={{ ...chip, minHeight: 36, marginLeft: "auto", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🗑 Hapus</button>
                     </div>
                     <div style={{ fontSize: 12, color: "var(--app-muted)", margin: "10px 0 6px" }}>Hasil (otomatis dihitung dibales)</div>
                     <div role="group" aria-label={`Hasil untuk ${who}`} className="sp-choice-grid">

@@ -34,7 +34,7 @@ const modal = (page) => page.locator(".modal-overlay").last();
 // nothing here reaches threads.com.
 async function mockUnfurl(page) {
   const known = {
-    AbC123: { handle: "@tokokue", name: "Toko Kue", text: "ada yang open jasa foto katalog buat UMKM?", postUrl: "https://www.threads.com/@tokokue/post/AbC123", postId: "AbC123" },
+    AbC123: { handle: "@tokokue", name: "Toko Kue", text: "ada yang open jasa foto katalog buat UMKM? budget ramah UMKM", postUrl: "https://www.threads.com/@tokokue/post/AbC123", postId: "AbC123" },
   };
   await page.route("**/api/hunt/unfurl", async route => {
     const url = JSON.parse(route.request().postData() || "{}").url || "";
@@ -136,11 +136,15 @@ export const flows = [
       for (const [place, tab, heading] of places) {
         await t.step(`${place}${tab ? ` → ${tab}` : ""} shows "${heading}"`, async () => { await go(t.page, place, tab); await expectText(t.page, heading); });
       }
-      await t.step("each tab says in one line what it's for", async () => {
+      await t.step("each tab says in one line what it's for, once", async () => {
         await go(t.page, "Tim", "Guild");
-        await expectText(t.page, "Tim kamu: anggota, peran");
+        await expectText(t.page, "Ruang tim: pipeline bersama");
+        if (await t.page.locator(".sp-subhint").count()) throw new Error("Guild says what it's for twice");
         await go(t.page, "Belajar", "Simulator");
-        await expectText(t.page, "Latihan jawab customer sebelum ketemu beneran.");
+        await expectText(t.page, "Latihan jawab customer sebelum ketemu beneran");
+        if (await t.page.locator(".sp-subhint").count()) throw new Error("Simulator says what it's for twice");
+        await go(t.page, "Jualan", "Leads");
+        await expectText(t.page, "Semua calon customer: skor potensi");
       });
       // WCAG 1.4.10: every place reflows at 320px (= 200% zoom) without sideways scroll.
       await t.step("no sideways scroll on any of them, also at 320px", async () => {
@@ -618,7 +622,11 @@ export const flows = [
       await t.step("log a second DM, decline it with a reason", async () => {
         await page.locator("#hunt-target").fill("@rotiflow");
         await page.getByRole("button", { name: "Copy", exact: true }).nth(1).click();
-        await page.getByRole("button", { name: "Hapus DM ke @rotiflow" }).waitFor();
+        await page.getByRole("button", { name: "Hapus DM ke @rotiflow" }).click();
+        // Asked in the app, not the browser's confirm(): Batal keeps the row.
+        const ask = page.getByRole("dialog", { name: "Hapus catatan DM?" });
+        await ask.getByRole("button", { name: "Batal" }).click();
+        await ask.waitFor({ state: "detached" });
         await huntRow(page, "@rotiflow").getByRole("button", { name: "Tandai Ditolak" }).click();
         await page.getByLabel("Alasan ditolak").fill("udah punya fotografer");
         await page.getByRole("button", { name: "Simpan", exact: true }).click();
@@ -698,6 +706,7 @@ export const flows = [
       await t.step("before the message: the post's context and the stage that fits", async () => {
         const card = page.getByLabel("Prospek @tokokue");
         await card.getByText("foto katalog", { exact: true }).waitFor();
+        await card.getByText("budget ramah UMKM", { exact: true }).waitFor();
         await card.getByText("Saran tahap:").waitFor();
         await page.getByRole("listitem", { name: "Tahap 1: Intro, cocok sekarang" }).waitFor();
         await card.getByRole("button", { name: "✎ Ubah konteks" }).click();
@@ -1001,6 +1010,23 @@ export const flows = [
         await page.getByRole("button", { name: /Tampilkan \d+ lagi/ }).click();
         const after = await page.getByRole("button", { name: "Copy" }).count();
         if (!(before === 8 && after > before)) throw new Error(`copy buttons ${before} → ${after}`);
+      });
+      await t.step("no match says so and Reset saringan brings every script back", async () => {
+        await page.getByRole("searchbox", { name: "Cari script" }).fill("zzzz");
+        await expectText(page, "Ga ada script yang cocok");
+        await page.getByRole("button", { name: "Reset saringan" }).click();
+        await page.getByRole("button", { name: "Copy", exact: true }).first().waitFor();
+        if (await page.getByRole("searchbox", { name: "Cari script" }).inputValue()) throw new Error("search not cleared");
+      });
+      await t.step("Simulator: pick a type and a scenario, copy a script, start over", async () => {
+        await go(page, "Belajar", "Simulator");
+        await page.getByRole("button", { name: /Burung Hantu/ }).first().click();
+        await page.getByRole("button", { name: /Belum Yakin/ }).first().click();
+        await page.getByRole("button", { name: "Ganti skenario (sekarang Belum Yakin)" }).waitFor();
+        await page.getByRole("button", { name: "Copy", exact: true }).first().click();
+        await page.getByRole("button", { name: "✓ Tersalin" }).waitFor();
+        await page.getByRole("button", { name: /Simulasi baru/ }).click();
+        await expectText(page, "Customer kamu lebih mirip yang mana?");
       });
       await t.step("Quick Pitch steps aside while scrolling down, and the page ends clear of it", async () => {
         if (isWide(page)) return;

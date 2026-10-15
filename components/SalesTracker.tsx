@@ -43,12 +43,11 @@ import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from 
 import { parseVCards } from "@/lib/vcard";
 import { authFetch } from "@/lib/authFetch";
 import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, longDate, rupiah, today, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
+import { useConfirm } from "@/components/ConfirmSheet";
 
-// Five places, so a phone never scrolls sideways to find one. Jualan and
-// Lainnya hold several tabs, picked from a second row.
 // Five places, in the order the work goes (owner, 2026-10-10): find people,
-// sell to them, report as a team, learn. Each tab says in one line what it's
-// for, so nothing hides behind a "Lainnya".
+// sell to them, report as a team, learn. A place with several tabs picks them
+// from a second row, and each tab says in one line what it's for.
 const SECTIONS: { id: string; label: string; short: string; icon: string; tabs: string[] }[] = [
   { id: "home", label: "Beranda", short: "Beranda", icon: "home" as IconName, tabs: ["Dashboard"] },
   { id: "hunt", label: "Hunting", short: "Hunting", icon: "target" as IconName, tabs: ["Hunting"] },
@@ -56,18 +55,11 @@ const SECTIONS: { id: string; label: string; short: string; icon: string; tabs: 
   { id: "team", label: "Tim & Report", short: "Tim", icon: "shield" as IconName, tabs: ["Guild", "Report Klien", "Outreach", "Rejection Log"] },
   { id: "learn", label: "Belajar", short: "Belajar", icon: "book" as IconName, tabs: ["Script Library", "Simulator", "AI Playbook"] },
 ];
+// Only tabs without a heading of their own get a line here; the others say
+// what they're for under their own title, and saying it twice read as clutter.
 const TAB_HINT: Record<string, string> = {
   Leads: "Semua calon customer: skor potensi, profil, dan jadwal follow-up.",
-  Penawaran: "Susun penawaran dari paket, kirim, lalu catat yang disetujui.",
-  Invoice: "Tagih DP dan pelunasan, ingetin yang jatuh tempo.",
-  Paket: "Daftar jasa dan harga, dipakai waktu bikin penawaran.",
-  Guild: "Tim kamu: anggota, peran, pipeline bersama, target, dan report tim.",
   "Report Klien": "Report bulanan buat klien: konten, chat, sampai lunas.",
-  Outreach: "Catatan email dan pesan yang udah dikirim.",
-  "Rejection Log": "Siapa yang nolak, alasannya, dan kapan coba lagi.",
-  "Script Library": "Script jawaban per tipe customer dan per keberatan.",
-  Simulator: "Latihan jawab customer sebelum ketemu beneran.",
-  "AI Playbook": "Cara pakai AI dan tools buat cari dan olah lead.",
 };
 const sectionOf = (tab: string) => SECTIONS.find(x => x.tabs.includes(tab)) || SECTIONS[0];
 
@@ -210,6 +202,7 @@ export default function SalesTracker({ user }: { user: User }) {
 }
 
 function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Space; spaces: SpaceOption[]; chooseSpace: (id: string) => void }) {
+  const [ask, askSheet] = useConfirm();
   const router = useRouter();
   const isNarrow = useIsNarrow();
   // A share or bookmarklet opens straight into Hunting (/dashboard?hunt&target=…);
@@ -597,13 +590,14 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const isSeed = (id: string) => id.startsWith("seed_");
   const seedCount = leads.filter(l => isSeed(l.id)).length + outreach.filter(o => isSeed(o.id)).length + rejections.filter(r => isSeed(r.id)).length;
 
-  async function removeSeedData() {
-    if (!confirm(`Hapus ${seedCount} data contoh? Data yang kamu isi sendiri ga kesentuh.`)) return;
-    const batch = writeBatch(db);
-    leads.filter(l => isSeed(l.id)).forEach(l => batch.delete(spaceDoc(space, "leads", l.id)));
-    outreach.filter(o => isSeed(o.id)).forEach(o => batch.delete(spaceDoc(space, "outreach", o.id)));
-    rejections.filter(r => isSeed(r.id)).forEach(r => batch.delete(spaceDoc(space, "rejections", r.id)));
-    await batch.commit();
+  function removeSeedData() {
+    ask(`Hapus ${seedCount} data contoh?`, "Data yang kamu isi sendiri ga kesentuh.", async () => {
+      const batch = writeBatch(db);
+      leads.filter(l => isSeed(l.id)).forEach(l => batch.delete(spaceDoc(space, "leads", l.id)));
+      outreach.filter(o => isSeed(o.id)).forEach(o => batch.delete(spaceDoc(space, "outreach", o.id)));
+      rejections.filter(r => isSeed(r.id)).forEach(r => batch.delete(spaceDoc(space, "rejections", r.id)));
+      await batch.commit();
+    });
   }
 
   async function handleLogout() {
@@ -735,6 +729,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
   return (
     <div style={{ background: "var(--app-bg)", minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, color: "var(--app-text)" }}>
+      {askSheet}
       <style>{`
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: var(--app-card); } ::-webkit-scrollbar-thumb { background: var(--app-border); border-radius: 4px; }
         .sp-top { position: sticky; top: 0; z-index: 50; }
@@ -1039,23 +1034,23 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
         {/* AI PLAYBOOK */}
         {activeTab === "AI Playbook" && (
-          <div>
+          <div className="sp-learn">
             <div style={{ marginBottom: 24 }}>
               <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>AI Sales Playbook</div>
-              <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 4 }}>Cara scraping, outreach, dan dominasi sales di era AI</div>
+              <div style={{ color: "var(--app-muted)", fontSize: 13, marginTop: 4 }}>Cara pakai AI dan tools buat cari lead, outreach, dan ngejar angka sales.</div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
               {AI_PLAYBOOK.map((section, si) => (
-                <div key={si} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 14, padding: 24 }}>
+                <div key={si} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 14, padding: "clamp(16px, 4vw, 24px)" }}>
                   <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20, color: section.color }}>{section.category}</div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
                     {section.steps.map((step, i) => (
                       <div key={i} className="step-card" style={{ ["--accent" as string]: section.color, background: "var(--app-inner)", borderRadius: 10, padding: 16, border: "1px solid var(--app-border)", transition: "border-color 0.2s" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                           <div style={{ width: 22, height: 22, borderRadius: 6, background: `${section.color}20`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: section.color, border: `1px solid ${section.color}40` }}>{i + 1}</div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: section.color }}>{step.title}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: section.color }}>{step.title}</div>
                         </div>
-                        <div style={{ fontSize: 12, color: "var(--app-sub)", lineHeight: 1.6 }}>{step.desc}</div>
+                        <div style={{ fontSize: 13, color: "var(--app-sub)", lineHeight: 1.6 }}>{step.desc}</div>
                       </div>
                     ))}
                   </div>
@@ -1063,7 +1058,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               ))}
             </div>
             <div style={{ background: "var(--app-card)", border: "1px solid #a78bfa40", borderRadius: 14, padding: 24, marginTop: 24 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: "color-mix(in srgb, #a78bfa 55%, var(--app-text))", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>🎯 Target Benchmark Sales Metrics Lo</div>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: "color-mix(in srgb, #a78bfa 55%, var(--app-text))", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>🎯 Target angka sales kamu</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
                 {[
                   { metric: "Cold Email Reply Rate", target: "5–15%", world: "< 3%", color: "var(--ok)" },
