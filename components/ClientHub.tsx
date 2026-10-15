@@ -518,9 +518,9 @@ function Content({ clientId, posts }: { clientId: string; posts: Post[] }) {
           {monthOptions(monthOf(today())).map(mm => <option key={mm} value={mm}>{monthName(mm)}</option>)}
         </select>
         <div className="sp-actions">
-          <label className="sp-tap" style={{ ...btnGhost, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", position: "relative" }}>
+          <label className="sp-tap" style={{ ...btnGhost, minHeight: 44, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", position: "relative" }}>
             ⬆ Import file
-            <input type="file" accept=".xlsx,.xls,.csv" onChange={onFile} aria-label="Import file export Meta / TikTok" style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", cursor: "pointer" }} />
+            <input type="file" accept=".xlsx,.xls,.csv" onChange={onFile} aria-label="Import file export Meta / TikTok" style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer" }} />
           </label>
           <button onClick={() => { postSave.reset(); setDraft(blankPost()); }} style={btnPrimary}>+ Post</button>
         </div>

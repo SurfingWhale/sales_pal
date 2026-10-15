@@ -1,5 +1,6 @@
 "use client";
 
+import { ink } from "@/components/ui";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { signOut, User } from "firebase/auth";
 import { STALL_DAYS, stalledWhat, useStalledDeals } from "@/lib/stalled";
@@ -1048,7 +1049,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                       <div key={i} className="step-card" style={{ ["--accent" as string]: section.color, background: "var(--app-inner)", borderRadius: 10, padding: 16, border: "1px solid var(--app-border)", transition: "border-color 0.2s" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                           <div style={{ width: 22, height: 22, borderRadius: 6, background: `${section.color}20`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: section.color, border: `1px solid ${section.color}40` }}>{i + 1}</div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: section.color }}>{step.title}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: ink(section.color) }}>{step.title}</div>
                         </div>
                         <div style={{ fontSize: 13, color: "var(--app-sub)", lineHeight: 1.6 }}>{step.desc}</div>
                       </div>
@@ -1070,7 +1071,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                 ].map(m => (
                   <div key={m.metric} style={{ background: "var(--app-inner)", borderRadius: 10, padding: 14 }}>
                     <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>{m.metric}</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: m.color, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{m.target}</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: ink(m.color), fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{m.target}</div>
                     <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>Rata-rata industri: {m.world}</div>
                   </div>
                 ))}

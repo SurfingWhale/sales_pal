@@ -66,7 +66,7 @@ export default function SalesReport({ quotes, invoices }: { quotes: Quote[]; inv
       <div className="sp-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 16 }}>
         {[
           { l: "Uang masuk", v: rupiah(cash), s: `${pays.length} pembayaran`, c: "var(--ok)" },
-          { l: "Ditagih", v: rupiah(billed.reduce((a, i) => a + total(i), 0)), s: `${billed.length} invoice dibuat`, c: "#005eb0" },
+          { l: "Ditagih", v: rupiah(billed.reduce((a, i) => a + total(i), 0)), s: `${billed.length} invoice dibuat`, c: "var(--brand-text)" },
           { l: "Penawaran disetujui", v: step(won.length, q.length), s: rupiah(won.reduce((a, x) => a + total(x), 0)), c: "color-mix(in srgb, #7c3aed 70%, var(--app-text))" },
           { l: "Invoice lunas", v: step(paidOff.length, billed.length), s: "dari invoice bulan ini", c: "var(--app-text)" },
         ].map(x => (

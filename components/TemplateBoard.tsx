@@ -94,7 +94,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
                 const sc = scores.find(x => x.templateId === t.id);
                 const missing = missingIn(t.body, data);
                 return (
-                  <div key={t.id} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", opacity: blocked ? 0.5 : 1 }}>
+                  <div key={t.id} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", filter: blocked ? "grayscale(1)" : undefined }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
                       <div style={{ fontSize: 13, fontWeight: 700 }}>{t.title}</div>
                       {canEdit && <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} title="Edit template" className="sp-icon-btn" style={{ ...chip, flexShrink: 0, minWidth: 32, minHeight: 32, padding: "2px 8px", margin: "-6px -6px 0 0" }}>✎</button>}

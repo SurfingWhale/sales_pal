@@ -104,7 +104,7 @@ export default function QuickPitch({ hideButton = false }: { hideButton?: boolea
         /* The page ends clear of the floating button, above the bottom nav. */
         @media (max-width: 767px) { .sp-main { padding-bottom: calc(176px + env(safe-area-inset-bottom, 0px)) !important; } }
         .sp-fab { transition: transform .2s ease, opacity .2s ease; }
-        .sp-fab.is-tucked { transform: translateY(24px) scale(.6); opacity: 0; pointer-events: none; }
+        .sp-fab.is-tucked { transform: translateY(24px) scale(.6); opacity: 0; pointer-events: none; visibility: hidden; }
         @media (prefers-reduced-motion: reduce) { .sp-fab { transition: none; } }
       `}</style>}
       {!hideButton && <button

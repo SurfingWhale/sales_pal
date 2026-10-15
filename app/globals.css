@@ -24,7 +24,9 @@ html, body {
   --surface: #f5f7fa;
 
   /* Success/positive — accessible on light surfaces (neon green failed WCAG on white) */
-  --ok: #0a8052;  /* green as text: 5.0:1 on the card (was #00a862, 3.1:1) */
+  --ok: #087347;  /* green as text: 5.9:1 on the card, 5.2:1 on inner panels */
+  --warn-text: #9a5000;   /* orange as text: 5.2:1 on inner panels */
+  --violet-text: #6d4fc2; /* violet as text: 5.2:1 on inner panels */
   --brand-text: #005eb0;
 
   /* App dashboard theme — light (default). Values from the SalesPal
@@ -62,6 +64,8 @@ html, body {
 
 [data-theme="dark"] {
   --ok: #00e07a;
+  --warn-text: #ffb84d;
+  --violet-text: #c4b5fd;
   --brand-text: #7ab5ef;  /* brand blue as text on dark */
 
   --app-bg: #0d0f12;
@@ -851,3 +855,39 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 @media (min-width: 1100px) { .sp-learn { max-width: 1040px; } }
 /* A narrow phone shows only the current step's name. */
 @media (max-width: 400px) { .sp-sim .sp-step-label { display: none; } }
+
+
+/* ---- The native standard on phones (docs/prd/PRD-010) ----
+   Apple's minimum touch target is 44pt. Every control in the app meets it on a
+   phone, whatever its inline style says; lead-map dots (positioned on the map)
+   and visually hidden file inputs are the only exceptions. */
+@media (max-width: 767px) {
+  :is(.sp-top, .sp-main, .sp-nav, .modal-overlay, .sp-hunt-bar) :is(button, select, summary, [role="button"], [role="tab"], [role="radio"]):not(.sp-dot):not(.vh),
+  :is(.sp-top, .sp-main, .modal-overlay) input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not(.vh) {
+    min-height: 44px !important;
+  }
+  :is(.sp-top, .sp-main, .sp-nav, .modal-overlay, .sp-hunt-bar) :is(button, [role="radio"], [role="tab"]):not(.sp-dot):not(.vh) { min-width: 44px !important; }
+  .sp-sub-btn { height: 44px !important; }
+  .sp-sub-btn::after { display: none; }
+  .modal-x-rail .modal-x { width: 44px; height: 44px; }
+  summary { display: flex; align-items: center; }
+}
+
+/* ---- Motion, kept small (PRD-010 §taste) ----
+   Sheets rise from the bottom on a phone, dialogs settle in on a Mac, and a
+   pressed button gives way a little. Nothing moves for people who asked their
+   device for less motion. */
+@keyframes sp-sheet-in { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes sp-pop-in { from { transform: scale(.98); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes sp-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+.modal-overlay:not(.print-overlay) { animation: sp-scrim-in .16s ease-out; }
+.modal-overlay:not(.print-overlay) > [aria-modal] { animation: sp-pop-in .18s cubic-bezier(.2, .8, .2, 1); }
+@media (max-width: 640px) {
+  .modal-overlay:not(.print-overlay) > [aria-modal] { animation: sp-sheet-in .22s cubic-bezier(.2, .8, .2, 1); }
+}
+@media (hover: none) {
+  button:not(:disabled):active, [role="button"]:active, .sp-sub-btn:active { transform: scale(.97); transition: transform .08s ease-out; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}

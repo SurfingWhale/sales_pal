@@ -1,5 +1,6 @@
 "use client";
 
+import { ink } from "@/components/ui";
 import { useState } from "react";
 import { archetypes, objections, scriptMatrix } from "@/lib/salespal-data";
 
@@ -165,7 +166,7 @@ export default function ScriptLibrary() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <span style={{
-                      fontSize: 12, background: `${arch.color}15`, color: arch.color,
+                      fontSize: 12, background: `${arch.color}15`, color: ink(arch.color),
                       border: `1px solid ${arch.color}30`, borderRadius: 20, padding: "3px 10px",
                     }}>
                       {arch.animal} {arch.name}
@@ -179,7 +180,7 @@ export default function ScriptLibrary() {
                     <span style={{
                       fontSize: 12,
                       background: item.tone === "formal" ? "#a78bfa20" : "#00ccff20",
-                      color: item.tone === "formal" ? "#a78bfa" : "#00ccff",
+                      color: item.tone === "formal" ? "var(--violet-text)" : "var(--brand-text)",
                       border: `1px solid ${item.tone === "formal" ? "#a78bfa40" : "#00ccff40"}`,
                       borderRadius: 20, padding: "3px 10px",
                     }}>

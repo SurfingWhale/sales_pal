@@ -1,0 +1,74 @@
+# The native standard (docs/prd/PRD-010): every flow, clicked through like a
+# person would, on the engines SalesPal really runs on — WebKit as an iPhone 12
+# and as desktop Safari — plus Chromium phone and desktop. Each run measures
+# taps and tap response, fails on any browser print/alert/confirm/prompt, and
+# runs the HIG audit (44px targets, 16px fields, no sideways scroll, axe).
+# Report and screenshots are uploaded per device.
+name: native
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flows:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: iPhone 12 (WebKit)
+            device: iphone12
+            browser: webkit
+          - name: Desktop Safari (WebKit)
+            device: safari
+            browser: webkit
+          - name: Chromium phone
+            device: ""
+            desktop: ""
+            browser: chromium
+          - name: Chromium desktop
+            device: ""
+            desktop: "1"
+            browser: chromium
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: fake
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: demo-salespal.firebaseapp.com
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: demo-salespal
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: demo-salespal.appspot.com
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "1"
+      NEXT_PUBLIC_FIREBASE_APP_ID: "1:1:web:1"
+      NEXT_TELEMETRY_DISABLED: "1"
+      DEVICE: ${{ matrix.device }}
+      DESKTOP: ${{ matrix.desktop }}
+      PROD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npm ci
+      - run: npm install -g firebase-tools@14
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: node tests/flows/run.mjs
+      - if: always()
+        run: cat tests/flows/out/report.md >> "$GITHUB_STEP_SUMMARY"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flows-${{ matrix.device || 'chromium' }}${{ matrix.desktop && '-desktop' || '' }}
+          path: tests/flows/out/
+          retention-days: 14

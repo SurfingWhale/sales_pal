@@ -79,7 +79,7 @@ export default function BerandaReport({ now, numbers, paid, receivable, leadsByS
             <span className="num big">{numbers.closedThisMonth}</span>
             {numbers.closingTarget > 0 && <span className="num" style={{ fontSize: 30, color: "var(--app-muted)" }}>/ {numbers.closingTarget}</span>}
           </p>
-          <button onClick={onSetTarget} aria-label={numbers.closingTarget ? `Ubah target closing, sekarang ${numbers.closingTarget}` : "Atur target closing"} style={{ display: "block", width: "100%", marginTop: 14, padding: 0, border: 0, background: "none", cursor: "pointer", textAlign: "left" }}>
+          <button onClick={onSetTarget} aria-label={numbers.closingTarget ? `Ubah target closing, sekarang ${numbers.closingTarget}` : "Atur target closing"} style={{ display: "block", width: "100%", marginTop: 0, padding: "14px 0", minHeight: 44, border: 0, background: "none", cursor: "pointer", textAlign: "left" }}>
             {numbers.closingTarget > 0
               ? <span style={{ display: "block", height: 4, borderRadius: 999, background: "var(--app-border)", overflow: "hidden" }}><span style={{ display: "block", width: `${pct}%`, height: "100%", borderRadius: 999, background: "#005eb0" }} /></span>
               : <span style={{ display: "inline-flex", alignItems: "center", minHeight: 32, fontSize: 13, color: "var(--brand-text)", fontWeight: 600 }}>Atur target</span>}

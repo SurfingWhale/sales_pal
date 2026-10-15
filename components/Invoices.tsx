@@ -132,8 +132,8 @@ export default function Invoices({ invoices, business, leads, services }: { invo
 
       <div className="sp-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 20 }}>
         {[
-          { l: "Belum tertagih", v: rupiah(receivable), s: `${invoices.filter(i => balance(i) > 0).length} invoice terbuka`, c: "#ff9900" },
-          { l: "Telat bayar", v: late.length, s: rupiah(late.reduce((a, i) => a + balance(i), 0)), c: "#ff4444" },
+          { l: "Belum tertagih", v: rupiah(receivable), s: `${invoices.filter(i => balance(i) > 0).length} invoice terbuka`, c: "var(--warn-text)" },
+          { l: "Telat bayar", v: late.length, s: rupiah(late.reduce((a, i) => a + balance(i), 0)), c: "color-mix(in srgb, #ff4444 55%, var(--app-text))" },
         ].map(x => (
           <div key={x.l} style={{ ...card, padding: 16 }}>
             <div style={{ fontSize: 20, fontWeight: 700, color: x.c, fontFamily: font }}>{x.v}</div>
@@ -224,7 +224,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
                   </div>
                   <div className="sp-doc-sum" style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 16, fontWeight: 700 }}>{rupiah(t)}</div>
-                    <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>sisa <b style={{ color: balance(inv) ? "#ff9900" : "var(--ok)" }}>{rupiah(balance(inv))}</b></div>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>sisa <b style={{ color: balance(inv) ? "var(--warn-text)" : "var(--ok)" }}>{rupiah(balance(inv))}</b></div>
                     <div style={{ marginTop: 6, display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       {overdue > 0 && <span style={badge("#ff4444")}>{overdue} hari</span>}
                       <span style={badge(invoiceColor[st])}>{st}</span>

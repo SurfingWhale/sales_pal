@@ -23,7 +23,7 @@ import {
   threadsPostLink, view,
 } from "@/lib/prospects";
 import { HuntInbox, bump, createProspect, ctx, recordSend, saveProspect, unfurl, useHuntInbox } from "@/lib/prospectStore";
-import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
+import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading, ink } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmSheet";
 
 type Filter = "Semua" | "Follow-up" | "Tertarik";
@@ -502,7 +502,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
             {([["Semua", sorted.length], ["Follow-up", stale.length], ["Tertarik", interested.length]] as [Filter, number][]).map(([f, n]) => (
               <button key={f} onClick={() => { setFilter(f); setLimit(PAGE); }} aria-pressed={filter === f}
                 style={{ ...chip, fontWeight: 700, ...(filter === f ? { background: "#005eb0", color: "#fff", border: "1px solid #005eb0" } : {}) }}>
-                {f} {n > 0 && <span style={{ opacity: 0.75 }}>{n}</span>}
+                {f} {n > 0 && <span>{n}</span>}
               </button>
             ))}
           </div>
