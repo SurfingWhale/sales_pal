@@ -756,7 +756,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         }
         .lead-row { cursor: pointer; }
         .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 100; display: flex; align-items: center; justify-content: center; padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom)); }
         input:focus, select:focus, textarea:focus { border-color: #005eb0 !important; }
       `}</style>
 

@@ -47,7 +47,7 @@ export const label: CSSProperties = {
 
 export const modalBox: CSSProperties = {
   background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16,
-  padding: 24, width: "100%", maxHeight: "88vh", overflowY: "auto",
+  padding: 24, width: "100%", maxHeight: "min(88vh, calc(100dvh - 48px))", overflowY: "auto", overscrollBehavior: "contain",
 };
 
 export const heading: CSSProperties = { fontSize: 20, fontWeight: 700, fontFamily: font };
