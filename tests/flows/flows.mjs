@@ -565,7 +565,10 @@ export const flows = [
         await page.getByRole("dialog", { name: "Buang perubahan?" }).getByRole("button", { name: "Buang" }).click();
         await page.locator("#doc-project").waitFor({ state: "detached" });
       });
-      await check("Klien baru", async () => { await go(page, "Tim", "Report Klien"); await page.getByRole("button", { name: "+ Klien" }).click(); });
+      await check("Klien baru", async () => { await go(page, "Tim", "Report Klien"); await page.getByRole("button", { name: /^\+ (Tambah k|K)lien$/ }).first().click(); }, { last: "Simpan klien" });
+      await check("Catat outreach", async () => { await go(page, "Tim", "Outreach"); await page.getByRole("button", { name: "+ Catat outreach" }).first().click(); }, { last: "Simpan" });
+      await check("Catat penolakan", async () => { await go(page, "Tim", "Rejection Log"); await page.getByRole("button", { name: "+ Catat penolakan" }).first().click(); }, { last: "Simpan" });
+      await check("Bikin guild", async () => { await go(page, "Tim", "Guild"); await page.getByRole("button", { name: "+ Bikin guild" }).click(); }, { last: "Bikin guild" });
       await check("Template baru", async () => { await go(page, "Hunting"); await page.getByRole("button", { name: "+ Template" }).click(); }, { last: "Batal" });
       await check("Quick Pitch", async () => { await go(page, "Jualan", "Leads"); await page.getByRole("button", { name: /Quick Pitch/ }).click(); });
     },
@@ -921,6 +924,7 @@ export const flows = [
       await t.step("and back to Pribadi", async () => {
         await go(page, "Tim", "Guild");
         await page.getByRole("region", { name: "Data pribadi kamu" }).getByRole("button", { name: "Balikin ke Pribadi" }).click();
+        await page.getByRole("dialog", { name: "Balikin ke Pribadi?" }).getByRole("button", { name: "Balikin", exact: true }).click();
         await expectText(page, "3 data balik ke Pribadi.", 20000);
         await go(page, "Jualan", "Leads");
         await expectText(page, "Lead Pindah");
@@ -1097,10 +1101,20 @@ export const flows = [
         await page.getByRole("button", { name: "Bekukan report tim" }).click();
         await expectText(page, "Dibekukan");
       });
-      await t.step("the leader prints the team report", async () => {
+      await t.step("the leader saves the team report as a named PDF file", async () => {
         await page.getByRole("button", { name: "Cetak / PDF" }).click();
         await expectText(page, "REPORT SALES TIM");
+        const [dl] = await Promise.all([page.waitForEvent("download"), modal(page).getByRole("button", { name: "Simpan / kirim PDF" }).click()]);
+        if (dl.suggestedFilename() !== `Report_Tim_Uji_${month}.pdf`) throw new Error(`file ${dl.suggestedFilename()}`);
         await modal(page).getByRole("button", { name: "Tutup", exact: true }).click();
+        await page.locator(".print-root").waitFor({ state: "detached" });
+      });
+      await t.step("reopening a frozen team report asks first", async () => {
+        await page.getByRole("button", { name: "Buka lagi" }).click();
+        const ask = page.getByRole("dialog", { name: "Buka lagi report ini?" });
+        await ask.getByRole("button", { name: "Batal" }).click();
+        await ask.waitFor({ state: "detached" });
+        await expectText(page, "Dibekukan");
       });
       await t.step("the activity log shows who did what", async () => {
         await page.getByRole("tab", { name: "Aktivitas" }).click();
@@ -1144,6 +1158,13 @@ export const flows = [
         await p2.getByRole("tab", { name: "Pipeline" }).click();
         await p2.getByText("Semua deal tim").waitFor({ timeout: 10000 });
         await p2.context().close();
+      });
+      await t.step("removing a member asks first, with Batal", async () => {
+        await page.getByRole("button", { name: `Keluarkan ${memberName}` }).click();
+        const ask = page.getByRole("dialog", { name: `Keluarkan ${memberName}?` });
+        await ask.getByRole("button", { name: "Batal" }).click();
+        await ask.waitFor({ state: "detached" });
+        await expectText(page, memberEmail);
       });
     },
   },
@@ -1251,11 +1272,36 @@ export const flows = [
         const href = await page.getByRole("link", { name: "Kirim via WA" }).getAttribute("href");
         if (!href || !href.startsWith("https://wa.me/?text=")) throw new Error(`href ${href}`);
       });
-      await t.step("open the printable monthly report", async () => {
+      await t.step("the monthly report saves as a PDF named after it", async () => {
         await page.getByRole("button", { name: "Cetak / PDF" }).click();
         await expectText(page, "LAPORAN BULANAN");
         await expectText(page, "OMZET PER SUMBER");
+        const [dl] = await Promise.all([page.waitForEvent("download"), modal(page).getByRole("button", { name: "Simpan / kirim PDF" }).click()]);
+        if (dl.suggestedFilename() !== `Report_Toko_Aksesoris_Uji_${month}.pdf`) throw new Error(`file ${dl.suggestedFilename()}`);
         await modal(page).getByRole("button", { name: "Tutup", exact: true }).click();
+        await page.locator(".print-root").waitFor({ state: "detached" });
+      });
+      await t.step("reopening a frozen report asks first", async () => {
+        await page.getByRole("button", { name: "Buka lagi" }).click();
+        await page.getByRole("dialog", { name: "Buka lagi report ini?" }).getByRole("button", { name: "Batal" }).click();
+        await expectText(page, "Dibekukan");
+      });
+      await t.step("a typed-in chat asks before it's thrown away; a deal delete asks too", async () => {
+        await page.getByRole("tab", { name: "Chat & Deal" }).click();
+        await page.getByRole("button", { name: "+ Chat masuk" }).click();
+        await modal(page).locator("#ch-name").fill("Bu Batal");
+        await page.keyboard.press("Escape");
+        const ask = page.getByRole("dialog", { name: "Buang perubahan?" });
+        await ask.getByRole("button", { name: "Batal" }).click();
+        if (await page.locator("#ch-name").inputValue() !== "Bu Batal") throw new Error("the form lost what was typed");
+        await page.keyboard.press("Escape");
+        await ask.getByRole("button", { name: "Buang" }).click();
+        await page.locator("#ch-name").waitFor({ state: "detached" });
+        await page.getByRole("button", { name: "semua", exact: true }).click();
+        await page.getByRole("button", { name: "Hapus Bu Rina" }).click();
+        await page.getByRole("dialog", { name: "Hapus Bu Rina?" }).getByRole("button", { name: "Hapus", exact: true }).click();
+        await page.getByRole("button", { name: "Hapus Bu Rina" }).waitFor({ state: "detached" });
+        await page.getByRole("button", { name: "aktif", exact: true }).click();
       });
       await t.step("a chat untouched for 10 days shows up in Perlu Ditindak", async () => {
         await page.getByRole("tab", { name: "Chat & Deal" }).click();

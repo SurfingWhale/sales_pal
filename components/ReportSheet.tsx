@@ -1,12 +1,12 @@
 "use client";
 
-import { createPortal } from "react-dom";
 import { Business } from "@/lib/billing";
 import { Baseline, MonthNumbers, delta, juta, monthName, wilson } from "@/lib/funnel";
-import { btnMuted, btnPrimary } from "@/components/ui";
+import { ReportDoc, reportName } from "@/lib/reportPdf";
+import ReportShell from "@/components/ReportShell";
 
 // The monthly client report as paper (PRD-005): the same numbers as the Report
-// tab, laid out for A4 and printed or saved as PDF. Black on white whatever the
+// tab, laid out for A4: saved as a PDF file (ReportShell, lib/reportPdf) or printed. Black on white whatever the
 // app theme, since it goes to the client. Uses PrintSheet's print classes, so
 // globals.css prints only this sheet.
 
@@ -35,7 +35,6 @@ interface Props {
 }
 
 export default function ReportSheet({ clientName, business, m, b, narrative, threshold, frozenAt, onClose }: Props) {
-  if (typeof document === "undefined") return null;
   const cell: React.CSSProperties = { padding: "6px 6px", borderBottom: `1px solid ${rule}`, fontSize: 11.5, verticalAlign: "top" };
   const num: React.CSSProperties = { ...cell, textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
   const th = (right?: boolean): React.CSSProperties => ({ ...cell, fontSize: 9.5, color: soft, letterSpacing: "1px", fontWeight: 600, borderBottom: `2px solid ${ink}`, textAlign: right ? "right" : "left" });
@@ -52,14 +51,30 @@ export default function ReportSheet({ clientName, business, m, b, narrative, thr
     ["ER (engagement ÷ views)", m.views ? pct(m.erViews) : "—", m.views ? delta(m.erViews, b.erViews, "rate").text : "angka konten belum diisi"],
   ];
 
-  return createPortal(
-    <div className="modal-overlay print-overlay" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} className="print-frame" style={{ width: "100%", maxWidth: 760, maxHeight: "92vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-        <div className="no-print" style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
-          <button onClick={() => window.print()} style={btnPrimary}>Cetak / PDF</button>
-          <button onClick={onClose} style={btnMuted}>Tutup</button>
-        </div>
+  const status = frozenAt ? `Final per ${new Date(frozenAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}` : "Draft — angka masih bisa berubah";
+  const funnel = ([["Chat / lead", m.leads], ["Qualified", m.qualified], ["Penawaran", m.quoted], ["Won", m.won], ["Lunas", m.paidFromCohort]] as [string, number][]);
+  const doc: ReportDoc = {
+    kicker: "LAPORAN BULANAN", title: clientName, subtitle: monthName(m.month),
+    meta: [business.name, business.phone, business.email, status].filter(Boolean) as string[],
+    sections: [
+      { title: "Ringkasan", lines },
+      { title: "Angka utama", table: { head: ["Metrik", "Bulan ini", "Dibanding rata-rata 3 bulan"], rows: kpis.map(([k, v, d]) => [k, v, d]), widths: [4, 2, 4], bold: [1] },
+        note: m.paidCount > 0 ? `Omzet = ${m.paidCount} deal x rata-rata ${juta(m.avgDeal)} (median ${juta(m.medianDeal)}). Deal >= ${juta(threshold)}: ${m.bigCount} deal, ${juta(m.bigRevenue)}; di bawahnya: ${m.smallCount} deal, ${juta(m.smallRevenue)}.` : undefined },
+      { title: "Funnel", table: { head: ["Tahap", "Jumlah", "Dari chat"], widths: [4, 2, 4], rows: [
+        ...(m.views > 0 ? [["Views", fmt(m.views), "—"], ["Engagement", fmt(m.engagement), "—"]] : []),
+        ...funnel.map(([k, v], i) => [k, fmt(v), i === 0 ? "—" : conv(v, m.leads)]),
+      ] }, note: `Funnel dihitung dari chat yang masuk bulan ini.${!m.cohortMature ? " Sebagian masih berjalan." : ""}` },
+      { title: "Omzet per sumber", table: { head: ["Sumber pertama", "Deal", "Omzet"], widths: [5, 2, 3], rows: sources.map(s => [s.channel === "Ga tau" ? "Belum ketahuan" : s.channel, String(s.count), juta(s.revenue)]) },
+        note: m.paidCount > 0 ? `${Math.round(m.unknownPaidShare * 100)}% deal lunas belum ketahuan sumbernya.` : undefined },
+      ...(m.platforms.length ? [{ title: "Konten per platform", table: { head: ["Platform", "Post", "Views", "ER", "Save/view", "Share/view", "Chat", "Omzet"], widths: [3, 1.2, 2, 1.6, 1.8, 1.8, 1.2, 2], bold: [0],
+        rows: m.platforms.map(p => [p.platform, String(p.posts), fmt(p.views), p.views ? pct(p.erViews) : "—", p.views ? pct(p.savesPerView) : "—", p.views ? pct(p.sharesPerView) : "—", String(p.leads), juta(p.revenue)]) } }] : []),
+      ...(([["Konten terbaik", m.top], ["Konten terlemah", m.bottom]] as const).filter(([, l]) => l.length).map(([t, l]) => ({ title: t, table: { head: ["Konten", "Views"], widths: [7, 2], rows: l.map(p => [`${p.title} · ${p.platform}`, fmt(p.views)]) } }))),
+    ],
+    footer: "Pembanding = rata-rata 3 bulan sebelumnya yang punya data; bulan pertama ditulis \"bulan dasar\". Angka di bawah 10 ditampilkan tanpa persen; konversi berisi rentang 95%. ER = (like + komentar + share + save) / views. Omzet dihitung dari tanggal lunas, funnel dari tanggal chat masuk. Reach tidak dijumlah antar post atau platform. Sumber = sumber pertama customer, dicatat saat chat pertama.",
+  };
 
+  return (
+    <ReportShell title={`Report ${clientName} · ${monthName(m.month)}`} fileName={reportName(clientName, m.month)} doc={doc} onClose={onClose}>
         <div className="print-root" style={{ background: "#fff", color: ink, borderRadius: 8, padding: "36px 34px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 20, flexWrap: "wrap", borderBottom: `2px solid ${ink}`, paddingBottom: 14 }}>
             <div>
@@ -70,7 +85,7 @@ export default function ReportSheet({ clientName, business, m, b, narrative, thr
             <div style={{ textAlign: "right", fontSize: 11, color: soft, lineHeight: 1.6 }}>
               {business.name && <div style={{ fontWeight: 700, color: ink, fontSize: 12 }}>{business.name}</div>}
               {[business.phone, business.email].filter(Boolean).map(x => <div key={x}>{x}</div>)}
-              <div>{frozenAt ? `Final per ${new Date(frozenAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}` : "Draft — angka masih bisa berubah"}</div>
+              <div>{status}</div>
             </div>
           </div>
 
@@ -127,7 +142,8 @@ export default function ReportSheet({ clientName, business, m, b, narrative, thr
           {m.platforms.length > 0 && (
             <div style={section}>
               <div style={h}>KONTEN PER PLATFORM</div>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
                 <thead><tr>{["PLATFORM", "POST", "VIEWS", "ER", "SAVE/VIEW", "SHARE/VIEW", "CHAT", "OMZET"].map((x, i) => <th key={x} style={th(i > 0)}>{x}</th>)}</tr></thead>
                 <tbody>{m.platforms.map(p => (
                   <tr key={p.platform}>
@@ -137,6 +153,7 @@ export default function ReportSheet({ clientName, business, m, b, narrative, thr
                   </tr>
                 ))}</tbody>
               </table>
+              </div>
             </div>
           )}
 
@@ -161,8 +178,6 @@ export default function ReportSheet({ clientName, business, m, b, narrative, thr
             Sumber = sumber pertama customer, dicatat saat chat pertama.
           </div>
         </div>
-      </div>
-    </div>,
-    document.body
+    </ReportShell>
   );
 }

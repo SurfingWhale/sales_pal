@@ -15,6 +15,8 @@ import {
 } from "@/lib/guild";
 import TeamReportSheet from "@/components/TeamReportSheet";
 import MoveToGuild from "@/components/MoveToGuild";
+import ConfirmSheet from "@/components/ConfirmSheet";
+import { FormNote, useDiscard, useSave } from "@/components/FormGuard";
 import { Pipeline } from "@/components/ClientHub";
 import { badge, btnGhost, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
@@ -91,34 +93,41 @@ export default function GuildHub({ uid, name, email, onUseSpace }: { uid: string
 
   useEffect(() => { if (role === "viewer" && view === "pipeline") setView("report"); }, [role, view]);
 
+  const foundSave = useSave();
+  const [closeFound, foundAsk] = useDiscard(!!founding?.trim(), () => setFounding(null), "Nama guild");
   async function found() {
     if (!founding?.trim()) return;
-    const g = await foundGuild({ uid, name, email }, founding);
-    remember(g); setGid(g); setFounding(null); setView("anggota");
+    const n = founding;
+    await foundSave.run(async () => {
+      const g = await foundGuild({ uid, name, email }, n);
+      remember(g); setGid(g); setFounding(null); setView("anggota");
+    });
   }
 
   const header = (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-      <div>
+      <div style={{ minWidth: 0, flex: "1 1 220px" }}>
         <div style={heading}>Guild</div>
         <div style={subheading}>Ruang tim: pipeline bersama, peran, target, dan report sales per orang.</div>
       </div>
-      <button onClick={() => setFounding("")} style={btnGhost}>+ Guild baru</button>
+      {refs && refs.length > 0 && <button onClick={() => { foundSave.reset(); setFounding(""); }} style={btnGhost}>+ Guild baru</button>}
     </div>
   );
 
   const foundModal = founding !== null && (
-    <div className="modal-overlay" onClick={() => setFounding(null)}>
-      <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 420 }}>
+    <div className="modal-overlay" onClick={() => { if (!foundSave.busy) closeFound(); }}>
+      <form onSubmit={e => { e.preventDefault(); found(); }} onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 420 }}>
         <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 6 }}>Bikin guild</div>
         <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 16 }}>Kamu jadi Leader. Anggota diundang lewat link.</div>
         <label htmlFor="gd-name" style={label}>Nama guild</label>
-        <input id="gd-name" value={founding} onChange={e => setFounding(e.target.value)} placeholder="mis. Tim Sales Jaya" maxLength={80} style={inputStyle} />
-        <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-          <button onClick={found} disabled={!founding.trim()} style={{ ...btnPrimary, opacity: founding.trim() ? 1 : 0.5 }}>Bikin guild</button>
-          <button onClick={() => setFounding(null)} style={btnMuted}>Batal</button>
+        <input id="gd-name" value={founding} onChange={e => setFounding(e.target.value)} placeholder="mis. Tim Contoh" maxLength={80} style={inputStyle} />
+        <FormNote why={founding.trim() ? "" : "Isi nama guild dulu."} err={foundSave.err} />
+        <div className="sp-form-foot">
+          <button type="button" onClick={closeFound} disabled={foundSave.busy} style={btnMuted}>Batal</button>
+          <button type="submit" disabled={!founding.trim() || foundSave.busy} style={{ ...btnPrimary, opacity: founding.trim() && !foundSave.busy ? 1 : 0.5 }}>{foundSave.busy ? "Membuat…" : "Bikin guild"}</button>
         </div>
-      </div>
+      </form>
+      {foundAsk}
     </div>
   );
 
@@ -126,15 +135,15 @@ export default function GuildHub({ uid, name, email, onUseSpace }: { uid: string
 
   if (!refs.length) {
     return (
-      <div style={{ paddingBottom: 72 }}>
+      <div className="sp-team" style={{ paddingBottom: 72 }}>
         {header}
-        <div style={{ ...card, padding: "36px 22px", textAlign: "center" }}>
+        <div style={{ ...card, padding: "36px 22px", textAlign: "center", maxWidth: 720, marginInline: "auto" }}>
           <div style={{ fontSize: 34, marginBottom: 10 }}>🛡️</div>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ikut guild mana pun</div>
           <div style={{ fontSize: 12.5, color: "var(--app-muted)", marginBottom: 18, maxWidth: 440, marginInline: "auto", lineHeight: 1.6 }}>
-            Bikin guild buat tim lo (atau tim sales klien), terus undang orangnya lewat link. Leader & Officer lihat semua deal dan report tiap orang; Member kerjain deal-nya sendiri; Viewer cuma lihat report.
+            Bikin guild buat tim kamu (atau tim sales klien), terus undang orangnya lewat link. Leader & Officer lihat semua deal dan report tiap orang; Member kerjain deal-nya sendiri; Viewer cuma lihat report.
           </div>
-          <button onClick={() => setFounding("")} style={btnPrimary}>+ Bikin guild</button>
+          <button onClick={() => { foundSave.reset(); setFounding(""); }} style={btnPrimary}>+ Bikin guild</button>
           <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 14 }}>Diundang orang? Buka link undangannya di HP ini.</div>
         </div>
         {foundModal}
@@ -143,7 +152,7 @@ export default function GuildHub({ uid, name, email, onUseSpace }: { uid: string
   }
 
   return (
-    <div style={{ paddingBottom: 72 }}>
+    <div className="sp-team" style={{ paddingBottom: 72 }}>
       {header}
       {refs.length > 1 && (
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
@@ -160,7 +169,7 @@ export default function GuildHub({ uid, name, email, onUseSpace }: { uid: string
         <div style={{ ...card, padding: 24, fontSize: 12.5, color: "var(--app-muted)", textAlign: "center" }}>Memuat…</div>
       ) : (
         <>
-          <div role="tablist" aria-label="Bagian guild" style={{ display: "flex", gap: 4, background: "var(--app-inner)", padding: 4, borderRadius: 10, marginBottom: 18 }}>
+          <div role="tablist" aria-label="Bagian guild" className="sp-tabs" style={{ display: "flex", gap: 4, background: "var(--app-inner)", padding: 4, borderRadius: 10, marginBottom: 18 }}>
             {([["pipeline", "Pipeline"], ["report", "Report Tim"], ["aktivitas", "Aktivitas"], ["anggota", `Anggota · ${members.length}`]] as const)
               .filter(([v]) => (v !== "pipeline" && v !== "aktivitas") || isSeller(role))
               .map(([v, l]) => (
@@ -296,6 +305,10 @@ function TeamReport({ gid, guild, me, members, deals, targets, reports }: { gid:
   const [month, setMonth] = useState(new Date().getDate() <= 7 ? shiftMonth(now, -1) : now);
   const [editing, setEditing] = useState<{ uid: string; name: string; revenue: string; deals: string } | null>(null);
   const [printing, setPrinting] = useState(false);
+  const [reopen, setReopen] = useState(false);
+  const targetSave = useSave();
+  const startTarget = useMemo(() => editing ? `${editing.revenue}|${editing.deals}` : "", [editing?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [closeTarget, targetAsk] = useDiscard(!!editing && `${editing.revenue}|${editing.deals}` !== startTarget, () => setEditing(null), "Target ini");
   const manager = isManager(me.role);
   const live = useMemo(() => teamMonth(month, deals, members, targets), [month, deals, members, targets]);
   const frozen = reports.find(r => r.month === month);
@@ -308,8 +321,10 @@ function TeamReport({ gid, guild, me, members, deals, targets, reports }: { gid:
 
   async function saveTarget() {
     if (!editing) return;
-    await setDoc(doc(db, "guilds", gid, "targets", `${month}_${editing.uid}`), { uid: editing.uid, month, revenue: n0(editing.revenue), deals: n0(editing.deals) });
-    logActivity(gid, { uid: me.uid, name: me.name }, "target_set", { refName: editing.name, about: editing.uid, detail: `${monthName(month)}: ${juta(n0(editing.revenue))}${n0(editing.deals) ? ` · ${n0(editing.deals)} deal` : ""}` });
+    const e = editing;
+    const ok = await targetSave.run(() => setDoc(doc(db, "guilds", gid, "targets", `${month}_${e.uid}`), { uid: e.uid, month, revenue: n0(e.revenue), deals: n0(e.deals) }));
+    if (!ok) return;
+    logActivity(gid, { uid: me.uid, name: me.name }, "target_set", { refName: e.name, about: e.uid, detail: `${monthName(month)}: ${juta(n0(e.revenue))}${n0(e.deals) ? ` · ${n0(e.deals)} deal` : ""}` });
     setEditing(null);
   }
   async function freeze() {
@@ -319,7 +334,6 @@ function TeamReport({ gid, guild, me, members, deals, targets, reports }: { gid:
     logActivity(gid, { uid: me.uid, name: me.name }, "report_frozen", { detail: monthName(month) });
   }
   async function unfreeze() {
-    if (!confirm("Buka lagi report ini? Angkanya dihitung ulang dari deal sekarang.")) return;
     await deleteDoc(doc(db, "guilds", gid, "reports", month));
   }
   const share = [
@@ -347,7 +361,7 @@ function TeamReport({ gid, guild, me, members, deals, targets, reports }: { gid:
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+          <div className="sp-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
             {[
               ["Omzet lunas", juta(revenue), showLive && manager ? delta(revenue, live.base.revenue, "money").text : ""],
               ["Deal lunas", fmtN(paidCount), showLive && manager ? delta(paidCount, live.base.paidCount, "count").text : ""],
@@ -362,7 +376,7 @@ function TeamReport({ gid, guild, me, members, deals, targets, reports }: { gid:
           </div>
 
           <div style={{ ...card, padding: 0, overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 560 }}>
+            <table className="sp-rtable" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 560 }}>
               <thead>
                 <tr style={{ background: "var(--app-inner)", textAlign: "left" }}>
                   {["#", "Sales", "Chat", "Penawaran", "Lunas", "Omzet", "Target", "Capaian", ""].map(h => <th key={h} style={{ padding: "9px 10px", fontSize: 12, color: "var(--app-muted)", fontWeight: 700 }}>{h}</th>)}
@@ -374,16 +388,16 @@ function TeamReport({ gid, guild, me, members, deals, targets, reports }: { gid:
                   const pct = r.targetRevenue ? Math.round((r.revenue / r.targetRevenue) * 100) : null;
                   return (
                     <tr key={r.uid} style={{ borderTop: "1px solid var(--app-border)", fontVariantNumeric: "tabular-nums", background: r.uid === me.uid ? "var(--app-inner)" : undefined }}>
-                      <td style={{ padding: "9px 10px", color: "var(--app-muted)" }}>{i + 1}</td>
-                      <td style={{ padding: "9px 10px", fontWeight: 700 }}>{r.name}{r.uid === me.uid ? " (kamu)" : ""}</td>
-                      <td style={{ padding: "9px 10px" }}>{r.leads}</td>
-                      <td style={{ padding: "9px 10px" }}>{r.quoted}</td>
-                      <td style={{ padding: "9px 10px" }}>{r.paid}</td>
-                      <td style={{ padding: "9px 10px", fontWeight: 700 }}>{juta(r.revenue)}</td>
-                      <td style={{ padding: "9px 10px", color: "var(--app-muted)" }}>{r.targetRevenue ? `${juta(r.targetRevenue)}${r.targetDeals ? ` · ${r.targetDeals} deal` : ""}` : "—"}</td>
-                      <td style={{ padding: "9px 10px", fontWeight: 700, color: pct == null ? "var(--app-muted)" : pct >= 100 ? "var(--ok)" : undefined }}>{pct == null ? "—" : `${pct}%`}</td>
-                      <td style={{ padding: "9px 10px" }}>
-                        {manager && !frozen && <button onClick={() => setEditing({ uid: r.uid, name: r.name, revenue: r.targetRevenue ? fmtN(r.targetRevenue) : "", deals: r.targetDeals ? String(r.targetDeals) : "" })} aria-label={`Atur target ${r.name}`} style={{ ...chip, fontSize: 12 }}>Target</button>}
+                      <td className="sp-rt-hide" style={{ padding: "9px 10px", color: "var(--app-muted)" }}>{i + 1}</td>
+                      <td className="sp-rt-head" style={{ padding: "9px 10px", fontWeight: 700 }}>{rows.length > 1 ? <span className="sp-rt-only" style={{ color: "var(--app-muted)", fontWeight: 600 }}>{i + 1}. </span> : null}{r.name}{r.uid === me.uid ? " (kamu)" : ""}</td>
+                      <td data-label="Chat" style={{ padding: "9px 10px" }}>{r.leads}</td>
+                      <td data-label="Penawaran" style={{ padding: "9px 10px" }}>{r.quoted}</td>
+                      <td data-label="Lunas" style={{ padding: "9px 10px" }}>{r.paid}</td>
+                      <td data-label="Omzet" style={{ padding: "9px 10px", fontWeight: 700 }}>{juta(r.revenue)}</td>
+                      <td data-label="Target" style={{ padding: "9px 10px", color: "var(--app-muted)" }}>{r.targetRevenue ? `${juta(r.targetRevenue)}${r.targetDeals ? ` · ${r.targetDeals} deal` : ""}` : "—"}</td>
+                      <td data-label="Capaian" style={{ padding: "9px 10px", fontWeight: 700, color: pct == null ? "var(--app-muted)" : pct >= 100 ? "var(--ok)" : undefined }}>{pct == null ? "—" : `${pct}%`}</td>
+                      <td className="sp-rt-wide" style={{ padding: "9px 10px" }}>
+                        {manager && !frozen && <button onClick={() => { targetSave.reset(); setEditing({ uid: r.uid, name: r.name, revenue: r.targetRevenue ? fmtN(r.targetRevenue) : "", deals: r.targetDeals ? String(r.targetDeals) : "" }); }} aria-label={`Atur target ${r.name}`} style={{ ...chip, fontSize: 13, color: "var(--app-text)" }}>{r.targetRevenue ? "Ubah target" : "Atur target"}</button>}
                       </td>
                     </tr>
                   );
@@ -396,14 +410,14 @@ function TeamReport({ gid, guild, me, members, deals, targets, reports }: { gid:
           </div>
 
           {(manager || frozen) && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {manager && (!frozen ? <button onClick={freeze} style={btnPrimary}>Bekukan report tim</button> : <button onClick={unfreeze} style={btnMuted}>Buka lagi</button>)}
-              <a href={`https://wa.me/?text=${encodeURIComponent(share)}`} target="_blank" rel="noreferrer" style={{ ...btnWA, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Kirim via WA</a>
+            <div className="sp-actions">
+              {manager && (!frozen ? <button onClick={freeze} style={btnPrimary}>Bekukan report tim</button> : <button onClick={() => setReopen(true)} style={btnMuted}>Buka lagi</button>)}
+              <a className="sp-tap" href={`https://wa.me/?text=${encodeURIComponent(share)}`} target="_blank" rel="noreferrer" style={{ ...btnWA, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>Kirim via WA</a>
               <button onClick={() => setPrinting(true)} style={btnGhost}>Cetak / PDF</button>
             </div>
           )}
           {!manager && !frozen && rows.length > 0 && (
-            <div><button onClick={() => setPrinting(true)} style={btnGhost}>Cetak / PDF</button></div>
+            <div className="sp-actions"><button onClick={() => setPrinting(true)} style={btnGhost}>Cetak / PDF</button></div>
           )}
         </div>
       )}
@@ -413,20 +427,27 @@ function TeamReport({ gid, guild, me, members, deals, targets, reports }: { gid:
           compare={showLive && manager ? { revenue: delta(revenue, live.base.revenue, "money").text, paidCount: delta(paidCount, live.base.paidCount, "count").text, leads: delta(leads, live.base.leads, "count").text } : undefined}
           frozenAt={frozen?.frozenAt} scope={manager || frozen ? "team" : "self"} onClose={() => setPrinting(false)} />
       )}
+      {reopen && (
+        <ConfirmSheet title="Buka lagi report ini?" action="Buka lagi" busyLabel="Membuka…" onConfirm={unfreeze} onClose={() => setReopen(false)}>
+          Angka {monthName(month)} dihitung ulang dari deal sekarang. Bisa dibekukan lagi kapan aja.
+        </ConfirmSheet>
+      )}
       {editing && (
-        <div className="modal-overlay" onClick={() => setEditing(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 400 }}>
+        <div className="modal-overlay" onClick={() => { if (!targetSave.busy) closeTarget(); }}>
+          <form onSubmit={e => { e.preventDefault(); saveTarget(); }} onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 400 }}>
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 4 }}>Target {editing.name}</div>
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 16 }}>{monthName(month)}</div>
             <label htmlFor="tg-rev" style={label}>Target omzet (Rp)</label>
             <input id="tg-rev" inputMode="numeric" value={editing.revenue} onChange={e => setEditing({ ...editing, revenue: e.target.value })} placeholder="50.000.000" style={{ ...inputStyle, marginBottom: 12 }} />
             <label htmlFor="tg-deals" style={label}>Target deal lunas</label>
             <input id="tg-deals" inputMode="numeric" value={editing.deals} onChange={e => setEditing({ ...editing, deals: e.target.value })} placeholder="4" style={inputStyle} />
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={saveTarget} style={btnPrimary}>Simpan target</button>
-              <button onClick={() => setEditing(null)} style={btnMuted}>Batal</button>
+            <FormNote err={targetSave.err} />
+            <div className="sp-form-foot">
+              <button type="button" onClick={closeTarget} disabled={targetSave.busy} style={btnMuted}>Batal</button>
+              <button type="submit" disabled={targetSave.busy} style={{ ...btnPrimary, opacity: targetSave.busy ? 0.6 : 1 }}>{targetSave.busy ? "Menyimpan…" : "Simpan target"}</button>
             </div>
-          </div>
+          </form>
+          {targetAsk}
         </div>
       )}
     </div>
@@ -441,6 +462,15 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
   const [copied, setCopied] = useState(false);
   const [settings, setSettings] = useState<{ name: string; titles: Record<Role, string> } | null>(null);
   const [handover, setHandover] = useState<string | null>(null);
+  const [kicking, setKicking] = useState<Member | null>(null);
+  const [leaving, setLeaving] = useState(false);
+  const [copyMsg, setCopyMsg] = useState("");
+  const [roleErr, setRoleErr] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const setSave = useSave();
+  const hoSave = useSave();
+  const startSettings = useMemo(() => settings ? JSON.stringify(settings) : "", [settings === null]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [closeSettings, settingsAsk] = useDiscard(!!settings && JSON.stringify(settings) !== startSettings, () => setSettings(null), "Perubahan guild");
   const sorted = [...members].sort((a, b) => ROLES.indexOf(a.role) - ROLES.indexOf(b.role) || a.name.localeCompare(b.name));
   const live = invites.filter(i => i.expiresAt > Date.now()).sort((a, b) => b.createdAt - a.createdAt);
   const leader = me.role === "leader";
@@ -456,40 +486,49 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
 
   const by = { uid, name: me.name };
   async function changeRole(m: Member, r: Role) {
-    await setRole(gid, m.uid, r);
+    setRoleErr("");
+    try { await setRole(gid, m.uid, r); } catch { setRoleErr(`Peran ${m.name} gagal diganti. Cek koneksi lalu coba lagi.`); return; }
     logActivity(gid, by, "role_changed", { refName: m.name, about: m.uid, detail: `${titleOf(guild, m.role)} → ${titleOf(guild, r)}` });
   }
   async function kick(m: Member) {
-    if (!confirm(`Keluarkan ${m.name} dari guild?`)) return;
     await removeMember(gid, m.uid);
     logActivity(gid, by, "removed", { refName: m.name, about: m.uid });
   }
   async function makeInvite() {
-    const c = await createInvite(guild, uid, inviteRole);
-    logActivity(gid, by, "invited", { detail: titleOf(guild, inviteRole) });
-    setLink(inviteLink(window.location.origin, gid, c));
-    setCopied(false);
+    setInviting(true); setCopyMsg("");
+    try {
+      const c = await createInvite(guild, uid, inviteRole);
+      logActivity(gid, by, "invited", { detail: titleOf(guild, inviteRole) });
+      setLink(inviteLink(window.location.origin, gid, c));
+      setCopied(false);
+    } catch { setCopyMsg("Link gagal dibuat. Cek koneksi lalu coba lagi."); }
+    finally { setInviting(false); }
   }
   async function copy() {
-    try { await navigator.clipboard.writeText(link); setCopied(true); } catch { /* the link stays selectable */ }
+    try { await navigator.clipboard.writeText(link); setCopied(true); setCopyMsg(""); setTimeout(() => setCopied(false), 2000); }
+    catch { setCopyMsg("Ga bisa nyalin otomatis. Tekan lama link di atas, lalu Salin."); }
   }
   async function saveSettings() {
     if (!settings || !settings.name.trim()) return;
-    const titles = Object.fromEntries(ROLES.map(r => [r, settings.titles[r].trim()]).filter(([, t]) => t));
-    await updateDoc(doc(db, "guilds", gid), { name: settings.name.trim().slice(0, 80), titles });
-    await setDoc(doc(db, "users", uid, "guilds", gid), { name: settings.name.trim().slice(0, 80) }, { merge: true });
-    setSettings(null);
+    const st = settings;
+    const titles = Object.fromEntries(ROLES.map(r => [r, st.titles[r].trim()]).filter(([, t]) => t));
+    const ok = await setSave.run(async () => {
+      await updateDoc(doc(db, "guilds", gid), { name: st.name.trim().slice(0, 80), titles });
+      await setDoc(doc(db, "users", uid, "guilds", gid), { name: st.name.trim().slice(0, 80) }, { merge: true });
+    });
+    if (ok) setSettings(null);
   }
   async function leave() {
-    if (!confirm(`Keluar dari ${guild.name}? Deal milik kamu tetap ada di guild.`)) return;
     await logActivity(gid, by, "left");
     await leaveGuild(gid, uid);
   }
   async function doHandover() {
     if (!handover) return;
-    await transferLeadership(gid, uid, handover);
-    const to = members.find(m => m.uid === handover);
-    logActivity(gid, by, "handover", { refName: to?.name, about: handover });
+    const h = handover;
+    const ok = await hoSave.run(() => transferLeadership(gid, uid, h));
+    if (!ok) return;
+    const to = members.find(m => m.uid === h);
+    logActivity(gid, by, "handover", { refName: to?.name, about: h });
     setHandover(null);
   }
 
@@ -499,7 +538,7 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
         {sorted.map(m => {
           const options = rolesFor(m);
           return (
-            <div key={m.uid} style={{ ...card, padding: "11px 14px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <div key={m.uid} className="sp-member" style={{ ...card, padding: "11px 14px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <div style={{ minWidth: 0, flex: "1 1 180px" }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}{m.uid === me.uid ? " (kamu)" : ""}</div>
                 <div style={{ fontSize: 12, color: "var(--app-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.email}</div>
@@ -507,48 +546,50 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
               {options.length ? (
                 <>
                   <label htmlFor={`role-${m.uid}`} style={{ position: "absolute", left: -9999 }}>Peran {m.name}</label>
-                  <select id={`role-${m.uid}`} value={m.role} onChange={e => changeRole(m, e.target.value as Role)} style={{ ...inputStyle, width: "auto", padding: "6px 10px", fontSize: 12 }}>
+                  <select id={`role-${m.uid}`} value={m.role} onChange={e => changeRole(m, e.target.value as Role)} style={{ ...inputStyle, width: "auto", padding: "6px 10px", fontSize: 13 }}>
                     {Array.from(new Set([m.role, ...options])).map(r => <option key={r} value={r}>{titleOf(guild, r)}</option>)}
                   </select>
                 </>
               ) : <span style={badge(ROLE_COLOR[m.role])}>{titleOf(guild, m.role)}</span>}
               {canRemove(m) && (
-                <button onClick={() => kick(m)} aria-label={`Keluarkan ${m.name}`} style={{ ...chip, color: "#dc2626", borderColor: "#dc262640" }}>Keluarkan</button>
+                <button onClick={() => setKicking(m)} aria-label={`Keluarkan ${m.name}`} style={{ ...chip, fontSize: 13, color: "color-mix(in srgb, #dc2626 70%, var(--app-text))", borderColor: "#dc262640" }}>Keluarkan</button>
               )}
             </div>
           );
         })}
+        {roleErr && <div role="alert" style={{ fontSize: 13, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}>{roleErr}</div>}
       </div>
 
       {invitable(me.role).length > 0 && (
         <div style={{ ...card, padding: 16 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>Undang orang</div>
           <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>Link berlaku 7 hari, buat siapa pun yang login pakai Gmail/email. Kirim ke orangnya lewat WA.</div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <div className="sp-invite-row">
             <label htmlFor="inv-role" style={{ position: "absolute", left: -9999 }}>Peran undangan</label>
             <select id="inv-role" value={inviteRole} onChange={e => setInviteRole(e.target.value as Role)} style={{ ...inputStyle, width: "auto" }}>
               {invitable(me.role).map(r => <option key={r} value={r}>{titleOf(guild, r)}</option>)}
             </select>
-            <button onClick={makeInvite} style={btnPrimary}>Bikin link undangan</button>
+            <button onClick={makeInvite} disabled={inviting} style={{ ...btnPrimary, opacity: inviting ? 0.6 : 1 }}>{inviting ? "Membuat link…" : "Bikin link undangan"}</button>
           </div>
           <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 8 }}>{ROLE_HINT[inviteRole]}</div>
           {link && (
             <div style={{ marginTop: 12 }}>
               <label htmlFor="inv-link" style={label}>Link undangan</label>
               <input id="inv-link" readOnly value={link} onFocus={e => e.currentTarget.select()} style={{ ...inputStyle, fontSize: 12 }} />
-              <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+              <div className="sp-actions" style={{ marginTop: 8 }}>
                 <button onClick={copy} style={btnGhost}>{copied ? "✓ Tersalin" : "Salin link"}</button>
-                <a href={`https://wa.me/?text=${encodeURIComponent(`Gabung ke guild ${guild.name} di SalesPal: ${link}`)}`} target="_blank" rel="noreferrer" style={{ ...btnWA, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Kirim via WA</a>
+                <a className="sp-tap" href={`https://wa.me/?text=${encodeURIComponent(`Gabung ke guild ${guild.name} di SalesPal: ${link}`)}`} target="_blank" rel="noreferrer" style={{ ...btnWA, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>Kirim via WA</a>
               </div>
             </div>
           )}
+          {copyMsg && <div role="alert" style={{ fontSize: 13, marginTop: 8, color: "var(--app-sub)" }}>{copyMsg}</div>}
           {live.length > 0 && (
             <div style={{ marginTop: 14 }}>
               <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Undangan aktif</div>
               {live.map(i => (
-                <div key={i.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", fontSize: 12, padding: "5px 0" }}>
-                  <span>{titleOf(guild, i.role)} · berlaku s/d {new Date(i.expiresAt).toLocaleDateString("id-ID")}</span>
-                  <button onClick={() => deleteDoc(doc(db, "guilds", gid, "invites", i.id))} style={chip}>Cabut</button>
+                <div key={i.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", fontSize: 13, padding: "5px 0" }}>
+                  <span style={{ minWidth: 0 }}>{titleOf(guild, i.role)} · berlaku s/d {new Date(i.expiresAt).toLocaleDateString("id-ID")}</span>
+                  <button onClick={() => deleteDoc(doc(db, "guilds", gid, "invites", i.id)).catch(() => setCopyMsg("Undangan gagal dicabut. Coba lagi."))} aria-label={`Cabut undangan ${titleOf(guild, i.role)}`} style={{ ...chip, fontSize: 13, flexShrink: 0 }}>Cabut</button>
                 </div>
               ))}
             </div>
@@ -556,37 +597,50 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {leader && <button onClick={() => setSettings({ name: guild.name, titles: Object.fromEntries(ROLES.map(r => [r, guild.titles?.[r] || ""])) as Record<Role, string> })} style={btnGhost}>Atur guild & nama peran</button>}
-        {leader && members.length > 1 && <button onClick={() => setHandover("")} style={btnGhost}>Serahkan Leader</button>}
-        {!leader && <button onClick={leave} style={{ ...btnMuted, color: "#dc2626" }}>Keluar dari guild</button>}
+      <div className="sp-actions">
+        {leader && <button onClick={() => { setSave.reset(); setSettings({ name: guild.name, titles: Object.fromEntries(ROLES.map(r => [r, guild.titles?.[r] || ""])) as Record<Role, string> }); }} style={btnGhost}>Atur guild & nama peran</button>}
+        {leader && members.length > 1 && <button onClick={() => { hoSave.reset(); setHandover(""); }} style={btnGhost}>Serahkan Leader</button>}
+        {!leader && <button onClick={() => setLeaving(true)} style={{ ...btnMuted, color: "color-mix(in srgb, #dc2626 70%, var(--app-text))" }}>Keluar dari guild</button>}
       </div>
 
+      {kicking && (
+        <ConfirmSheet title={`Keluarkan ${kicking.name}?`} action="Keluarkan" busyLabel="Mengeluarkan…" onConfirm={() => kick(kicking)} onClose={() => setKicking(null)}>
+          Dia ga bisa buka {guild.name} lagi. Deal miliknya tetap ada di guild. Bisa diundang lagi lewat link baru.
+        </ConfirmSheet>
+      )}
+      {leaving && (
+        <ConfirmSheet title={`Keluar dari ${guild.name}?`} action="Keluar" busyLabel="Keluar…" onConfirm={leave} onClose={() => setLeaving(false)}>
+          Deal milik kamu tetap ada di guild. Buat balik lagi, minta link undangan baru.
+        </ConfirmSheet>
+      )}
+
       {settings && (
-        <div className="modal-overlay" onClick={() => setSettings(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 440 }}>
+        <div className="modal-overlay" onClick={() => { if (!setSave.busy) closeSettings(); }}>
+          <form onSubmit={e => { e.preventDefault(); saveSettings(); }} onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 440 }}>
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 16 }}>Atur guild</div>
             <label htmlFor="gs-name" style={label}>Nama guild</label>
             <input id="gs-name" value={settings.name} onChange={e => setSettings({ ...settings, name: e.target.value })} maxLength={80} style={{ ...inputStyle, marginBottom: 14 }} />
             <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>Nama peran</div>
-            <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 10 }}>Ganti sesuai istilah tim lo (mis. Officer → Supervisor). Hak aksesnya tetap.</div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 10 }}>Ganti sesuai istilah tim kamu (mis. Officer → Supervisor). Hak aksesnya tetap.</div>
             {ROLES.map(r => (
               <div key={r} style={{ marginBottom: 8 }}>
                 <label htmlFor={`gs-${r}`} style={label}>{r === "leader" ? "Leader" : r === "officer" ? "Officer" : r === "member" ? "Member" : "Viewer"} — {ROLE_HINT[r]}</label>
                 <input id={`gs-${r}`} value={settings.titles[r]} onChange={e => setSettings({ ...settings, titles: { ...settings.titles, [r]: e.target.value } })} placeholder={titleOf(null, r)} maxLength={30} style={inputStyle} />
               </div>
             ))}
-            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-              <button onClick={saveSettings} style={btnPrimary}>Simpan</button>
-              <button onClick={() => setSettings(null)} style={btnMuted}>Batal</button>
+            <FormNote why={settings.name.trim() ? "" : "Nama guild ga boleh kosong."} err={setSave.err} />
+            <div className="sp-form-foot">
+              <button type="button" onClick={closeSettings} disabled={setSave.busy} style={btnMuted}>Batal</button>
+              <button type="submit" disabled={!settings.name.trim() || setSave.busy} style={{ ...btnPrimary, opacity: settings.name.trim() && !setSave.busy ? 1 : 0.5 }}>{setSave.busy ? "Menyimpan…" : "Simpan"}</button>
             </div>
-          </div>
+          </form>
+          {settingsAsk}
         </div>
       )}
 
       {handover !== null && (
-        <div className="modal-overlay" onClick={() => setHandover(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 420 }}>
+        <div className="modal-overlay" onClick={() => { if (!hoSave.busy) setHandover(null); }}>
+          <form onSubmit={e => { e.preventDefault(); doHandover(); }} onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 420 }}>
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 6 }}>Serahkan Leader</div>
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 14 }}>Dia jadi Leader, kamu turun jadi {titleOf(guild, "officer")}. Ga bisa dibatalin sendiri.</div>
             <label htmlFor="ho-who" style={label}>Ke siapa</label>
@@ -594,11 +648,12 @@ function Members({ gid, guild, me, members, invites, uid }: { gid: string; guild
               <option value="">— pilih anggota —</option>
               {members.filter(m => m.uid !== uid).map(m => <option key={m.uid} value={m.uid}>{m.name} · {titleOf(guild, m.role)}</option>)}
             </select>
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={doHandover} disabled={!handover} style={{ ...btnPrimary, opacity: handover ? 1 : 0.5 }}>Serahkan</button>
-              <button onClick={() => setHandover(null)} style={btnMuted}>Batal</button>
+            <FormNote why={handover ? "" : "Pilih anggota dulu."} err={hoSave.err} />
+            <div className="sp-form-foot">
+              <button type="button" onClick={() => setHandover(null)} disabled={hoSave.busy} style={btnMuted}>Batal</button>
+              <button type="submit" disabled={!handover || hoSave.busy} style={{ ...btnPrimary, opacity: handover && !hoSave.busy ? 1 : 0.5 }}>{hoSave.busy ? "Menyerahkan…" : "Serahkan"}</button>
             </div>
-          </div>
+          </form>
         </div>
       )}
     </div>

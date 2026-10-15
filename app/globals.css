@@ -785,3 +785,56 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 @media (max-width: 480px) { .sp-print-actions .pointer-only { display: none !important; } }
 .sp-tap:focus-within { outline: 2px solid #005eb0; outline-offset: 2px; }
 .modal-overlay label.sp-tap { color: var(--app-text) !important; margin-bottom: 0 !important; font-size: 14px !important; }
+
+/* ---- Tim: Guild, Report Klien, Outreach, Rejection Log (QA 15 Okt) ---- */
+/* A row of actions: wraps tidily on a phone, each button a full thumb wide. */
+.sp-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sp-deal-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.sp-deal-filter { display: flex; gap: 6px; flex-wrap: wrap; }
+.sp-deal-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.sp-deal-actions .sp-del { margin-left: auto; }
+.sp-invite-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sp-rt-only { display: none; }
+@media (max-width: 640px), not ((hover: hover) and (pointer: fine)) {
+  .sp-team button, .sp-team a.sp-tap, .sp-team label.sp-tap, .sp-team select, .sp-team summary { min-height: 44px !important; }
+  .sp-team .sp-tight { min-height: 0 !important; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .sp-team button:not(:disabled):hover, .sp-team a.sp-tap:hover, .sp-team label.sp-tap:hover { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--app-text) 6%, transparent); }
+  .sp-team button:disabled { cursor: not-allowed; }
+}
+/* Wide screens: lists and reports keep a readable measure. */
+@media (min-width: 1100px) { .sp-team { max-width: 1040px; } }
+@media (max-width: 640px) {
+  .sp-actions > button, .sp-actions > a { flex: 1 1 calc(50% - 4px); }
+  .sp-invite-row > select { flex: 0 0 auto; }
+  .sp-invite-row > button { flex: 1 1 160px; }
+  .sp-deal-bar > :last-child:not(.sp-deal-filter) { flex: 1 1 auto; }
+  .sp-deal-filter { flex: 1 1 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .sp-deal-filter > button { padding-left: 4px !important; padding-right: 4px !important; }
+  .sp-deal-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sp-deal-actions > .sp-next { grid-column: 1 / -1; }
+  .sp-deal-actions .sp-del { margin-left: 0; }
+  .sp-sales-card { padding: 16px !important; }
+  .sp-sales-num { font-size: 19px !important; }
+  /* Tables reflow into one card per row: the name on top, each number under its label. */
+  .sp-rtable { min-width: 0 !important; display: block; }
+  .sp-rtable thead { display: none; }
+  .sp-rtable caption { display: block; }
+  .sp-rtable tbody { display: block; }
+  .sp-rtable tr { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px 12px; padding: 12px 14px; border-top: 1px solid var(--app-border); }
+  .sp-rtable tbody tr:first-child { border-top: 0; }
+  .sp-rtable-flat tr { padding: 10px 0; border-top: 1px solid var(--app-inner); }
+  .sp-rtable td { padding: 0 !important; border: 0 !important; text-align: left !important; white-space: normal !important; max-width: none !important; font-size: 14px !important; min-width: 0; overflow-wrap: anywhere; }
+  .sp-rtable td[data-label]::before { content: attr(data-label); display: block; font-size: 12px; font-weight: 600; color: var(--app-muted); margin-bottom: 1px; }
+  .sp-rtable td.sp-rt-head, .sp-rtable td.sp-rt-wide { grid-column: 1 / -1; }
+  .sp-rtable td.sp-rt-hide, .sp-rtable td.sp-rt-wide:empty { display: none; }
+  .sp-rtable td.sp-rt-wide button { width: 100%; }
+  .sp-rt-only { display: inline; }
+}
+/* The guild's four tabs: one sideways row on the narrowest phones, not two-line labels. */
+@media (max-width: 380px) {
+  .sp-tabs { overflow-x: auto; scrollbar-width: none; }
+  .sp-tabs::-webkit-scrollbar { display: none; }
+  .sp-tabs > button { flex: 0 0 auto !important; white-space: nowrap; padding: 9px 12px !important; }
+}

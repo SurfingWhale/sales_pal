@@ -33,6 +33,7 @@ import HuntBar from "@/components/HuntBar";
 import ClientHub from "@/components/ClientHub";
 import SalesReport from "@/components/SalesReport";
 import GuildHub from "@/components/GuildHub";
+import { OutreachTab, RejectionTab, type Outreach, type Rejection } from "@/components/TeamLogs";
 import LeadSources from "@/components/LeadSources";
 import ModalA11y from "@/components/ModalA11y";
 import { Hunt, useClosingTarget, useHuntGoal } from "@/lib/hunting";
@@ -79,14 +80,6 @@ interface Lead {
   ownerUid?: string; ownerName?: string;   // in a guild space
   lastReplyAt?: string;                    // when they last answered (PRD-008 §2)
   profile?: LeadProfile;                   // need, pain, objection, type (PRD-008 §3)
-}
-interface Outreach {
-  id: string; leadName: string; type: string; date: string; subject: string;
-  status: string; opens: number; clicks: number;
-}
-interface Rejection {
-  id: string; leadName: string; date: string; reason: string; channel: string;
-  followUpDate: string; lesson: string;
 }
 
 // New accounts start empty. Earlier versions wrote example rows (ids seed_…)
@@ -252,12 +245,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [showAddLead, setShowAddLead] = useState(false);
   const [addLeadErr, setAddLeadErr] = useState("");
   const [savingLead, setSavingLead] = useState(false);
-  const [showAddOutreach, setShowAddOutreach] = useState(false);
-  const [showAddRejection, setShowAddRejection] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [newLead, setNewLead] = useState({ name: "", contact: "", source: "GMaps", status: "Cold", email: "", phone: "", category: "F&B", notes: "", value: "" });
-  const [newOutreach, setNewOutreach] = useState({ leadName: "", type: "Email", subject: "", status: "Sent" });
-  const [newRejection, setNewRejection] = useState({ leadName: "", reason: "", channel: "Email", followUpDate: "", lesson: "" });
   const [showImport, setShowImport] = useState(false);
   const [importHeaders, setImportHeaders] = useState<string[]>([]);
   const [importRows, setImportRows] = useState<Record<string, unknown>[]>([]);
@@ -551,25 +540,6 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   }
   function closeAddLead() { if (!savingLead) { setShowAddLead(false); setAddLeadErr(""); } }
 
-  async function addOutreach() {
-    if (!newOutreach.leadName) return;
-    const id = `out_${Date.now()}`;
-    await setDoc(spaceDoc(space, "outreach", id), stamp(space, {
-      ...newOutreach, date: new Date().toISOString().split("T")[0], opens: 0, clicks: 0,
-    }));
-    setNewOutreach({ leadName: "", type: "Email", subject: "", status: "Sent" });
-    setShowAddOutreach(false);
-  }
-
-  async function addRejection() {
-    if (!newRejection.leadName) return;
-    const id = `rej_${Date.now()}`;
-    await setDoc(spaceDoc(space, "rejections", id), stamp(space, {
-      ...newRejection, date: new Date().toISOString().split("T")[0],
-    }));
-    setNewRejection({ leadName: "", reason: "", channel: "Email", followUpDate: "", lesson: "" });
-    setShowAddRejection(false);
-  }
 
   // Asked first in the lead's own "Hapus lead?" sheet (components/LeadDetail).
   async function deleteLead(id: string) {
@@ -1058,112 +1028,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           leads={leads.map(l => ({ id: l.id, name: l.name, contact: l.contact, phone: l.phone }))} />}
         {activeTab === "Paket" && <Services services={services} business={business} />}
 
-        {/* OUTREACH */}
-        {activeTab === "Outreach" && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div>
-                <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Outreach Tracker</div>
-                <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 2 }}>Track semua DM, email, dan WA lo</div>
-              </div>
-              <button onClick={() => setShowAddOutreach(true)} style={btnPrimary}>+ Catat outreach</button>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 24 }}>
-              {[
-                { label: "Total Sent", value: outreach.length, color: "var(--brand-text)" },
-                { label: "Replied", value: outreach.filter(o => o.status === "Replied").length, color: "var(--ok)" },
-                { label: "Seen/Open", value: outreach.filter(o => o.status === "Seen").length, color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))" },
-                { label: "No Response", value: outreach.filter(o => o.status === "No Response").length, color: "var(--app-muted)" },
-                { label: "Rejected", value: outreach.filter(o => o.status === "Rejected").length, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" },
-              ].map(s => (
-                <div key={s.label} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 10, padding: 16 }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: `color-mix(in srgb, ${s.color} 55%, var(--app-text))`, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{s.value}</div>
-                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {outreach.length === 0 && (
-                <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "48px 24px", textAlign: "center" }}>
-                  <div style={{ fontSize: 34, marginBottom: 12 }}>📭</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ada outreach</div>
-                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Catat email, DM, atau WA pertama lo biar bisa dilacak.</div>
-                  <button onClick={() => setShowAddOutreach(true)} style={btnPrimary}>+ Log Outreach</button>
-                </div>
-              )}
-              {outreach.map(o => {
-                const statusColors: Record<string, string> = { Replied: "#00a862", Seen: "#f59e0b", Sent: "#005eb0", "No Response": "var(--app-muted)", Rejected: "#ff4444" };
-                return (
-                  <div key={o.id} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 10, padding: 20, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                      <div style={{ fontSize: 20 }}>{o.type === "Email" ? "📧" : o.type === "DM Instagram" ? "📸" : "💬"}</div>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{o.leadName}</div>
-                        <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{o.subject}</div>
-                        <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{o.type} · {o.date}</div>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <span className="badge" style={{ background: `${statusColors[o.status]}20`, color: statusColors[o.status], border: `1px solid ${statusColors[o.status]}40` }}>{o.status}</span>
-                      <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Opens: {o.opens} · Clicks: {o.clicks}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* REJECTION LOG */}
-        {activeTab === "Rejection Log" && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div>
-                <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Rejection Log</div>
-                <div style={{ color: "var(--app-muted)", fontSize: 12, marginTop: 2 }}>Tiap rejection = data buat improve. Catat & belajar.</div>
-              </div>
-              <button onClick={() => setShowAddRejection(true)} style={btnPrimary}>+ LOG REJECTION</button>
-            </div>
-            <div style={{ background: "#ff44440d", border: "1px solid #ff444430", borderRadius: 10, padding: 16, marginBottom: 20, fontSize: 12, color: "#ff8888" }}>
-              <span style={{ fontWeight: 700 }}>💡 Mindset:</span> Rejection bukan kegagalan — itu adalah data. Setiap &quot;tidak&quot; lo adalah insight buat close deal berikutnya lebih cepet.
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {rejections.length === 0 && (
-                <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: "48px 24px", textAlign: "center" }}>
-                  <div style={{ fontSize: 34, marginBottom: 12 }}>🗂️</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ada rejection dicatat</div>
-                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Setiap penolakan itu data. Catat biar bisa dipelajari & di-follow up.</div>
-                  <button onClick={() => setShowAddRejection(true)} style={btnPrimary}>+ Log Rejection</button>
-                </div>
-              )}
-              {rejections.map(r => (
-                <div key={r.id} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 20 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{r.leadName}</div>
-                      <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{r.channel} · {r.date}</div>
-                    </div>
-                    <span className="badge" style={{ background: "#ff44441a", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444430" }}>REJECTED</span>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12 }}>
-                      <div style={{ fontSize: 12, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 4 }}>ALASAN REJECTION</div>
-                      <div style={{ fontSize: 12, color: "#ff8888" }}>{r.reason}</div>
-                    </div>
-                    <div style={{ background: "var(--app-inner)", borderRadius: 8, padding: 12 }}>
-                      <div style={{ fontSize: 12, color: "var(--app-muted)", letterSpacing: "1px", marginBottom: 4 }}>FOLLOW-UP DATE</div>
-                      <div style={{ fontSize: 12, color: "color-mix(in srgb, #f59e0b 55%, var(--app-text))" }}>{r.followUpDate || "Belum dijadwal"}</div>
-                    </div>
-                  </div>
-                  <div style={{ background: "#00ff881a", borderRadius: 8, padding: 12, marginTop: 12, border: "1px solid #00ff8820" }}>
-                    <div style={{ fontSize: 12, color: "var(--ok)", letterSpacing: "1px", marginBottom: 4 }}>💡 LESSON LEARNED</div>
-                    <div style={{ fontSize: 12 }}>{r.lesson}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {activeTab === "Outreach" && <OutreachTab outreach={outreach} />}
+        {activeTab === "Rejection Log" && <RejectionTab rejections={rejections} />}
 
         {/* SIMULATOR */}
         {activeTab === "Simulator" && <SalesSimulator />}
@@ -1257,64 +1123,6 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               <button type="submit" disabled={savingLead} style={{ ...btnPrimary, flex: 1, minHeight: 44, opacity: savingLead ? 0.7 : 1 }}>{savingLead ? "Menyimpan…" : "Simpan lead"}</button>
             </div>
           </form>
-        </div>
-      )}
-
-      {/* Modal Add Outreach */}
-      {showAddOutreach && (
-        <div className="modal-overlay" onClick={() => setShowAddOutreach(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20 }}>+ Log Outreach</div>
-            {([["leadName", "Nama Lead/Perusahaan"], ["subject", "Subject / Pesan Pembuka"]] as [string, string][]).map(([k, label]) => (
-              <div key={k} style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
-                <input value={(newOutreach as Record<string, string>)[k]} onChange={e => setNewOutreach({ ...newOutreach, [k]: e.target.value })} style={inputStyle} placeholder={label} />
-              </div>
-            ))}
-            {([["type", "Tipe", ["Email", "DM Instagram", "WhatsApp", "LinkedIn", "Telepon"]], ["status", "Status", ["Sent", "Seen", "Replied", "No Response", "Rejected"]]] as [string, string, string[]][]).map(([k, label, opts]) => (
-              <div key={k} style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
-                <select value={(newOutreach as Record<string, string>)[k]} onChange={e => setNewOutreach({ ...newOutreach, [k]: e.target.value })} style={inputStyle}>
-                  {opts.map(o => <option key={o} value={o}>{o}</option>)}
-                </select>
-              </div>
-            ))}
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={addOutreach} style={btnPrimary}>Simpan</button>
-              <button onClick={() => setShowAddOutreach(false)} style={{ ...btnPrimary, background: "var(--app-border)", color: "var(--app-text)" }}>Batal</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Add Rejection */}
-      {showAddRejection && (
-        <div className="modal-overlay" onClick={() => setShowAddRejection(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 20 }}>+ Log Rejection</div>
-            {([["leadName", "Nama Lead/Perusahaan"], ["reason", "Alasan Rejection"], ["lesson", "Lesson Learned"]] as [string, string][]).map(([k, label]) => (
-              <div key={k} style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>{label}</label>
-                {k === "lesson"
-                  ? <textarea value={(newRejection as Record<string, string>)[k]} onChange={e => setNewRejection({ ...newRejection, [k]: e.target.value })} style={{ ...inputStyle, resize: "none", height: 70 }} placeholder={label} />
-                  : <input value={(newRejection as Record<string, string>)[k]} onChange={e => setNewRejection({ ...newRejection, [k]: e.target.value })} style={inputStyle} placeholder={label} />}
-              </div>
-            ))}
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Channel</label>
-              <select value={newRejection.channel} onChange={e => setNewRejection({ ...newRejection, channel: e.target.value })} style={inputStyle}>
-                {["Email", "DM Instagram", "WhatsApp", "LinkedIn", "Telepon"].map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 6 }}>Jadwal Follow-Up</label>
-              <input type="date" value={newRejection.followUpDate} onChange={e => setNewRejection({ ...newRejection, followUpDate: e.target.value })} style={inputStyle} />
-            </div>
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={addRejection} style={btnPrimary}>Simpan</button>
-              <button onClick={() => setShowAddRejection(false)} style={{ ...btnPrimary, background: "var(--app-border)", color: "var(--app-text)" }}>Batal</button>
-            </div>
-          </div>
         </div>
       )}
 

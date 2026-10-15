@@ -15,7 +15,7 @@ const SOFT: [number, number, number] = [87, 96, 106];
 const RULE: [number, number, number] = [208, 215, 222];
 
 // The standard PDF fonts only know Latin-1 plus a few marks; swap the rest.
-function safe(s: string): string {
+export function safe(s: string): string {
   return (s || "")
     .replace(/[→⟶➜]/g, "->").replace(/[✓✔]/g, "v").replace(/[“”]/g, '"').replace(/[‘’]/g, "'")
     .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF–—•…€]/g, "");

@@ -12,6 +12,8 @@ import { db } from "@/lib/firebase";
 import { today, useBusiness } from "@/lib/billing";
 import { spaceCol, spaceDoc, spacePath, spaceQuery, stamp, useSpace } from "@/lib/space";
 import ReportSheet from "@/components/ReportSheet";
+import ConfirmSheet from "@/components/ConfirmSheet";
+import { FormNote, useDiscard, useSave } from "@/components/FormGuard";
 import {
   CHANNELS, Channel, Client, Deal, FirstTouch, MonthNumbers, Baseline, PLATFORMS, Platform, Post, STAGE_LABEL, Stage,
   UNKNOWN, advance, baseline, computeMonth, delta, juta, monthName, monthOf, narrative, postsFromRows, shareText, shiftMonth, wilson,
@@ -63,28 +65,34 @@ export default function ClientHub() {
   }, [spaceKey, clientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const client = clients.find(c => c.id === clientId);
+  const clientSave = useSave();
+  const clientStart = useMemo(() => editClient ? `${editClient.name}|${editClient.threshold}` : "", [editClient === null]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [closeClient, clientAsk] = useDiscard(!!editClient && `${editClient.name}|${editClient.threshold}` !== clientStart, () => setEditClient(null), "Isian klien");
+  const openClient = (c: { id: string; name: string; threshold: string }) => { clientSave.reset(); setEditClient(c); };
 
   async function saveClient() {
     if (!editClient || !editClient.name.trim()) return;
-    const id = editClient.id || `cl_${Date.now()}`;
-    await setDoc(spaceDoc(space, "clients", id), {
-      name: editClient.name.trim(),
-      segmentThreshold: n0(editClient.threshold) || 5_000_000,
-      ...(editClient.id ? {} : stamp(space, { createdAt: Date.now() })),
-    }, { merge: true });
+    const e = editClient;
+    const id = e.id || `cl_${Date.now()}`;
+    const ok = await clientSave.run(() => setDoc(spaceDoc(space, "clients", id), {
+      name: e.name.trim(),
+      segmentThreshold: n0(e.threshold) || 5_000_000,
+      ...(e.id ? {} : stamp(space, { createdAt: Date.now() })),
+    }, { merge: true }));
+    if (!ok) return;
     setClientId(id); rememberClient(id);
     setEditClient(null);
   }
 
   return (
     // Room at the bottom so the floating Quick Pitch button never covers the last line.
-    <div style={{ paddingBottom: 72 }}>
+    <div className="sp-team" style={{ paddingBottom: 72 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-        <div>
+        <div style={{ minWidth: 0, flex: "1 1 220px" }}>
           <div style={heading}>Report Klien</div>
           <div style={subheading}>Catat chat + sumbernya, geser deal sampai lunas, terus report bulanan jadi sendiri.</div>
         </div>
-        <button onClick={() => setEditClient({ id: "", name: "", threshold: "5.000.000" })} style={btnGhost}>+ Klien</button>
+        {client && <button onClick={() => openClient({ id: "", name: "", threshold: "5.000.000" })} style={btnGhost}>+ Klien</button>}
       </div>
 
       {!client ? (
@@ -92,18 +100,18 @@ export default function ClientHub() {
           <div style={{ fontSize: 32, marginBottom: 10 }}>🧾</div>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ada klien</div>
           <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 18, maxWidth: 420, marginInline: "auto" }}>
-            Ini buat klien yang sosmednya lo pegang (mis. toko aksesoris): chat, deal, angka konten, dan report bulanannya. Penjualan jasa lo sendiri ada di kartu Penjualan di atas.
+            Ini buat klien yang sosmednya kamu pegang (mis. toko aksesoris): chat, deal, angka konten, dan report bulanannya. Penjualan jasa kamu sendiri ada di kartu Penjualan di atas.
           </div>
-          <button onClick={() => setEditClient({ id: "", name: "", threshold: "5.000.000" })} style={btnPrimary}>+ Tambah klien</button>
+          <button onClick={() => openClient({ id: "", name: "", threshold: "5.000.000" })} style={btnPrimary}>+ Tambah klien</button>
         </div>
       ) : (
         <>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
             <label htmlFor="client-pick" style={{ position: "absolute", left: -9999 }}>Pilih klien</label>
-            <select id="client-pick" value={clientId} onChange={e => { setClientId(e.target.value); rememberClient(e.target.value); }} style={{ ...inputStyle, width: "auto", minWidth: 160, fontWeight: 700 }}>
+            <select id="client-pick" value={clientId} onChange={e => { setClientId(e.target.value); rememberClient(e.target.value); }} style={{ ...inputStyle, width: "auto", minWidth: 160, maxWidth: "100%", flex: "0 1 auto", fontWeight: 700 }}>
               {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-            <button onClick={() => setEditClient({ id: client.id, name: client.name, threshold: fmtN(client.segmentThreshold || 5_000_000) })} style={chip}>Atur klien</button>
+            <button onClick={() => openClient({ id: client.id, name: client.name, threshold: fmtN(client.segmentThreshold || 5_000_000) })} style={{ ...chip, fontSize: 13, color: "var(--app-text)" }}>Atur klien</button>
           </div>
           <div role="tablist" aria-label="Bagian" style={{ display: "flex", gap: 4, background: "var(--app-inner)", padding: 4, borderRadius: 10, marginBottom: 18 }}>
             {([["pipeline", "Chat & Deal"], ["konten", "Konten"], ["report", "Report"]] as const).map(([v, l]) => (
@@ -122,19 +130,21 @@ export default function ClientHub() {
       )}
 
       {editClient && (
-        <div className="modal-overlay" onClick={() => setEditClient(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 420 }}>
+        <div className="modal-overlay" onClick={() => { if (!clientSave.busy) closeClient(); }}>
+          <form onSubmit={e => { e.preventDefault(); saveClient(); }} onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 420 }}>
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 16 }}>{editClient.id ? "Atur klien" : "Klien baru"}</div>
             <label htmlFor="cl-name" style={label}>Nama klien</label>
-            <input id="cl-name" value={editClient.name} onChange={e => setEditClient({ ...editClient, name: e.target.value })} placeholder="mis. Toko Aksesoris Jaya" style={{ ...inputStyle, marginBottom: 12 }} />
+            <input id="cl-name" value={editClient.name} onChange={e => setEditClient({ ...editClient, name: e.target.value })} placeholder="mis. Toko Contoh" style={{ ...inputStyle, marginBottom: 12 }} />
             <label htmlFor="cl-th" style={label}>Batas deal besar (Rp)</label>
             <input id="cl-th" inputMode="numeric" value={editClient.threshold} onChange={e => setEditClient({ ...editClient, threshold: e.target.value })} style={inputStyle} />
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Report misahin deal besar vs kecil, biar ketauan kalau omzet turun karena ukuran deal, bukan jumlahnya.</div>
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={saveClient} style={btnPrimary}>Simpan klien</button>
-              <button onClick={() => setEditClient(null)} style={btnMuted}>Batal</button>
+            <FormNote why={editClient.name.trim() ? "" : "Isi nama klien dulu."} err={clientSave.err} />
+            <div className="sp-form-foot">
+              <button type="button" onClick={closeClient} disabled={clientSave.busy} style={btnMuted}>Batal</button>
+              <button type="submit" disabled={!editClient.name.trim() || clientSave.busy} style={{ ...btnPrimary, opacity: editClient.name.trim() && !clientSave.busy ? 1 : 0.5 }}>{clientSave.busy ? "Menyimpan…" : "Simpan klien"}</button>
             </div>
-          </div>
+          </form>
+          {clientAsk}
         </div>
       )}
     </div>
@@ -148,7 +158,7 @@ function SourcePicker({ value, onChange, id }: { value: Channel; onChange: (c: C
     <div role="radiogroup" aria-labelledby={id} style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
       {CHANNELS.map(c => (
         <button key={c} type="button" role="radio" aria-checked={value === c} onClick={() => onChange(c)}
-          style={{ ...chip, fontSize: 12, padding: "7px 11px", fontWeight: 600,
+          style={{ ...chip, fontSize: 13, padding: "7px 12px", minHeight: 40, fontWeight: 600,
             background: value === c ? "#005eb0" : "transparent", color: value === c ? "#fff" : "var(--app-muted)", borderColor: value === c ? "#005eb0" : "var(--app-border)" }}>
           {c}
         </button>
@@ -174,6 +184,12 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
   const [reassign, setReassign] = useState<{ deal: Deal; to: string } | null>(null);
   const [move, setMove] = useState<{ deal: Deal; to: Stage; amount: string; date: string; reason: string; channel: Channel } | null>(null);
   const [filter, setFilter] = useState<"aktif" | "lunas" | "gugur" | "semua">("aktif");
+  const [removing, setRemoving] = useState<Deal | null>(null);
+  const chatSave = useSave();
+  const moveSave = useSave();
+  const raSave = useSave();
+  const chatDirty = !!draft && !!(draft.name.trim() || draft.phone.trim() || draft.code.trim() || draft.heardFrom.trim() || draft.paidNow || draft.channel !== UNKNOWN);
+  const [closeChat, chatAsk] = useDiscard(chatDirty, () => setDraft(null), "Chat ini");
   const col = (id: string) => doc(db, path.join("/"), id);
 
   const shown = deals
@@ -205,7 +221,8 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
     const chosen = owners?.find(o => o.uid === draft.owner);
     const owner = chosen ? { ownerUid: chosen.uid, ownerName: chosen.name } : {};
     const id = `deal_${Date.now()}`;
-    await setDoc(col(id), clean({ ...deal, ...extra, ...owner }));
+    const row = clean({ ...deal, ...extra, ...owner });
+    if (!(await chatSave.run(() => setDoc(col(id), row)))) return;
     onEvent?.({ what: deal.paidAt ? "deal_paid" : "deal_created", ref: id, refName: deal.contactName, about: chosen?.uid,
       detail: [chosen && chosen.uid !== extra?.ownerUid ? `untuk ${chosen.name}` : "", deal.paidAmount ? juta(deal.paidAmount) : "", draft.channel].filter(Boolean).join(" · ") });
     setDraft(null);
@@ -215,12 +232,14 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
     if (!reassign) return;
     const o = owners?.find(x => x.uid === reassign.to);
     if (!o) return;
-    await updateDoc(col(reassign.deal.id), { ownerUid: o.uid, ownerName: o.name });
+    const id = reassign.deal.id;
+    if (!(await raSave.run(() => updateDoc(col(id), { ownerUid: o.uid, ownerName: o.name })))) return;
     onEvent?.({ what: "deal_reassigned", ref: reassign.deal.id, refName: reassign.deal.contactName, detail: `${reassign.deal.ownerName || "?"} → ${o.name}`, about: o.uid });
     setReassign(null);
   }
 
   function startMove(deal: Deal, to: Stage) {
+    moveSave.reset();
     setMove({ deal, to, amount: to === "paid" ? fmtN(deal.quoteValue || 0).replace(/^0$/, "") : "", date: today(), reason: "", channel: deal.firstTouch?.channel || UNKNOWN });
   }
 
@@ -228,7 +247,8 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
     if (!move) return;
     const { deal, to } = move;
     if (to === "lost") {
-      await updateDoc(col(deal.id), clean({ ...advance(deal, "lost", move.date), lostReason: move.reason.trim() || undefined }));
+      const upd = clean({ ...advance(deal, "lost", move.date), lostReason: move.reason.trim() || undefined });
+      if (!(await moveSave.run(() => updateDoc(col(deal.id), upd)))) return;
       onEvent?.({ what: "deal_lost", ref: deal.id, refName: deal.contactName, detail: move.reason.trim() || undefined });
     } else {
       const amount = to === "quoted" || to === "paid" ? n0(move.amount) : undefined;
@@ -237,7 +257,7 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
       if (to === "paid" && (deal.firstTouch?.channel || UNKNOWN) === UNKNOWN && move.channel !== UNKNOWN) {
         upd.firstTouch = { ...deal.firstTouch, channel: move.channel, method: "seller_guess" };
       }
-      await updateDoc(col(deal.id), clean(upd));
+      if (!(await moveSave.run(() => updateDoc(col(deal.id), clean(upd))))) return;
       onEvent?.(to === "paid"
         ? { what: "deal_paid", ref: deal.id, refName: deal.contactName, detail: amount ? juta(amount) : undefined }
         : { what: "deal_moved", ref: deal.id, refName: deal.contactName, detail: `→ ${STAGE_LABEL[to]}${to === "quoted" && amount ? ` ${juta(amount)}` : ""}` });
@@ -246,7 +266,6 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
   }
 
   async function remove(d: Deal) {
-    if (!confirm(`Hapus ${d.contactName}? Angkanya ikut hilang dari report.`)) return;
     await deleteDoc(col(d.id));
     onEvent?.({ what: "deal_deleted", ref: d.id, refName: d.contactName });
   }
@@ -266,16 +285,16 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
         </div>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      <div className="sp-deal-bar">
+        <div role="group" aria-label="Saring deal" className="sp-deal-filter">
           {(["aktif", "lunas", "gugur", "semua"] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)} aria-pressed={filter === f}
-              style={{ ...chip, textTransform: "capitalize", fontWeight: 600, background: filter === f ? "var(--app-inner)" : "transparent", color: filter === f ? "var(--app-text)" : "var(--app-muted)" }}>
+              style={{ ...chip, fontSize: 13, textTransform: "capitalize", fontWeight: 600, background: filter === f ? "var(--app-inner)" : "transparent", color: filter === f ? "var(--app-text)" : "var(--app-muted)", borderColor: filter === f ? "var(--app-line-strong, var(--app-border))" : "var(--app-border)" }}>
               {f}
             </button>
           ))}
         </div>
-        <button onClick={() => setDraft(blankChat(extra?.ownerUid || ""))} style={btnPrimary}>+ Chat masuk</button>
+        <button onClick={() => { chatSave.reset(); setDraft(blankChat(extra?.ownerUid || "")); }} style={btnPrimary}>+ Chat masuk</button>
       </div>
 
       {shown.length === 0 ? (
@@ -309,12 +328,12 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
                   {d.paidAmount ? <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ok)" }}>Lunas {juta(d.paidAmount)} · {d.paidAt}</span> : null}
                   {d.stage === "lost" && <span style={{ fontSize: 12, color: "var(--app-muted)" }}>{d.lostReason || "tanpa alasan"}</span>}
                 </div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-                  {nx && <button onClick={() => startMove(d, nx)} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 12 }}>→ {NEXT_LABEL[d.stage]}</button>}
-                  {d.stage !== "paid" && d.stage !== "won" && d.stage !== "lost" && <button onClick={() => startMove(d, "paid")} style={{ ...chip, fontSize: 12 }}>Langsung lunas</button>}
-                  {d.stage !== "paid" && d.stage !== "lost" && <button onClick={() => startMove(d, "lost")} style={{ ...chip, fontSize: 12 }}>Gugur</button>}
-                  {owners && owners.length > 1 && <button onClick={() => setReassign({ deal: d, to: d.ownerUid || "" })} style={{ ...chip, fontSize: 12 }}>Pindah pemilik</button>}
-                  <button onClick={() => remove(d)} aria-label={`Hapus ${d.contactName}`} style={{ ...chip, fontSize: 12, marginLeft: "auto", color: "#dc2626", borderColor: "#dc262640" }}>Hapus</button>
+                <div className="sp-deal-actions">
+                  {nx && <button className="sp-next" onClick={() => startMove(d, nx)} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 13 }}>→ {NEXT_LABEL[d.stage]}</button>}
+                  {d.stage !== "paid" && d.stage !== "won" && d.stage !== "lost" && <button onClick={() => startMove(d, "paid")} style={{ ...chip, fontSize: 13, color: "var(--app-text)" }}>Langsung lunas</button>}
+                  {d.stage !== "paid" && d.stage !== "lost" && <button onClick={() => startMove(d, "lost")} style={{ ...chip, fontSize: 13, color: "var(--app-text)" }}>Gugur</button>}
+                  {owners && owners.length > 1 && <button onClick={() => { raSave.reset(); setReassign({ deal: d, to: d.ownerUid || "" }); }} style={{ ...chip, fontSize: 13, color: "var(--app-text)" }}>Pindah pemilik</button>}
+                  <button className="sp-del" onClick={() => setRemoving(d)} aria-label={`Hapus ${d.contactName}`} style={{ ...chip, fontSize: 13, color: "color-mix(in srgb, #dc2626 70%, var(--app-text))", borderColor: "#dc262640" }}>Hapus</button>
                 </div>
               </div>
             );
@@ -322,12 +341,17 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
         </div>
       )}
 
+      {removing && (
+        <ConfirmSheet title={`Hapus ${removing.contactName}?`} onConfirm={() => remove(removing)} onClose={() => setRemoving(null)}>
+          Deal ini dan angkanya ikut hilang dari report. Ga bisa dibalikin.
+        </ConfirmSheet>
+      )}
       {draft && (
-        <div className="modal-overlay" onClick={() => setDraft(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 480 }}>
+        <div className="modal-overlay" onClick={() => { if (!chatSave.busy) closeChat(); }}>
+          <form onSubmit={e => { e.preventDefault(); saveChat(); }} onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 480 }}>
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 16 }}>Chat masuk</div>
             <label htmlFor="ch-name" style={label}>Nama customer</label>
-            <input id="ch-name" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="mis. Pak Andri" style={{ ...inputStyle, marginBottom: 12 }} />
+            <input id="ch-name" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="mis. Pak Budi" style={{ ...inputStyle, marginBottom: 12 }} />
             <label htmlFor="ch-phone" style={label}>No. WhatsApp (opsional)</label>
             <input id="ch-phone" type="tel" value={draft.phone} onChange={e => setDraft({ ...draft, phone: e.target.value })} placeholder="08…" style={{ ...inputStyle, marginBottom: 12 }} />
             {owners && owners.length > 1 && (
@@ -338,7 +362,7 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
                 </select>
               </>
             )}
-            <div id="ch-src" style={label}>Dari mana dia datang?</div>
+            <div id="ch-src" style={{ ...label, fontSize: 13, fontWeight: 600, color: "var(--app-sub)" }}>Dari mana dia datang?</div>
             <SourcePicker id="ch-src" value={draft.channel} onChange={c => setDraft({ ...draft, channel: c })} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
               <div>
@@ -352,8 +376,8 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
             </div>
             <label htmlFor="ch-heard" style={{ ...label, marginTop: 12 }}>&quot;Dari mana tahu kami?&quot; (jawaban customer, opsional)</label>
             <input id="ch-heard" value={draft.heardFrom} onChange={e => setDraft({ ...draft, heardFrom: e.target.value })} placeholder="mis. liat video pasang lampu di TikTok" style={{ ...inputStyle, marginBottom: 12 }} />
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, cursor: "pointer" }}>
-              <input type="checkbox" checked={draft.paidNow} onChange={e => setDraft({ ...draft, paidNow: e.target.checked })} />
+            <label className="sp-tap" style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 14, cursor: "pointer", minHeight: 44 }}>
+              <input type="checkbox" checked={draft.paidNow} style={{ width: 20, height: 20, flexShrink: 0 }} onChange={e => setDraft({ ...draft, paidNow: e.target.checked })} />
               Udah lunas (buat ngisi transaksi lama)
             </label>
             {draft.paidNow && (
@@ -369,17 +393,19 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
               </div>
             )}
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 10 }}>Sumber dikunci setelah disimpan. Kalau sekarang &quot;Ga tau&quot;, masih bisa diisi sekali pas deal lunas.</div>
-            <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-              <button onClick={saveChat} disabled={!draft.name.trim() || (draft.paidNow && !n0(draft.amount))} style={{ ...btnPrimary, opacity: !draft.name.trim() || (draft.paidNow && !n0(draft.amount)) ? 0.5 : 1 }}>Simpan chat</button>
-              <button onClick={() => setDraft(null)} style={btnMuted}>Batal</button>
+            <FormNote why={!draft.name.trim() ? "Isi nama customer dulu." : draft.paidNow && !n0(draft.amount) ? "Isi nominal lunasnya dulu." : ""} err={chatSave.err} />
+            <div className="sp-form-foot">
+              <button type="button" onClick={closeChat} disabled={chatSave.busy} style={btnMuted}>Batal</button>
+              <button type="submit" disabled={!draft.name.trim() || (draft.paidNow && !n0(draft.amount)) || chatSave.busy} style={{ ...btnPrimary, opacity: !draft.name.trim() || (draft.paidNow && !n0(draft.amount)) || chatSave.busy ? 0.5 : 1 }}>{chatSave.busy ? "Menyimpan…" : "Simpan chat"}</button>
             </div>
-          </div>
+          </form>
+          {chatAsk}
         </div>
       )}
 
       {move && (
-        <div className="modal-overlay" onClick={() => setMove(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 440 }}>
+        <div className="modal-overlay" onClick={() => { if (!moveSave.busy) setMove(null); }}>
+          <form onSubmit={e => { e.preventDefault(); doMove(); }} onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 440 }}>
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 4 }}>{move.deal.contactName} → {STAGE_LABEL[move.to]}</div>
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 16 }}>Tanggalnya kesimpen buat ngitung funnel dan lama closing.</div>
             {(move.to === "quoted" || move.to === "paid") && (
@@ -403,27 +429,29 @@ export function Pipeline({ path, deals, extra, showOwner, owners, onEvent }: {
                 <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 8 }}>Boleh tetap &quot;Ga tau&quot; — tapi kehitung di baris &quot;belum ketahuan&quot; di report.</div>
               </div>
             )}
-            <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-              <button onClick={doMove} disabled={move.to === "paid" && !n0(move.amount)} style={{ ...btnPrimary, opacity: move.to === "paid" && !n0(move.amount) ? 0.5 : 1 }}>Simpan</button>
-              <button onClick={() => setMove(null)} style={btnMuted}>Batal</button>
+            <FormNote why={move.to === "paid" && !n0(move.amount) ? "Isi nominal lunasnya dulu." : ""} err={moveSave.err} />
+            <div className="sp-form-foot">
+              <button type="button" onClick={() => setMove(null)} disabled={moveSave.busy} style={btnMuted}>Batal</button>
+              <button type="submit" disabled={(move.to === "paid" && !n0(move.amount)) || moveSave.busy} style={{ ...btnPrimary, opacity: (move.to === "paid" && !n0(move.amount)) || moveSave.busy ? 0.5 : 1 }}>{moveSave.busy ? "Menyimpan…" : "Simpan"}</button>
             </div>
-          </div>
+          </form>
         </div>
       )}
       {reassign && (
-        <div className="modal-overlay" onClick={() => setReassign(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 400 }}>
+        <div className="modal-overlay" onClick={() => { if (!raSave.busy) setReassign(null); }}>
+          <form onSubmit={e => { e.preventDefault(); doReassign(); }} onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 400 }}>
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 4 }}>Pindah pemilik</div>
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 14 }}>{reassign.deal.contactName} · sekarang {reassign.deal.ownerName || "—"}</div>
             <label htmlFor="ra-to" style={label}>Ke</label>
             <select id="ra-to" value={reassign.to} onChange={e => setReassign({ ...reassign, to: e.target.value })} style={inputStyle}>
               {(owners || []).map(o => <option key={o.uid} value={o.uid}>{o.name}</option>)}
             </select>
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={doReassign} disabled={reassign.to === reassign.deal.ownerUid} style={{ ...btnPrimary, opacity: reassign.to === reassign.deal.ownerUid ? 0.5 : 1 }}>Pindahin</button>
-              <button onClick={() => setReassign(null)} style={btnMuted}>Batal</button>
+            <FormNote why={reassign.to === reassign.deal.ownerUid ? "Pilih pemilik lain dulu." : ""} err={raSave.err} />
+            <div className="sp-form-foot">
+              <button type="button" onClick={() => setReassign(null)} disabled={raSave.busy} style={btnMuted}>Batal</button>
+              <button type="submit" disabled={reassign.to === reassign.deal.ownerUid || raSave.busy} style={{ ...btnPrimary, opacity: reassign.to === reassign.deal.ownerUid || raSave.busy ? 0.5 : 1 }}>{raSave.busy ? "Memindahkan…" : "Pindahin"}</button>
             </div>
-          </div>
+          </form>
         </div>
       )}
     </div>
@@ -443,56 +471,65 @@ function Content({ clientId, posts }: { clientId: string; posts: Post[] }) {
   const [imp, setImp] = useState<{ rows: Omit<Post, "id">[]; file: string; platform: Platform; raw: Record<string, unknown>[] } | null>(null);
   const space = useSpace();
   const ref = (id: string) => spaceDoc(space, "clients", clientId, "posts", id);
+  const [fileErr, setFileErr] = useState("");
+  const [removing, setRemoving] = useState<Post | null>(null);
+  const postSave = useSave();
+  const impSave = useSave();
+  const postDirty = !!draft && (["title", "views", "likes", "comments", "shares", "saves"] as const).some(k => draft[k].trim());
+  const [closePost, postAsk] = useDiscard(postDirty, () => setDraft(null), "Post ini");
 
   const m = useMemo(() => computeMonth(month, [], posts), [month, posts]);
   const list = posts.filter(p => p.month === month).sort((a, b) => b.views - a.views);
 
   async function savePost() {
     if (!draft || !draft.title.trim()) return;
-    await setDoc(ref(`post_${Date.now()}`), {
-      month, platform: draft.platform, title: draft.title.trim(), format: draft.format,
-      views: n0(draft.views), likes: n0(draft.likes), comments: n0(draft.comments), shares: n0(draft.shares), saves: n0(draft.saves),
-    });
-    setDraft(null);
+    const d = draft;
+    const ok = await postSave.run(() => setDoc(ref(`post_${Date.now()}`), {
+      month, platform: d.platform, title: d.title.trim(), format: d.format,
+      views: n0(d.views), likes: n0(d.likes), comments: n0(d.comments), shares: n0(d.shares), saves: n0(d.saves),
+    }));
+    if (ok) setDraft(null);
   }
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
+    setFileErr("");
     file.arrayBuffer().then(buf => {
       const wb = XLSX.read(new Uint8Array(buf), { type: "array" });
       const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]], { defval: "" });
       setImp({ raw, file: file.name, platform: "Instagram", rows: postsFromRows(raw, month, "Instagram") });
-    }).catch(() => alert("File ga kebaca. Pakai export .xlsx atau .csv dari Meta Business Suite / TikTok Studio."));
+    }).catch(() => setFileErr(`${file.name} ga kebaca. Pakai export .xlsx atau .csv dari Meta Business Suite / TikTok Studio.`));
   }
 
   async function runImport() {
     if (!imp) return;
     const stamp = Date.now();
-    await Promise.all(imp.rows.map((r, i) => setDoc(ref(`post_${stamp}_${i}`), r)));
-    setImp(null);
+    const rows = imp.rows;
+    if (await impSave.run(() => Promise.all(rows.map((r, i) => setDoc(ref(`post_${stamp}_${i}`), r))))) setImp(null);
   }
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+      <div className="sp-deal-bar">
         <label htmlFor="ct-month" style={{ position: "absolute", left: -9999 }}>Bulan</label>
         <select id="ct-month" value={month} onChange={e => setMonth(e.target.value)} style={{ ...inputStyle, width: "auto", fontWeight: 700 }}>
           {monthOptions(monthOf(today())).map(mm => <option key={mm} value={mm}>{monthName(mm)}</option>)}
         </select>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <label style={{ ...btnGhost, display: "inline-flex", alignItems: "center", cursor: "pointer" }}>
-            ⬆ Import export
-            <input type="file" accept=".xlsx,.xls,.csv" onChange={onFile} style={{ display: "none" }} />
+        <div className="sp-actions">
+          <label className="sp-tap" style={{ ...btnGhost, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", position: "relative" }}>
+            ⬆ Import file
+            <input type="file" accept=".xlsx,.xls,.csv" onChange={onFile} aria-label="Import file export Meta / TikTok" style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", cursor: "pointer" }} />
           </label>
-          <button onClick={() => setDraft(blankPost())} style={btnPrimary}>+ Post</button>
+          <button onClick={() => { postSave.reset(); setDraft(blankPost()); }} style={btnPrimary}>+ Post</button>
         </div>
       </div>
+      {fileErr && <div role="alert" style={{ fontSize: 13, marginBottom: 12, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}>{fileErr}</div>}
 
       {m.platforms.length > 0 && (
         <div style={{ ...card, padding: 0, overflowX: "auto", marginBottom: 14 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 460 }}>
+          <table className="sp-rtable" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 460 }}>
             <thead>
               <tr style={{ background: "var(--app-inner)", textAlign: "left" }}>
                 {["Platform", "Post", "Views", "ER (eng ÷ views)", "Save/view", "Share/view"].map(h => <th key={h} style={{ padding: "9px 12px", fontSize: 12, color: "var(--app-muted)", fontWeight: 700 }}>{h}</th>)}
@@ -501,12 +538,12 @@ function Content({ clientId, posts }: { clientId: string; posts: Post[] }) {
             <tbody>
               {m.platforms.map(p => (
                 <tr key={p.platform} style={{ borderTop: "1px solid var(--app-border)", fontVariantNumeric: "tabular-nums" }}>
-                  <td style={{ padding: "9px 12px", fontWeight: 700 }}>{p.platform}</td>
-                  <td style={{ padding: "9px 12px" }}>{p.posts}</td>
-                  <td style={{ padding: "9px 12px" }}>{fmtN(p.views)}</td>
-                  <td style={{ padding: "9px 12px" }}>{pct(p.erViews)}</td>
-                  <td style={{ padding: "9px 12px" }}>{pct(p.savesPerView)}</td>
-                  <td style={{ padding: "9px 12px" }}>{pct(p.sharesPerView)}</td>
+                  <td className="sp-rt-head" style={{ padding: "9px 12px", fontWeight: 700 }}>{p.platform}</td>
+                  <td data-label="Post" style={{ padding: "9px 12px" }}>{p.posts}</td>
+                  <td data-label="Views" style={{ padding: "9px 12px" }}>{fmtN(p.views)}</td>
+                  <td data-label="ER" style={{ padding: "9px 12px" }}>{pct(p.erViews)}</td>
+                  <td data-label="Save/view" style={{ padding: "9px 12px" }}>{pct(p.savesPerView)}</td>
+                  <td data-label="Share/view" style={{ padding: "9px 12px" }}>{pct(p.sharesPerView)}</td>
                 </tr>
               ))}
             </tbody>
@@ -528,15 +565,20 @@ function Content({ clientId, posts }: { clientId: string; posts: Post[] }) {
                   {p.platform}{p.format ? ` · ${p.format}` : ""} · {fmtN(p.views)} views · {fmtN(p.likes)} like · {fmtN(p.comments)} komen · {fmtN(p.shares)} share · {fmtN(p.saves)} save
                 </div>
               </div>
-              <button onClick={() => deleteDoc(ref(p.id))} aria-label={`Hapus ${p.title}`} style={{ ...chip, color: "#dc2626", borderColor: "#dc262640" }}>Hapus</button>
+              <button onClick={() => setRemoving(p)} aria-label={`Hapus ${p.title}`} style={{ ...chip, fontSize: 13, flexShrink: 0, color: "color-mix(in srgb, #dc2626 70%, var(--app-text))", borderColor: "#dc262640" }}>Hapus</button>
             </div>
           ))}
         </div>
       )}
 
+      {removing && (
+        <ConfirmSheet title="Hapus post ini?" onConfirm={() => deleteDoc(ref(removing.id))} onClose={() => setRemoving(null)}>
+          <b>{removing.title}</b> dan angkanya ikut hilang dari report {monthName(month)}.
+        </ConfirmSheet>
+      )}
       {draft && (
-        <div className="modal-overlay" onClick={() => setDraft(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 460 }}>
+        <div className="modal-overlay" onClick={() => { if (!postSave.busy) closePost(); }}>
+          <form onSubmit={e => { e.preventDefault(); savePost(); }} onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 460 }}>
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 16 }}>Post {monthName(month)}</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
               <div>
@@ -553,7 +595,7 @@ function Content({ clientId, posts }: { clientId: string; posts: Post[] }) {
               </div>
             </div>
             <label htmlFor="po-title" style={label}>Judul / isi konten</label>
-            <input id="po-title" value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} placeholder="mis. Video pasang karpet iCAR" style={{ ...inputStyle, marginBottom: 10 }} />
+            <input id="po-title" value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} placeholder="mis. Video produk baru" style={{ ...inputStyle, marginBottom: 10 }} />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: 8 }}>
               {(["views", "likes", "comments", "shares", "saves"] as const).map(k => (
                 <div key={k}>
@@ -563,16 +605,18 @@ function Content({ clientId, posts }: { clientId: string; posts: Post[] }) {
               ))}
             </div>
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 8 }}>Reach sengaja ga dicatat: dijumlah antar post hasilnya selalu salah.</div>
-            <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-              <button onClick={savePost} disabled={!draft.title.trim()} style={{ ...btnPrimary, opacity: draft.title.trim() ? 1 : 0.5 }}>Simpan post</button>
-              <button onClick={() => setDraft(null)} style={btnMuted}>Batal</button>
+            <FormNote why={draft.title.trim() ? "" : "Isi judul / isi kontennya dulu."} err={postSave.err} />
+            <div className="sp-form-foot">
+              <button type="button" onClick={closePost} disabled={postSave.busy} style={btnMuted}>Batal</button>
+              <button type="submit" disabled={!draft.title.trim() || postSave.busy} style={{ ...btnPrimary, opacity: draft.title.trim() && !postSave.busy ? 1 : 0.5 }}>{postSave.busy ? "Menyimpan…" : "Simpan post"}</button>
             </div>
-          </div>
+          </form>
+          {postAsk}
         </div>
       )}
 
       {imp && (
-        <div className="modal-overlay" onClick={() => setImp(null)}>
+        <div className="modal-overlay" onClick={() => { if (!impSave.busy) setImp(null); }}>
           <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 480 }}>
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 6 }}>Import {imp.file}</div>
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 14 }}>
@@ -590,9 +634,10 @@ function Content({ clientId, posts }: { clientId: string; posts: Post[] }) {
               ))}
               {imp.rows.length === 0 && <div style={{ padding: 12, fontSize: 12, color: "var(--app-muted)" }}>Ga ada baris yang punya angka views/like/komen/share/save.</div>}
             </div>
-            <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-              <button onClick={runImport} disabled={!imp.rows.length} style={{ ...btnPrimary, opacity: imp.rows.length ? 1 : 0.5 }}>Import {imp.rows.length} post</button>
-              <button onClick={() => setImp(null)} style={btnMuted}>Batal</button>
+            <FormNote err={impSave.err} />
+            <div className="sp-form-foot">
+              <button onClick={() => setImp(null)} disabled={impSave.busy} style={btnMuted}>Batal</button>
+              <button onClick={runImport} disabled={!imp.rows.length || impSave.busy} style={{ ...btnPrimary, opacity: imp.rows.length && !impSave.busy ? 1 : 0.5 }}>{impSave.busy ? "Mengimpor…" : `Import ${imp.rows.length} post`}</button>
             </div>
           </div>
         </div>
@@ -645,6 +690,8 @@ function Report({ client, deals, posts, reports }: { client: Client; deals: Deal
   const [text, setText] = useState("");
   const [copied, setCopied] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [reopen, setReopen] = useState(false);
+  const [copyErr, setCopyErr] = useState(false);
   const space = useSpace();
   const business = useBusiness(space);
   useEffect(() => { setText(frozen?.narrative || narrative(live, liveBase, client.name)); },
@@ -657,12 +704,12 @@ function Report({ client, deals, posts, reports }: { client: Client; deals: Deal
     await setDoc(ref, JSON.parse(JSON.stringify({ month, numbers: live, base: liveBase, narrative: text, frozenAt: Date.now() })));
   }
   async function unfreeze() {
-    if (!confirm("Buka lagi report ini? Angkanya dihitung ulang dari data sekarang.")) return;
     await deleteDoc(ref);
   }
   const share = shareText(m, text);
   async function copy() {
-    try { await navigator.clipboard.writeText(share); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* user can select the text */ }
+    setCopyErr(false);
+    try { await navigator.clipboard.writeText(share); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { setCopyErr(true); }
   }
 
   const unknown = m.bySource.find(s => s.channel === "Ga tau");
@@ -684,7 +731,7 @@ function Report({ client, deals, posts, reports }: { client: Client; deals: Deal
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+          <div className="sp-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
             <Tile k="Omzet lunas" v={juta(m.revenue)} d={delta(m.revenue, b.revenue, "money")} />
             <Tile k="Deal lunas" v={fmtN(m.paidCount)} d={delta(m.paidCount, b.paidCount, "count")} />
             <Tile k="Chat masuk" v={fmtN(m.leads)} d={delta(m.leads, b.leads, "count")} />
@@ -741,7 +788,7 @@ function Report({ client, deals, posts, reports }: { client: Client; deals: Deal
 
           {m.platforms.length > 0 && (
             <div style={{ ...card, padding: 0, overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 480 }}>
+              <table className="sp-rtable" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 480 }}>
                 <thead>
                   <tr style={{ background: "var(--app-inner)", textAlign: "left" }}>
                     {["Platform", "Post", "Views", "ER", "Chat", "Omzet"].map(h => <th key={h} style={{ padding: "9px 12px", fontSize: 12, color: "var(--app-muted)", fontWeight: 700 }}>{h}</th>)}
@@ -750,12 +797,12 @@ function Report({ client, deals, posts, reports }: { client: Client; deals: Deal
                 <tbody>
                   {m.platforms.map(p => (
                     <tr key={p.platform} style={{ borderTop: "1px solid var(--app-border)", fontVariantNumeric: "tabular-nums" }}>
-                      <td style={{ padding: "9px 12px", fontWeight: 700 }}>{p.platform}</td>
-                      <td style={{ padding: "9px 12px" }}>{p.posts}</td>
-                      <td style={{ padding: "9px 12px" }}>{fmtN(p.views)}</td>
-                      <td style={{ padding: "9px 12px" }}>{p.views ? pct(p.erViews) : "—"}</td>
-                      <td style={{ padding: "9px 12px" }}>{p.leads}</td>
-                      <td style={{ padding: "9px 12px" }}>{juta(p.revenue)}</td>
+                      <td className="sp-rt-head" style={{ padding: "9px 12px", fontWeight: 700 }}>{p.platform}</td>
+                      <td data-label="Post" style={{ padding: "9px 12px" }}>{p.posts}</td>
+                      <td data-label="Views" style={{ padding: "9px 12px" }}>{fmtN(p.views)}</td>
+                      <td data-label="ER" style={{ padding: "9px 12px" }}>{p.views ? pct(p.erViews) : "—"}</td>
+                      <td data-label="Chat" style={{ padding: "9px 12px" }}>{p.leads}</td>
+                      <td data-label="Omzet" style={{ padding: "9px 12px" }}>{juta(p.revenue)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -786,20 +833,26 @@ function Report({ client, deals, posts, reports }: { client: Client; deals: Deal
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>
               Ditulisin dari angka di atas. Rapiin kalimatnya, terus bekukan biar angka bulan ini ga berubah lagi.
             </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+            <div className="sp-actions" style={{ marginTop: 12 }}>
               {!frozen
                 ? <button onClick={freeze} style={btnPrimary}>Bekukan report</button>
-                : <button onClick={unfreeze} style={btnMuted}>Buka lagi</button>}
-              <a href={`https://wa.me/?text=${encodeURIComponent(share)}`} target="_blank" rel="noreferrer" style={{ ...btnWA, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Kirim via WA</a>
+                : <button onClick={() => setReopen(true)} style={btnMuted}>Buka lagi</button>}
+              <a className="sp-tap" href={`https://wa.me/?text=${encodeURIComponent(share)}`} target="_blank" rel="noreferrer" style={{ ...btnWA, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>Kirim via WA</a>
               <button onClick={() => setPrinting(true)} style={btnGhost}>Cetak / PDF</button>
               <button onClick={copy} style={btnGhost}>{copied ? "✓ Tersalin" : "Salin teks"}</button>
             </div>
+            {copyErr && <div role="alert" style={{ fontSize: 13, marginTop: 8, color: "var(--app-sub)" }}>Ga bisa nyalin otomatis. Pilih teks ringkasan di atas, lalu Salin.</div>}
           </div>
 
           <div style={{ fontSize: 12, color: "var(--app-muted)", lineHeight: 1.6 }}>
             Pembanding = rata-rata 3 bulan sebelumnya yang ada datanya. Bulan pertama ditulis &quot;bulan dasar&quot;. Angka di bawah 10 ga dikasih persen. ER = (like + komen + share + save) ÷ views. Omzet dihitung dari tanggal lunas; funnel dari tanggal chat masuk. Reach ga dijumlah.
           </div>
         </div>
+      )}
+      {reopen && (
+        <ConfirmSheet title="Buka lagi report ini?" action="Buka lagi" busyLabel="Membuka…" onConfirm={unfreeze} onClose={() => setReopen(false)}>
+          Angka {monthName(month)} dihitung ulang dari data sekarang. Bisa dibekukan lagi kapan aja.
+        </ConfirmSheet>
       )}
       {printing && <ReportSheet clientName={client.name} business={business} m={m} b={b} narrative={text} threshold={threshold} frozenAt={frozen?.frozenAt} onClose={() => setPrinting(false)} />}
     </div>

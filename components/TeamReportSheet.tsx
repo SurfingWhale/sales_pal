@@ -1,9 +1,9 @@
 "use client";
 
-import { createPortal } from "react-dom";
 import { juta, monthName } from "@/lib/funnel";
 import type { SellerRow } from "@/lib/guild";
-import { btnMuted, btnPrimary } from "@/components/ui";
+import { ReportDoc, reportName } from "@/lib/reportPdf";
+import ReportShell from "@/components/ReportShell";
 
 // The guild's team report on paper (PRD-007 §2.3): totals, one row per seller
 // with target and progress. Black on white for printing; uses PrintSheet's
@@ -28,19 +28,30 @@ interface Props {
 }
 
 export default function TeamReportSheet({ guildName, month, rows, revenue, paidCount, leads, compare, frozenAt, scope, onClose }: Props) {
-  if (typeof document === "undefined") return null;
   const cell: React.CSSProperties = { padding: "6px", borderBottom: `1px solid ${rule}`, fontSize: 11.5 };
   const num: React.CSSProperties = { ...cell, textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
   const th = (right?: boolean): React.CSSProperties => ({ ...cell, fontSize: 9.5, color: soft, letterSpacing: "1px", fontWeight: 600, borderBottom: `2px solid ${ink}`, textAlign: right ? "right" : "left" });
   const target = rows.reduce((a, r) => a + r.targetRevenue, 0);
 
-  return createPortal(
-    <div className="modal-overlay print-overlay" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} className="print-frame" style={{ width: "100%", maxWidth: 760, maxHeight: "92vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-        <div className="no-print" style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button onClick={() => window.print()} style={btnPrimary}>Cetak / PDF</button>
-          <button onClick={onClose} style={btnMuted}>Tutup</button>
-        </div>
+  const status = frozenAt ? `Final per ${new Date(frozenAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}` : "Draft — angka masih bisa berubah";
+  const kpis: string[][] = [
+    ["Omzet lunas", juta(revenue), ...(compare ? [compare.revenue] : [])],
+    ["Deal lunas", fmt(paidCount), ...(compare ? [compare.paidCount] : [])],
+    ["Chat masuk", fmt(leads), ...(compare ? [compare.leads] : [])],
+    ...(target > 0 ? [["Capaian target tim", `${Math.round((revenue / target) * 100)}%`, ...(compare ? [`target ${juta(target)}`] : [])]] : []),
+  ];
+  const doc: ReportDoc = {
+    kicker: scope === "team" ? "REPORT SALES TIM" : "REPORT SALES PRIBADI", title: guildName, subtitle: monthName(month), meta: [status],
+    sections: [
+      { title: "Angka utama", table: { head: ["Metrik", "Bulan ini", ...(compare ? ["Dibanding rata-rata 3 bulan"] : [])], widths: compare ? [4, 2, 4] : [6, 3], bold: [1], rows: kpis } },
+      { title: "Per sales", table: { head: ["Sales", "Chat", "Penawaran", "Lunas", "Omzet", "Target", "Capaian"], widths: [4, 1.3, 2, 1.3, 2, 2, 1.7], bold: [0, 4],
+        rows: rows.map((r, i) => [`${i + 1}. ${r.name}`, String(r.leads), String(r.quoted), String(r.paid), juta(r.revenue), r.targetRevenue ? juta(r.targetRevenue) : "—", r.targetRevenue ? `${Math.round((r.revenue / r.targetRevenue) * 100)}%` : "—"]) } },
+    ],
+    footer: "Omzet & deal lunas dihitung dari tanggal lunas; chat & penawaran dari chat yang masuk bulan ini. Capaian = omzet lunas / target omzet. Pembanding = rata-rata 3 bulan sebelumnya yang punya data; bulan pertama ditulis \"bulan dasar\"; di bawah 10 kejadian ditulis tanpa persen.",
+  };
+
+  return (
+    <ReportShell title={`Report ${guildName} · ${monthName(month)}`} fileName={reportName(guildName, month)} doc={doc} onClose={onClose}>
         <div className="print-root" style={{ background: "#fff", color: ink, borderRadius: 8, padding: "36px 34px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 20, flexWrap: "wrap", borderBottom: `2px solid ${ink}`, paddingBottom: 14 }}>
             <div>
@@ -48,9 +59,7 @@ export default function TeamReportSheet({ guildName, month, rows, revenue, paidC
               <div style={{ fontSize: 22, fontWeight: 700, marginTop: 2 }}>{guildName}</div>
               <div style={{ fontSize: 13, fontWeight: 600 }}>{monthName(month)}</div>
             </div>
-            <div style={{ textAlign: "right", fontSize: 11, color: soft }}>
-              {frozenAt ? `Final per ${new Date(frozenAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}` : "Draft — angka masih bisa berubah"}
-            </div>
+            <div style={{ textAlign: "right", fontSize: 11, color: soft }}>{status}</div>
           </div>
 
           <div style={{ marginTop: 22 }}>
@@ -68,7 +77,8 @@ export default function TeamReportSheet({ guildName, month, rows, revenue, paidC
 
           <div style={{ marginTop: 22, breakInside: "avoid" }}>
             <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "1.5px", marginBottom: 8 }}>PER SALES</div>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 520 }}>
               <thead><tr>{["#", "SALES", "CHAT", "PENAWARAN", "LUNAS", "OMZET", "TARGET", "CAPAIAN"].map((h, i) => <th key={h} style={th(i > 1)}>{h}</th>)}</tr></thead>
               <tbody>{rows.map((r, i) => (
                 <tr key={r.uid}>
@@ -81,6 +91,7 @@ export default function TeamReportSheet({ guildName, month, rows, revenue, paidC
                 </tr>
               ))}</tbody>
             </table>
+            </div>
           </div>
 
           <div style={{ marginTop: 22, fontSize: 9.5, color: soft, lineHeight: 1.6, borderTop: `1px solid ${rule}`, paddingTop: 10 }}>
@@ -88,8 +99,6 @@ export default function TeamReportSheet({ guildName, month, rows, revenue, paidC
             Pembanding = rata-rata 3 bulan sebelumnya yang punya data; bulan pertama ditulis &quot;bulan dasar&quot;; di bawah 10 kejadian ditulis tanpa persen.
           </div>
         </div>
-      </div>
-    </div>,
-    document.body
+    </ReportShell>
   );
 }

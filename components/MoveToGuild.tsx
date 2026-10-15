@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Role, isManager } from "@/lib/guild";
 import { MOVE_GROUPS, MoveGroup, countMoved, countPersonal, moveToGuild, restoreFromGuild, setMainGuild } from "@/lib/moveToGuild";
+import ConfirmSheet from "@/components/ConfirmSheet";
 import { btnMuted, btnPrimary, card, chip, font, modalBox } from "@/components/ui";
 
 // "Data pribadi kamu" on the Guild page (docs/prd/PRD-007 §2.7): what's still
@@ -17,6 +18,7 @@ export default function MoveToGuild({ me, guild, role, onUseGuild }: {
   const [busy, setBusy] = useState<number | null>(null);
   const [msg, setMsg] = useState("");
   const [tick, setTick] = useState(0);
+  const [asking, setAsking] = useState(false);
   const manager = isManager(role);
 
   useEffect(() => {
@@ -45,7 +47,6 @@ export default function MoveToGuild({ me, guild, role, onUseGuild }: {
   }
 
   async function back() {
-    if (!confirm(`Balikin ${moved} data dari ${guild.name} ke Pribadi? Versi terakhir di guild yang dibawa pulang, lalu dihapus dari guild.`)) return;
     setBusy(0); setMsg("");
     try {
       const n = await restoreFromGuild(me.uid, guild.id);
@@ -69,12 +70,12 @@ export default function MoveToGuild({ me, guild, role, onUseGuild }: {
             {moved ? ` ${moved} data udah dipindah ke sini.` : ""}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div className="sp-actions">
           {total > 0 && (
             <button disabled={busy !== null} onClick={() => setPicking({ groups: MOVE_GROUPS.filter(g => counts![g.id]).map(g => g.id), catalogs: manager, main: true })}
               style={{ ...btnPrimary, padding: "9px 16px" }}>Bawa ke {guild.name}</button>
           )}
-          {moved > 0 && <button disabled={busy !== null} onClick={back} style={{ ...btnMuted, padding: "9px 16px" }}>Balikin ke Pribadi</button>}
+          {moved > 0 && <button disabled={busy !== null} onClick={() => setAsking(true)} style={{ ...btnMuted, padding: "9px 16px" }}>Balikin ke Pribadi</button>}
         </div>
       </div>
       <div role="status" style={{ fontSize: 12, color: "var(--app-sub)", marginTop: msg || busy !== null ? 10 : 0 }}>
@@ -94,7 +95,7 @@ export default function MoveToGuild({ me, guild, role, onUseGuild }: {
                 const n = counts?.[g.id] || 0;
                 return (
                   <button key={g.id} aria-pressed={on} disabled={!n} onClick={() => setPicking({ ...picking, groups: on ? picking.groups.filter(x => x !== g.id) : [...picking.groups, g.id] })}
-                    style={{ ...chip, minHeight: 38, textAlign: "left", fontSize: 13, opacity: n ? 1 : 0.5, ...(on ? { color: "var(--app-text)", border: "1px solid #005eb0", background: "#005eb014" } : {}) }}>
+                    style={{ ...chip, minHeight: 44, textAlign: "left", fontSize: 13, opacity: n ? 1 : 0.5, ...(on ? { color: "var(--app-text)", border: "1px solid #005eb0", background: "#005eb014" } : {}) }}>
                     {on ? "☑" : "☐"} {g.label} · {n}
                   </button>
                 );
@@ -102,22 +103,28 @@ export default function MoveToGuild({ me, guild, role, onUseGuild }: {
             </div>
             {manager && (
               <button aria-pressed={picking.catalogs} onClick={() => setPicking({ ...picking, catalogs: !picking.catalogs })}
-                style={{ ...chip, minHeight: 38, width: "100%", textAlign: "left", fontSize: 13, marginBottom: 6, ...(picking.catalogs ? { color: "var(--app-text)", border: "1px solid #005eb0", background: "#005eb014" } : {}) }}>
+                style={{ ...chip, minHeight: 44, width: "100%", textAlign: "left", fontSize: 13, marginBottom: 6, ...(picking.catalogs ? { color: "var(--app-text)", border: "1px solid #005eb0", background: "#005eb014" } : {}) }}>
                 {picking.catalogs ? "☑" : "☐"} Salin Paket, template pesan, kampanye & info bisnis (yang belum ada di guild)
               </button>
             )}
             <button aria-pressed={picking.main} onClick={() => setPicking({ ...picking, main: !picking.main })}
-              style={{ ...chip, minHeight: 38, width: "100%", textAlign: "left", fontSize: 13, marginBottom: 16, ...(picking.main ? { color: "var(--app-text)", border: "1px solid #005eb0", background: "#005eb014" } : {}) }}>
+              style={{ ...chip, minHeight: 44, width: "100%", textAlign: "left", fontSize: 13, marginBottom: 16, ...(picking.main ? { color: "var(--app-text)", border: "1px solid #005eb0", background: "#005eb014" } : {}) }}>
               {picking.main ? "☑" : "☐"} Jadiin {guild.name} ruang kerja utama — data baru & lead website masuk sini
             </button>
-            <div style={{ display: "flex", gap: 10 }}>
+            {!picking.groups.length && <div role="status" style={{ fontSize: 13, color: "var(--app-muted)", marginBottom: 4 }}>Pilih minimal satu yang mau dibawa.</div>}
+            <div className="sp-form-foot">
+              <button onClick={() => setPicking(null)} disabled={busy !== null} style={btnMuted}>Batal</button>
               <button onClick={go} disabled={busy !== null || !picking.groups.length} style={{ ...btnPrimary, opacity: picking.groups.length ? 1 : 0.5 }}>
                 {busy !== null ? `Memindahkan… ${busy}%` : "Pindahin"}
               </button>
-              <button onClick={() => setPicking(null)} disabled={busy !== null} style={btnMuted}>Batal</button>
             </div>
           </div>
         </div>
+      )}
+      {asking && (
+        <ConfirmSheet title="Balikin ke Pribadi?" action="Balikin" busyLabel="Membalikin…" onConfirm={async () => { back(); }} onClose={() => setAsking(false)}>
+          {moved} data dari {guild.name} dibawa pulang ke Pribadi (versi terakhirnya di guild), lalu dihapus dari guild.
+        </ConfirmSheet>
       )}
     </section>
   );
