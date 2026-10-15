@@ -7,6 +7,13 @@ import { Business, EMPTY_BUSINESS } from "@/lib/billing";
 import { logoImage } from "@/lib/image";
 import { btnMuted, btnPrimary, chip, font, inputStyle, label, modalBox } from "@/components/ui";
 
+// The owner's three studios, ready as dark-on-white PNGs (public/brand-logos).
+const BRANDS = [
+  { id: "beuntamed", name: "beUntamed", tagline: "Fotografi & video event", src: "/brand-logos/beuntamed.png" },
+  { id: "visufavor", name: "Visufavor", tagline: "Food & product photography", src: "/brand-logos/visufavor.png" },
+  { id: "untmd-sports", name: "UNTMD Sports", tagline: "Fotografi olahraga & padel", src: "/brand-logos/untmd-sports.png" },
+];
+
 // The letterhead on every quote and invoice: logo, name, what you do,
 // contacts, where to transfer, and the terms (QA 11 Okt: "embed logo as
 // trusted dan kirim TNC").
@@ -20,6 +27,17 @@ export default function BusinessEditor({ business, onClose }: { business: Busine
     if (!file) return;
     setMsg("");
     try { setB({ ...b, logo: await logoImage(file) }); } catch (e) { setMsg((e as Error).message); }
+  }
+
+  async function pickBrand(br: (typeof BRANDS)[number]) {
+    setMsg("");
+    try {
+      const blob = await (await fetch(br.src)).blob();
+      const logo = await logoImage(new File([blob], `${br.id}.png`, { type: "image/png" }));
+      setB(cur => ({ ...cur, logo, name: cur.name || br.name, tagline: cur.tagline || br.tagline }));
+    } catch (e) {
+      setMsg((e as Error).message || "Logo gagal dimuat.");
+    }
   }
 
   async function save() {
@@ -58,6 +76,19 @@ export default function BusinessEditor({ business, onClose }: { business: Busine
               <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={e => pickLogo(e.target.files?.[0])} style={{ position: "absolute", width: 1, height: 1, opacity: 0 }} />
             </label>
             {b.logo && <button onClick={() => setB({ ...b, logo: "" })} style={{ ...chip, minHeight: 36 }}>Hapus</button>}
+          </div>
+        </div>
+
+        <div role="group" aria-label="Logo brand lo" style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>Atau pilih logo brand lo:</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {BRANDS.map(br => (
+              <button key={br.id} onClick={() => pickBrand(br)} aria-label={`Pakai logo ${br.name}`}
+                style={{ ...chip, minHeight: 52, padding: "6px 12px", background: "#fff", border: "1px solid var(--app-border)", display: "inline-flex", alignItems: "center" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={br.src} alt="" style={{ height: 28, maxWidth: 110, objectFit: "contain" }} />
+              </button>
+            ))}
           </div>
         </div>
 
