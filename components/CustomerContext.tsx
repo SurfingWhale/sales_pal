@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import AnimalArt from "@/components/AnimalArt";
 import { longDate } from "@/lib/billing";
 import { archetypes } from "@/lib/salespal-data";
 import { guessArchetype } from "@/lib/profile";
@@ -105,7 +106,7 @@ export default function CustomerContext({ p, v, strategy, stage, now, jobs, defa
                 {type && (
                   <div style={{ display: "contents" }}>
                     <dt style={{ color: "var(--app-muted)" }}>Gaya</dt>
-                    <dd style={{ margin: 0 }}>{type.animal} {type.name} (tebakan) · {type.comStyle}</dd>
+                    <dd style={{ margin: 0 }}><AnimalArt id={type.id} size={22} /> {type.name} (tebakan) · {type.comStyle}</dd>
                   </div>
                 )}
               </dl>

@@ -1,6 +1,7 @@
 "use client";
 
 import { ink } from "@/components/ui";
+import AnimalArt from "@/components/AnimalArt";
 import { useRef, useState } from "react";
 import { archetypes, objections, scriptMatrix } from "@/lib/salespal-data";
 
@@ -110,7 +111,7 @@ export default function SalesSimulator() {
                   (e.currentTarget as HTMLElement).style.background = "var(--app-card)";
                 }}
               >
-                <div aria-hidden="true" style={{ fontSize: 34, marginBottom: 10 }}>{a.animal}</div>
+                <div style={{ marginBottom: 10 }}><AnimalArt id={a.id} size={72} /></div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: ink(a.color), fontFamily: "'Plus Jakarta Sans', sans-serif", marginBottom: 6 }}>{a.name}</div>
                 <div style={{ fontSize: 12, color: "var(--app-muted)", lineHeight: 1.6, marginBottom: 14 }}>{a.comStyle}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -137,7 +138,7 @@ export default function SalesSimulator() {
             borderRadius: 12, padding: "14px 20px", marginBottom: 28,
             display: "flex", alignItems: "center", gap: 14,
           }}>
-            <span aria-hidden="true" style={{ fontSize: 28 }}>{archetype.animal}</span>
+            <AnimalArt id={archetype.id} size={48} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: ink(archetype.color) }}>{archetype.name}</div>
               <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{archetype.strategy}</div>
@@ -184,7 +185,7 @@ export default function SalesSimulator() {
               aria-label={`Ganti tipe customer (sekarang ${archetype.name})`}
               style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 40, background: `${archetype.color}0d`, border: `1px solid ${archetype.color}30`, borderRadius: 20, padding: "0 14px", cursor: "pointer", color: "inherit", fontFamily: "inherit" }}
             >
-              <span aria-hidden="true">{archetype.animal}</span>
+              <AnimalArt id={archetype.id} size={28} />
               <span style={{ fontSize: 13, fontWeight: 700, color: ink(archetype.color) }}>{archetype.name}</span>
               <span style={{ fontSize: 12, color: "var(--app-muted)" }}>· ganti</span>
             </button>

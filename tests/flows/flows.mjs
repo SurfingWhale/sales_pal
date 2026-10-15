@@ -326,7 +326,7 @@ export const flows = [
         await t.page.getByRole("button", { name: "Isi manual" }).first().click();
         await t.page.locator("#pf-need").fill("Foto menu baru buat 2 cabang");
         await t.page.locator("#pf-obj").fill("Harganya kemahalan");
-        await t.page.getByRole("button", { name: "🦁 Singa" }).click();
+        await t.page.getByRole("button", { name: "Singa", exact: true }).click();
         await t.page.getByRole("button", { name: "Simpan profil" }).click();
         await expectText(t.page, "Foto menu baru buat 2 cabang");
         await fullProfile(t.page);
