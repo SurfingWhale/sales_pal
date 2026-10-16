@@ -269,8 +269,17 @@ export const flows = [
         const theme = await t.page.evaluate(() => document.documentElement.getAttribute("data-theme"));
         if (theme !== "dark") throw new Error(`theme is ${theme}`);
         await t.page.getByRole("button", { name: /Tampilan/ }).click();
+      });
+      await t.step("pick a profile picture; the header shows it", async () => {
+        await t.page.getByRole("button", { name: "Ganti foto profil" }).click();
+        const pick = t.page.getByRole("dialog", { name: "Foto profil" });
+        await pick.getByRole("radio", { name: "Singa" }).click();
+        await pick.getByRole("button", { name: "Simpan" }).click();
+        await pick.waitFor({ state: "detached" });
+        await t.page.getByRole("dialog", { name: "Profil & Pengaturan" }).getByRole("button", { name: /Foto profil.*Singa/ }).waitFor();
         await t.page.keyboard.press("Escape");
-        await modal(t.page).click({ position: { x: 5, y: 5 } }).catch(() => {});
+        await t.page.getByRole("dialog", { name: "Profil & Pengaturan" }).waitFor({ state: "detached" });
+        await t.page.getByRole("button", { name: "Profil dan pengaturan" }).locator('img[src*="animal-lion"]').waitFor();
       });
     },
   },

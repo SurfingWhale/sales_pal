@@ -254,11 +254,16 @@ export interface GuildLook { color?: string; emblem?: string; logo?: string }
 
 function useGuildLook(gid: string): GuildLook {
   const [look, setLook] = useState<GuildLook>({});
+  // Right after founding or joining, the server may refuse this read for a
+  // moment (the membership write is still landing); a refused listener stops,
+  // so listen again a few times rather than keep the default crest for good.
+  const [retry, setRetry] = useState(0);
+  useEffect(() => { setLook({}); setRetry(0); }, [gid]);
   useEffect(() => {
-    setLook({});
     if (!gid) return;
-    return onSnapshot(doc(db, "guilds", gid, "settings", "look"), s => setLook((s.data() as GuildLook) || {}), () => setLook({}));
-  }, [gid]);
+    return onSnapshot(doc(db, "guilds", gid, "settings", "look"), s => setLook((s.data() as GuildLook) || {}),
+      e => { if ((e as { code?: string }).code === "permission-denied") setTimeout(() => setRetry(r => (r < 6 ? r + 1 : r)), 1200); });
+  }, [gid, retry]);
   return look;
 }
 
