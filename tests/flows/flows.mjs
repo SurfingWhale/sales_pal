@@ -212,6 +212,30 @@ async function ownerLogin(t) {
 // ---------- flows ----------
 export const flows = [
   {
+    // The landing (TasteSkill v2): the hero is a quote you can fill in, and every way in leads to the login.
+    name: "landing: fill the quote, then sign in",
+    async run(t) {
+      const { page, base } = t;
+      await t.step("the landing opens on its headline", async () => { await page.goto(`${base}/`); await page.getByRole("heading", { level: 1, name: "Dari DM sampai lunas." }).waitFor(); });
+      await t.step("the quote follows the name and the package", async () => {
+        await page.locator("#lp-client").fill("Kedai Contoh");
+        await page.getByRole("radiogroup", { name: "Paket" }).getByRole("radio", { name: /Liputan event sehari/ }).click();
+        await page.getByText("DP 50% buat Kedai Contoh").waitFor();
+        await page.getByText("Rp 3.000.000").first().waitFor();
+        const href = await page.getByRole("link", { name: "Kirim contoh ini ke WhatsApp" }).getAttribute("href");
+        if (!href || !decodeURIComponent(href).includes("Kedai Contoh")) throw new Error(`WhatsApp link: ${href}`);
+      });
+      await t.step("the showcase tabs switch", async () => {
+        await page.getByRole("tablist", { name: "Bagian app" }).getByRole("tab", { name: "Guild" }).click();
+        await page.getByRole("heading", { name: "Satu tim, satu angka." }).waitFor();
+      });
+      await t.step("Mulai gratis leads to the login", async () => {
+        await page.getByRole("link", { name: "Mulai gratis" }).click();
+        await page.waitForURL("**/login");
+      });
+    },
+  },
+  {
     name: "sign up and land on the dashboard",
     async run(t) {
       await t.step("login page loads with Google and email options", async () => {
