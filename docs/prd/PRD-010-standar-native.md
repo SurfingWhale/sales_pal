@@ -97,3 +97,11 @@ PROD=1 DEVICE=iphone12 npm run test:flows   # WebKit iPhone 12 (butuh `npx playw
 PROD=1 DEVICE=safari npm run test:flows     # WebKit Safari 1440×900
 NO_AUDIT=1 …                             # matiin audit per langkah (debug cepat)
 ```
+
+## 8. Susulan 16 Okt — Profil & Pengaturan
+
+Owner: "masih belum halus, dan gw belum bisa milih logo profile." Lembar Profil dibikin ulang jadi daftar pengaturan ala Settings iPhone (`components/ProfileSheet.tsx`):
+- **Foto profil bisa dipilih**: avatar 88px di atas (tap = ganti), pilihan Inisial atau 8 karakter (4 orang + 4 binatang). Disimpan di `users/{uid}/settings/profile.avatar` (koleksi `settings` udah dicakup rules). Tombol profil di header ikut nampilin karakternya.
+- **Baris seragam** dalam grup berjudul (Akun · Aplikasi · Versi & data): ikon dalam kotak warna, label 15px, keterangan 13px, nilai atau **switch** di kanan, tinggi ≥ 52px, garis pemisah tipis. Emoji 🔔🧹 diganti ikon; "Matikan/Nyalain" dan "Cek update" yang beda-beda gayanya diganti switch dan aksi teks yang sama.
+- **Logout** sendiri di paling bawah, merah, di tengah.
+- Flow navigasi: pilih Singa → baris "Foto profil · Singa" dan tombol header nampilin gambarnya.

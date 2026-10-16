@@ -11,6 +11,7 @@ import BerandaLearn from "@/components/BerandaLearn";
 import HeatDots from "@/components/HeatDots";
 import { DetailActions, LeadPage, LeadPanel } from "@/components/LeadDetail";
 import Icon, { IconName } from "@/components/Icon";
+import ProfileSheet, { MeAvatar, useMyAvatar } from "@/components/ProfileSheet";
 import { downscaleImage } from "@/lib/image";
 import { registerWorker, takeSharedFile } from "@/lib/share";
 import type { LeadProfile } from "@/lib/profile";
@@ -283,6 +284,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [targetError, setTargetError] = useState("");
   const [savingTarget, setSavingTarget] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const myAvatar = useMyAvatar(user.uid);
   const [updateInfo, setUpdateInfo] = useState<{ latest: string; hasUpdate: boolean; error?: boolean } | null>(null);
   const [clearing, setClearing] = useState(false);
 
@@ -844,9 +846,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               {todo.some(t => t.when <= now) && <span aria-hidden="true" style={{ position: "absolute", top: 10, right: 11, width: 8, height: 8, borderRadius: "50%", background: "#005eb0", boxShadow: "0 0 0 2px var(--app-bg)" }} />}
             </button>
             <button className="sp-iconbtn" onClick={() => { setShowProfile(true); setUpdateInfo(null); }} aria-label="Profil dan pengaturan" title="Profil & pengaturan">
-              <span style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--app-inner)", color: "var(--app-ink-2)", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {(user.displayName || user.email || "U").charAt(0).toUpperCase()}
-              </span>
+              <MeAvatar avatar={myAvatar} name={user.displayName || user.email || "U"} size={34} />
             </button>
           </div>
         </div>
@@ -1167,69 +1167,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       )}
 
       {/* Profile & Settings Modal */}
-      {showProfile && (        <div className="modal-overlay" onClick={() => setShowProfile(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 17, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Profil & Pengaturan</div>
-              <button onClick={() => setShowProfile(false)} aria-label="Tutup" style={{ flexShrink: 0, width: 44, height: 44, margin: "-10px -10px -10px 0", borderRadius: "50%", background: "transparent", border: "none", color: "var(--app-ink-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={18} stroke={2} /></button>
-            </div>
-
-            {/* User */}
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
-              <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#005eb0", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, flexShrink: 0 }}>
-                {(user.displayName || user.email || "U").charAt(0).toUpperCase()}
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.displayName || (user.email || "").split("@")[0]}</div>
-                <div style={{ fontSize: 12, color: "var(--app-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.email}</div>
-              </div>
-            </div>
-
-            {/* Version / update */}
-            <div style={{ background: "var(--app-inner)", borderRadius: 12, padding: 16, marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>Versi aplikasi</div>
-                  <div style={{ fontSize: 12, color: "var(--app-muted)", fontFamily: "monospace", marginTop: 2 }}>{APP_VERSION}</div>
-                </div>
-                <button onClick={checkUpdate} disabled={checkingUpdate} style={{ ...btnPrimary, background: "transparent", color: "var(--brand-text)", border: "1px solid #005eb0", padding: "8px 14px", opacity: checkingUpdate ? 0.6 : 1 }}>
-                  {checkingUpdate ? "Mengecek…" : "Cek update"}
-                </button>
-              </div>
-              {updateInfo && (
-                <div style={{ marginTop: 12, fontSize: 12 }}>
-                  {updateInfo.error ? (
-                    <span style={{ color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}>Gagal cek update. Coba lagi.</span>
-                  ) : updateInfo.hasUpdate ? (
-                    <div>
-                      <div style={{ color: "var(--ok)", fontWeight: 700, marginBottom: 8 }}>🎉 Update tersedia (versi {updateInfo.latest})</div>
-                      <button onClick={clearCacheAndReload} disabled={clearing} style={{ ...btnPrimary, width: "100%" }}>{clearing ? "Memperbarui..." : "Update sekarang"}</button>
-                    </div>
-                  ) : (
-                    <span style={{ color: "var(--app-muted)" }}>✓ Kamu udah di versi terbaru.</span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <button onClick={toggleTheme} aria-pressed={isDark} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: "var(--app-inner)", border: "none", borderRadius: 12, padding: 16, cursor: "pointer", fontFamily: "inherit", color: "var(--app-text)", marginBottom: 12 }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, fontWeight: 700 }}><Icon name={isDark ? "moon" : "sun"} size={18} /> Tampilan</span>
-              <span style={{ fontSize: 12, color: "var(--app-muted)" }}>{isDark ? "Gelap" : "Terang"} · ganti</span>
-            </button>
-            <PushToggle />
-
-            {/* Clear cache */}
-            <button onClick={clearCacheAndReload} disabled={clearing} style={{ width: "100%", background: "var(--app-inner)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 16, textAlign: "left", cursor: "pointer", fontFamily: "inherit", marginBottom: 12, opacity: clearing ? 0.6 : 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--app-text)" }}>🧹 {clearing ? "Membersihkan…" : "Bersihkan cache & muat ulang"}</div>
-              <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>Hapus cache app & muat versi terbaru. Login kamu tetap aman.</div>
-            </button>
-
-            {/* Logout */}
-            <button onClick={handleLogout} style={{ width: "100%", minHeight: 48, background: "transparent", border: "1px solid #ff444440", borderRadius: 12, padding: 14, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-              Logout
-            </button>
-          </div>
-        </div>
+      {showProfile && (
+        <ProfileSheet uid={user.uid} name={user.displayName || ""} email={user.email || ""} version={APP_VERSION} isDark={isDark} onTheme={toggleTheme}
+          onCheckUpdate={checkUpdate} checking={checkingUpdate} update={updateInfo} onRefresh={clearCacheAndReload} refreshing={clearing}
+          onLogout={handleLogout} onClose={() => setShowProfile(false)} />
       )}
 
       {/* Atur target closing */}
