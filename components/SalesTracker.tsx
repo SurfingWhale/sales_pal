@@ -796,8 +796,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           @keyframes sp-edge { to { opacity: 1; } }
         }
         @supports (animation-timeline: view()) {
+          /* A moving ancestor would trap a fixed dialog inside it, so a block
+             that holds an open dialog (or the pinned undo bar) stays still. */
           @media (prefers-reduced-motion: no-preference) {
-            .sp-main > * > :not(.modal-overlay):not(.sp-toast):not([role="tablist"]):not(style) {
+            .sp-main > * > :not(.modal-overlay):not(.sp-toast):not([role="tablist"]):not(style):not(:has(.modal-overlay, .sp-toast, [role="dialog"])) {
               animation: sp-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 45%;
             }
             @keyframes sp-rise { from { transform: translateY(32px) scale(.98); } to { transform: none; } }
