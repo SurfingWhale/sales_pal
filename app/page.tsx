@@ -1,244 +1,304 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import "./landing.css";
 
-const stripItems = [
-  "🗺️ GMaps Scraping → Outscraper",
-  "📩 Cold Email → Instantly.ai",
-  "⚡ AI Scoring → Real-time",
-  "📊 Pipeline → Live",
-  "🤖 Personalization → Claude + GPT",
-  "🎯 7-Touch Formula → Proven",
-  "💡 Rejection Data → Win More",
+// The landing page (TasteSkill v2, "The page is the object"): a studio's
+// quote slip — what SalesPal hands a client on WhatsApp — is the page. The
+// hero slip can be filled in: pick a package, type a name, send it.
+
+const PACKAGES = [
+  { id: "foto", name: "Foto produk", price: 1_500_000 },
+  { id: "fv", name: "Foto + video reels", price: 3_500_000 },
+  { id: "event", name: "Liputan event sehari", price: 6_000_000 },
 ];
+const rp = (n: number) => `Rp ${n.toLocaleString("id-ID")}`;
 
-const features = [
-  { icon: "🗺️", cls: "b", title: "GMaps Lead Mining", desc: "Scrape ribuan potential client berdasarkan kategori, kota, dan rating. Filter bisnis aktif dengan sinyal intent tertinggi." },
-  { icon: "⚡", cls: "g", title: "AI Lead Scoring", desc: "Setiap lead di-score berdasarkan 5 parameter otomatis: website, rating, sosmed, kategori, dan budget signals." },
-  { icon: "📩", cls: "a", title: "Multi-Channel Outreach", desc: "Track email, DM IG, WhatsApp, LinkedIn dalam satu dashboard. Open rate & reply rate real-time." },
-  { icon: "❌", cls: "b", title: "Rejection Intelligence", desc: "Setiap rejection dicatat + lesson learned + follow-up date otomatis. Pattern rejection jadi insight closing." },
-  { icon: "📊", cls: "g", title: "Sales Pipeline Visual", desc: "Cold → Warm → Hot → Closed. Total pipeline value, conversion rate, dan metrik penting real-time." },
-  { icon: "🤖", cls: "a", title: "AI Playbook Built-in", desc: "Panduan step-by-step scraping, 7-touch sequence, stack tools AI terbaik, dan benchmark metrics dalam app." },
-];
+// The app, drawn as itself (data-ui): what each moment of the day looks like.
+function HuntingUI() {
+  return (
+    <div data-ui="" aria-label="Contoh layar Hunting">
+      <div className="row"><b>@tokokue</b><span className="badge warm">Baru</span></div>
+      <div className="muted">“ada yang open jasa foto katalog buat UMKM? budget ramah ya”</div>
+      <div className="stage"><span className="chip on">1. Intro</span><span className="chip">2. Follow-up</span><span className="chip">3. Gali</span></div>
+      <div className="msg">Halo Toko Kue! Aku liat kamu lagi nyari foto katalog. Aku biasa pegang yang kayak gini. Boleh aku kirim contoh hasil + kisaran harganya?</div>
+      <div className="btns"><span className="b">Copy</span><span className="b blue">Copy &amp; DM</span></div>
+    </div>
+  );
+}
+function QuoteUI() {
+  return (
+    <div data-ui="" aria-label="Contoh penawaran">
+      <div className="row"><b>Penawaran Q-0142</b><span className="badge">Disetujui</span></div>
+      <div className="muted">Toko Kue · Foto katalog 20 produk</div>
+      <div className="sep" />
+      <div className="row"><span>Foto produk (20 item)</span><span className="tnum">Rp 1.500.000</span></div>
+      <div className="row"><span>Edit &amp; retouch</span><span className="tnum">Rp 500.000</span></div>
+      <div className="sep" />
+      <div className="row"><b>Total</b><b className="tnum">Rp 2.000.000</b></div>
+      <div className="row" style={{ marginTop: 12 }}><span className="b wa" style={{ width: "100%" }}>Jadiin invoice → kirim WA</span></div>
+    </div>
+  );
+}
+function InvoiceUI() {
+  return (
+    <div data-ui="" aria-label="Contoh invoice lunas">
+      <div className="row"><b>INV-0142</b><span className="badge">Lunas</span></div>
+      <div className="muted">Toko Kue · dibayar 2 kali</div>
+      <div className="sep" />
+      <div className="row"><span>DP 50%</span><span className="tnum">Rp 1.000.000</span></div>
+      <div className="row"><span>Pelunasan</span><span className="tnum">Rp 1.000.000</span></div>
+      <div className="sep" />
+      <div className="row"><b>Masuk bulan ini</b><b className="tnum">Rp 2.000.000</b></div>
+      <div className="muted" style={{ marginTop: 10 }}>Otomatis masuk Report Klien bulan Oktober.</div>
+    </div>
+  );
+}
+function JourneyUI() {
+  const rows: [string, string, string][] = [["@tokokue", "Tertarik", ""], ["@rotikeju", "Intro terkirim", "warm"], ["@kopiflow", "Dibales", ""]];
+  return (
+    <div data-ui="" aria-label="Contoh journey prospek">
+      <div className="row"><b>Journey prospek</b><span className="muted">3 aktif</span></div>
+      <div className="sep" />
+      {rows.map(([h, s, c]) => <div key={h} className="row" style={{ padding: "6px 0" }}><span>{h}</span><span className={`badge ${c}`}>{s}</span></div>)}
+    </div>
+  );
+}
+function GuildUI() {
+  const ppl: [string, string, string][] = [["Raka", "Leader", "leader"], ["Sinta", "Officer", "officer"], ["Bima", "Member", "member"]];
+  return (
+    <div data-ui="" aria-label="Contoh guild">
+      <div className="row"><b>Tim Contoh</b><span className="muted">Level 3</span></div>
+      {ppl.map(([n, r, k]) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <div key={n} className="person"><img src={`/guild/char-${k}.png`} alt="" /><span style={{ flex: 1 }}>{n}</span><span className="chip">{r}</span></div>
+      ))}
+    </div>
+  );
+}
 
-const showcaseItems = [
-  { img: "/phone1.jpg", name: "Sales Command Center", sub: "Overview semua metrik penting" },
-  { img: "/phone2.jpg", name: "Lead Database", sub: "Filter, score & manage leads" },
-  { img: "/phone3.jpg", name: "Outreach Tracker", sub: "Email, DM, WA dalam satu tempat" },
-  { img: "/phone4.jpg", name: "Rejection Log", sub: "Ubah rejection jadi data menang" },
+const SCENES = [
+  { ui: <HuntingUI />, cap: "Pagi: orang nyari jasa di Threads, DM-nya udah siap." },
+  { ui: <QuoteUI />, cap: "Siang: dia setuju, penawaran jadi dalam semenit." },
+  { ui: <InvoiceUI />, cap: "Malam: invoice lunas, angkanya masuk report." },
 ];
 
 export default function LandingPage() {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const [activeIdx, setActiveIdx] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const startX = useRef(0);
-  const scrollLeft = useRef(0);
+  const [client, setClient] = useState("Toko Kue Contoh");
+  const [pkg, setPkg] = useState("fv");
+  const [scene, setScene] = useState(0);
+  const [tab, setTab] = useState(0);
+  const p = PACKAGES.find(x => x.id === pkg)!;
+  const dp = Math.round(p.price / 2);
+  const wa = useMemo(() => `https://wa.me/?text=${encodeURIComponent(
+    `Halo ${client.trim() || "kak"}, ini penawarannya:\n${p.name} — ${rp(p.price)}\nDP 50%: ${rp(dp)}\n\nKalau cocok, aku kirim invoice-nya ya.`)}`, [client, p, dp]);
 
-  function handleMouseDown(e: React.MouseEvent) {
-    setIsDragging(true);
-    startX.current = e.pageX - (trackRef.current?.offsetLeft ?? 0);
-    scrollLeft.current = trackRef.current?.scrollLeft ?? 0;
-  }
+  // The slow crossfade: the app beside the slip changes like light in a room.
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let t: ReturnType<typeof setInterval> | undefined;
+    const run = () => { clearInterval(t); if (!document.hidden) t = setInterval(() => setScene(s => (s + 1) % SCENES.length), 5600); };
+    run();
+    document.addEventListener("visibilitychange", run);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", run); };
+  }, []);
 
-  function handleMouseMove(e: React.MouseEvent) {
-    if (!isDragging || !trackRef.current) return;
-    e.preventDefault();
-    const x = e.pageX - (trackRef.current.offsetLeft ?? 0);
-    trackRef.current.scrollLeft = scrollLeft.current - (x - startX.current) * 1.5;
-  }
+  // Entrances: content is visible without script; with it, parts rise once.
+  useEffect(() => {
+    const root = document.querySelector(".lp");
+    root?.classList.add("lp-js");
+    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { rootMargin: "0px 0px -10% 0px" });
+    root?.querySelectorAll("[data-rise]").forEach(el => io.observe(el));
+    return () => io.disconnect();
+  }, []);
 
-  function handleScroll() {
-    if (!trackRef.current) return;
-    const idx = Math.round(trackRef.current.scrollLeft / (trackRef.current.scrollWidth / showcaseItems.length));
-    setActiveIdx(idx);
-  }
-
-  function scrollToItem(i: number) {
-    const el = trackRef.current?.querySelectorAll(".sc-item")[i];
-    el?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-  }
+  const tabs = [
+    { name: "Hunting", title: "Orangnya nyari, kamu nyapa.", body: "Tempel link post Threads. SalesPal baca kebutuhan, tanggal dan lokasinya, lalu nyiapin DM per tahap: intro, follow-up, gali kebutuhan, penawaran.", ui: <HuntingUI /> },
+    { name: "Journey", title: "Tiap orang ada jejaknya.", body: "Baru, intro, dibales, tertarik, kasih data. Siapa yang perlu disapa lagi hari ini kelihatan tanpa buka chat satu-satu.", ui: <JourneyUI /> },
+    { name: "Guild", title: "Satu tim, satu angka.", body: "Undang anggota pakai link. Leader lihat semua deal dan target bulanan; tiap sales lihat punyanya sendiri.", ui: <GuildUI /> },
+  ];
+  const t = tabs[tab];
 
   return (
-    <>
-      {/* NAV */}
-      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, background: "rgba(245,247,250,0.92)", backdropFilter: "blur(12px)", borderBottom: "1px solid #d0d7de", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div className="logo-text" style={{ fontSize: 22, marginBottom: 0 }}>SALES<em>PAL</em></div>
-        <Link href="/login" className="btn-primary" style={{ padding: "10px 24px", fontSize: 13 }}>
-          🚀 Masuk / Daftar
-        </Link>
-      </nav>
+    <div className="lp">
+      <header className="lp-nav">
+        <Link href="/" className="wm">SALESPAL</Link>
+        <nav aria-label="Utama">
+          <a href="#alur" className="hide-s">Alurnya</a>
+          <a href="#isi" className="hide-s">Isinya</a>
+          <Link href="/login" className="lp-btn">Masuk</Link>
+        </nav>
+      </header>
 
-      {/* HERO */}
-      <section className="hero" style={{ paddingTop: 120 }}>
-        <div className="hero-content">
-          <div className="badge-pill">
-            <span className="dot" />
-            Built with AI &middot; Sales Intelligence Platform
-          </div>
+      <main>
+        {/* Hero: the quote slip, and the app that wrote it */}
+        <section className="lp-hero" aria-labelledby="lp-h1">
+          <div className="lp-card">
+            <div className="lp-stripe" aria-hidden="true">{Array.from({ length: 40 }, (_, i) => <span key={i} />)}</div>
+            <div className="lp-card-body">
+              <h1 id="lp-h1" data-rise="">Dari DM sampai lunas.</h1>
+              <p className="lp-lead" data-rise="" style={{ ["--i" as string]: 1 }}>
+                SalesPal buat studio foto &amp; video: nyatet orang yang lagi nyari jasa kamu, nyiapin DM-nya, lalu ngubah closingan jadi penawaran dan invoice PDF yang langsung kekirim ke WhatsApp.
+              </p>
 
-          <div className="logo-lockup">
-            <Image src="/logo.png" alt="SalesPal" width={56} height={56} className="logo-img" />
-            <div className="logo-text">SALES<em>PAL</em></div>
-          </div>
-
-          <h1 className="hero-headline">
-            <span className="line1">Track Every</span>
-            <span className="line1">Lead.</span>
-            <span className="line2">Close More</span>
-            <span className="line2">Deals.</span>
-            <span className="line3">Dominate</span>
-            <span className="line3">Your Market.</span>
-          </h1>
-
-          <p className="hero-sub">
-            AI-powered CRM + outreach tracker buat sales yang mau scale di era otomasi. Dari GMaps scraping sampai rejection analytics — semua ada.
-          </p>
-
-          <div className="hero-cta">
-            <Link href="/login" className="btn-primary">🚀 Mulai Gratis</Link>
-            <Link href="/dashboard" className="btn-ghost">Lihat Demo →</Link>
-          </div>
-
-          {/* Floating Phones */}
-          <div className="phones-wrap">
-            <div className="phone-mock p1">
-              <div className="phone-notch" /><div className="phone-cam" />
-              <div className="phone-vol" /><div className="phone-vol2" /><div className="phone-pwr" />
-              <div className="phone-inner">
-                <Image src="/phone1.jpg" alt="Dashboard" fill style={{ objectFit: "cover", objectPosition: "top" }} />
-              </div>
-              <div className="phone-label">📊 Dashboard</div>
-            </div>
-            <div className="phone-mock p2">
-              <div className="phone-notch" /><div className="phone-cam" />
-              <div className="phone-vol" /><div className="phone-vol2" /><div className="phone-pwr" />
-              <div className="phone-inner">
-                <Image src="/phone2.jpg" alt="Lead DB" fill style={{ objectFit: "cover", objectPosition: "top" }} />
-              </div>
-              <div className="phone-label">👥 Lead DB</div>
-            </div>
-            <div className="phone-mock p3">
-              <div className="phone-notch" /><div className="phone-cam" />
-              <div className="phone-vol" /><div className="phone-vol2" /><div className="phone-pwr" />
-              <div className="phone-inner">
-                <Image src="/phone3.jpg" alt="Outreach" fill style={{ objectFit: "cover", objectPosition: "top" }} />
-              </div>
-              <div className="phone-label">📩 Outreach</div>
-            </div>
-            <div className="phone-mock p4">
-              <div className="phone-notch" /><div className="phone-cam" />
-              <div className="phone-vol" /><div className="phone-vol2" /><div className="phone-pwr" />
-              <div className="phone-inner">
-                <Image src="/phone4.jpg" alt="Rejection Log" fill style={{ objectFit: "cover", objectPosition: "top" }} />
-              </div>
-              <div className="phone-label">❌ Rejection Log</div>
-            </div>
-            <div className="phones-floor" />
-          </div>
-        </div>
-      </section>
-
-      {/* MARQUEE STRIP */}
-      <div className="strip">
-        <div className="strip-track">
-          {[...stripItems, ...stripItems].map((item, i) => (
-            <div key={i} className="strip-item" dangerouslySetInnerHTML={{ __html: item.replace(" → ", " → <b>").replace(/(<b>.*)$/, "$1</b>") }} />
-          ))}
-        </div>
-      </div>
-
-      {/* FEATURES */}
-      <div className="sec">
-        <div className="sec-tag">Core Features</div>
-        <h2 className="sec-title">Semua yang kamu butuhin buat menang di sales.</h2>
-        <div className="feat-grid">
-          {features.map((f) => (
-            <div key={f.title} className="feat-card">
-              <div className={`fi ${f.cls}`}>{f.icon}</div>
-              <div className="feat-title">{f.title}</div>
-              <div className="feat-desc">{f.desc}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* SHOWCASE */}
-      <section className="showcase">
-        <div className="showcase-head">
-          <h2>Liat langsung,<br />bukan cuma kata-kata.</h2>
-          <p>Scroll → untuk lihat semua fitur</p>
-        </div>
-        <div
-          className="sc-track"
-          ref={trackRef}
-          onMouseDown={handleMouseDown}
-          onMouseLeave={() => setIsDragging(false)}
-          onMouseUp={() => setIsDragging(false)}
-          onMouseMove={handleMouseMove}
-          onScroll={handleScroll}
-        >
-          {showcaseItems.map((item, i) => (
-            <div key={item.name} className={`sc-item${activeIdx === i ? " active" : ""}`}>
-              <div className="sc-phone">
-                <div className="sn" /><div className="sc2" />
-                <div className="sv" /><div className="sv2" /><div className="sp" />
-                <div className="sc-inner">
-                  <Image src={item.img} alt={item.name} width={232} height={504} style={{ objectFit: "cover", objectPosition: "top", width: "100%", height: "100%" }} />
+              <form className="lp-quote" onSubmit={e => e.preventDefault()} aria-label="Coba bikin penawaran" data-rise="" style={{ ["--i" as string]: 2 }}>
+                <div>
+                  <label htmlFor="lp-client">Untuk</label>
+                  <input id="lp-client" value={client} onChange={e => setClient(e.target.value)} autoComplete="off" />
                 </div>
+                <div role="radiogroup" aria-label="Paket" className="lp-pkgs">
+                  {PACKAGES.map(x => (
+                    <button key={x.id} type="button" role="radio" aria-checked={pkg === x.id} className="lp-pkg" onClick={() => setPkg(x.id)}>
+                      <span>{x.name}</span><span className="tnum">{rp(x.price)}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="lp-lines tnum" aria-live="polite">
+                  <div><span>DP 50% buat {client.trim() || "klien"}</span><span>{rp(dp)}</span></div>
+                  <div className="total"><span>Total</span><span>{rp(p.price)}</span></div>
+                </div>
+              </form>
+
+              <div className="lp-actions">
+                <Link href="/login" className="lp-btn">Mulai gratis</Link>
+                <a href={wa} target="_blank" rel="noreferrer" className="lp-link">Kirim contoh ini ke WhatsApp</a>
               </div>
-              <div className="sc-name">{item.name}</div>
-              <div className="sc-sub">{item.sub}</div>
+              <div className="lp-card-foot"><a href="#alur" className="lp-link">Lihat alurnya</a><a href="#isi" className="lp-link">Isinya apa aja</a><Link href="/login" className="lp-link">Udah punya akun</Link></div>
             </div>
-          ))}
-        </div>
-        <div className="dots">
-          {showcaseItems.map((item, i) => (
-            <button key={i} className={`landing-dot${activeIdx === i ? " on" : ""}`} onClick={() => scrollToItem(i)} aria-label={`Lihat ${item.name}`} aria-current={activeIdx === i} />
-          ))}
-        </div>
-      </section>
-
-      {/* STATS */}
-      <div className="stats-section">
-        <div className="stats-grid">
-          <div className="stat-card"><div className="sv b">5–15%</div><div className="sl">Cold email reply rate yang harus kamu kejar</div></div>
-          <div className="stat-card"><div className="sv g">40%+</div><div className="sl">Meeting rate dari setiap reply yang kamu dapat</div></div>
-          <div className="stat-card"><div className="sv w">7×</div><div className="sl">Touchpoints rata-rata sebelum deal closed</div></div>
-          <div className="stat-card"><div className="sv b">+30%</div><div className="sl">Win rate naik pakai AI-personalized proposal</div></div>
-        </div>
-      </div>
-
-      {/* CTA */}
-      <div className="cta-section">
-        <div className="cta-box">
-          <div className="cta-left">
-            <h2>Udah cukup<br />prospek manual<br />tanpa sistem.</h2>
-            <p>SALESPAL ngasih kamu unfair advantage. Mulai tracking, mulai closing, mulai winning — sekarang.</p>
           </div>
-          <div className="cta-right">
-            <Link href="/login" className="btn-primary" style={{ fontSize: 16, padding: "18px 40px" }}>
-              Get SALESPAL Free →
-            </Link>
-            <div className="info-tag">🎬 Demo di TikTok @salespal.id</div>
-            <div className="info-tag">✓ No credit card &nbsp;✓ Setup 2 menit</div>
-          </div>
-        </div>
-      </div>
+          <figure className="lp-room" aria-label="Layar SalesPal, berganti sepanjang hari">
+            {SCENES.map((s, i) => (
+              <div key={i} className={`scene${i === scene ? " on" : ""}`} aria-hidden={i !== scene}>
+                {s.ui}
+                <figcaption>{s.cap}</figcaption>
+              </div>
+            ))}
+          </figure>
+        </section>
 
-      {/* FOOTER */}
-      <footer>
-        <div className="footer-inner">
-          <div className="foot-brand">
-            <Image src="/logo.png" alt="SalesPal" width={30} height={30} style={{ borderRadius: 9, objectFit: "contain", background: "#0c1a3a" }} />
-            SALES<em>PAL</em>
+        {/* 1. Showcase: one plate, three tabs */}
+        <section className="lp-show" aria-labelledby="lp-show-h">
+          <div className="lp-plate" data-rise="">
+            <div className="scene"><div className="drift">{t.ui}</div></div>
           </div>
-          <p>AI-Powered Sales Intelligence · Built for closers 🐾</p>
-          <p>© 2026 SalesPal. All rights reserved.</p>
+          <div className="lp-show-text">
+            <div role="tablist" aria-label="Bagian app" className="lp-tabs">
+              {tabs.map((x, i) => <button key={x.name} role="tab" aria-selected={tab === i} onClick={() => setTab(i)}>{x.name}</button>)}
+            </div>
+            <div role="tabpanel" aria-label={t.name}>
+              <h2 id="lp-show-h" data-rise="">{t.title}</h2>
+              <p data-rise="" style={{ ["--i" as string]: 1 }}>{t.body}</p>
+            </div>
+            <div className="lp-cells">
+              <Link href="/login">Coba gratis</Link>
+              <a href="#alur">Lihat satu hari</a>
+            </div>
+          </div>
+        </section>
+
+        {/* 2. How it works: one working day, printed as a slip */}
+        <section id="alur" className="lp-day" aria-labelledby="lp-day-h">
+          <div className="lp-day-text">
+            <h2 id="lp-day-h" data-rise="">Satu hari jualan.</h2>
+            <p data-rise="" style={{ ["--i" as string]: 1 }}>Begini satu hari di SalesPal, dari notifikasi pagi sampai uang masuk dan kecatat di report.</p>
+          </div>
+          <div className="lp-slip tnum" data-rise="" style={{ ["--i" as string]: 2 }}>
+            <h3>Pagi</h3>
+            <div className="r"><span>Ringkasan “Perlu ditindak”</span><span>08.00</span></div>
+            <div className="r"><span>Follow-up beruntun, satu lead satu layar</span><span>15 mnt</span></div>
+            <h3>Siang</h3>
+            <div className="r"><span>Tempel link post Threads</span><span>1 tap</span></div>
+            <div className="r"><span>DM sesuai tahap, langsung ke Instagram</span><span>30 dtk</span></div>
+            <h3>Sore</h3>
+            <div className="r"><span>Dia bales, kasih nomor, jadi lead</span><span>2 tap</span></div>
+            <div className="r"><span>Cek tanggal acaranya di kalender</span><span>1 tap</span></div>
+            <h3>Malam</h3>
+            <div className="r"><span>Penawaran → invoice PDF</span><span>1 mnt</span></div>
+            <div className="r"><span>Catat DP, kirim lewat WhatsApp</span><span>1 tap</span></div>
+            <div className="end"><span>Invoice lunas, report bulanan jadi sendiri</span><span>1 hari</span></div>
+          </div>
+        </section>
+
+        {/* 3. What's inside: stacking sheets */}
+        <section id="isi" className="lp-feat" aria-labelledby="lp-feat-h">
+          <h2 id="lp-feat-h" data-rise="">Yang ada di dalamnya.</h2>
+          <article className="lp-sheet s1">
+            <h3>Hunting &amp; journey prospek</h3>
+            <div className="pic" data-rise=""><JourneyUI /></div>
+            <p className="txt" data-rise="" style={{ ["--i" as string]: 1 }}>Prospek dari post Threads, DM dan WhatsApp masuk satu daftar dengan ID-nya sendiri. Template ngisi kebutuhan, tanggal dan lokasi dari post; yang kosong pakai default kamu.</p>
+          </article>
+          <article className="lp-sheet s2">
+            <h3>Penawaran jadi invoice</h3>
+            <div className="pic" data-rise=""><InvoiceUI /></div>
+            <p className="txt" data-rise="" style={{ ["--i" as string]: 1 }}>Satu form urut kayak PDF-nya: acara, item, deliverables, harga. Kop dan logo studio ikut tercetak, file PDF-nya kebagi langsung dari HP.</p>
+          </article>
+          <article className="lp-sheet s3">
+            <h3>Kenali tipe customer</h3>
+            <div className="pic" data-rise="">
+              <div className="lp-pics">
+                {([["owl", "Burung Hantu"], ["lion", "Singa"], ["dolphin", "Lumba-lumba"], ["rabbit", "Kelinci"]] as const).map(([id, n]) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <figure key={id}><img src={`/archetypes/animal-${id}.png`} alt={`Karakter ${n}`} width={256} height={256} loading="lazy" /><figcaption>{n}</figcaption></figure>
+                ))}
+              </div>
+            </div>
+            <p className="txt" data-rise="" style={{ ["--i" as string]: 1 }}>Analitis, dominan, ramah, atau ragu-ragu. SalesPal nebak dari cara orangnya nulis, lalu nyaranin balasan yang pas buat keberatannya.</p>
+          </article>
+          <article className="lp-sheet s4">
+            <h3>Guild buat tim sales</h3>
+            <div className="pic" data-rise="">
+              <div className="lp-pics">
+                {([["leader", "Leader"], ["officer", "Officer"], ["member", "Member"], ["viewer", "Viewer"]] as const).map(([id, n]) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <figure key={id}><img src={`/guild/char-${id}.png`} alt={`Karakter ${n}`} width={256} height={256} loading="lazy" /><figcaption>{n}</figcaption></figure>
+                ))}
+              </div>
+            </div>
+            <p className="txt" data-rise="" style={{ ["--i" as string]: 1 }}>Empat peran dengan hak yang jelas. Pipeline bareng, target per orang, report tim yang bisa dibekukan dan dikirim ke klien.</p>
+          </article>
+        </section>
+
+        {/* 4. About: a letter on the same paper */}
+        <section className="lp-letter-wrap" aria-label="Kenapa SalesPal dibikin">
+          <div className="lp-letter" data-rise="">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-mark.png" alt="" width={48} height={48} />
+            <p>Kami jalanin studio foto dan video sendiri. Klien datang dari mana-mana: post Threads, DM Instagram, chat WhatsApp jam sebelas malam.</p>
+            <p>Dulu semuanya di kepala dan di galeri screenshot. Siapa yang udah ditawarin, siapa yang belum bayar DP, acara tanggal berapa bentrok sama apa.</p>
+            <p>SalesPal kami bikin buat <mark>kerjaan yang terjadi di HP</mark>: nyapa orang yang lagi nyari, ngingetin follow-up, dan ngirim penawaran yang rapi tanpa buka laptop.</p>
+            <p>Gratis buat dipakai sendiri. Kalau tim kamu nambah, bikin guild.</p>
+            <div className="lp-sign">Tim SalesPal</div>
+            <span>dibikin orang studio, buat orang studio</span>
+          </div>
+          <div className="lp-tear">
+            <span style={{ fontWeight: 700 }}>Masuk pakai Google atau email</span>
+            <Link href="/login" className="lp-btn">Masuk</Link>
+          </div>
+        </section>
+
+        {/* 5. One word is the button */}
+        <Link href="/login" className="lp-cta" aria-label="Mulai pakai SalesPal, gratis">
+          <span className="say">Bikin akun, tempel satu link post, kirim DM pertama kamu.</span>
+          <svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="4"><path d="M12 36 36 12M16 12h20v20" /></svg>
+          <span className="word" aria-hidden="true">Mulai</span>
+        </Link>
+      </main>
+
+      <footer className="lp-foot">
+        <div className="stripe" aria-hidden="true">{Array.from({ length: 80 }, (_, i) => <span key={i} />)}</div>
+        <div className="inv">
+          <p>Jualan studio, rapi dari HP.</p>
+          <Link href="/login" className="lp-btn">Masuk / Daftar</Link>
         </div>
+        <ul>
+          <li><Link href="/login">Masuk</Link></li>
+          <li><a href="#alur">Alurnya</a></li>
+          <li><a href="#isi">Isinya</a></li>
+        </ul>
+        <div className="legal"><span>© 2026 SalesPal</span><span>Karakter ilustrasi: koleksi SalesPal</span></div>
+        <div className="name" aria-hidden="true">SALESPAL</div>
       </footer>
-    </>
+    </div>
   );
 }

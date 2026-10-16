@@ -105,3 +105,13 @@ Owner: "masih belum halus, dan gw belum bisa milih logo profile." Lembar Profil 
 - **Baris seragam** dalam grup berjudul (Akun · Aplikasi · Versi & data): ikon dalam kotak warna, label 15px, keterangan 13px, nilai atau **switch** di kanan, tinggi ≥ 52px, garis pemisah tipis. Emoji 🔔🧹 diganti ikon; "Matikan/Nyalain" dan "Cek update" yang beda-beda gayanya diganti switch dan aksi teks yang sama.
 - **Logout** sendiri di paling bawah, merah, di tengah.
 - Flow navigasi: pilih Singa → baris "Foto profil · Singa" dan tombol header nampilin gambarnya.
+
+## 9. Susulan 16 Okt — Landing dibikin ulang pakai TasteSkill v2
+
+Landing lama gagal di inspektor TasteSkill: 15 FAIL, 7 WARN. Masalahnya: judul 7 baris di HP, teks gradasi dan glow, 24 emoji jadi ikon, bayangan di tombol, teks isi 13,5px, 14 ukuran font, dan isi yang udah basi (Outscraper, Instantly). Halaman `/` (`app/page.tsx`, `app/landing.css`) dibikin ulang:
+- **Arah:** "The page is the object", seed 1715383983. Warna dan font tetap dari brand (`--keep palette,type`).
+- **Ide:** penawaran yang dikirim studio ke WhatsApp jadi halaman itu sendiri.
+- **Yang bisa dicoba pengunjung:** slip di hero bisa diisi (nama klien, pilih paket). DP dan total ikut kehitung, dan link "Kirim contoh ini ke WhatsApp" bawa teks yang udah keisi.
+- **Bagian halaman:** hero slip di samping layar app yang ganti pelan-pelan (Hunting → Penawaran → Invoice lunas), plate dengan tab (Hunting / Journey / Guild), slip "Satu hari jualan", lembar fitur yang numpuk (karakter tipe customer dan peran guild sebagai gambar), surat dari tim, satu kata "Mulai" sebagai tombol, footer dengan nama SALESPAL yang kepotong.
+- **Hasil:** inspektor 0 FAIL. Satu WARN (ga ada video) dibiarin karena ga ada klip jujur buat software. Lint 0 FAIL, flow `landing` lolos di HP dan desktop dengan audit HIG 0.
+- **Contoh yang mesti dicek sebelum jualan beneran:** harga paket di slip (Rp 1,5 jt / 3,5 jt / 6 jt), "Toko Kue", Q-0142 / INV-0142, nama Raka/Sinta/Bima di fragmen guild.

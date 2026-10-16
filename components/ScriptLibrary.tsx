@@ -65,8 +65,8 @@ export default function ScriptLibrary() {
   });
 
   const inputBase = {
-    background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8,
-    color: "var(--app-text)", padding: "0 14px", minHeight: 44, fontSize: 14, fontFamily: "'Plus Jakarta Sans', sans-serif",
+    background: "var(--app-card)", border: "1px solid var(--app-line-strong)", borderRadius: 999,
+    color: "var(--app-text)", padding: "0 18px", minHeight: 48, fontSize: 16, fontFamily: "'Plus Jakarta Sans', sans-serif",
   } as React.CSSProperties;
 
   return (
@@ -79,7 +79,7 @@ export default function ScriptLibrary() {
       </div>
 
       {/* Filters */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
         <input
           type="search"
           aria-label="Cari script"
@@ -99,16 +99,17 @@ export default function ScriptLibrary() {
             <option key={o.id} value={o.id}>{o.icon} {o.label}</option>
           ))}
         </select>
-        <div role="group" aria-label="Gaya bahasa" style={{ display: "flex", flex: "1 1 220px", background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8, overflow: "hidden" }}>
+        <div role="group" aria-label="Gaya bahasa" style={{ display: "flex", flex: "1 1 220px", gap: 4, padding: 4, background: "var(--app-inner)", borderRadius: 999 }}>
           {(["all", "formal", "santai"] as const).map(t => (
             <button
               key={t}
               aria-pressed={filterTone === t}
               onClick={() => setFilterTone(t)}
               style={{
-                background: filterTone === t ? "var(--app-border)" : "transparent",
-                border: "none", color: filterTone === t ? "var(--app-text)" : "var(--app-muted)",
-                flex: 1, padding: "0 14px", minHeight: 44, fontSize: 14, cursor: "pointer",
+                background: filterTone === t ? "var(--app-card)" : "transparent", borderRadius: 999,
+                boxShadow: filterTone === t ? "0 1px 3px rgba(0,0,0,.12)" : "none",
+                border: "none", color: filterTone === t ? "var(--app-text)" : "var(--app-ink-2)", fontWeight: filterTone === t ? 700 : 500,
+                flex: 1, padding: "0 14px", minHeight: 40, fontSize: 14, cursor: "pointer",
                 fontFamily: "'Plus Jakarta Sans', sans-serif", transition: "background-color 0.15s, color 0.15s, border-color 0.15s",
               }}
             >
@@ -119,14 +120,14 @@ export default function ScriptLibrary() {
       </div>
 
       {/* Archetype quick-filter pills */}
-      <div role="group" aria-label="Tipe customer" style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+      <div role="group" aria-label="Tipe customer" className="sp-chiprow" style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
         <button
           aria-pressed={filterArchetype === "all"}
           onClick={() => setFilterArchetype("all")}
           style={{
-            background: filterArchetype === "all" ? "var(--app-border)" : "transparent",
-            border: "1px solid var(--app-border)", borderRadius: 20, color: filterArchetype === "all" ? "var(--app-text)" : "var(--app-muted)",
-            padding: "0 14px", minHeight: 36, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+            background: filterArchetype === "all" ? "var(--app-text)" : "transparent", flexShrink: 0, whiteSpace: "nowrap",
+            border: `1px solid ${filterArchetype === "all" ? "var(--app-text)" : "var(--app-line-strong)"}`, borderRadius: 999, color: filterArchetype === "all" ? "var(--app-card)" : "var(--app-ink-2)",
+            padding: "0 16px", minHeight: 44, fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
           }}
         >
           Semua tipe
@@ -137,13 +138,14 @@ export default function ScriptLibrary() {
             aria-pressed={filterArchetype === a.id}
             onClick={() => setFilterArchetype(filterArchetype === a.id ? "all" : a.id)}
             style={{
-              background: filterArchetype === a.id ? `${a.color}20` : "transparent",
-              border: `1px solid ${filterArchetype === a.id ? a.color : "var(--app-border)"}`,
-              borderRadius: 20, color: filterArchetype === a.id ? a.color : "var(--app-muted)",
-              padding: "0 14px", minHeight: 36, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+              background: filterArchetype === a.id ? "var(--app-text)" : "transparent", flexShrink: 0, whiteSpace: "nowrap",
+              border: `1px solid ${filterArchetype === a.id ? "var(--app-text)" : "var(--app-line-strong)"}`,
+              borderRadius: 999, color: filterArchetype === a.id ? "var(--app-card)" : "var(--app-ink-2)",
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "0 16px 0 8px", minHeight: 44, fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
             }}
           >
-            <AnimalArt id={a.id} size={24} /> {a.name}
+            <AnimalArt id={a.id} size={28} />{a.name}
           </button>
         ))}
       </div>
@@ -192,9 +194,9 @@ export default function ScriptLibrary() {
 
                 {/* Script text */}
                 <div style={{
-                  background: "var(--app-inner)", borderRadius: 8, padding: "12px 16px",
-                  fontSize: 15, lineHeight: 1.6, fontStyle: "italic", color: "var(--app-text)",
-                  marginBottom: 10, borderLeft: `3px solid ${arch.color}`,
+                  background: "var(--app-inner)", borderRadius: 14, padding: "14px 16px",
+                  fontSize: 16, lineHeight: 1.6, color: "var(--app-text)",
+                  marginBottom: 14,
                 }}>
                   &ldquo;{item.script}&rdquo;
                 </div>
@@ -210,8 +212,8 @@ export default function ScriptLibrary() {
                       background: isCopied ? "#00a8621a" : "transparent",
                       border: `1px solid ${isCopied ? "var(--ok)" : "var(--app-border)"}`,
                       color: isCopied ? "var(--ok)" : "var(--app-text)",
-                      borderRadius: 8, padding: "0 16px", minHeight: 44, fontSize: 14, fontWeight: 700,
-                      cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
+                      borderRadius: 999, padding: "0 18px", minHeight: 44, fontSize: 14, fontWeight: 700, flexShrink: 0,
+                      cursor: "pointer", fontFamily: "inherit",
                     }}
                   >
                     {isCopied ? "✓ Tersalin" : "Copy"}

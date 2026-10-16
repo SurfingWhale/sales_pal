@@ -24,7 +24,7 @@ const fv = (v) =>
   : Array.isArray(v) ? { arrayValue: { values: v.map(fv) } }
   : { mapValue: { fields: Object.fromEntries(Object.entries(v).filter(([, x]) => x !== undefined).map(([k, x]) => [k, fv(x)])) } };
 
-async function uidOf(project, email) {
+export async function uidOf(project, email) {
   const r = await fetch(`http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/${project}/accounts:query`, {
     method: "POST", headers: { Authorization: "Bearer owner", "Content-Type": "application/json" }, body: "{}",
   });
@@ -32,7 +32,7 @@ async function uidOf(project, email) {
   return (j.userInfo || []).find(u => u.email === email)?.localId;
 }
 
-async function seedDocs(project, docs) {
+export async function seedDocs(project, docs) {
   const root = `projects/${project}/databases/(default)/documents`;
   for (let i = 0; i < docs.length; i += 400) {
     const writes = docs.slice(i, i + 400).map(([path, data]) => ({ update: { name: `${root}/${path}`, fields: fv(data).mapValue.fields } }));
@@ -47,7 +47,7 @@ const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0
 const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return ymd(d); };
 
 // 200 leads, 40 quotes, 50 invoices, 60 prospects, 120 DMs, 3 clients.
-function bigAccount(uid) {
+export function bigAccount(uid) {
   const u = `users/${uid}`;
   const docs = [];
   const STATUS = ["Cold", "Warm", "Hot", "Closed", "Lost"];
@@ -111,7 +111,7 @@ function bigAccount(uid) {
   return docs;
 }
 
-async function signup(t) {
+export async function signup(t) {
   const { page, base } = t;
   await page.goto(`${base}/login`);
   await page.getByRole("button", { name: "Daftar gratis" }).click();
@@ -124,7 +124,7 @@ async function signup(t) {
   return email;
 }
 
-async function go(page, place, tab) {
+export async function go(page, place, tab) {
   await page.locator(".sp-nav-btn", { hasText: place }).click();
   if (tab) await page.locator(".sp-sub-btn", { hasText: new RegExp(`^${tab}$`) }).click();
   await page.waitForTimeout(300);
@@ -211,6 +211,30 @@ async function ownerLogin(t) {
 
 // ---------- flows ----------
 export const flows = [
+  {
+    // The landing (TasteSkill v2): the hero is a quote you can fill in, and every way in leads to the login.
+    name: "landing: fill the quote, then sign in",
+    async run(t) {
+      const { page, base } = t;
+      await t.step("the landing opens on its headline", async () => { await page.goto(`${base}/`); await page.getByRole("heading", { level: 1, name: "Dari DM sampai lunas." }).waitFor(); });
+      await t.step("the quote follows the name and the package", async () => {
+        await page.locator("#lp-client").fill("Kedai Contoh");
+        await page.getByRole("radiogroup", { name: "Paket" }).getByRole("radio", { name: /Liputan event sehari/ }).click();
+        await page.getByText("DP 50% buat Kedai Contoh").waitFor();
+        await page.getByText("Rp 3.000.000").first().waitFor();
+        const href = await page.getByRole("link", { name: "Kirim contoh ini ke WhatsApp" }).getAttribute("href");
+        if (!href || !decodeURIComponent(href).includes("Kedai Contoh")) throw new Error(`WhatsApp link: ${href}`);
+      });
+      await t.step("the showcase tabs switch", async () => {
+        await page.getByRole("tablist", { name: "Bagian app" }).getByRole("tab", { name: "Guild" }).click();
+        await page.getByRole("heading", { name: "Satu tim, satu angka." }).waitFor();
+      });
+      await t.step("Mulai gratis leads to the login", async () => {
+        await page.getByRole("link", { name: "Mulai gratis" }).click();
+        await page.waitForURL("**/login");
+      });
+    },
+  },
   {
     name: "sign up and land on the dashboard",
     async run(t) {

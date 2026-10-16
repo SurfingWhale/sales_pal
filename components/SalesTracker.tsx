@@ -771,14 +771,39 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           .sp-nav-short { display: inline; }
           .sp-subhint { padding: 6px 16px 0; font-size: 12px; }
           .sp-space { padding: 0 10px 0 12px; font-size: 12px; }
-          .sp-space select { max-width: 96px; }
+          .sp-space select { max-width: 132px; }
           .sp-space { min-width: 0; }
           .sp-subnav { padding: 6px 16px 4px; }
           /* 40px pills, 44px to the finger: the hit area reaches past the pill. */
           .sp-sub-btn { position: relative; height: 40px; }
           .sp-sub-btn::after { content: ""; position: absolute; left: 0; right: 0; top: -2px; bottom: -2px; }
           .sp-main { padding: 16px 16px calc(110px + env(safe-area-inset-bottom, 0px)) !important; }
-          .sp-fab { bottom: calc(92px + env(safe-area-inset-bottom, 0px)) !important; }
+          /* Quick Pitch docks beside the tab bar (like iOS 26's accessory
+             button), so it never sits on top of a card. */
+          .sp-nav { right: 88px; }
+          .sp-fab { right: 14px !important; bottom: calc(14px + env(safe-area-inset-bottom, 0px)) !important; width: 64px !important; height: 64px !important; }
+          .sp-fab.is-tucked { transform: none !important; opacity: 1 !important; visibility: visible !important; pointer-events: auto !important; }
+          /* Filter rows stay one line and slide sideways, bleeding to the screen edge. */
+          .sp-chiprow { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding-inline: 16px; scroll-padding-inline: 16px; }
+          .sp-chiprow::-webkit-scrollbar { display: none; }
+        }
+        /* Scrolling feels alive: the header gains its edge as content slides
+           under it, and each block rises into place as it enters the screen.
+           Transform only (contrast never dips); off under Reduce Motion. */
+        @supports (animation-timeline: scroll()) {
+          .sp-top::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--app-border); opacity: 0; pointer-events: none;
+            animation: sp-edge linear both; animation-timeline: scroll(root); animation-range: 0 56px; }
+          @keyframes sp-edge { to { opacity: 1; } }
+        }
+        @supports (animation-timeline: view()) {
+          /* A moving ancestor would trap a fixed dialog inside it, so a block
+             that holds an open dialog (or the pinned undo bar) stays still. */
+          @media (prefers-reduced-motion: no-preference) {
+            .sp-main > * > :not(.modal-overlay):not(.sp-toast):not([role="tablist"]):not(style):not(:has(.modal-overlay, .sp-toast, [role="dialog"])) {
+              animation: sp-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 45%;
+            }
+            @keyframes sp-rise { from { transform: translateY(32px) scale(.98); } to { transform: none; } }
+          }
         }
         /* A small phone with the workspace picker: the paw alone says SalesPal,
            so the bell and the avatar keep their place on screen. */
@@ -873,8 +898,9 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             ))}
           </div>
         )}
-        {TAB_HINT[activeTab] && <p className="sp-subhint">{TAB_HINT[activeTab]}</p>}
       </header>
+      {/* The hint scrolls away with the page, so the sticky header stays short. */}
+      {TAB_HINT[activeTab] && <p className="sp-subhint">{TAB_HINT[activeTab]}</p>}
 
       <div className="sp-main" style={{ padding: "32px 32px 96px", maxWidth: 1200, margin: "0 auto" }}>
 
@@ -930,13 +956,19 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                 <select id="status-filter" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...leadField, padding: "0 14px", flex: wide ? "0 0 auto" : "1 1 0", minWidth: 0 }}>
                   {[["All", "Semua status"], ["Hot", "Hot"], ["Warm", "Warm"], ["Cold", "Cold"], ["Closed", "Closed"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
-                <button onClick={() => setShowImport(true)} style={{ height: 44, padding: "0 18px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>Import</button>
+                {leads.length > 0 && <>
+                  <label className="vh" htmlFor="lead-sort">Urutkan</label>
+                  <select id="lead-sort" value={leadSort} onChange={e => setLeadSort(e.target.value as Sort)} style={{ ...leadField, padding: "0 14px", flex: wide ? "0 0 auto" : "1 1 0", minWidth: 0 }}>
+                    {SORTS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </select>
+                </>}
+                <button onClick={() => setShowImport(true)} aria-label="Import lead dari file" title="Import" style={{ height: 44, minWidth: 44, padding: wide ? "0 18px" : 0, border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Icon name="upload" stroke={1.7} />{wide && "Import"}</button>
                 {wide && <button onClick={() => setShowAddLead(true)} style={{ display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}><Icon name="plus" stroke={1.8} />Tambah lead</button>}
               </div>
             </div>
 
             {leads.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 16 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 12 }}>
                 {dueLeads.length > 0 && (
                   <button onClick={() => setFuRun(dueLeads)} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                     ▶ Follow-up beruntun <span className="tabnum" style={{ background: "rgba(0,0,0,0.28)", borderRadius: 999, padding: "1px 8px" }}>{dueLeads.length}</span>
@@ -955,21 +987,17 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                     );
                   })}
                 </div>
-                <label className="vh" htmlFor="lead-sort">Urutkan</label>
-                <select id="lead-sort" value={leadSort} onChange={e => setLeadSort(e.target.value as Sort)} style={{ ...leadField, padding: "0 14px", flex: "0 0 auto" }}>
-                  {SORTS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-                </select>
               </div>
             )}
 
             {leads.length > 0 && (
-              <div role="group" aria-label="Saring menurut potensi" className="sp-chiprow" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 24 }}>
+              <div role="group" aria-label="Saring menurut potensi" className="sp-chiprow" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
                 {([0, 5, 4, 3, 2, 1] as (0 | Level)[]).map(lv => {
                   const on = filterLevel === lv;
                   const n = lv ? leads.filter(l => sc(l).level === lv).length : leads.length;
                   return (
                     <button key={lv} onClick={() => setFilterLevel(lv)} aria-pressed={on}
-                      style={{ height: wide ? 36 : 44, padding: "0 14px", borderRadius: 999, border: `1px solid ${on ? "var(--app-text)" : "var(--app-line-strong)"}`, background: on ? "var(--app-text)" : "transparent", color: on ? "var(--app-card)" : "var(--app-ink-2)", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, fontFamily: "inherit" }}>
+                      style={{ flexShrink: 0, whiteSpace: "nowrap", height: wide ? 36 : 44, padding: "0 14px", borderRadius: 999, border: `1px solid ${on ? "var(--app-text)" : "var(--app-line-strong)"}`, background: on ? "var(--app-text)" : "transparent", color: on ? "var(--app-card)" : "var(--app-ink-2)", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, fontFamily: "inherit" }}>
                       {lv > 0 && <HeatDots level={lv as Level} size={5} gap={2} />}
                       {lv ? LEVEL_WORD[lv as Level] : "Semua"} <span className="tabnum" style={{ fontWeight: 500 }}>{n}</span>
                     </button>

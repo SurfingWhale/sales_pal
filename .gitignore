@@ -44,3 +44,4 @@ firebase-debug.log
 # Local deep-research working files (may contain client figures; repo is public)
 /research_notes/
 /reports/
+.taste-skill/
