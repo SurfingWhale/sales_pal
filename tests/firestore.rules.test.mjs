@@ -1,6 +1,6 @@
 // Tests for firestore.rules, against the Firestore emulator.
 //
-//   npm i --no-save @firebase/rules-unit-testing firebase
+//   npm i --no-save @firebase/rules-unit-testing@3   (v3 pairs with firebase 10)
 //   firebase emulators:exec --only firestore --project demo-salespal "node tests/firestore.rules.test.mjs"
 //
 // (The emulator needs Java. Port 8089 — set it in firebase.json's emulators block
