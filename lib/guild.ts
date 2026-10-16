@@ -27,7 +27,9 @@ export const ROLE_HINT: Record<Role, string> = {
 };
 
 export interface Guild { id: string; name: string; leaderUid: string; titles?: Partial<Record<Role, string>>; createdAt: number }
-export interface Member { uid: string; name: string; email: string; role: Role; joinedAt: number; inviteCode?: string }
+export interface Member { uid: string; name: string; email: string; role: Role; joinedAt: number; inviteCode?: string; avatar?: string }
+// Characters a member may pick (firestore.rules memberShape); none = their role's.
+export const AVATARS = ["leader", "officer", "member", "viewer", "owl", "lion", "dolphin", "rabbit"] as const;
 export interface Invite { id: string; role: Role; roleTitle?: string; guildName: string; createdBy: string; createdAt: number; expiresAt: number }
 export interface Target { id: string; uid: string; month: string; revenue: number; deals: number }
 export interface GuildRef { id: string; name: string; joinedAt: number }
