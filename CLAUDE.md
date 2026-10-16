@@ -19,8 +19,10 @@ then here.
   plus `inbound_leads`, and the server-only `connections` (token vault),
   `usage` (quotas) and `pushSubs` (Web Push subscriptions), which deny every browser and are reached only through
   `lib/serverAuth.ts`.
-  Run `tests/firestore.rules.test.mjs` (see its header) before
-  `firebase deploy --only firestore:rules --project sales-pal`.
+  Merging a change to `main` deploys it: `.github/workflows/firestore-rules.yml`
+  runs `tests/firestore.rules.test.mjs` on the emulator, then
+  `firebase deploy --only firestore:rules --project sales-pal` with the
+  `FIREBASE_SERVICE_ACCOUNT` secret (skipped while the secret is unset).
 - This repository is public: the rules hold the owner's sign-in email and no
   other personal detail. Keep it that way.
 - **Before a PR, run `npm run test:flows`** (and `DESKTOP=1 npm run test:flows`).
