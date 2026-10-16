@@ -50,8 +50,10 @@ service cloud.firestore {
     function ownedData(c) { return c in ['leads', 'outreach', 'rejections', 'hunts', 'prospects', 'huntSessions', 'quotes', 'invoices', 'clients']; }
     function catalog(c) { return c in ['services', 'pitchTemplates', 'settings', 'campaigns', 'costs']; }
     function memberShape(d) {
-      return d.keys().hasOnly(['uid', 'name', 'email', 'role', 'inviteCode', 'joinedAt'])
-        && d.role in ['leader', 'officer', 'member', 'viewer'];
+      return d.keys().hasOnly(['uid', 'name', 'email', 'role', 'inviteCode', 'joinedAt', 'avatar'])
+        && d.role in ['leader', 'officer', 'member', 'viewer']
+        // The character they picked (public/guild, public/archetypes); none = their role's.
+        && (!('avatar' in d) || d.avatar in ['leader', 'officer', 'member', 'viewer', 'owl', 'lion', 'dolphin', 'rabbit']);
     }
 
     match /guilds/{g} {

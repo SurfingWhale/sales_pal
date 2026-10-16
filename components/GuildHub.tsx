@@ -5,12 +5,12 @@
 // reports. Every rule here is also enforced by firestore.rules.
 
 import { useEffect, useMemo, useState } from "react";
-import { collection, deleteDoc, doc, getDoc, limit, onSnapshot, orderBy, query, setDoc, updateDoc, where } from "firebase/firestore";
+import { collection, deleteDoc, deleteField, doc, getDoc, limit, onSnapshot, orderBy, query, setDoc, updateDoc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { today } from "@/lib/billing";
 import { Deal, delta, juta, monthName, monthOf, shiftMonth } from "@/lib/funnel";
 import {
-  ACTIVITY_TEXT, Activity, Guild, GuildRef, Invite, Member, ROLES, ROLE_HINT, Role, Target, createInvite, foundGuild, invitable, inviteLink,
+  ACTIVITY_TEXT, AVATARS, Activity, Guild, GuildRef, Invite, Member, ROLES, ROLE_HINT, Role, Target, createInvite, foundGuild, invitable, inviteLink,
   isManager, isSeller, leaveGuild, logActivity, removeMember, setRole, teamMonth, titleOf, transferLeadership,
 } from "@/lib/guild";
 import TeamReportSheet from "@/components/TeamReportSheet";
@@ -37,12 +37,18 @@ function RoleBadge({ guild, role, size = 20 }: { guild: Guild | null; role: Role
   );
 }
 
-function Avatar({ role, size, ring }: { role: Role; size: number; ring?: boolean }) {
+// The character they picked, or their role's.
+const avatarSrc = (role: Role, pick?: string) =>
+  pick && (AVATARS as readonly string[]).includes(pick)
+    ? (["owl", "lion", "dolphin", "rabbit"].includes(pick) ? `/archetypes/animal-${pick}.png` : PERSON(pick as Role))
+    : PERSON(role);
+
+function Avatar({ role, size, ring, pick }: { role: Role; size: number; ring?: boolean; pick?: string }) {
   return (
     <span aria-hidden="true" style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, overflow: "hidden", display: "inline-flex", alignItems: "flex-end", justifyContent: "center",
       background: `color-mix(in srgb, ${ROLE_COLOR[role]} 18%, var(--app-card))`, border: ring ? "2px solid var(--app-card)" : `1px solid ${ROLE_COLOR[role]}40` }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={PERSON(role)} alt="" width={size} height={size} style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", transform: "scale(1.12) translateY(6%)" }} />
+      <img src={avatarSrc(role, pick)} alt="" width={size} height={size} style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", transform: "scale(1.12) translateY(6%)" }} />
     </span>
   );
 }
@@ -328,7 +334,7 @@ function GuildBanner({ guild, me, members, deals, targets, look, onEdit }: { gui
           <div role="group" aria-label={`Anggota: ${people.map(m => `${m.name} (${titleOf(guild, m.role)})`).join(", ")}`} style={{ display: "flex", alignItems: "center", marginTop: 8 }}>
             {shown.map((m, i) => (
               <span key={m.uid} title={`${m.name} · ${titleOf(guild, m.role)}`} style={{ marginInlineStart: i ? -8 : 0, display: "inline-flex" }}>
-                <Avatar role={m.role} size={32} ring />
+                <Avatar role={m.role} pick={m.avatar} size={32} ring />
               </span>
             ))}
             {people.length > shown.length && <span style={{ fontSize: 12, color: "var(--app-muted)", marginInlineStart: 8 }}>+{people.length - shown.length}</span>}
@@ -343,6 +349,48 @@ function GuildBanner({ guild, me, members, deals, targets, look, onEdit }: { gui
         </div>
       )}
     </section>
+  );
+}
+
+// ======================= Karakter =======================
+// Each member picks their own character (QA 15 Okt: "kok gabisa milih"): the
+// four people from the owner's art or the four customer-type animals. Saved on
+// their own member doc; firestore.rules allows only this set.
+
+const AVATAR_LABEL: Record<string, string> = { leader: "Bos bermahkota", officer: "Supervisor", member: "Sales", viewer: "Pengamat", owl: "Burung Hantu", lion: "Singa", dolphin: "Lumba-lumba", rabbit: "Kelinci" };
+
+function AvatarSheet({ gid, me, onClose }: { gid: string; me: Member; onClose: () => void }) {
+  const [pick, setPick] = useState<string>(me.avatar || "");
+  const save = useSave();
+  async function submit() {
+    const ok = await save.run(() => updateDoc(doc(db, "guilds", gid, "members", me.uid), { avatar: pick || deleteField() }));
+    if (ok) onClose();
+  }
+  const option = (id: string, l: string) => (
+    <button key={id || "role"} type="button" role="radio" aria-checked={pick === id} onClick={() => setPick(id)}
+      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: 10, minHeight: 44, borderRadius: 14, cursor: "pointer", fontFamily: "inherit", color: "var(--app-text)",
+        background: pick === id ? `color-mix(in srgb, ${ROLE_COLOR[me.role]} 10%, var(--app-card))` : "var(--app-card)",
+        border: `${pick === id ? 2 : 1}px solid ${pick === id ? ROLE_COLOR[me.role] : "var(--app-border)"}` }}>
+      <Avatar role={me.role} pick={id || undefined} size={64} />
+      <span style={{ fontSize: 12, fontWeight: 600, textAlign: "center", lineHeight: 1.3 }}>{l}</span>
+    </button>
+  );
+  return (
+    <div className="modal-overlay" onClick={() => { if (!save.busy) onClose(); }}>
+      <form noValidate aria-labelledby="av-h" onSubmit={e => { e.preventDefault(); submit(); }} onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 480 }}>
+        <div id="av-h" style={{ fontSize: 17, fontWeight: 700, fontFamily: font, marginBottom: 4 }}>Karakter kamu</div>
+        <div style={{ fontSize: 13, color: "var(--app-muted)", marginBottom: 16 }}>Keliatan di banner dan daftar anggota. Peran kamu tetap {titleOf(null, me.role)}.</div>
+        <div role="radiogroup" aria-label="Pilih karakter" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8 }}>
+          {option("", "Sesuai peran")}
+          {AVATARS.filter(a => a !== me.role).map(a => option(a, AVATAR_LABEL[a]))}
+        </div>
+        <FormNote err={save.err} />
+        <div className="sp-form-foot">
+          <button type="button" onClick={onClose} disabled={save.busy} style={btnMuted}>Batal</button>
+          <button type="submit" disabled={save.busy} style={{ ...btnPrimary, opacity: save.busy ? 0.6 : 1 }}>{save.busy ? "Menyimpan…" : "Simpan karakter"}</button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -632,6 +680,7 @@ function Members({ gid, guild, me, members, invites, uid, onSettings }: { gid: s
   const [copied, setCopied] = useState(false);
   const [handover, setHandover] = useState<string | null>(null);
   const [kicking, setKicking] = useState<Member | null>(null);
+  const [picking, setPicking] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [copyMsg, setCopyMsg] = useState("");
   const [roleErr, setRoleErr] = useState("");
@@ -695,7 +744,12 @@ function Members({ gid, guild, me, members, invites, uid, onSettings }: { gid: s
           const options = rolesFor(m);
           return (
             <div key={m.uid} className="sp-member" style={{ ...card, padding: "12px 14px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <Avatar role={m.role} size={44} />
+              {m.uid === me.uid
+                ? <button type="button" onClick={() => setPicking(true)} aria-label="Ganti karakter kamu" style={{ padding: 0, border: 0, background: "none", cursor: "pointer", borderRadius: "50%", position: "relative" }}>
+                    <Avatar role={m.role} pick={m.avatar} size={44} />
+                    <span aria-hidden="true" style={{ position: "absolute", insetInlineEnd: -2, bottom: -2, width: 18, height: 18, borderRadius: "50%", background: "var(--app-card)", border: "1px solid var(--app-border)", fontSize: 11, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>✎</span>
+                  </button>
+                : <Avatar role={m.role} pick={m.avatar} size={44} />}
               <div style={{ minWidth: 0, flex: "1 1 160px" }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}{m.uid === me.uid ? " (kamu)" : ""}</div>
                 <div style={{ fontSize: 12, color: "var(--app-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.email}</div>
@@ -767,6 +821,7 @@ function Members({ gid, guild, me, members, invites, uid, onSettings }: { gid: s
         {!leader && <button onClick={() => setLeaving(true)} style={{ ...btnMuted, color: "color-mix(in srgb, #dc2626 70%, var(--app-text))" }}>Keluar dari guild</button>}
       </div>
 
+      {picking && <AvatarSheet gid={gid} me={me} onClose={() => setPicking(false)} />}
       {kicking && (
         <ConfirmSheet title={`Keluarkan ${kicking.name}?`} action="Keluarkan" busyLabel="Mengeluarkan…" onConfirm={() => kick(kicking)} onClose={() => setKicking(null)}>
           Dia ga bisa buka {guild.name} lagi. Deal miliknya tetap ada di guild. Bisa diundang lagi lewat link baru.

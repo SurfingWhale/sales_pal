@@ -1320,6 +1320,15 @@ export const flows = [
         await sheet.waitFor({ state: "detached" });
         await page.getByRole("region", { name: "Guild Tim Uji" }).getByRole("img", { name: "Logo Tim Uji" }).waitFor();
       });
+      await t.step("each member picks their own character", async () => {
+        await page.getByRole("button", { name: "Ganti karakter kamu" }).click();
+        const sheet = page.getByRole("dialog", { name: "Karakter kamu" });
+        await sheet.getByRole("radio", { name: "Singa" }).click();
+        await sheet.getByRole("button", { name: "Simpan karakter" }).click();
+        await sheet.waitFor({ state: "detached" });
+        await page.locator('.sp-member img[src*="animal-lion"]').first().waitFor();
+        await page.getByRole("region", { name: "Guild Tim Uji" }).locator('img[src*="animal-lion"]').waitFor();
+      });
       await t.step("leader makes a member invite link", async () => {
         await page.getByRole("radiogroup", { name: "Peran undangan" }).getByRole("radio", { name: /^Member/ }).click();
         await page.getByRole("button", { name: "Bikin link undangan" }).click();

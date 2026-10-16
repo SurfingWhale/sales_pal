@@ -128,6 +128,9 @@ await t("officer edits any deal", assertSucceeds(updateDoc(doc(O, "guilds", G, "
 
 await t("member cannot promote themselves", assertFails(updateDoc(doc(M, "guilds", G, "members", "memb"), { role: "officer" })));
 await t("member updates their own name", assertSucceeds(updateDoc(doc(M, "guilds", G, "members", "memb"), { name: "Andri" })));
+await t("member picks their own character", assertSucceeds(updateDoc(doc(M, "guilds", G, "members", "memb"), { avatar: "owl" })));
+await t("only a character from the set", assertFails(updateDoc(doc(M, "guilds", G, "members", "memb"), { avatar: "https://example.com/x.png" })));
+await t("member cannot pick a character for someone else", assertFails(updateDoc(doc(M, "guilds", G, "members", "memb2"), { avatar: "lion" })));
 await t("officer cannot make someone an officer", assertFails(updateDoc(doc(O, "guilds", G, "members", "memb2"), { role: "officer" })));
 await t("officer moves a member to viewer and back", assertSucceeds(updateDoc(doc(O, "guilds", G, "members", "memb2"), { role: "viewer" }).then(() => updateDoc(doc(O, "guilds", G, "members", "memb2"), { role: "member" }))));
 await t("leader cannot crown a second leader without handing over", assertFails(updateDoc(doc(L, "guilds", G, "members", "memb"), { role: "leader" })));
