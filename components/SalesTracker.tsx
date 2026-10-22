@@ -800,6 +800,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         .sp-nav-short { display: none; }
         .sp-subhint { max-width: 1200px; margin: 0 auto; padding: 8px 32px 0; font-size: 13px; color: var(--app-muted); position: relative; z-index: 1; }
         .sp-iconbtn { width: 44px; height: 44px; border: 0; border-radius: 999px; color: var(--app-ink-2); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; flex-shrink: 0; font-family: inherit; }
+        .sp-iconbtn:not(.glass) { background: transparent; }
         .sp-space { display: flex; align-items: center; height: 44px; border-radius: 999px; color: var(--app-ink-2); font-size: 13px; font-weight: 500; padding: 0 12px 0 16px; gap: 6px; }
         .sp-space select { appearance: none; -webkit-appearance: none; background: transparent; border: none; color: inherit; font: inherit; max-width: 150px; text-overflow: ellipsis; cursor: pointer; outline: none; }
         .sp-subnav { display: flex; gap: 8px; max-width: 1200px; margin: 0 auto; padding: 8px 32px 0; overflow-x: auto; scrollbar-width: none; }
@@ -812,9 +813,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           /* An iOS tab bar: docked to the bottom edge, 50pt over the home indicator. */
           .sp-nav { position: fixed; z-index: 60; left: 0; right: 0; bottom: 0; height: calc(50px + env(safe-area-inset-bottom, 0px)); padding: 0 4px env(safe-area-inset-bottom, 0px); border-radius: 0; margin: 0; gap: 0; box-shadow: inset 0 0.5px 0 var(--app-line-strong); }
           .sp-nav::before { display: none; }
-          .sp-nav.glass { background: color-mix(in srgb, var(--app-bg) 94%, transparent); }
+          .sp-nav.glass { background: var(--app-bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
           /* Header buttons: a light chip, not a floating shadow. */
-          .sp-top .sp-iconbtn.glass { box-shadow: inset 0 0 0 0.5px var(--app-line-strong); background: var(--glass-strong); }
+          /* The bell: a 36px chip inside its 44px tap box. */
+          .sp-top .sp-iconbtn.glass { box-shadow: none; background: radial-gradient(circle closest-side, var(--glass-strong) 0 17px, var(--app-line-strong) 17px 17.6px, transparent 18px); -webkit-backdrop-filter: none; backdrop-filter: none; }
           .sp-top .sp-iconbtn.glass::before { display: none; }
           .sp-nav-btn { flex: 1; min-width: 0; height: 50px; flex-direction: column; justify-content: center; gap: 2px; padding: 0; border-radius: 0; font-size: 11px; font-weight: 500; }
           .sp-nav-btn.is-on { background: transparent; box-shadow: none; color: var(--brand-text); font-weight: 600; }

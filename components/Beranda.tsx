@@ -75,6 +75,7 @@ const css = `
 
 .sp-today { margin-top: 20px; display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 12px 16px; }
 .sp-today-txt { font-size: 14px; min-width: 0; flex: 1 1 200px; display: flex; align-items: center; gap: 10px; }
+.sp-today-main { display: contents; }
 .sp-today-bar { display: none; }
 
 .sp-kpis { margin-top: 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--app-border); border-top: 1px solid var(--app-border); border-bottom: 1px solid var(--app-border); }
@@ -122,17 +123,29 @@ const css = `
   .sp-seg { max-width: none; margin-bottom: 12px; }
   .sp-card { border-radius: 14px; }
 
-  .sp-find { margin: 0; padding: 12px; gap: 12px; }
-  .sp-find-ic { width: 36px; height: 36px; border-radius: 10px; }
-  .sp-find-ttl { font-size: 15px !important; }
-  .sp-find-sub { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; }
-  .sp-find .sp-btn { padding: 0 14px; }
+  /* Buttons: a 44px tap box drawn as a 32px shape. The transparent block
+     border keeps the target; the fill and line sit on the padding box, and
+     the negative margin gives the 12px back to the layout. */
+  .sp-btn { height: 44px; margin-block: -6px; border: 0 solid transparent; border-block-width: 6px; background-clip: padding-box; border-radius: 14px; padding: 0 12px; font-size: 13px; gap: 6px; }
+  .sp-btn.line { border-color: transparent; border-inline-width: 0; box-shadow: inset 0 0 0 1px var(--app-line-strong); }
+  .sp-btn.tint { background-color: color-mix(in srgb, #005eb0 10%, transparent); color: var(--brand-text); }
 
-  .sp-today { margin: 0; flex-direction: column; align-items: stretch; gap: 12px; padding: 12px; }
-  .sp-today-txt { flex: none; }
-  .sp-today-bar { display: block; height: 4px; border-radius: 2px; background: var(--app-inner); overflow: hidden; }
+  .sp-find { margin: 0; padding: 12px; gap: 12px; }
+  .sp-find-ic { width: 32px; height: 32px; border-radius: 8px; }
+  .sp-find-ttl { font-size: 14px !important; }
+  .sp-find-sub { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* One filled action per screen (Mulai hunting): Cari bisnis steps down to a tint. */
+  .sp-find .sp-find-go { background-color: color-mix(in srgb, #005eb0 10%, transparent); color: var(--brand-text); }
+
+  .sp-today { margin: 0; flex-wrap: nowrap; gap: 12px; padding: 12px; }
+  .sp-today-main { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
+  .sp-today-txt { flex: none; font-size: 13px; gap: 8px; align-items: flex-start; line-height: 1.35; }
+  .sp-today-txt > svg { margin-top: 1px; flex-shrink: 0; }
+  .sp-today-sep { display: none; }
+  .sp-today-q { display: block; color: var(--app-muted); }
+  .sp-today-bar { display: block; height: 3px; border-radius: 2px; background: var(--app-inner); overflow: hidden; margin-left: 26px; }
   .sp-today-bar > span { display: block; height: 100%; border-radius: 2px; background: #b93a06; }
-  .sp-today .sp-btn { width: 100%; }
+  .sp-today .sp-btn { flex-shrink: 0; height: 48px; margin-block: -6px; padding: 0 14px; font-size: 14px; }
 
   .sp-kpis { margin: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; background: var(--app-card); border: 1px solid var(--app-border); border-radius: 14px; overflow: hidden; }
   .sp-kpi { background: transparent; padding: 12px; }
@@ -150,22 +163,23 @@ const css = `
   .sp-todo-sec { margin: 0; }
   .sp-todo-head { margin-bottom: 4px; }
   .sp-todo { display: flex; flex-direction: column; gap: 0; background: var(--app-card); border: 1px solid var(--app-border); border-radius: 14px; overflow: hidden; }
-  .sp-task, .sp-task.is-first { min-height: 0; border: 0; border-radius: 0; padding: 12px 16px; gap: 8px; background: transparent; color: var(--app-text); }
+  .sp-task, .sp-task.is-first { min-height: 0; border: 0; border-radius: 0; padding: 12px 16px; gap: 10px; background: transparent; color: var(--app-text); }
   .sp-task + .sp-task { box-shadow: inset 0 1px 0 var(--app-border); }
   .sp-task h3 { font-size: 15px; line-height: 1.3; }
   .sp-task-meta, .sp-task.is-first .sp-task-meta { font-size: 12px; gap: 6px; color: var(--app-muted); }
   .sp-task-what, .sp-task.is-first .sp-task-what { margin-top: 2px; font-size: 13px; line-height: 1.4; color: var(--app-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sp-task-flag { background: color-mix(in srgb, #005eb0 12%, transparent); color: var(--brand-text); font-weight: 600; padding: 2px 8px; }
-  .sp-task-acts { margin-top: 0; gap: 8px; }
-  .sp-task .sp-btn { border-radius: 10px; padding: 0 14px; }
-  .sp-task.is-first .sp-btn.line { background: #005eb0; color: #fff; border-color: #005eb0; }
+  .sp-task-acts { margin-top: 0; gap: 4px; }
+  .sp-task .sp-btn { border-radius: 14px; }
+  .sp-task .sp-btn.ghost { padding: 0 8px; }
+  /* The most urgent row leads with a tint, not a third filled button. */
+  .sp-task.is-first .sp-btn.line { background-color: color-mix(in srgb, #005eb0 10%, transparent); color: var(--brand-text); box-shadow: none; }
   .sp-task.is-first .sp-btn.ghost { color: var(--app-ink-2); }
   .sp-b-more { margin-top: 8px; gap: 24px; }
 }
 @media (max-width: 360px) {
-  .sp-find { flex-wrap: wrap; }
-  .sp-find > span:nth-child(2) { flex-basis: calc(100% - 48px) !important; }
-  .sp-find .sp-btn { width: 100%; }
+  .sp-today { flex-direction: column; align-items: stretch; }
+  .sp-today .sp-btn { width: 100%; }
   .sp-kpi .lbl { white-space: normal; min-height: 2.6em; line-height: 1.3; }
   .sp-seg-btn { font-size: 12px; }
 }
@@ -231,11 +245,13 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
       {hunting && (
         // The day's one main move: today's DMs against the goal, then start.
         <section aria-label="Hunting hari ini" className="sp-card sp-today">
+          <span className="sp-today-main">
           <span className="sp-today-txt">
             <Icon name="target" size={18} />
-            <span><b className="tabnum">{hunting.sentToday}/{hunting.goal}</b> DM hari ini · <b className="tabnum">{hunting.queued}</b> prospek di antrian</span>
+            <span><b className="tabnum">{hunting.sentToday}/{hunting.goal}</b> DM hari ini<span className="sp-today-sep"> · </span><span className="sp-today-q"><b className="tabnum">{hunting.queued}</b> prospek di antrian</span></span>
           </span>
           <span className="sp-today-bar" aria-hidden="true"><span style={{ width: `${hunting.goal ? Math.min(100, (hunting.sentToday / hunting.goal) * 100) : 0}%` }} /></span>
+          </span>
           {hunting.live
             ? <button onClick={hunting.onOpen} className="sp-btn line">Sesi jalan · buka Hunting</button>
             : <button onClick={hunting.onStart} className="sp-btn hunt">▶ Mulai hunting</button>}
@@ -250,7 +266,7 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
             <span className="sp-find-ttl" style={{ display: "block", fontSize: 15, fontWeight: 700 }}>Cari calon klien</span>
             <span className="sp-find-sub">Bisnis dari Google Maps, titik lemahnya, dan pesan pembuka. Atau import daftar Excel.</span>
           </span>
-          <button onClick={onFind} className="sp-btn blue" style={{ flexShrink: 0 }}>Cari bisnis</button>
+          <button onClick={onFind} className="sp-btn blue sp-find-go" style={{ flexShrink: 0 }}>Cari bisnis</button>
         </section>
       )}
 
