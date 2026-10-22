@@ -86,8 +86,10 @@
 .lp-card-foot { display: flex; flex-wrap: wrap; gap: 8px 28px; padding-top: 4px; margin-top: auto; }
 
 .lp-room { position: sticky; top: var(--gap); height: calc(100svh - 72px - var(--gap)); background: var(--navy); overflow: hidden; display: grid; place-items: center; }
-.lp-room .scene { position: absolute; inset: 0; display: grid; place-items: center; padding: clamp(16px, 4vw, 56px); opacity: 0; visibility: hidden; transition: opacity 1.2s ease-in-out, visibility 0s linear 1.2s; }
-.lp-room .scene.on { opacity: 1; visibility: visible; transition: opacity 1.2s ease-in-out, visibility 0s; }
+/* The next screen wipes in over the last (clip, not opacity), so text is
+   never half-faded and its contrast never dips. */
+.lp-room .scene { position: absolute; inset: 0; display: grid; place-items: center; padding: clamp(16px, 4vw, 56px); visibility: hidden; clip-path: inset(0 0 0 100%); z-index: 0; transition: clip-path 1.2s cubic-bezier(.2,0,0,1), visibility 0s linear 1.2s; }
+.lp-room .scene.on { visibility: visible; clip-path: inset(0); z-index: 1; transition: clip-path 1.2s cubic-bezier(.2,0,0,1), visibility 0s; }
 .lp-room .scene figcaption { position: absolute; left: clamp(16px, 3vw, 32px); bottom: clamp(16px, 3vw, 28px); color: var(--paper); font-weight: 600; max-width: 30ch; }
 
 @media (max-width: 860px) {
