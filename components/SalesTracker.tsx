@@ -41,6 +41,7 @@ import ClientHub from "@/components/ClientHub";
 import SalesReport from "@/components/SalesReport";
 import GuildHub from "@/components/GuildHub";
 import { OutreachTab, RejectionTab, type Outreach, type Rejection } from "@/components/TeamLogs";
+import ActivityLog from "@/components/ActivityLog";
 import LeadSources from "@/components/LeadSources";
 import ModalA11y from "@/components/ModalA11y";
 import { Hunt, useClosingTarget, useHuntGoal } from "@/lib/hunting";
@@ -60,7 +61,7 @@ const SECTIONS: { id: string; label: string; short: string; icon: string; tabs: 
   { id: "home", label: "Beranda", short: "Beranda", icon: "home" as IconName, tabs: ["Dashboard"] },
   { id: "hunt", label: "Hunting", short: "Hunting", icon: "target" as IconName, tabs: ["Hunting"] },
   { id: "sell", label: "Jualan", short: "Jualan", icon: "briefcase" as IconName, tabs: ["Leads", "Penawaran", "Invoice", "Paket"] },
-  { id: "team", label: "Tim & Report", short: "Tim", icon: "shield" as IconName, tabs: ["Guild", "Report Klien", "Outreach", "Rejection Log"] },
+  { id: "team", label: "Tim & Report", short: "Tim", icon: "shield" as IconName, tabs: ["Guild", "Report Klien", "Log aktivitas", "Outreach", "Rejection Log"] },
   { id: "learn", label: "Belajar", short: "Belajar", icon: "book" as IconName, tabs: ["Script Library", "Simulator", "AI Playbook"] },
 ];
 // Only tabs without a heading of their own get a line here; the others say
@@ -1151,6 +1152,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           leads={leads.map(l => ({ id: l.id, name: l.name, contact: l.contact, phone: l.phone }))} />}
         {activeTab === "Paket" && <Services services={services} business={business} />}
 
+        {activeTab === "Log aktivitas" && <ActivityLog hunts={hunts} sessions={huntSession.sessions} quotes={quotes} invoices={invoices}
+          outreach={outreach} rejections={rejections} onGo={tab => { setActiveTab(tab); window.scrollTo({ top: 0 }); }} />}
         {activeTab === "Outreach" && <OutreachTab outreach={outreach} />}
         {activeTab === "Rejection Log" && <RejectionTab rejections={rejections} />}
 

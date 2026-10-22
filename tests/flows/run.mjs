@@ -76,6 +76,7 @@ async function audit(page, touch) {
       for (const e of document.querySelectorAll("button, a[href], input:not([type=hidden]), select, textarea, [role=button], [role=tab], [role=radio], [role=checkbox], summary")) {
         if (!shown(e) || e.disabled) continue;
         if (e.matches("a") && e.closest("p, li") && !e.matches("[role=button]")) continue; // a link inside a sentence
+        if (e.matches(".sp-heat")) continue; // heat map days: a dense grid by design (globals.css); the day list under it is the full-size way in
         const r = e.getBoundingClientRect();
         if (r.width <= 2 || r.height <= 2) continue; // visually hidden (e.g. a file input behind its label)
         if (parseFloat(getComputedStyle(e).opacity) < 0.99) continue; // fading in or out, or an invisible overlay on its visible label

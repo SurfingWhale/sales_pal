@@ -60,6 +60,8 @@ html, body {
   --panel-shadow: 0 1px 2px rgba(16,24,40,0.04), 0 12px 32px rgba(16,24,40,0.08);
   --glow-a: rgba(110,169,228,0.35); --glow-b: rgba(0,94,176,0.22);
   --scrim: rgba(10,14,20,0.32);
+  /* Log aktivitas heat map: one blue, light to dark (validated, 2:1 on the card) */
+  --heat-1: #86b6ef; --heat-2: #3987e5; --heat-3: #256abf; --heat-4: #104281;
 }
 
 [data-theme="dark"] {
@@ -67,6 +69,7 @@ html, body {
   --warn-text: #ffb84d;
   --violet-text: #c4b5fd;
   --brand-text: #7ab5ef;  /* brand blue as text on dark */
+  --heat-1: #184f95; --heat-2: #2a78d6; --heat-3: #6da7ec; --heat-4: #b7d3f6;
 
   --app-bg: #0d0f12;
   --app-card: #15181c;
@@ -860,14 +863,15 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 
 /* ---- The native standard on phones (docs/prd/PRD-010) ----
    Apple's minimum touch target is 44pt. Every control in the app meets it on a
-   phone, whatever its inline style says; lead-map dots (positioned on the map)
-   and visually hidden file inputs are the only exceptions. */
+   phone, whatever its inline style says; lead-map dots (positioned on the map),
+   the days of the Log aktivitas heat map (a dense grid; the day list under it
+   is the full-size way in) and visually hidden file inputs are the only exceptions. */
 @media (max-width: 767px) {
-  :is(.sp-top, .sp-main, .sp-nav, .modal-overlay, .sp-hunt-bar) :is(button, select, summary, [role="button"], [role="tab"], [role="radio"]):not(.sp-dot):not(.vh),
+  :is(.sp-top, .sp-main, .sp-nav, .modal-overlay, .sp-hunt-bar) :is(button, select, summary, [role="button"], [role="tab"], [role="radio"]):not(.sp-dot):not(.sp-heat):not(.vh),
   :is(.sp-top, .sp-main, .modal-overlay) input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not(.vh) {
     min-height: 44px !important;
   }
-  :is(.sp-top, .sp-main, .sp-nav, .modal-overlay, .sp-hunt-bar) :is(button, [role="radio"], [role="tab"]):not(.sp-dot):not(.vh) { min-width: 44px !important; }
+  :is(.sp-top, .sp-main, .sp-nav, .modal-overlay, .sp-hunt-bar) :is(button, [role="radio"], [role="tab"]):not(.sp-dot):not(.sp-heat):not(.vh) { min-width: 44px !important; }
   .sp-sub-btn { height: 44px !important; }
   .sp-sub-btn::after { display: none; }
   .modal-x-rail .modal-x { width: 44px; height: 44px; }

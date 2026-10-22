@@ -324,7 +324,7 @@ export const flows = [
       await t.step("sign up", () => signup(t));
       const places = [["Beranda", null, "Perlu ditindak"], ["Hunting", null, "Hunting Mode"],
         ["Jualan", "Leads", "Belum ada lead"], ["Jualan", "Penawaran", "Susun dari paket"], ["Jualan", "Invoice", "Invoice & Pembayaran"], ["Jualan", "Paket", "Paket & Harga"],
-        ["Tim", "Guild", "Belum ikut guild"], ["Tim", "Report Klien", "Report Klien"], ["Tim", "Outreach", "Outreach Tracker"], ["Tim", "Rejection Log", "Rejection"],
+        ["Tim", "Guild", "Belum ikut guild"], ["Tim", "Report Klien", "Report Klien"], ["Tim", "Log aktivitas", "Belum ada aktivitas"], ["Tim", "Outreach", "Outreach Tracker"], ["Tim", "Rejection Log", "Rejection"],
         ["Belajar", "Script Library", "Script Library"], ["Belajar", "Simulator", "Simulator"], ["Belajar", "AI Playbook", "Playbook"]];
       for (const [place, tab, heading] of places) {
         await t.step(`${place}${tab ? ` → ${tab}` : ""} shows "${heading}"`, async () => { await go(t.page, place, tab); await expectText(t.page, heading); });
@@ -1280,6 +1280,22 @@ export const flows = [
         await page.getByText("Konversi NTB → ETB").waitFor();
       });
       await t.step("the Hot lead is in Leads", async () => { await go(page, "Jualan", "Leads"); await expectText(page, "Toko Kue"); });
+      await t.step("log aktivitas: today on the heat map, that day's list, one kind", async () => {
+        await go(page, "Tim", "Log aktivitas");
+        const map = page.getByRole("region", { name: /Heat map aktivitas/ });
+        await map.getByRole("button", { name: /: \d+ aktivitas$/ }).last().click();
+        await page.getByRole("button", { name: /^Hapus filter/ }).waitFor();
+        const todayList = page.getByRole("region", { name: "Hari ini" });
+        await todayList.getByText("Simpan post Toko Kue (@tokokue)").waitFor();
+        await todayList.getByText("Toko Kue (@tokokue) jadi lead (ETB)").waitFor();
+        await todayList.getByText(/^Sesi hunting \d+ menit$/).first().waitFor();
+        await map.getByRole("button", { name: /^Respon/ }).click();
+        await todayList.getByText("Simpan post Toko Kue (@tokokue)").waitFor({ state: "detached" });
+        await todayList.getByText("Toko Kue (@tokokue) jadi lead (ETB)").waitFor();
+        await map.getByRole("button", { name: /^Semua/ }).click();
+        await page.getByRole("button", { name: /^Hapus filter/ }).click();
+        await page.getByRole("button", { name: /^Hapus filter/ }).waitFor({ state: "detached" });
+      });
     },
   },
   {
@@ -1636,10 +1652,10 @@ export const flows = [
         await expectText(page, "Dibekukan");
       });
       await t.step("the activity log shows who did what", async () => {
-        await page.getByRole("tab", { name: "Aktivitas" }).click();
+        await page.getByRole("tab", { name: "Aktivitas", exact: true }).click();
         await page.getByText("gabung guild").first().waitFor({ timeout: 10000 });
         await page.getByText("closing lunas").first().waitFor();
-        await p2.getByRole("tab", { name: "Aktivitas" }).click();
+        await p2.getByRole("tab", { name: "Aktivitas", exact: true }).click();
         await p2.getByText("nyatet chat").first().waitFor({ timeout: 10000 });
         await p2.getByText("Yang kamu lakuin").waitFor();
       });
@@ -1652,7 +1668,7 @@ export const flows = [
         const other = await sel.locator("option").evaluateAll((os, v) => os.map(o => o.value).find(x => x !== v), now);
         await sel.selectOption(other);
         await modal(page).getByRole("button", { name: "Pindahin" }).click();
-        await page.getByRole("tab", { name: "Aktivitas" }).click();
+        await page.getByRole("tab", { name: "Aktivitas", exact: true }).click();
         await page.getByText("pindah pemilik deal").first().waitFor({ timeout: 10000 });
       });
       await t.step("the guild as a workspace: a member's lead reaches the leader, not Pribadi", async () => {

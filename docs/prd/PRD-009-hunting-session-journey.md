@@ -406,3 +406,13 @@ Ga ada koleksi atau aturan Firestore baru (`statusAt`, `eventDate`, `description
 - **Kartu prospek ringkas**: nama + status, 2 baris post, chip Butuh/Kapan/Di mana/Budget, cek jadwal; ID, link post, gaya, saran tahap di balik **Detail ▾**.
 - **Papan pesan per tahap**: tahap jadi chip (yang cocok ditandai ● dan kepilih otomatis, angka = jumlah pesan); pesan tahap itu numpuk ke bawah (di laptop jadi grid). Ga ada lagi papan yang lebarnya 6 kolom digeser ke samping.
 - Flow: hunting (default kosong ngisi `{kebutuhan}`, ID di Detail, pindah bagian), journey (chip tahap, Detail), akun besar (Journey).
+
+**Susulan 22 Okt — Log aktivitas:** "Gw punya flow log: list info activity, ada heat map, dan bisa di-trace sales activity apa yang gw kerjain."
+- Tab **Tim & Report → Log aktivitas** (`components/ActivityLog.tsx`, `lib/activity.ts`), plus link di Beranda → Report & closing.
+- **Ga nulis data baru** (rules ga berubah): semuanya dibaca dari yang udah tersimpan — riwayat journey prospek (simpan post, DM / balas di post, dibales, status, catatan, jadi ETB), log DM lama di luar journey, sesi hunting, penawaran (dibuat, dikirim, diterima), invoice (terbit, pembayaran masuk), Outreach & Rejection Log. Prospek DNC cuma nyisa satu baris "minta ga dihubungi" karena riwayatnya udah dihapus.
+- **Heat map 17 minggu** (Sen–Min): satu warna biru, 4 tingkat relatif ke hari paling rame (lolos cek kontras 2:1 di terang & gelap). Tap hari → daftar cuma hari itu. Chip jenis: Hunting, Respon, Jualan, Catatan.
+- **Ringkasan**: jumlah aktivitas 17 minggu, hari berturut-turut, minggu ini vs minggu lalu, hari paling rame.
+- **Daftar per hari**, terbaru dulu, dengan jam kalau record-nya nyimpen jam; tap baris → buka tempatnya. 14 hari sekali tampil, sisanya **Lihat lebih lama**.
+- Di guild cuma aktivitas lu sendiri; aktivitas tim tetap di Guild → Aktivitas.
+- Kotak heat map dikecualiin dari aturan 44px di HP (grid padat; daftar di bawahnya jalur ukuran penuh), dicatat di `app/globals.css`.
+- Flow: journey (hari ini di heat map, daftar hari itu, filter Respon), navigation (tab kosong).
