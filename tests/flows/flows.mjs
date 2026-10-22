@@ -324,7 +324,7 @@ export const flows = [
       await t.step("sign up", () => signup(t));
       const places = [["Beranda", null, "Perlu ditindak"], ["Hunting", null, "Hunting Mode"],
         ["Jualan", "Leads", "Belum ada lead"], ["Jualan", "Penawaran", "Susun dari paket"], ["Jualan", "Invoice", "Invoice & Pembayaran"], ["Jualan", "Paket", "Paket & Harga"],
-        ["Tim", "Guild", "Belum ikut guild"], ["Tim", "Report Klien", "Report Klien"], ["Tim", "Log aktivitas", "Belum ada aktivitas"], ["Tim", "Outreach", "Outreach Tracker"], ["Tim", "Rejection Log", "Rejection"],
+        ["Tim", "Dashboard tim", "Belum ada yang bisa dihitung"], ["Tim", "Guild", "Belum ikut guild"], ["Tim", "Report Klien", "Report Klien"], ["Tim", "Log aktivitas", "Belum ada aktivitas"], ["Tim", "Outreach", "Outreach Tracker"], ["Tim", "Rejection Log", "Rejection"],
         ["Belajar", "Script Library", "Script Library"], ["Belajar", "Simulator", "Simulator"], ["Belajar", "AI Playbook", "Playbook"]];
       for (const [place, tab, heading] of places) {
         await t.step(`${place}${tab ? ` → ${tab}` : ""} shows "${heading}"`, async () => { await go(t.page, place, tab); await expectText(t.page, heading); });
@@ -1296,6 +1296,16 @@ export const flows = [
         await page.getByRole("button", { name: /^Hapus filter/ }).click();
         await page.getByRole("button", { name: /^Hapus filter/ }).waitFor({ state: "detached" });
       });
+      await t.step("dashboard kamu: the month's numbers, trend and funnel", async () => {
+        await go(page, "Tim", "Dashboard tim");
+        await expectText(page, "Dashboard kamu");
+        const tiles = page.getByRole("region", { name: "Angka utama" });
+        await tiles.getByText("Jadi ETB").waitFor();
+        await page.getByRole("img", { name: /^Aktivitas per hari: total \d+/ }).waitFor();
+        await page.getByRole("region", { name: "Funnel periode ini" }).getByText("Closing").waitFor();
+        await page.getByRole("radio", { name: "Bulan lalu" }).click();
+        await page.getByRole("radio", { name: "Bulan lalu", checked: true }).waitFor();
+      });
     },
   },
   {
@@ -1684,6 +1694,30 @@ export const flows = [
         await expectText(page, "Warung Tim");
         await expectText(page, `👤 ${memberName}`);
         await page.locator("#space-pick").selectOption({ label: "👤 Pribadi" });
+        await go(page, "Tim", "Guild");
+        await go(p2, "Tim", "Guild");
+      });
+      await t.step("dashboard tim: a member sees their own, the leader sees each seller and opens one", async () => {
+        await p2.locator("#space-pick").selectOption({ label: "🛡️ Tim Uji" });
+        await go(p2, "Tim", "Outreach");
+        await p2.getByRole("button", { name: "+ Catat outreach" }).first().click();
+        await p2.locator("#ou-name").fill("Kopi Tim");
+        await modal(p2).getByRole("button", { name: "Simpan", exact: true }).click();
+        await expectText(p2, "Kopi Tim");
+        await go(p2, "Tim", "Dashboard tim");
+        await expectText(p2, "Dashboard kamu");
+        await p2.getByText("Log aktivitas kamu").waitFor();
+        if (await p2.getByRole("heading", { name: "Per sales" }).count()) throw new Error("a member sees every seller");
+        await page.locator("#space-pick").selectOption({ label: "🛡️ Tim Uji" });
+        await go(page, "Tim", "Dashboard tim");
+        await page.getByRole("heading", { name: "Per sales" }).waitFor();
+        await page.getByRole("radio", { name: "30 hari" }).click();
+        await page.getByRole("button", { name: new RegExp(`^${memberName}: 1 aktivitas`) }).click();
+        await expectText(page, `Dashboard ${memberName}`);
+        await page.getByText(`Log aktivitas ${memberName}`).waitFor();
+        await page.getByText("Email ke Kopi Tim").first().waitFor();
+        await page.locator("#space-pick").selectOption({ label: "👤 Pribadi" });
+        await p2.locator("#space-pick").selectOption({ label: "👤 Pribadi" });
         await go(page, "Tim", "Guild");
         await go(p2, "Tim", "Guild");
       });
