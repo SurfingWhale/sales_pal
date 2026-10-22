@@ -790,7 +790,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   };
   const mapLeads = active.map(l => ({
     id: l.id, name: l.name, score: sc(l).total, value: Number(l.value) || 0, phone: l.phone,
-    category: l.category, address: l.address, status: l.status, ...(validGeo(l.geo) ? { geo: l.geo } : {}),
+    category: l.category, address: l.address, status: l.status, archetype: l.profile?.archetype, ...(validGeo(l.geo) ? { geo: l.geo } : {}),
     why: l.nextActionDate ? `${l.nextAction || "Follow-up"} ${longDate(l.nextActionDate)}` : sc(l).tip ? `Biar naik: ${sc(l).tip}` : "",
   }));
 

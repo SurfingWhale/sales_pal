@@ -62,6 +62,8 @@ export function bigAccount(uid) {
       ...(i % 6 === 0 ? { lastReplyAt: daysAgo(i % 10) } : {}),
       // Half have a point around central Jakarta, for Peta 3D.
       ...(i % 2 === 0 ? { address: `Jl. Contoh No. ${i}, Jakarta`, geo: { lat: -6.17 - (i % 13) * 0.004, lng: 106.81 + (i % 11) * 0.005, by: "maps" } } : {}),
+      // Two in three have a customer type from their chat: their pin wears the character.
+      ...(i % 3 ? { profile: { archetype: ["owl", "lion", "dolphin", "rabbit"][Math.floor(i / 2) % 4], source: "wa-export" } } : {}),
     }]);
   }
   const item = (k) => ({ name: `Paket foto ${k}`, qty: 1, price: 750_000 + k * 250_000, description: "20 foto edit\n1x revisi" });
@@ -547,6 +549,19 @@ export const flows = [
         await sheet.waitFor({ state: "detached" });
         await page.getByText(/Muncul di Peta 3D · ditandai di peta/).first().waitFor();
       });
+      await t.step("paste a Google Maps link: the point is read on the phone", async () => {
+        await page.getByRole("button", { name: "Ubah", exact: true }).first().click();
+        const sheet = page.getByRole("dialog", { name: "Lokasi lead" });
+        const link = "https://www.google.com/maps/place/Kopi+Tempel+Flow/@-6.22,106.84,17z/data=!3m1!4b1!8m2!3d-6.2253771!4d106.8487123";
+        await sheet.locator("#geo-addr").evaluate((el, text) => {
+          const data = new DataTransfer();
+          data.setData("text/plain", text);
+          el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+        }, link);
+        await sheet.getByRole("list", { name: "Hasil alamat" }).getByRole("button", { name: /Kopi Tempel Flow/ }).click();
+        await sheet.waitFor({ state: "detached" });
+        await page.getByText(/Muncul di Peta 3D · dari link peta/).first().waitFor();
+      });
     },
   },
   {
@@ -804,8 +819,13 @@ export const flows = [
         await map.getByRole("button", { name: "Peta 3D" }).click();
         const pins = map.locator(".sp-pin");
         await pins.first().waitFor({ timeout: 15000 });
-        await pins.first().click();
+        // A lead typed from its chat wears its character, on the pin and on the card.
+        await map.locator(".sp-pin.typed img").first().waitFor();
+        // The rest show their category as a coloured icon.
+        await map.locator(".sp-pin.cat svg").first().waitFor();
+        await map.locator(".sp-pin.typed").last().click();
         const card = map.getByRole("region", { name: /^Lead / });
+        await card.getByText(/^(Burung Hantu|Singa|Lumba-Lumba|Kelinci)$/).waitFor();
         await card.getByRole("link", { name: /Rute/ }).waitFor();
         await t.audit("Beranda → Peta 3D with a lead card (big account)");
         await card.getByRole("button", { name: "Tutup kartu lead" }).click();

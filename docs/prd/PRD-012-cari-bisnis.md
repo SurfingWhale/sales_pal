@@ -84,7 +84,7 @@ Satu key dipakai buat dua hal: **Cari bisnis** (`/api/places`) dan **Cari alamat
    - *API restrictions* → **Restrict key** → centang **Places API (New)** aja → Save.
    - *Application restrictions* → biarin **None**: key dipanggil dari server Vercel yang IP-nya ganti-ganti, bukan dari browser.
 6. **Pasang rem biaya:**
-   - Kuota: https://console.cloud.google.com/apis/api/places.googleapis.com/quotas → *SearchText requests per day* → mis. **300**.
+   - Kuota: https://console.cloud.google.com/apis/api/places.googleapis.com/quotas → *SearchText requests per day* → mis. **300**. Mau pasti **Rp 0**: isi **30**: 30 × 30 hari tetap di bawah 1.000 jatah gratis Cari bisnis. Kuota ini yang benar-benar menghentikan permintaan; budget cuma ngasih tahu.
    - Budget: Billing → **Budgets & alerts** → Create budget mis. **Rp 100.000/bulan**, alert email 50% dan 90%.
    - Di app sendiri udah ada batas per user per hari: `PLACES_DAILY_LIMIT` (bawaan 30 pencarian) dan `GEOCODE_DAILY_LIMIT` (bawaan 100 cari alamat).
 7. **Masukin ke Vercel.** Vercel → project SalesPal → **Settings → Environment Variables** → Add:
@@ -93,7 +93,9 @@ Satu key dipakai buat dua hal: **Cari bisnis** (`/api/places`) dan **Cari alamat
 8. **Redeploy.** Vercel → Deployments → deployment terbaru → ⋯ → **Redeploy** (env baru cuma kebaca di build berikutnya).
 9. **Tes.** Beranda → Cari calon klien → Cari bisnis → "coffee shop Jakarta Selatan". Terus buka satu lead → Lokasi → Atur lokasi → Cari.
 
-**Biaya:** Cari bisnis minta ulasan, jadi kena SKU *Text Search Enterprise + Atmosphere*; Cari alamat kena SKU *Text Search Pro*. Google ngasih jatah gratis per SKU tiap bulan (sejak Maret 2025 bentuknya kuota gratis per SKU, bukan kredit $200). Cek angka terbaru di halaman pricing Google Maps Platform sebelum dipakai banyak.
+**Biaya:** Cari bisnis minta ulasan, jadi kena SKU *Text Search Enterprise + Atmosphere*; Cari alamat kena SKU *Text Search Pro*. Google ngasih jatah gratis per SKU tiap bulan (sejak Maret 2025 bentuknya kuota gratis per SKU, bukan kredit $200). Cek angka terbaru di halaman pricing Google Maps Platform sebelum dipakai banyak. Satu pencarian = sampai 20 bisnis, jadi 30 pencarian/hari ≈ 600 bisnis/hari.
+
+**Tanpa key:** Cari bisnis minta Import Excel; Cari alamat di Lokasi lead tetap jalan gratis lewat OpenStreetMap, dan tempel link Google Maps ga butuh key sama sekali (PRD-013 §4).
 
 **Kalau error:**
 
