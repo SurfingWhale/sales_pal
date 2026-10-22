@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Business, Quote, issuerOf, quoteText, termsOf, waLink } from "@/lib/billing";
-import { buildPdf, pdfName, sharePdfs } from "@/lib/pdfDoc";
+import { useMemo, useState } from "react";
+import { Business, Quote, issuerOf, quoteText, termsOf } from "@/lib/billing";
+import { buildPdf, pdfName } from "@/lib/pdfDoc";
 import { AgreementKind, DEFAULT_NDA, DEFAULT_SPK, DEFAULT_SPK_TITLE, agreementName, buildAgreementPdf, fillAgreement } from "@/lib/agreements";
-import { btnMuted, btnPrimary, font, inputStyle, label, modalBox, WA_INK } from "@/components/ui";
+import { inputStyle, label } from "@/components/ui";
+import WaSendSheet from "@/components/WaSendSheet";
 
 // Sending a quote, with the papers that go with it (PRD-011, owner: "SPK dll
 // buat lebih mudah dipakai ketika mau mengirimkan penawaran"). The quote is
@@ -19,8 +20,11 @@ export interface SentPatch {
   nda?: { title: string; body: string };
 }
 
+// The quote goes through your own WhatsApp (WaSendSheet): its words first,
+// then the PDFs. The first step marks it sent and freezes the letterhead and
+// terms, with Batal to take that back.
 export default function SendQuoteSheet({ q, business, onSent, onClose }: {
-  q: Quote; business: Business; onSent: (p: SentPatch) => Promise<void>; onClose: () => void;
+  q: Quote; business: Business; onSent: (p: SentPatch) => Promise<(() => Promise<void>) | void>; onClose: () => void;
 }) {
   const issuer = useMemo(() => q.issuer || issuerOf(business), [q.issuer, business]);
   const terms = useMemo(() => q.terms || termsOf(business), [q.terms, business]);
@@ -31,31 +35,15 @@ export default function SendQuoteSheet({ q, business, onSent, onClose }: {
   const [spkTitle, setSpkTitle] = useState(q.spk?.title || d.spkTitle || DEFAULT_SPK_TITLE);
   const [spkBody, setSpkBody] = useState(q.spk?.body || fillAgreement(d.spkTemplate || DEFAULT_SPK, q, issuer, terms));
   const [ndaBody, setNdaBody] = useState(q.nda?.body || fillAgreement(d.ndaTemplate || DEFAULT_NDA, q, issuer, terms));
-  const [files, setFiles] = useState<{ blob: Blob; name: string }[] | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
-  // Opening WhatsApp or a share sheet doesn't mean it went out, so the seller
-  // says so before the quote is marked sent and its letterhead frozen.
-  const [confirm, setConfirm] = useState<"" | "shared" | "downloaded" | "wa">("");
 
-  // iOS shares only straight from a tap, so the PDFs are ready before it.
-  useEffect(() => {
-    let live = true;
-    setFiles(null);
-    const t = setTimeout(async () => {
-      try {
-        const out = [{ blob: await buildPdf({ kind: "quote", data: q }, issuer), name: pdfName({ kind: "quote", data: q }) }];
-        const add = async (kind: AgreementKind, title: string, body: string) =>
-          out.push({ blob: await buildAgreementPdf(kind, q, { title, body }, issuer), name: agreementName(q, kind) });
-        if (spkOn) await add("spk", spkTitle, spkBody);
-        if (ndaOn) await add("nda", "Perjanjian Kerahasiaan (NDA)", ndaBody);
-        if (live) setFiles(out);
-      } catch {
-        if (live) setMsg("PDF gagal dibuat. Coba tutup lalu buka lagi.");
-      }
-    }, 350);
-    return () => { live = false; clearTimeout(t); };
-  }, [q, issuer, spkOn, ndaOn, spkTitle, spkBody, ndaBody]);
+  async function makeFiles() {
+    const out = [{ blob: await buildPdf({ kind: "quote", data: q }, issuer), name: pdfName({ kind: "quote", data: q }) }];
+    const add = async (kind: AgreementKind, title: string, body: string) =>
+      out.push({ blob: await buildAgreementPdf(kind, q, { title, body }, issuer), name: agreementName(q, kind) });
+    if (spkOn) await add("spk", spkTitle, spkBody);
+    if (ndaOn) await add("nda", "Perjanjian Kerahasiaan (NDA)", ndaBody);
+    return out;
+  }
 
   const patch = (): SentPatch => ({
     issuer, terms,
@@ -63,23 +51,7 @@ export default function SendQuoteSheet({ q, business, onSent, onClose }: {
     ...(ndaOn ? { nda: { title: "Perjanjian Kerahasiaan (NDA)", body: ndaBody } } : {}),
   });
 
-  async function share() {
-    if (!files) return;
-    setMsg("");
-    const r = await sharePdfs(files);
-    if (r !== "cancelled") setConfirm(r);
-  }
-
-  function sendWa() {
-    const extra = [spkOn && `${spkTitle} terlampir`, ndaOn && "NDA terlampir"].filter(Boolean).join(", ");
-    window.open(waLink(q.phone, quoteText(q, issuer) + (extra ? `\n\n(${extra} dalam PDF.)` : "")), "_blank");
-    setConfirm("wa");
-  }
-
-  async function markSent() {
-    setBusy(true); setMsg("");
-    try { await onSent(patch()); onClose(); } catch { setMsg("Gagal dicatat. Cek koneksi lalu coba lagi."); setBusy(false); }
-  }
+  const extra = [spkOn && `${spkTitle} terlampir`, ndaOn && "NDA terlampir"].filter(Boolean).join(", ");
 
   const row = (on: boolean, set: (v: boolean) => void, title: string, hint: string, locked?: boolean) => (
     <label style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 56, padding: "8px 14px", cursor: locked ? "default" : "pointer", boxShadow: "inset 0 -1px 0 var(--app-border)" }}>
@@ -106,49 +78,19 @@ export default function SendQuoteSheet({ q, business, onSent, onClose }: {
   );
 
   return (
-    <div className="modal-overlay" onClick={() => { if (!busy) onClose(); }}>
-      <div role="dialog" aria-modal="true" aria-labelledby="send-h" onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 520 }}>
-        {confirm ? <>
-          <div id="send-h" style={{ fontSize: 17, fontWeight: 700, fontFamily: font }}>Udah kekirim ke {q.leadName || "klien"}?</div>
-          <p style={{ fontSize: 14, color: "var(--app-sub)", margin: "6px 0 16px", lineHeight: 1.5 }}>
-            {confirm === "downloaded" ? "PDF-nya udah tersimpan di perangkat ini. Kirim ke klien dulu, baru tandai terkirim."
-              : confirm === "wa" ? "Tandai terkirim kalau pesannya udah beneran dikirim di WhatsApp."
-              : "Tandai terkirim kalau file-nya udah sampai ke klien."}
-            {" "}Saat ditandai, kop dan syarat dikunci ke penawaran ini.
-          </p>
-          <div role="status" style={{ fontSize: 13, color: "var(--hot)", marginBottom: msg ? 8 : 0 }}>{msg}</div>
-          <div className="sp-form-foot" style={{ flexWrap: "wrap" }}>
-            <button onClick={() => { setConfirm(""); setMsg(""); }} disabled={busy} style={btnMuted}>Belum, kembali</button>
-            <button onClick={markSent} disabled={busy} style={{ ...btnPrimary, flex: 1, opacity: busy ? 0.6 : 1 }}>{busy ? "Menyimpan…" : "Udah, tandai terkirim"}</button>
-          </div>
-        </> : <>
-        <div id="send-h" style={{ fontSize: 17, fontWeight: 700, fontFamily: font }}>Kirim penawaran</div>
-        <p style={{ fontSize: 13, color: "var(--app-muted)", margin: "4px 0 16px" }}>
-          {q.number} buat {q.leadName || "klien"}. Pilih yang ikut dikirim; isinya udah keisi dari penawaran dan Kop & logo.
-        </p>
-
-        <div style={{ background: "var(--app-inner)", borderRadius: 14, overflow: "hidden", marginBottom: 12 }}>
-          {row(true, () => {}, `Penawaran ${q.number}`, "Selalu ikut", true)}
-          {row(spkOn, setSpkOn, spkTitle || DEFAULT_SPK_TITLE, spkSigned ? "Udah ditandatangani" : "Ruang lingkup, biaya & termin, revisi, pembatalan, tanda tangan", spkSigned)}
-          {spkOn && editor("spk", spkTitle, setSpkTitle, spkBody, setSpkBody, spkSigned)}
-          {row(ndaOn, setNdaOn, "NDA (kerahasiaan)", ndaSigned ? "Udah ditandatangani" : "Opsional, kalau project-nya rahasia", ndaSigned)}
-          {ndaOn && editor("nda", "NDA", null, ndaBody, setNdaBody, ndaSigned)}
-        </div>
-        <p style={{ fontSize: 12, color: "var(--app-muted)", margin: "0 0 4px" }}>
-          Template ini bukan nasihat hukum: cek dan sesuaikan isinya sebelum dikirim. Kop dan syarat dikunci ke penawaran ini saat dikirim.
-          Perjanjian dianggap ditandatangani hanya setelah kamu menandainya.
-        </p>
-        <div role="status" style={{ fontSize: 13, color: "var(--hot)", marginTop: msg ? 8 : 0 }}>{msg}</div>
-
-        <div className="sp-form-foot" style={{ flexWrap: "wrap" }}>
-          <button onClick={onClose} disabled={busy} style={btnMuted}>Batal</button>
-          <button onClick={sendWa} disabled={busy} style={{ ...btnMuted, background: "#25D366", color: WA_INK }}>Kirim teks WA</button>
-          <button onClick={share} disabled={busy || !files} style={{ ...btnPrimary, flex: 1, opacity: busy || !files ? 0.6 : 1 }}>
-            {!files ? "Menyiapkan PDF…" : `Bagikan PDF (${files.length})`}
-          </button>
-        </div>
-        </>}
+    <WaSendSheet title="Kirim penawaran" who={q.leadName || "klien"} phone={q.phone}
+      text={quoteText(q, issuer) + (extra ? `\n\n(${extra} dalam PDF.)` : "")}
+      makeFiles={makeFiles} filesKey={JSON.stringify([spkOn, ndaOn, spkTitle, spkBody, ndaBody])}
+      logged={`Penawaran ${q.number} tercatat terkirim; kop & syarat dikunci`}
+      onSent={() => onSent(patch())} onClose={onClose}
+      note="Template perjanjian bukan nasihat hukum: cek dan sesuaikan isinya sebelum dikirim. Perjanjian dianggap ditandatangani hanya setelah kamu menandainya.">
+      <div style={{ background: "var(--app-inner)", borderRadius: 14, overflow: "hidden", marginBottom: 12 }}>
+        {row(true, () => {}, `Penawaran ${q.number}`, "Selalu ikut", true)}
+        {row(spkOn, setSpkOn, spkTitle || DEFAULT_SPK_TITLE, spkSigned ? "Udah ditandatangani" : "Ruang lingkup, biaya & termin, revisi, pembatalan, tanda tangan", spkSigned)}
+        {spkOn && editor("spk", spkTitle, setSpkTitle, spkBody, setSpkBody, spkSigned)}
+        {row(ndaOn, setNdaOn, "NDA (kerahasiaan)", ndaSigned ? "Udah ditandatangani" : "Opsional, kalau project-nya rahasia", ndaSigned)}
+        {ndaOn && editor("nda", "NDA", null, ndaBody, setNdaBody, ndaSigned)}
       </div>
-    </div>
+    </WaSendSheet>
   );
 }

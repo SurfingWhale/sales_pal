@@ -61,6 +61,7 @@ export interface Quote extends Brief {
   validUntil: string;
   status: QuoteStatus;
   sentAt?: string;
+  followUpAt?: string;     // the last nudge sent from Follow-up WA
   invoiceId?: string;       // the first invoice (older quotes have only this)
   invoiceIds?: string[];    // every invoice made from it (one per schedule row)
   ownerUid?: string;

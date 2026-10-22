@@ -2,15 +2,17 @@
 
 import Icon from "@/components/Icon";
 import { useState } from "react";
-import { deleteDoc, setDoc, updateDoc } from "firebase/firestore";
+import { deleteDoc, deleteField, setDoc, updateDoc } from "firebase/firestore";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import {
   Business, Invoice, InvoiceState, Service, addDays, issuerOf, balance, nextNumber, daysBetween, dpAmount, invoiceColor, invoiceState, invoiceText,
-  isIssued, longDate, owed, paid, rupiah, rupiahShort, today, total, waLink,
+  isIssued, longDate, owed, paid, rupiah, rupiahShort, today, total,
 } from "@/lib/billing";
 import PrintSheet from "@/components/PrintSheet";
 import DocEditor, { DocDraft, LeadRef, briefOf, cleanItems } from "@/components/DocEditor";
 import ConfirmSheet from "@/components/ConfirmSheet";
+import WaSendSheet from "@/components/WaSendSheet";
+import { buildPdf, pdfName } from "@/lib/pdfDoc";
 import { badge, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, label, modalBox, subheading, WA_INK } from "@/components/ui";
 
 const FILTERS = ["All", "Draft", "Belum bayar", "DP masuk", "Telat", "Lunas", "Dibatalkan"] as const;
@@ -20,6 +22,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
   const [editing, setEditing] = useState<DocDraft | null>(null);
   const [paying, setPaying] = useState<{ inv: Invoice; amount: string; date: string; note: string } | null>(null);
   const [printing, setPrinting] = useState<Invoice | null>(null);
+  const [billing, setBilling] = useState<Invoice | null>(null);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
   // Ten at a time: the list ends, and the rest is one tap away.
   const [limit, setLimit] = useState(10);
@@ -78,9 +81,13 @@ export default function Invoices({ invoices, business, leads, services }: { invo
     await updateDoc(spaceDoc(space, "invoices", inv.id), { issue: "Dibatalkan" });
   }
 
-  function bill(inv: Invoice) {
-    window.open(waLink(inv.phone, invoiceText(inv, inv.issuer || business)), "_blank");
-    issue(inv);
+  // Tagih via WA: the bill's words and its PDF through your own WhatsApp
+  // (WaSendSheet). Sending it issues a draft, with Batal to take that back.
+  function bill(inv: Invoice) { setBilling(inv); }
+  async function markBilled(inv: Invoice): Promise<(() => Promise<void>) | void> {
+    if (isIssued(inv)) return;
+    await updateDoc(spaceDoc(space, "invoices", inv.id), { issue: "Diterbitkan", issuedAt: now });
+    return async () => { await updateDoc(spaceDoc(space, "invoices", inv.id), { issue: inv.issue || "Draft", issuedAt: inv.issuedAt ?? deleteField() }); };
   }
 
   async function setDue(inv: Invoice, dueDate: string) {
@@ -335,6 +342,12 @@ export default function Invoices({ invoices, business, leads, services }: { invo
       )}
 
       {editing && <DocEditor kind="invoice" initial={editing} leads={leads} services={services} onSave={saveInvoice} onClose={() => setEditing(null)} />}
+      {billing && (
+        <WaSendSheet title={`Tagih ${billing.number}`} who={billing.leadName || "klien"} phone={billing.phone} text={invoiceText(billing, billing.issuer || business)}
+          makeFiles={async () => [{ blob: await buildPdf({ kind: "invoice", data: billing }, billing.issuer || business), name: pdfName({ kind: "invoice", data: billing }) }]}
+          filesKey={billing.id} logged={isIssued(billing) ? `Tagihan ${billing.number} tercatat terkirim` : `Invoice ${billing.number} diterbitkan dan tercatat terkirim`}
+          onSent={() => markBilled(billing)} onClose={() => setBilling(null)} />
+      )}
       {printing && <PrintSheet kind="invoice" data={printing} business={printing.issuer || business} frozen={!!printing.issuer} onClose={() => setPrinting(null)} />}
       {asking && (asking.cancel
         ? <ConfirmSheet title="Batalkan invoice?" action="Batalkan invoice" busyLabel="Membatalkan…" onConfirm={() => cancel(asking.inv)} onClose={() => setAsking(null)}>

@@ -2,7 +2,7 @@
 
 import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
-import { setDoc, deleteDoc, updateDoc, arrayUnion } from "firebase/firestore";
+import { setDoc, deleteDoc, updateDoc, arrayUnion, deleteField } from "firebase/firestore";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import {
   Business, Invoice, LineItem, QUOTE_STATUS, Quote, QuoteStatus, Service,
@@ -12,6 +12,8 @@ import PrintSheet from "@/components/PrintSheet";
 import DocEditor, { DocDraft, LeadRef, briefOf, cleanItems } from "@/components/DocEditor";
 import ConfirmSheet from "@/components/ConfirmSheet";
 import SendQuoteSheet, { SentPatch } from "@/components/SendQuoteSheet";
+import WaSendSheet from "@/components/WaSendSheet";
+import { buildPdf, pdfName } from "@/lib/pdfDoc";
 import { badge, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, label, modalBox, subheading, WA_INK } from "@/components/ui";
 
 export type { LeadRef };
@@ -51,8 +53,10 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
   const [failed, setFailed] = useState("");
   const [sending, setSending] = useState<Quote | null>(null);
 
-  // Sent: the letterhead and terms are frozen on it, with the papers that went along.
-  async function markSent(q: Quote, p: SentPatch) {
+  // Sent: the letterhead and terms are frozen on it, with the papers that went
+  // along. Returns how to take it back (Batal in the send sheet).
+  async function markSent(q: Quote, p: SentPatch): Promise<() => Promise<void>> {
+    const before = { status: q.status, sentAt: q.sentAt, issuer: q.issuer, terms: q.terms, spk: q.spk, nda: q.nda };
     const on = today();
     const keep = (a: Quote["spk"], n?: { title: string; body: string }) =>
       a?.signedAt ? a : n ? { ...n, sentAt: on } : undefined;
@@ -62,6 +66,25 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
       ...(spk ? { spk } : {}), ...(nda ? { nda } : {}),
       ...(q.status === "Draft" ? { status: "Terkirim" } : {}), ...(q.sentAt ? {} : { sentAt: on }),
     });
+    return async () => {
+      await updateDoc(spaceDoc(space, "quotes", q.id), Object.fromEntries(Object.entries(before).map(([k, v]) => [k, v === undefined ? deleteField() : v])));
+    };
+  }
+
+  // A nudge, not the whole quote again (owner, 23 Okt), through the same sheet.
+  const [nudging, setNudging] = useState<Quote | null>(null);
+  const nudgeText = (q: Quote) => [
+    `Halo kak ${q.contact || q.leadName}, mau follow-up penawaran ${q.number}${q.project ? ` (${q.project})` : ""} yang aku kirim ${q.sentAt ? longDate(q.sentAt) : "kemarin"}.`,
+    "Ada yang mau ditanyain atau disesuaikan?",
+    q.validUntil >= today() ? `Penawarannya berlaku sampai ${longDate(q.validUntil)}.` : "",
+  ].filter(Boolean).join(" ");
+  async function markNudged(q: Quote): Promise<() => Promise<void>> {
+    const before = q.followUpAt;
+    await updateDoc(spaceDoc(space, "quotes", q.id), { followUpAt: today() });
+    return async () => { await updateDoc(spaceDoc(space, "quotes", q.id), { followUpAt: before ?? deleteField() }); };
+  }
+  async function extend(q: Quote) {
+    await updateDoc(spaceDoc(space, "quotes", q.id), { validUntil: addDays(today(), 7) });
   }
 
   async function markSigned(q: Quote, kind: "spk" | "nda") {
@@ -252,6 +275,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                     <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ok)" }}>{rupiah(total(q))}</div>
                     <div style={{ marginTop: 6, display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
                       {expired && <span style={badge("#ff9900")}>Kedaluwarsa</span>}
+                      {q.followUpAt && q.status === "Terkirim" && <span style={badge("#64748b")}>follow-up {longDate(q.followUpAt)}</span>}
                       {waiting >= 3 && <span style={badge("#ff9900")}>{waiting} hari tanpa jawaban</span>}
                       <span style={badge(quoteColor[q.status])}>{q.status}</span>
                     </div>
@@ -261,7 +285,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                   <div className="sp-doc-main">
                     {q.status === "Draft"
                       ? <button onClick={() => setSending(q)} style={{ ...chip, background: "#005eb0", color: "#fff", border: "none", fontWeight: 700 }}>Kirim penawaran</button>
-                      : <button onClick={() => sendWA(q)} style={{ ...chip, background: "#25D366", color: WA_INK, border: "none", fontWeight: 700 }}>
+                      : <button onClick={() => (q.status === "Terkirim" ? setNudging(q) : sendWA(q))} style={{ ...chip, background: "#25D366", color: WA_INK, border: "none", fontWeight: 700 }}>
                           {q.status === "Terkirim" ? "Follow-up WA" : "Kirim WA"}
                         </button>}
                     {q.status === "Terkirim" && (
@@ -271,6 +295,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                       </>
                     )}
                     {q.status === "Draft" && <button onClick={() => setStatus(q, "Terkirim")} style={{ ...chip, color: "var(--app-text)", fontWeight: 700 }}>Tandai terkirim</button>}
+                    {expired && q.status !== "Digantikan" && <button onClick={() => extend(q)} style={{ ...chip, color: "var(--app-text)", fontWeight: 700 }}>Perpanjang 7 hari</button>}
                     {q.status === "Disetujui" && (() => {
                       const m = money(q);
                       if (m.next < 0) return <span style={{ ...chip, cursor: "default", color: "var(--ok)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>✓ Semua termin ditagih</span>;
@@ -328,6 +353,11 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
 
       {printing && <PrintSheet kind="quote" data={printing} business={printing.issuer || business} frozen={!!printing.issuer} onClose={() => setPrinting(null)} />}
       {sending && <SendQuoteSheet q={sending} business={business} onSent={p => markSent(sending, p)} onClose={() => setSending(null)} />}
+      {nudging && (
+        <WaSendSheet title="Follow-up penawaran" who={nudging.leadName || "klien"} phone={nudging.phone} text={nudgeText(nudging)}
+          makeFiles={async () => [{ blob: await buildPdf({ kind: "quote", data: nudging }, nudging.issuer || business), name: pdfName({ kind: "quote", data: nudging }) }]}
+          filesKey={nudging.id} logged={`Follow-up ${nudging.number} tercatat`} onSent={() => markNudged(nudging)} onClose={() => setNudging(null)} />
+      )}
 
       {deleting && (
         <ConfirmSheet title="Hapus penawaran?" onConfirm={() => remove(deleting)} onClose={() => setDeleting(null)}>
