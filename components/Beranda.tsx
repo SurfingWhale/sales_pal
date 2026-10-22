@@ -77,13 +77,15 @@ const css = `
 .sp-today-txt { font-size: 14px; min-width: 0; flex: 1 1 200px; display: flex; align-items: center; gap: 10px; }
 .sp-today-bar { display: none; }
 
-.sp-kpis { margin-top: 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1px; background: var(--app-border); border-top: 1px solid var(--app-border); border-bottom: 1px solid var(--app-border); }
+.sp-kpis { margin-top: 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--app-border); border-top: 1px solid var(--app-border); border-bottom: 1px solid var(--app-border); }
 .sp-kpi { background: var(--app-bg); padding: 24px 24px 26px; }
 .sp-kpi:first-child { padding-left: 0; }
 .sp-kpi .lbl { margin: 0; font-size: 13px; font-weight: 500; color: var(--app-muted); }
 .sp-kpi .val { margin: 14px 0 0; display: flex; align-items: baseline; gap: 6px; }
 .sp-kpi .unit { font-size: 16px; font-weight: 600; color: var(--app-muted); }
 .sp-kpi .sub { margin: 10px 0 0; font-size: 13px; color: var(--app-muted); }
+/* A tablet is touched too: the target link keeps a 44pt row. */
+.sp-kpi .sub button { min-height: 44px; vertical-align: baseline; }
 .sp-kpi .big { font-size: 64px; }
 
 .sp-todo-sec { margin-top: clamp(24px, 5vw, 56px); }
@@ -107,6 +109,10 @@ const css = `
 .sp-task.is-first .sp-btn.ghost { color: #fff; }
 .sp-b-more { margin-top: clamp(24px, 5vw, 56px); display: flex; flex-direction: column; gap: 32px; }
 
+@media (min-width: 768px) and (max-width: 1099px) {
+  .sp-kpi { padding: 20px 16px 22px; }
+  .sp-kpi .big { font-size: 48px; }
+}
 @media (max-width: 767px) {
   .sp-b-desk { display: none !important; }
   /* One rhythm on a phone: 16px between blocks, 8/12px inside them. */
@@ -155,6 +161,13 @@ const css = `
   .sp-task.is-first .sp-btn.line { background: #005eb0; color: #fff; border-color: #005eb0; }
   .sp-task.is-first .sp-btn.ghost { color: var(--app-ink-2); }
   .sp-b-more { margin-top: 8px; gap: 24px; }
+}
+@media (max-width: 360px) {
+  .sp-find { flex-wrap: wrap; }
+  .sp-find > span:nth-child(2) { flex-basis: calc(100% - 48px) !important; }
+  .sp-find .sp-btn { width: 100%; }
+  .sp-kpi .lbl { white-space: normal; min-height: 2.6em; line-height: 1.3; }
+  .sp-seg-btn { font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .sp-seg-btn > span { transition: none; } }
 `;

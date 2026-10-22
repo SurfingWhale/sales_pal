@@ -794,7 +794,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         .sp-top { position: sticky; top: 0; z-index: 50; }
         .sp-top-in { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 0 32px; height: 68px; display: flex; align-items: center; gap: 24px; }
         .sp-nav { margin: 0 auto; display: flex; gap: 2px; padding: 3px; border-radius: 999px; }
-        .sp-nav-btn { position: relative; height: 38px; padding: 0 16px; display: flex; align-items: center; gap: 6px; border: none; border-radius: 999px; background: transparent; color: var(--app-ink-2); font: 500 14px 'Plus Jakarta Sans', sans-serif; cursor: pointer; white-space: nowrap; }
+        .sp-nav-btn { position: relative; height: 44px; padding: 0 16px; display: flex; align-items: center; gap: 6px; border: none; border-radius: 999px; background: transparent; color: var(--app-ink-2); font: 500 14px 'Plus Jakarta Sans', sans-serif; cursor: pointer; white-space: nowrap; }
         .sp-nav-btn.is-on { color: var(--app-text); font-weight: 600; background: var(--thumb); box-shadow: var(--thumb-shadow); }
         .sp-nav-icon { display: none; }
         .sp-nav-short { display: none; }
@@ -812,6 +812,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           /* An iOS tab bar: docked to the bottom edge, 50pt over the home indicator. */
           .sp-nav { position: fixed; z-index: 60; left: 0; right: 0; bottom: 0; height: calc(50px + env(safe-area-inset-bottom, 0px)); padding: 0 4px env(safe-area-inset-bottom, 0px); border-radius: 0; margin: 0; gap: 0; box-shadow: inset 0 0.5px 0 var(--app-line-strong); }
           .sp-nav::before { display: none; }
+          .sp-nav.glass { background: color-mix(in srgb, var(--app-bg) 94%, transparent); }
+          /* Header buttons: a light chip, not a floating shadow. */
+          .sp-top .sp-iconbtn.glass { box-shadow: inset 0 0 0 0.5px var(--app-line-strong); background: var(--glass-strong); }
+          .sp-top .sp-iconbtn.glass::before { display: none; }
           .sp-nav-btn { flex: 1; min-width: 0; height: 50px; flex-direction: column; justify-content: center; gap: 2px; padding: 0; border-radius: 0; font-size: 11px; font-weight: 500; }
           .sp-nav-btn.is-on { background: transparent; box-shadow: none; color: var(--brand-text); font-weight: 600; }
           .sp-nav-icon { display: block; }
@@ -880,7 +884,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         <div className="pb t" aria-hidden="true" style={{ top: 0, height: 96 }}><span /><span /><span /><span /><span /><span /></div>
         <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 96, background: "linear-gradient(to bottom, var(--bar-tint) 0%, var(--bar-tint) 40%, transparent 100%)", pointerEvents: "none" }} />
         <div className={`sp-top-in${spaces.length > 0 ? " has-space" : ""}`}>
-          <button onClick={() => setActiveTab("Dashboard")} aria-label="SalesPal, ke Beranda" style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--app-text)", background: "none", border: "none", padding: 0, cursor: "pointer", flexShrink: 0 }}>
+          <button onClick={() => setActiveTab("Dashboard")} aria-label="SalesPal, ke Beranda" style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 44, color: "var(--app-text)", background: "none", border: "none", padding: 0, cursor: "pointer", flexShrink: 0 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-mark.png" alt="" width={18} height={18} style={{ width: 18, height: 18, objectFit: "contain" }} />
             <span className="num sp-brand-word" style={{ fontSize: 19, letterSpacing: "0.06em", paddingTop: 3 }}>SALESPAL</span>
