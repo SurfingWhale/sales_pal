@@ -24,21 +24,24 @@ const dayName = (day: string, now: string) =>
 const shortDay = (day: string) => new Date(day + "T12:00:00").toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
 const clock = (ms: number) => new Date(ms).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
 
-export default function ActivityLog({ hunts, sessions, quotes, invoices, outreach, rejections, onGo }: {
+export default function ActivityLog({ hunts, sessions, quotes, invoices, outreach, rejections, onGo, owner, title = "Log aktivitas" }: {
   hunts: Hunt[]; sessions: HuntSession[]; quotes: Quote[]; invoices: Invoice[];
   outreach: Outreach[]; rejections: Rejection[]; onGo: (tab: string) => void;
+  owner?: string;   // whose (Dashboard tim opens a seller's); you by default
+  title?: string;
 }) {
   const space = useSpace();
-  // Every journey, closed ones too; in a guild only your own (a Leader reads the whole team's).
+  // Every journey, closed ones too; in a guild only one person's (a Leader reads the whole team's).
   const allProspects = useSpaceCollection<Prospect>(space, "prospects");
+  const who = owner || space.me.uid;
   const mine = <T extends { ownerUid?: string }>(rows: T[]) =>
-    space.kind === "guild" ? rows.filter(r => !r.ownerUid || r.ownerUid === space.me.uid) : rows;
+    space.kind === "guild" ? rows.filter(r => (r.ownerUid || space.me.uid) === who) : rows;
 
   const acts = useMemo(() => activities({
     prospects: mine(allProspects), hunts: mine(hunts as (Hunt & { ownerUid?: string })[]), sessions: mine(sessions),
     quotes: mine(quotes as (Quote & { ownerUid?: string })[]), invoices: mine(invoices as (Invoice & { ownerUid?: string })[]),
     outreach: mine(outreach as (Outreach & { ownerUid?: string })[]), rejections: mine(rejections as (Rejection & { ownerUid?: string })[]),
-  }), [allProspects, hunts, sessions, quotes, invoices, outreach, rejections]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [allProspects, hunts, sessions, quotes, invoices, outreach, rejections, who]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const now = today();
   const [kinds, setKinds] = useState<ActKind[]>([]);   // none picked = all
@@ -75,7 +78,7 @@ export default function ActivityLog({ hunts, sessions, quotes, invoices, outreac
   if (!acts.length) {
     return (
       <div>
-        <div style={heading}>Log aktivitas</div>
+        <div style={heading}>{title}</div>
         <div style={{ ...subheading, marginBottom: 16 }}>Semua yang kamu kerjain, per hari.</div>
         <div style={{ ...card, padding: "36px 22px", textAlign: "center" }}>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ada aktivitas</div>
@@ -90,7 +93,7 @@ export default function ActivityLog({ hunts, sessions, quotes, invoices, outreac
 
   return (
     <div>
-      <div style={heading}>Log aktivitas</div>
+      <div style={heading}>{title}</div>
       <div style={{ ...subheading, marginBottom: 16 }}>Semua yang kamu kerjain, per hari: DM, balasan, penawaran, pembayaran.</div>
 
       <section aria-label={`Heat map aktivitas ${WEEKS} minggu`} style={{ ...card, padding: 14, marginBottom: 12 }}>

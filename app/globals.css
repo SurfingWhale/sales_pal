@@ -944,3 +944,14 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 }
 .sp-guild-tabs { position: sticky; top: 76px; z-index: 5; }
 @media (max-width: 767px) { .sp-guild-tabs { top: 66px; } }
+
+/* Dashboard tim (PRD-014): one row per seller, a table on a laptop, a card on a phone. */
+.sp-dash-row { display: grid; grid-template-columns: minmax(170px, 2.2fr) repeat(6, minmax(0, 1fr)) minmax(96px, 1.2fr) minmax(84px, 1fr); gap: 8px; align-items: center; }
+.sp-dash-row > * { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 860px) {
+  .sp-dash-head { display: none !important; }
+  .sp-dash-row { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 10px; }
+  .sp-dash-row > :first-child { grid-column: 1 / -1; }
+  .sp-dash-row > :nth-child(8), .sp-dash-row > :nth-child(9) { grid-column: span 2; }
+  .sp-dash-row [data-l]::before { content: attr(data-l); display: block; font-size: 11px; font-weight: 400; color: var(--app-muted); }
+}

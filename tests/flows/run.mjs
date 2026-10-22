@@ -20,7 +20,7 @@
 // Output: tests/flows/out/report.md, plus a screenshot of every failed step.
 
 import { spawn, execSync } from "node:child_process";
-import { createServer } from "node:net";
+import { connect, createServer } from "node:net";
 import { mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { chromium, webkit, devices } from "playwright";
 import AxeBuilder from "@axe-core/playwright";
@@ -120,11 +120,21 @@ async function waitFor(url, ms) {
 
 // A run started right after another can find the last one's emulators still
 // shutting down on these ports, attach to them, and lose its data when they
-// finally exit. Wait until the ports are free instead.
-const portFree = (port) => new Promise(ok => {
-  const s = createServer().once("error", () => ok(false)).once("listening", () => s.close(() => ok(true)));
-  s.listen(port, "127.0.0.1");
+// finally exit. Wait until the ports are free instead. A server on "::" (next
+// dev) doesn't stop a listen on 127.0.0.1 on macOS, so first see whether
+// anything answers on either loopback.
+const answers = (port, host) => new Promise(ok => {
+  const c = connect({ port, host });
+  c.setTimeout(500, () => { c.destroy(); ok(false); });
+  c.once("connect", () => { c.destroy(); ok(true); }).once("error", () => ok(false));
 });
+const portFree = async (port) => {
+  if ((await answers(port, "127.0.0.1")) || (await answers(port, "::1"))) return false;
+  return new Promise(ok => {
+    const s = createServer().once("error", () => ok(false)).once("listening", () => s.close(() => ok(true)));
+    s.listen(port, "127.0.0.1");
+  });
+};
 
 async function waitPortsFree(ports, ms) {
   const until = Date.now() + ms;

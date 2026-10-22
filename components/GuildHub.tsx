@@ -43,7 +43,7 @@ const avatarSrc = (role: Role, pick?: string) =>
     ? (["owl", "lion", "dolphin", "rabbit"].includes(pick) ? `/archetypes/animal-${pick}.png` : PERSON(pick as Role))
     : PERSON(role);
 
-function Avatar({ role, size, ring, pick }: { role: Role; size: number; ring?: boolean; pick?: string }) {
+export function Avatar({ role, size, ring, pick }: { role: Role; size: number; ring?: boolean; pick?: string }) {
   return (
     <span aria-hidden="true" style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, overflow: "hidden", display: "inline-flex", alignItems: "flex-end", justifyContent: "center",
       background: `color-mix(in srgb, ${ROLE_COLOR[role]} 18%, var(--app-card))`, border: ring ? "2px solid var(--app-card)" : `1px solid ${ROLE_COLOR[role]}40` }}>
