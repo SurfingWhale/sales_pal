@@ -13,13 +13,14 @@ export const dynamic = "force-dynamic";
 
 const FIELDS = [
   "places.id", "places.displayName", "places.formattedAddress", "places.nationalPhoneNumber", "places.internationalPhoneNumber",
-  "places.websiteUri", "places.rating", "places.userRatingCount", "places.googleMapsUri", "places.primaryTypeDisplayName", "places.reviews",
+  "places.websiteUri", "places.rating", "places.userRatingCount", "places.googleMapsUri", "places.primaryTypeDisplayName", "places.reviews", "places.location",
   "nextPageToken",
 ].join(",");
 
 interface GPlace {
   id: string; displayName?: { text?: string }; formattedAddress?: string; nationalPhoneNumber?: string; internationalPhoneNumber?: string;
   websiteUri?: string; rating?: number; userRatingCount?: number; googleMapsUri?: string; primaryTypeDisplayName?: { text?: string };
+  location?: { latitude?: number; longitude?: number };
   reviews?: { rating?: number; text?: { text?: string }; originalText?: { text?: string }; relativePublishTimeDescription?: string }[];
 }
 
@@ -104,6 +105,7 @@ export async function POST(req: Request) {
     rating: typeof g.rating === "number" ? g.rating : null,
     reviewCount: g.userRatingCount || 0,
     mapsUrl: g.googleMapsUri || "",
+    ...(typeof g.location?.latitude === "number" && typeof g.location?.longitude === "number" ? { lat: g.location.latitude, lng: g.location.longitude } : {}),
     reviews: (g.reviews || []).map(r => ({ rating: r.rating || 0, text: r.originalText?.text || r.text?.text || "", when: r.relativePublishTimeDescription || "" })),
   }));
 

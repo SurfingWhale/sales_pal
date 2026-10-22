@@ -61,6 +61,17 @@ function kindColor(kind: string): string {
   return "#5b636c";
 }
 
+// Where each task sits in its own path, drawn as a line of steps on the card.
+function stepsOf(t: { kind: string; action: string }): { steps: string[]; at: number } {
+  if (/tertarik/i.test(t.kind)) return { steps: ["Intro", "Follow-up", "Tertarik", "Lead"], at: 2 };
+  if (/hunting/i.test(t.kind)) return { steps: ["Intro", "Follow-up", "Tertarik", "Lead"], at: /intro/i.test(t.action) ? 0 : 1 };
+  if (/penawaran/i.test(t.kind)) return { steps: ["Dibuat", "Terkirim", "Disetujui"], at: 1 };
+  if (/invoice/i.test(t.kind)) return { steps: ["Terbit", "Ditagih", "Lunas"], at: 1 };
+  if (/macet/i.test(t.kind)) return { steps: ["Lead", "Penawaran", "Closing"], at: 1 };
+  if (/follow/i.test(t.kind)) return { steps: ["Kontak", "Follow-up", "Penawaran", "Closing"], at: 1 };
+  return { steps: ["Ditolak", "Coba lagi", "Lead"], at: 1 };
+}
+
 const css = `
 .sp-b-panel { display: flex; flex-direction: column; }
 .sp-b-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 24px; }
@@ -137,6 +148,21 @@ const css = `
 .sp-row-title { display: block; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-row-sub { display: block; margin-top: 2px; font-size: 13px; color: var(--app-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-row-sub .is-late { color: var(--hot); font-weight: 600; }
+.sp-b-map { margin-top: 24px; }
+/* The path line: done steps filled in the task's colour, the current one ringed. */
+.sp-flow { list-style: none; margin: 0; padding: 0; display: flex; position: relative; }
+.sp-flow li { flex: 1; position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; font-size: 11px; font-weight: 500; color: var(--app-muted); }
+.sp-flow li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--app-line-strong); position: relative; z-index: 1; }
+.sp-flow li:not(:last-child)::after { content: ""; position: absolute; left: 8px; right: 0; top: 3px; height: 2px; border-radius: 1px; background: var(--app-border); }
+.sp-flow li.done::before, .sp-flow li.done::after { background: color-mix(in srgb, var(--k) 80%, var(--app-text)); }
+.sp-flow li.now::before { background: var(--app-card); box-shadow: 0 0 0 2px color-mix(in srgb, var(--k) 80%, var(--app-text)); }
+.sp-flow li.now { color: var(--app-text); font-weight: 700; }
+.sp-flow li span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 4px; }
+.sp-task.is-first .sp-flow li { color: rgba(255,255,255,0.86); }
+.sp-task.is-first .sp-flow li.now { color: #fff; }
+.sp-task.is-first .sp-flow li::before, .sp-task.is-first .sp-flow li:not(:last-child)::after { background: rgba(255,255,255,0.35); }
+.sp-task.is-first .sp-flow li.done::before, .sp-task.is-first .sp-flow li.done::after { background: #fff; }
+.sp-task.is-first .sp-flow li.now::before { background: #005eb0; box-shadow: 0 0 0 2px #fff; }
 .sp-b-more { margin-top: clamp(24px, 5vw, 56px); display: flex; flex-direction: column; gap: 32px; }
 
 @media (min-width: 768px) and (max-width: 1099px) {
@@ -194,8 +220,20 @@ const css = `
   .sp-todo-head { margin-bottom: 8px; }
   .sp-todo { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: min(80%, 300px); gap: 12px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scroll-padding-inline: 16px; margin: 0 -16px; padding: 2px 16px 4px; scrollbar-width: none; }
   .sp-todo::-webkit-scrollbar { display: none; }
-  .sp-task, .sp-task.is-first { scroll-snap-align: start; height: 176px; min-height: 0; padding: 14px; border-radius: 16px; gap: 8px; background: var(--app-card); color: var(--app-text); border: 1px solid var(--app-border); }
-  .sp-task.is-first { border-color: color-mix(in srgb, #005eb0 40%, var(--app-border)); }
+  .sp-task, .sp-task.is-first { scroll-snap-align: start; height: 214px; min-height: 0; padding: 14px; border-radius: 18px; gap: 10px; color: var(--app-text); border: 1px solid color-mix(in srgb, var(--k, #5b636c) 18%, var(--app-border));
+    background: radial-gradient(140% 100% at 0% 0%, color-mix(in srgb, var(--k, #5b636c) 15%, var(--app-card)) 0%, var(--app-card) 62%); }
+  .sp-task.is-first .sp-flow li { color: var(--app-muted); }
+  .sp-task.is-first .sp-flow li.now { color: var(--app-text); }
+  .sp-task.is-first .sp-flow li:not(:last-child)::after { background: var(--app-border); }
+  .sp-task.is-first .sp-flow li::before { background: var(--app-line-strong); }
+  .sp-task.is-first .sp-flow li.done::before, .sp-task.is-first .sp-flow li.done::after { background: color-mix(in srgb, var(--k) 80%, var(--app-text)); }
+  .sp-task.is-first .sp-flow li.now::before { background: var(--app-card); box-shadow: 0 0 0 2px color-mix(in srgb, var(--k) 80%, var(--app-text)); }
+  .sp-b-map { margin: 0; }
+  /* Each block gets a soft wash of its own colour, so none is a blank box. */
+  .sp-today { background: radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, #b93a06 12%, var(--app-card)) 0%, var(--app-card) 58%); border-color: color-mix(in srgb, #b93a06 16%, var(--app-border)); }
+  .sp-find { background: radial-gradient(120% 140% at 0% 100%, color-mix(in srgb, #005eb0 10%, var(--app-card)) 0%, var(--app-card) 60%); }
+  .sp-kpis { background: linear-gradient(180deg, color-mix(in srgb, #005eb0 6%, var(--app-card)) 0%, var(--app-card) 100%); }
+  .sp-task.is-first { border-color: color-mix(in srgb, #005eb0 45%, var(--app-border)); }
   .sp-task.is-first .sp-task-tile { color: color-mix(in srgb, var(--k) 75%, var(--app-text)); background: color-mix(in srgb, var(--k) 12%, transparent); }
   .sp-task h3 { font-size: 16px; line-height: 1.3; }
   .sp-task-meta, .sp-task.is-first .sp-task-meta { font-size: 12px; gap: 8px; color: var(--app-muted); }
@@ -296,6 +334,12 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
         </section>
       )}
 
+      {/* The map comes right after the day's move: where the leads are, by
+          potential or on the street (PRD-013). */}
+      <div className="sp-b-map">
+        <LeadMap leads={mapLeads} onOpen={onOpenLead} onAll={onAllLeads} onAdd={onAdd} onImport={onImport} />
+      </div>
+
       {onFind && (
         // Cari bisnis (PRD-012): new prospects from Google Maps or an Excel list.
         <section aria-label="Cari calon klien" className="sp-card sp-find">
@@ -372,6 +416,14 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
                     <h3>{t.title}</h3>
                     <p className="sp-task-what">{t.what}{first ? ` · ${whenText.toLowerCase()}` : ""}</p>
                   </div>
+                  {(() => {
+                    const f = stepsOf(t);
+                    return (
+                      <ol className="sp-flow" aria-label={`Tahap sekarang: ${f.steps[f.at]}, ${f.at + 1} dari ${f.steps.length}`}>
+                        {f.steps.map((st, n) => <li key={st} className={n < f.at ? "done" : n === f.at ? "now" : undefined} aria-hidden="true"><span>{st}</span></li>)}
+                      </ol>
+                    );
+                  })()}
                   <div className="sp-task-acts">
                     {t.wa && t.phone
                       ? <a href={waLink(t.phone, t.text)} target="_blank" rel="noreferrer" className="sp-btn line">{t.action}</a>
@@ -418,7 +470,6 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
       </section>
 
       <div className="sp-b-more">
-        <LeadMap leads={mapLeads} onOpen={onOpenLead} onAll={onAllLeads} onAdd={onAdd} onImport={onImport} />
         {children}
       </div>
       </div>

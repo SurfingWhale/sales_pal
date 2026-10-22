@@ -60,6 +60,8 @@ export function bigAccount(uid) {
       notes: i % 7 ? "" : "Minta pricelist, follow-up minggu depan.", lastContact: daysAgo(i % 90), value: 1_000_000 + (i % 20) * 750_000,
       ...(i % 4 === 0 ? { nextActionDate: daysAgo((i % 9) - 4), nextAction: "Follow-up penawaran" } : {}),
       ...(i % 6 === 0 ? { lastReplyAt: daysAgo(i % 10) } : {}),
+      // Half have a point around central Jakarta, for Peta 3D.
+      ...(i % 2 === 0 ? { address: `Jl. Contoh No. ${i}, Jakarta`, geo: { lat: -6.17 - (i % 13) * 0.004, lng: 106.81 + (i % 11) * 0.005, by: "maps" } } : {}),
     }]);
   }
   const item = (k) => ({ name: `Paket foto ${k}`, qty: 1, price: 750_000 + k * 250_000, description: "20 foto edit\n1x revisi" });
@@ -161,6 +163,15 @@ async function addLead(page, name) {
 // Leads (PRD-008): on a wide screen a lead opens in the panel beside the
 // list; on a phone it opens as a full-screen profile.
 const isWide = (page) => (page.viewportSize()?.width || 0) >= 1024;
+
+// The street map's tiles come from OpenFreeMap; tests draw a plain background
+// instead, so a flow never waits on the internet.
+export async function stubMap(page) {
+  await page.route(/tiles\.openfreemap\.org/, route => route.fulfill({
+    contentType: "application/json",
+    body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#e9e5dc" } }] }),
+  }));
+}
 async function openLeadRow(page, name) {
   await closeAll(page);
   await go(page, "Jualan", "Leads");
@@ -217,7 +228,7 @@ export const flows = [
     name: "cari bisnis: maps results to leads, template to import",
     async run(t) {
       const { page } = t;
-      const place = (id, name, extra) => ({ id, name, category: "Coffee shop", address: `Jl. Contoh ${id}, Jakarta`, phone: `0812000000${id.slice(-2)}`, website: "", rating: 4.0, reviewCount: 12, mapsUrl: `https://maps.google.com/?cid=${id}`, reviews: [{ rating: 2, text: "Pelayanannya lama banget, nunggu 30 menit", when: "" }], ...extra });
+      const place = (id, name, extra) => ({ id, name, category: "Coffee shop", address: `Jl. Contoh ${id}, Jakarta`, lat: -6.2, lng: 106.81, phone: `0812000000${id.slice(-2)}`, website: "", rating: 4.0, reviewCount: 12, mapsUrl: `https://maps.google.com/?cid=${id}`, reviews: [{ rating: 2, text: "Pelayanannya lama banget, nunggu 30 menit", when: "" }], ...extra });
       await page.route("**/api/places", r => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
         places: [place("p01", "Kopi Uji Satu"), place("p02", "Kopi Uji Dua", { website: "https://kopiujidua.id", rating: 4.7, reviewCount: 320, reviews: [] })], nextPageToken: "" }) }));
       await t.step("sign up", () => signup(t));
@@ -299,11 +310,11 @@ export const flows = [
         await t.page.getByRole("button", { name: "Lanjutkan dengan Google" }).waitFor();
       });
       await t.step("create an account with email", () => signup(t));
-      await t.step("Beranda says what to do before the lead map", async () => {
+      await t.step("Beranda opens with the day's move, then the lead map, then the queue", async () => {
         await t.page.getByRole("heading", { level: 1, name: /perlu ditindak hari ini|mendesak hari ini/ }).waitFor();
         const order = await t.page.evaluate(() => [...document.querySelectorAll(".sp-main h2")].map(h => (h.textContent || "").trim()));
         const todo = order.findIndex(x => /^Perlu ditindak/.test(x)), map = order.findIndex(x => /^Peta lead/.test(x));
-        if (todo < 0 || map < 0 || todo > map) throw new Error(`headings: ${order.join(" | ")}`);
+        if (todo < 0 || map < 0 || map > todo) throw new Error(`headings: ${order.join(" | ")}`);
       });
     },
   },
@@ -503,6 +514,38 @@ export const flows = [
         await fullProfile(page);
         await expectText(page, "Pola chat");
         await expectText(page, "“Bisa minggu depan?”");
+      });
+    },
+  },
+  {
+    name: "lokasi lead: from an address, then fine-tuned on the map",
+    async run(t) {
+      const { page } = t;
+      await stubMap(page);
+      await page.route("**/api/geocode", r => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+        hits: [{ lat: -6.2001, lng: 106.8166, label: "Kopi Lokasi Flow", address: "Jl. Contoh No. 7, Jakarta" }] }) }));
+      await t.step("sign up and add a lead", async () => { await signup(t); await addLead(page, "Lokasi Flow"); });
+      await t.step("the lead has no location yet", async () => {
+        await page.locator(".lead-row", { hasText: "Lokasi Flow" }).first().click();
+        await page.getByText("Belum ada lokasi").first().waitFor();
+      });
+      await t.step("search the address and pick the result", async () => {
+        await page.getByRole("button", { name: "Atur lokasi" }).first().click();
+        const sheet = page.getByRole("dialog", { name: "Lokasi lead" });
+        await sheet.locator("#geo-addr").fill("Kopi Lokasi Flow Jakarta");
+        await sheet.getByRole("button", { name: "Cari", exact: true }).click();
+        await t.audit("Lokasi lead sheet with a result");
+        await sheet.getByRole("list", { name: "Hasil alamat" }).getByRole("button", { name: /Kopi Lokasi Flow/ }).click();
+        await sheet.waitFor({ state: "detached" });
+        await page.getByText("Jl. Contoh No. 7, Jakarta").first().waitFor();
+        await page.getByText(/Muncul di Peta 3D · dari alamat/).first().waitFor();
+      });
+      await t.step("move the pin on the map", async () => {
+        await page.getByRole("button", { name: "Ubah", exact: true }).first().click();
+        const sheet = page.getByRole("dialog", { name: "Lokasi lead" });
+        await sheet.getByRole("button", { name: "Pakai titik ini" }).click();
+        await sheet.waitFor({ state: "detached" });
+        await page.getByText(/Muncul di Peta 3D · ditandai di peta/).first().waitFor();
       });
     },
   },
@@ -753,6 +796,21 @@ export const flows = [
         await seedDocs(project, bigAccount(uid));
         await page.reload();
         await page.waitForURL("**/dashboard");
+      });
+      await t.step("Peta 3D: leads with a point show as pins; a pin opens its card with Rute", async () => {
+        await stubMap(page);
+        await go(page, "Beranda");
+        const map = page.locator(isWide(page) ? ".sp-only-desk" : "section.sp-only-phone").filter({ has: page.getByRole("group", { name: "Mode peta" }) }).first();
+        await map.getByRole("button", { name: "Peta 3D" }).click();
+        const pins = map.locator(".sp-pin");
+        await pins.first().waitFor({ timeout: 15000 });
+        await pins.first().click();
+        const card = map.getByRole("region", { name: /^Lead / });
+        await card.getByRole("link", { name: /Rute/ }).waitFor();
+        await t.audit("Beranda → Peta 3D with a lead card (big account)");
+        await card.getByRole("button", { name: "Tutup kartu lead" }).click();
+        await map.getByRole("button", { name: /belum ada lokasinya/ }).waitFor();
+        await map.getByRole("button", { name: "Potensi" }).click();
       });
       await t.step("Perlu ditindak is a bounded queue: ten cards, the rest in a sheet that scrolls itself", async () => {
         await go(page, "Beranda");

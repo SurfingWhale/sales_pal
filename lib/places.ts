@@ -16,6 +16,7 @@ export interface Place {
   reviewCount: number;
   mapsUrl: string;
   email?: string;            // found on its website, not verified
+  lat?: number; lng?: number; // where it is, for the street map
   reviews: PlaceReview[];    // what Google returns (up to 5)
 }
 

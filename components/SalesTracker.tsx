@@ -21,7 +21,7 @@ import { Space, SpaceContext, seesEveryone, spaceDoc, spaceQuery, stamp } from "
 import { SpaceOption, useSpaceChoice } from "@/lib/spaceChoice";
 import { disablePush, restorePush } from "@/lib/push";
 import PushToggle from "@/components/PushToggle";
-import { collection, doc, getCountFromServer, getDoc, setDoc, onSnapshot, deleteDoc, writeBatch, query, where, updateDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, getCountFromServer, getDoc, setDoc, onSnapshot, deleteDoc, deleteField, writeBatch, query, where, updateDoc, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import { auth, db } from "@/lib/firebase";
@@ -51,6 +51,7 @@ import { parseVCards } from "@/lib/vcard";
 import { authFetch } from "@/lib/authFetch";
 import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, owed, longDate, rupiah, today, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
 import { useConfirm } from "@/components/ConfirmSheet";
+import { LeadGeo, validGeo } from "@/lib/geo";
 
 // Five places, in the order the work goes (owner, 2026-10-10): find people,
 // sell to them, report as a team, learn. A place with several tabs picks them
@@ -79,6 +80,8 @@ interface Lead {
   ownerUid?: string; ownerName?: string;   // in a guild space
   lastReplyAt?: string;                    // when they last answered (PRD-008 §2)
   profile?: LeadProfile;                   // need, pain, objection, type (PRD-008 §3)
+  address?: string;
+  geo?: LeadGeo;                           // where it is on the street map (PRD-013)
 }
 
 // New accounts start empty. Earlier versions wrote example rows (ids seed_…)
@@ -552,6 +555,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         notes: [p.weak.length ? `Titik lemah: ${p.weak.map(w => w.label).join("; ")}` : "", worst ? `Ulasan ${worst.rating}★: "${snippet(worst.text, 200)}"` : ""].filter(Boolean).join("\n"),
         ...(p.address ? { address: p.address } : {}), ...(p.website ? { website: p.website } : {}),
         ...(p.rating !== null ? { rating: p.rating } : {}), reviewCount: p.reviewCount, ...(p.mapsUrl ? { mapsUrl: p.mapsUrl } : {}), placeId: p.id,
+        ...(typeof p.lat === "number" && typeof p.lng === "number" ? { geo: { lat: p.lat, lng: p.lng, by: "maps" } } : {}),
         ...(p.weak.length ? { profile: { pain: p.weak.map(w => w.label).join("; ") } } : {}),
       }));
     });
@@ -618,6 +622,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       onQuote: () => { setPageOpen(false); startQuote(l); },
       onDelete: async () => { await deleteLead(l.id); setPageOpen(false); setSelectedLead(null); },
       onSavePhone: phone => updateDoc(spaceDoc(space, "leads", l.id), { phone }),
+      onSaveGeo: (geo, address) => updateDoc(spaceDoc(space, "leads", l.id), { geo: geo || deleteField(), ...(address !== undefined ? { address } : {}) }),
     };
   }
 
@@ -783,6 +788,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   };
   const mapLeads = active.map(l => ({
     id: l.id, name: l.name, score: sc(l).total, value: Number(l.value) || 0, phone: l.phone,
+    category: l.category, address: l.address, status: l.status, ...(validGeo(l.geo) ? { geo: l.geo } : {}),
     why: l.nextActionDate ? `${l.nextAction || "Follow-up"} ${longDate(l.nextActionDate)}` : sc(l).tip ? `Biar naik: ${sc(l).tip}` : "",
   }));
 
