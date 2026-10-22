@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Invoice, Quote, balance, longDate, rupiah, today, total } from "@/lib/billing";
+import { Invoice, Quote, balance, isIssued, longDate, rupiah, today, total } from "@/lib/billing";
 import { seesEveryone, useSpace } from "@/lib/space";
 import { card, chip, font } from "@/components/ui";
 
@@ -25,7 +25,7 @@ export default function SalesReport({ quotes, invoices }: { quotes: Quote[]; inv
 
   const q = quotes.filter(x => inMonth(x.date));
   const won = q.filter(x => x.status === "Disetujui");
-  const billed = invoices.filter(i => inMonth(i.date));
+  const billed = invoices.filter(i => isIssued(i) && inMonth(i.date));
   const pays = invoices.flatMap(i => (i.payments || []).filter(p => inMonth(p.date)).map(p => ({ i, p })));
   const cash = pays.reduce((a, x) => a + x.p.amount, 0);
   const paidOff = billed.filter(i => balance(i) === 0 && total(i) > 0);

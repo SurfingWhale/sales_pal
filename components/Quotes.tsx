@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { setDoc, deleteDoc, updateDoc } from "firebase/firestore";
+import { setDoc, deleteDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import {
   Business, Invoice, LineItem, QUOTE_STATUS, Quote, QuoteStatus, Service,
-  addDays, issuerOf, daysBetween, longDate, nextNumber, quoteColor, quoteText, rupiah, subtotal, today, total, waLink, waNumber,
+  addDays, issuerOf, isIssued, paid, scheduleOf, termAmounts, termsOf, daysBetween, longDate, nextNumber, quoteColor, quoteText, rupiah, subtotal, today, total, waLink, waNumber,
 } from "@/lib/billing";
 import PrintSheet from "@/components/PrintSheet";
 import DocEditor, { DocDraft, LeadRef, briefOf, cleanItems } from "@/components/DocEditor";
@@ -19,10 +19,13 @@ export type { LeadRef };
 function blank(b: Business, lead?: LeadRef): DocDraft {
   const d = today();
   const docs = b.docs || {};
+  const dp = docs.dpPercent ?? 50;
   return {
     id: "", number: "",
     leadId: lead?.id || "", leadName: lead?.name || "", contact: lead?.contact || "", phone: lead?.phone || "",
-    items: [], discount: 0, dpPercent: docs.dpPercent ?? 50, notes: "", date: d, validUntil: addDays(d, docs.validDays || 14),
+    items: [], discount: 0, dpPercent: dp, notes: "", date: d, validUntil: addDays(d, docs.validDays || 14),
+    schedule: docs.schedule?.length ? docs.schedule : scheduleOf({ dpPercent: dp }, docs),
+    ...(docs.taxPercent ? { taxPercent: docs.taxPercent } : {}),
   };
 }
 
@@ -75,25 +78,45 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
   const won = quotes.filter(q => q.status === "Disetujui");
   const decided = won.length + quotes.filter(q => q.status === "Ditolak").length;
 
+  // An accepted quote is never rewritten: editing it makes a revision
+  // (Q-…-r2) that takes over only once it is accepted (PRD-011 §4).
+  const [revising, setRevising] = useState<Quote | null>(null);
+
   async function save(d: DocDraft) {
-    const id = d.id || `q_${Date.now()}`;
-    const old = quotes.find(q => q.id === d.id);
+    const base = revising;
+    const old = base ? undefined : quotes.find(q => q.id === d.id);
+    const id = base ? `q_${Date.now()}` : d.id || `q_${Date.now()}`;
+    const root = (base?.number || "").replace(/-r\d+$/, "");
+    const rev = base ? quotes.filter(q => q.number === root || q.number.startsWith(`${root}-r`)).length + 1 : 0;
+    const sched = d.schedule?.length ? d.schedule.map(t => ({ label: t.label.trim() || "Termin", percent: t.percent || 0, ...(t.when?.trim() ? { when: t.when.trim() } : {}) })) : undefined;
     const doc: Omit<Quote, "id"> = {
-      number: d.number || nextNumber("Q", quotes.map(q => q.number)),
+      number: base ? `${root}-r${rev}` : d.number || nextNumber("Q", quotes.map(q => q.number)),
       leadId: d.leadId, leadName: d.leadName.trim(), contact: d.contact.trim(), phone: d.phone.trim(),
-      items: cleanItems(d.items), discount: d.discount, dpPercent: d.dpPercent, notes: d.notes.trim(),
-      date: d.date, validUntil: d.validUntil || addDays(d.date, 14), status: old?.status || "Draft",
+      items: cleanItems(d.items), discount: d.discount, notes: d.notes.trim(),
+      // The old single DP stays in step with the schedule for older readers.
+      dpPercent: sched && sched.length > 1 ? sched[0].percent : sched ? 0 : d.dpPercent,
+      ...(sched ? { schedule: sched } : {}), ...(d.taxPercent ? { taxPercent: d.taxPercent } : {}),
+      date: base ? today() : d.date, validUntil: d.validUntil || addDays(d.date, 14), status: old?.status || "Draft",
       ...(old?.sentAt ? { sentAt: old.sentAt } : {}), ...(old?.invoiceId ? { invoiceId: old.invoiceId } : {}),
+      ...(old?.acceptedAt ? { acceptedAt: old.acceptedAt } : {}), ...(old?.supersedes ? { supersedes: old.supersedes } : {}),
+      ...(base ? { supersedes: base.id } : {}),
       ...briefOf(d),
     };
-    await setDoc(spaceDoc(space, "quotes", id), stamp(space, doc, old as { ownerUid?: string; ownerName?: string } | undefined));
-    setEditing(null);
+    await setDoc(spaceDoc(space, "quotes", id), JSON.parse(JSON.stringify(stamp(space, doc, (old || base) as { ownerUid?: string; ownerName?: string } | undefined))));
+    setEditing(null); setRevising(null);
   }
+
+  const draftOf = (q: Quote): DocDraft => ({ ...q, validUntil: q.validUntil, schedule: scheduleOf(q, q.terms || termsOf(business)) });
 
   async function setStatus(q: Quote, status: QuoteStatus) {
     const patch: Partial<Quote> = { status };
     if (status === "Terkirim" && !q.sentAt) patch.sentAt = today();
+    if (status === "Disetujui") patch.acceptedAt = today();
     await updateDoc(spaceDoc(space, "quotes", q.id), patch);
+    // An accepted revision takes over from the quote it revises.
+    if (status === "Disetujui" && q.supersedes && quotes.some(x => x.id === q.supersedes)) {
+      await updateDoc(spaceDoc(space, "quotes", q.supersedes), { status: "Digantikan", supersededBy: q.id });
+    }
     // A yes closes the lead, at the value actually agreed.
     if (status === "Disetujui" && q.leadId) {
       await updateDoc(spaceDoc(space, "leads", q.leadId), { status: "Closed", value: total(q), lastContact: today() }).catch(() => {});
@@ -115,20 +138,41 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
     await deleteDoc(spaceDoc(space, "quotes", q.id));
   }
 
-  async function makeInvoice(q: Quote) {
+  // One invoice per schedule row, made as a draft: issuing it is its own step.
+  async function makeInvoice(q: Quote, index: number) {
     const id = `inv_${Date.now()}`;
     const d = today();
+    const terms = scheduleOf(q, q.terms || termsOf(business));
+    const t = terms[index];
+    const whole = terms.length === 1;
+    const amount = termAmounts(total(q), terms)[index];
     const inv: Omit<Invoice, "id"> = {
       number: nextNumber("INV", invoices.map(i => i.number)),
       quoteId: q.id, leadId: q.leadId, leadName: q.leadName, contact: q.contact, phone: q.phone,
-      items: q.items, discount: q.discount, dpPercent: q.dpPercent, notes: q.notes,
+      items: whole ? q.items : [{ name: `${t.label} ${t.percent}% — ${q.project || q.number}`, qty: 1, price: amount, description: `Termin ${index + 1} dari ${terms.length} · penawaran ${q.number}${t.when ? ` · ${t.when}` : ""}` }],
+      discount: whole ? q.discount : 0, dpPercent: 0, notes: q.notes,
+      ...(whole && q.taxPercent ? { taxPercent: q.taxPercent } : {}),
       date: d, dueDate: addDays(d, 7), payments: [],
-      issuer: q.issuer || issuerOf(business),
+      issuer: q.issuer || issuerOf(business), issue: "Draft",
+      ...(whole ? {} : { term: { index, label: t.label, percent: t.percent } }),
       ...briefOf(q),
     };
     await setDoc(spaceDoc(space, "invoices", id), stamp(space, inv, q as { ownerUid?: string; ownerName?: string }));
-    await updateDoc(spaceDoc(space, "quotes", q.id), { invoiceId: id });
+    await updateDoc(spaceDoc(space, "quotes", q.id), { ...(q.invoiceId ? {} : { invoiceId: id }), invoiceIds: arrayUnion(id) });
     onInvoiceCreated();
+  }
+
+  // The money on an accepted quote: agreed, billed, received, left.
+  function money(q: Quote) {
+    const linked = invoices.filter(i => i.quoteId === q.id && i.issue !== "Dibatalkan");
+    const terms = scheduleOf(q, q.terms || termsOf(business));
+    const billedIdx = new Set<number>();
+    linked.forEach(i => { if (i.term) billedIdx.add(i.term.index); else terms.forEach((_, n) => billedIdx.add(n)); });
+    const next = terms.findIndex((_, n) => !billedIdx.has(n));
+    const agreed = total(q);
+    const billed = linked.filter(isIssued).reduce((a, i) => a + total(i), 0);
+    const received = linked.reduce((a, i) => a + paid(i), 0);
+    return { terms, next, agreed, billed, received, left: Math.max(0, agreed - received), drafts: linked.filter(i => i.issue === "Draft").length };
   }
 
   return (
@@ -195,6 +239,8 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                     <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>
                       {q.project || q.items.map(i => i.name).join(", ")}{q.eventDate ? ` · acara ${longDate(q.eventDate)}` : ""}
                     </div>
+                    {q.supersedes && <div style={{ fontSize: 12, color: "var(--app-sub)", marginTop: 2 }}>Revisi dari {quotes.find(x => x.id === q.supersedes)?.number || "penawaran sebelumnya"}</div>}
+                    {q.supersededBy && <div style={{ fontSize: 12, color: "var(--app-sub)", marginTop: 2 }}>Digantikan {quotes.find(x => x.id === q.supersededBy)?.number || "revisi"} (yang berlaku)</div>}
                   </div>
                   <div className="sp-doc-sum" style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ok)" }}>{rupiah(total(q))}</div>
@@ -219,18 +265,34 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                       </>
                     )}
                     {q.status === "Draft" && <button onClick={() => setStatus(q, "Terkirim")} style={{ ...chip, color: "var(--app-text)", fontWeight: 700 }}>Tandai terkirim</button>}
-                    {q.status === "Disetujui" && !q.invoiceId && (
-                      <button onClick={() => makeInvoice(q)} style={{ ...chip, background: "#005eb0", color: "#fff", border: "none", fontWeight: 700 }}>Buat invoice →</button>
-                    )}
-                    {q.invoiceId && <span style={{ ...chip, cursor: "default", color: "var(--ok)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>✓ Invoice dibuat</span>}
+                    {q.status === "Disetujui" && (() => {
+                      const m = money(q);
+                      if (m.next < 0) return <span style={{ ...chip, cursor: "default", color: "var(--ok)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>✓ Semua termin ditagih</span>;
+                      const t = m.terms[m.next];
+                      return <button onClick={() => makeInvoice(q, m.next)} style={{ ...chip, background: "#005eb0", color: "#fff", border: "none", fontWeight: 700 }}>
+                        {m.terms.length === 1 ? "Buat invoice →" : `Buat invoice ${t.label} ${t.percent}% →`}
+                      </button>;
+                    })()}
                   </div>
                   <div className="sp-doc-tools">
                     <button onClick={() => copy(q)} style={{ ...chip, color: copied === q.id ? "var(--ok)" : "var(--app-text)" }}>{copied === q.id ? "✓ Tersalin" : "Copy teks"}</button>
                     <button onClick={() => setPrinting(q)} style={{ ...chip, color: "var(--app-text)" }}>PDF</button>
-                    <button onClick={() => setEditing({ ...q, validUntil: q.validUntil })} style={{ ...chip, color: "var(--app-text)" }}>Edit</button>
+                    {q.status === "Disetujui"
+                      ? <button onClick={() => { setRevising(q); setEditing({ ...draftOf(q), id: "", number: "" }); }} title="Yang disetujui tetap tersimpan; revisi berlaku setelah disetujui" style={{ ...chip, color: "var(--app-text)" }}>Revisi</button>
+                      : q.status !== "Digantikan" && <button onClick={() => { setRevising(null); setEditing(draftOf(q)); }} style={{ ...chip, color: "var(--app-text)" }}>Edit</button>}
                     <button className="sp-del" onClick={() => setDeleting(q)} aria-label={`Hapus ${q.number}`} title="Hapus" style={{ ...chip, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}>🗑</button>
                   </div>
                 </div>
+                {(q.status === "Disetujui" || q.status === "Digantikan") && (() => {
+                  const m = money(q);
+                  const cell = (k: string, v: number, c?: string) => <span key={k}><span style={{ color: "var(--app-muted)" }}>{k} </span><b className="tabnum" style={{ color: c }}>{rupiah(v)}</b></span>;
+                  return (
+                    <div aria-label="Uang penawaran ini" style={{ display: "flex", gap: "4px 16px", flexWrap: "wrap", marginTop: 10, padding: "10px 12px", borderRadius: 12, background: "var(--app-inner)", fontSize: 13 }}>
+                      {cell("Disepakati", m.agreed)}{cell("Ditagih", m.billed)}{cell("Diterima", m.received, "var(--ok)")}{cell("Sisa", m.left)}
+                      {m.drafts > 0 && <span style={{ color: "var(--app-sub)" }}>{m.drafts} invoice masih draft</span>}
+                    </div>
+                  );
+                })()}
                 {(q.spk || q.nda) && (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 10, fontSize: 13 }}>
                     {(["spk", "nda"] as const).map(k => q[k] && (
@@ -251,7 +313,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
         </div>
       )}
 
-      {editing && <DocEditor kind="quote" initial={editing} leads={leads} services={services} onSave={save} onClose={() => setEditing(null)} />}
+      {editing && <DocEditor kind="quote" initial={editing} leads={leads} services={services} onSave={save} onClose={() => { setEditing(null); setRevising(null); }} />}
 
       {printing && <PrintSheet kind="quote" data={printing} business={printing.issuer || business} frozen={!!printing.issuer} onClose={() => setPrinting(null)} />}
       {sending && <SendQuoteSheet q={sending} business={business} onSent={p => markSent(sending, p)} onClose={() => setSending(null)} />}

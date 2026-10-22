@@ -49,7 +49,7 @@ import { useHuntSession, useProspects, useStrategy } from "@/lib/prospectStore";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { parseVCards } from "@/lib/vcard";
 import { authFetch } from "@/lib/authFetch";
-import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, longDate, rupiah, today, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
+import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, owed, longDate, rupiah, today, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
 import { useConfirm } from "@/components/ConfirmSheet";
 
 // Five places, in the order the work goes (owner, 2026-10-10): find people,
@@ -739,7 +739,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       kind: "Coba lagi", action: "Lihat catatan", wa: false,
       open: () => setActiveTab("Rejection Log"),
     })),
-    ...invoices.filter(i => balance(i) > 0 && i.dueDate && i.dueDate <= soon).map(i => ({
+    ...invoices.filter(i => owed(i) > 0 && i.dueDate && i.dueDate <= soon).map(i => ({
       key: `i_${i.id}`, when: i.dueDate, icon: "receipt" as IconName, title: i.leadName,
       what: `${invoiceState(i, now) === "Telat" ? "Telat bayar" : "Jatuh tempo"} ${i.number} · sisa ${rupiah(balance(i))}`, phone: i.phone,
       text: `Halo ${i.contact || i.leadName}, reminder invoice ${i.number} jatuh tempo ${longDate(i.dueDate)}, sisa ${rupiah(balance(i))}. Terima kasih!`,
@@ -775,7 +775,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     active: active.length,
     newThisWeek: active.filter(l => Number(l.id.match(/_(\d{13})/)?.[1] || 0) > weekAgo).length,
     high: highPotential,
-    closedThisMonth: invoices.filter(i => (i.date || "").startsWith(month)).length,
+    closedThisMonth: invoices.filter(i => i.issue !== "Dibatalkan" && (i.date || "").startsWith(month)).length,
     closingTarget,
     paidThisMonth: paidThisMonth ? `${rupiah(paidThisMonth)} masuk bulan ini` : "invoice dibuat bulan ini",
     pipeline: active.reduce((a, l) => a + (Number(l.value) || 0), 0),
@@ -955,7 +955,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           <Beranda now={now} todo={todo} numbers={numbers} mapLeads={mapLeads}
             hunting={{ live: Boolean(huntSession.live), sentToday: hunts.filter(h => h.date === now).length, goal: huntGoal, queued: queue(prospects, now, strategy).length,
               onStart: async () => { await huntSession.start(); setActiveTab("Hunting"); }, onOpen: gotoHunting }}
-            report={<BerandaReport now={now} numbers={numbers} paid={paidThisMonth} receivable={invoices.reduce((a, i) => a + balance(i), 0)}
+            report={<BerandaReport now={now} numbers={numbers} paid={paidThisMonth} receivable={invoices.reduce((a, i) => a + owed(i), 0)}
               leadsByStatus={leads.reduce((m, l) => ({ ...m, [l.status]: (m[l.status] || 0) + 1 }), {} as Record<string, number>)}
               prospects={prospects} hunts={hunts} sessions={huntSession.sessions} onGo={tab => { setActiveTab(tab); window.scrollTo({ top: 0 }); }}
               onSetTarget={setClosingTarget} />}

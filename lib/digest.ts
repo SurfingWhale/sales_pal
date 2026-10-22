@@ -27,11 +27,14 @@ export function stalled(deals: Deal[], on: string): { deal: Deal; lastMove: stri
 
 interface LeadLike { status?: string; nextActionDate?: string }
 interface QuoteLike { status?: string; sentAt?: string }
-interface InvoiceLike { dueDate?: string; items?: { qty?: number; price?: number }[]; discount?: number; payments?: { amount?: number }[] }
+interface InvoiceLike { dueDate?: string; items?: { qty?: number; price?: number }[]; discount?: number; taxPercent?: number; payments?: { amount?: number }[]; issue?: string }
 interface RejectionLike { followUpDate?: string }
 
+// Same as lib/billing owed(): a draft or cancelled invoice is owed nothing.
 const owed = (i: InvoiceLike) => {
-  const total = Math.max(0, (i.items || []).reduce((a, x) => a + (x.qty || 0) * (x.price || 0), 0) - (i.discount || 0));
+  if (i.issue === "Draft" || i.issue === "Dibatalkan") return 0;
+  const base = Math.max(0, (i.items || []).reduce((a, x) => a + (x.qty || 0) * (x.price || 0), 0) - (i.discount || 0));
+  const total = base + (i.taxPercent ? Math.round((base * i.taxPercent) / 100) : 0);
   return total - (i.payments || []).reduce((a, p) => a + (p.amount || 0), 0);
 };
 

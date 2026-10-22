@@ -25,7 +25,9 @@ export interface LineItem {
   description?: string;   // what's included, printed under the name
 }
 
-export const QUOTE_STATUS = ["Draft", "Terkirim", "Disetujui", "Ditolak"] as const;
+// Digantikan: a revision of it was accepted, so its terms are no longer the
+// effective ones (PRD-011 §4); it stays readable.
+export const QUOTE_STATUS = ["Draft", "Terkirim", "Disetujui", "Ditolak", "Digantikan"] as const;
 export type QuoteStatus = (typeof QUOTE_STATUS)[number];
 
 // What the job is, so it doesn't all end up in "Catatan" (QA 15 Okt): a title,
@@ -36,7 +38,13 @@ export interface Brief {
   eventTime?: string;     // "13.30–15.00 WIB"
   venue?: string;
   deliverables?: string;  // one per line
+  timeline?: string;      // estimated work time: "File final 7 hari kerja setelah acara"
+  exclusions?: string;    // outside the scope, one per line
 }
+
+// One row of a payment schedule: "DP 50% saat booking". Amounts come from the
+// document's total; the last row takes the rounding remainder.
+export interface Term { label: string; percent: number; when?: string }
 
 export interface Quote extends Brief {
   id: string;
@@ -53,9 +61,15 @@ export interface Quote extends Brief {
   validUntil: string;
   status: QuoteStatus;
   sentAt?: string;
-  invoiceId?: string;
+  invoiceId?: string;       // the first invoice (older quotes have only this)
+  invoiceIds?: string[];    // every invoice made from it (one per schedule row)
   ownerUid?: string;
   ownerName?: string;
+  taxPercent?: number;      // PPN or other, on (subtotal − discount)
+  schedule?: Term[];        // payment schedule; none = derived from dpPercent
+  acceptedAt?: string;
+  supersedes?: string;      // the quote this one revises
+  supersededBy?: string;    // the accepted revision that replaced it
   // Frozen when the quote is sent (PRD-011): the letterhead and the terms it
   // went out with. Changing the business later never rewrites it.
   issuer?: Issuer;
@@ -71,6 +85,7 @@ export interface Agreement {
   body: string;            // the filled text, as sent
   sentAt: string;
   signedAt?: string;
+  declinedAt?: string;
 }
 
 export interface Payment {
@@ -97,6 +112,12 @@ export interface Invoice extends Brief {
   ownerUid?: string;      // guild: the seller (lib/space.ts stamp)
   ownerName?: string;
   issuer?: Issuer;        // frozen when the invoice is made (PRD-011)
+  taxPercent?: number;
+  // Issuing is its own step, apart from being paid. Older invoices have no
+  // field and count as issued.
+  issue?: "Draft" | "Diterbitkan" | "Dibatalkan";
+  issuedAt?: string;
+  term?: { index: number; label: string; percent: number };  // which schedule row it bills
 }
 
 export interface Business {
@@ -122,6 +143,9 @@ export interface DocDefaults {
   finalWhen?: string;      // "H-1 acara"
   revisions?: string;      // "1x revisi minor"
   cancellation?: string;   // cancellation and rescheduling
+  schedule?: Term[];       // default payment schedule; none = from dpPercent
+  taxPercent?: number;
+  spkAuto?: boolean;       // tick the work agreement when sending a quote
   spkTitle?: string;       // "Perjanjian Kerja"
   spkTemplate?: string;
   ndaTemplate?: string;
@@ -178,9 +202,33 @@ export function subtotal(items: LineItem[]): number {
   return items.reduce((a, i) => a + (i.qty || 0) * (i.price || 0), 0);
 }
 
-export function total(d: { items: LineItem[]; discount: number }): number {
-  return Math.max(0, subtotal(d.items) - (d.discount || 0));
+export function taxAmount(d: { items: LineItem[]; discount: number; taxPercent?: number }): number {
+  const base = Math.max(0, subtotal(d.items) - (d.discount || 0));
+  return d.taxPercent ? Math.round((base * d.taxPercent) / 100) : 0;
 }
+
+export function total(d: { items: LineItem[]; discount: number; taxPercent?: number }): number {
+  return Math.max(0, subtotal(d.items) - (d.discount || 0)) + taxAmount(d);
+}
+
+// The schedule a quote is paid by: its own, or the old single DP split.
+export function scheduleOf(q: { schedule?: Term[]; dpPercent: number }, t: { dpWhen?: string; finalWhen?: string } = {}): Term[] {
+  if (q.schedule?.length) return q.schedule;
+  if (!q.dpPercent || q.dpPercent >= 100) return [{ label: "Pembayaran penuh", percent: 100, ...(t.finalWhen ? { when: t.finalWhen } : {}) }];
+  return [
+    { label: "DP", percent: q.dpPercent, ...(t.dpWhen ? { when: t.dpWhen } : {}) },
+    { label: "Pelunasan", percent: 100 - q.dpPercent, ...(t.finalWhen ? { when: t.finalWhen } : {}) },
+  ];
+}
+
+// Each row's amount; the last row takes what rounding left over.
+export function termAmounts(totalAmount: number, terms: Term[]): number[] {
+  const out = terms.map(t => Math.round((totalAmount * (t.percent || 0)) / 100));
+  if (out.length) out[out.length - 1] = totalAmount - out.slice(0, -1).reduce((a, n) => a + n, 0);
+  return out;
+}
+
+export const scheduleSum = (terms: Term[]) => terms.reduce((a, t) => a + (t.percent || 0), 0);
 
 export function dpAmount(d: { items: LineItem[]; discount: number; dpPercent: number }): number {
   return Math.round((total(d) * (d.dpPercent || 0)) / 100);
@@ -194,9 +242,19 @@ export function balance(inv: Invoice): number {
   return Math.max(0, total(inv) - paid(inv));
 }
 
-export type InvoiceState = "Lunas" | "DP masuk" | "Telat" | "Belum bayar";
+// Issued (older invoices without the field count as issued).
+export const isIssued = (inv: Pick<Invoice, "issue">) => !inv.issue || inv.issue === "Diterbitkan";
+
+// What the client still owes on it: nothing on a draft or a cancelled one.
+export function owed(inv: Invoice): number {
+  return isIssued(inv) ? balance(inv) : 0;
+}
+
+export type InvoiceState = "Lunas" | "DP masuk" | "Telat" | "Belum bayar" | "Draft" | "Dibatalkan";
 
 export function invoiceState(inv: Invoice, on = today()): InvoiceState {
+  if (inv.issue === "Dibatalkan") return "Dibatalkan";
+  if (inv.issue === "Draft" && paid(inv) === 0) return "Draft";
   const p = paid(inv);
   if (p >= total(inv) && total(inv) > 0) return "Lunas";
   if (inv.dueDate && inv.dueDate < on) return "Telat";
@@ -208,6 +266,8 @@ export const invoiceColor: Record<InvoiceState, string> = {
   "DP masuk": "#005eb0",
   Telat: "#ff4444",
   "Belum bayar": "#ff9900",
+  Draft: "#64748b",
+  Dibatalkan: "#94a3b8",
 };
 
 export const quoteColor: Record<QuoteStatus, string> = {
@@ -215,6 +275,7 @@ export const quoteColor: Record<QuoteStatus, string> = {
   Terkirim: "#005eb0",
   Disetujui: "#00a862",
   Ditolak: "#ff4444",
+  Digantikan: "#94a3b8",
 };
 
 // Q-2609-001: prefix, year and month, then the next number in that month.

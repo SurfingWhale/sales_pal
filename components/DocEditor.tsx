@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Brief, LineItem, Service, rupiah, subtotal, total } from "@/lib/billing";
+import { Brief, LineItem, Service, Term, rupiah, scheduleSum, subtotal, taxAmount, termAmounts, total } from "@/lib/billing";
 import { btnMuted, btnPrimary, chip, font, inputStyle, label, modalBox } from "@/components/ui";
 import ConfirmSheet from "@/components/ConfirmSheet";
 
@@ -25,6 +25,8 @@ export interface DocDraft extends Brief {
   date: string;
   validUntil?: string;   // quote
   dueDate?: string;      // invoice
+  taxPercent?: number;
+  schedule?: Term[];     // quote: payment schedule
 }
 
 const num = (v: string) => parseInt(v.replace(/\D/g, ""), 10) || 0;
@@ -69,7 +71,11 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
   }, [added]);
   const set = (p: Partial<DocDraft>) => setD(cur => ({ ...cur, ...p }));
   const setItem = (i: number, p: Partial<LineItem>) => set({ items: d.items.map((it, n) => (n === i ? { ...it, ...p } : it)) });
-  const missing = !d.leadName.trim() ? "Isi nama klien dulu." : d.items.length === 0 ? "Tambah minimal satu item." : "";
+  const sched = d.schedule || [];
+  const sum = scheduleSum(sched);
+  const missing = !d.leadName.trim() ? "Isi nama klien dulu." : d.items.length === 0 ? "Tambah minimal satu item."
+    : kind === "quote" && sched.length && sum !== 100 ? `Jadwal pembayaran totalnya ${sum}%, harus 100%.` : "";
+  const setTerm = (i: number, p: Partial<Term>) => set({ schedule: sched.map((t, n) => (n === i ? { ...t, ...p } : t)) });
   const title = kind === "quote" ? (d.id ? `Edit ${d.number}` : "Penawaran baru") : (d.id ? `Edit ${d.number}` : "Invoice baru");
 
   function pickLead(id: string) {
@@ -129,6 +135,7 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
               {input("doc-event", "Tanggal acara", d.eventDate || "", v => set({ eventDate: v }), "", "date")}
               {input("doc-time", "Jam", d.eventTime || "", v => set({ eventTime: v }), "mis. 13.30–15.00 WIB")}
               {input("doc-venue", "Lokasi", d.venue || "", v => set({ venue: v }), "mis. Jl. Contoh No. 1, Jakarta", "text", "1/-1")}
+              {input("doc-timeline", "Estimasi waktu pengerjaan", d.timeline || "", v => set({ timeline: v }), "mis. File final 7 hari kerja setelah acara", "text", "1/-1")}
             </div>
           </Section>
 
@@ -166,10 +173,16 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
               placeholder={"Foto event hasil edit\n1 reel recap vertikal\nFoto produk & brand hasil edit"} style={{ ...inputStyle, resize: "vertical", height: 96 }} />
           </Section>
 
+          <Section t="Di luar scope" hint="Opsional. Yang ga termasuk, biar ga jadi salah paham. Satu baris satu poin.">
+            <textarea id="doc-exclusions" aria-label="Di luar scope" value={d.exclusions || ""} onChange={e => set({ exclusions: e.target.value })}
+              placeholder={"Biaya transport luar kota\nCetak foto\nRevisi di luar jatah"} style={{ ...inputStyle, resize: "vertical", height: 84 }} />
+          </Section>
+
           <Section t="Harga & pembayaran">
             <div style={grid}>
               {input("doc-discount", "Diskon (Rp)", d.discount ? d.discount.toLocaleString("id-ID") : "", v => set({ discount: num(v) }), "0")}
-              {input("doc-dp", "DP (%)", String(d.dpPercent), v => set({ dpPercent: Math.min(100, num(v)) }))}
+              {input("doc-tax", "Pajak / PPN (%)", d.taxPercent ? String(d.taxPercent) : "", v => set({ taxPercent: Math.min(100, num(v)) || undefined }), "0")}
+              {kind === "invoice" && input("doc-dp", "DP (%)", String(d.dpPercent), v => set({ dpPercent: Math.min(100, num(v)) }))}
               {kind === "quote"
                 ? input("doc-valid", "Berlaku s/d", d.validUntil || "", v => set({ validUntil: v }), "", "date")
                 : <>
@@ -178,6 +191,29 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
                   </>}
             </div>
           </Section>
+
+          {kind === "quote" && (
+            <Section t="Jadwal pembayaran" hint="DP, termin, pelunasan. Totalnya 100%. Tiap baris nanti bisa jadi invoice sendiri.">
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {sched.map((t, i) => {
+                  const amt = termAmounts(total(d), sched)[i];
+                  return (
+                    <div key={i} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 84px", gap: 8, padding: "8px 12px 12px", borderRadius: 12, background: "var(--app-inner)" }}>
+                      <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--app-muted)" }}>Termin {i + 1} · {rupiah(amt)}</span>
+                        {sched.length > 1 && <button onClick={() => set({ schedule: sched.filter((_, n) => n !== i) })} aria-label={`Hapus termin ${i + 1}`} style={{ marginLeft: "auto", background: "none", border: "none", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", minHeight: 32 }}>Hapus</button>}
+                      </div>
+                      <input value={t.label} onChange={e => setTerm(i, { label: e.target.value })} style={inputStyle} placeholder="mis. DP" aria-label={`Nama termin ${i + 1}`} />
+                      <input inputMode="numeric" value={t.percent || ""} onChange={e => setTerm(i, { percent: Math.min(100, num(e.target.value)) })} style={{ ...inputStyle, textAlign: "right" }} placeholder="%" aria-label={`Persen termin ${i + 1}`} />
+                      <input value={t.when || ""} onChange={e => setTerm(i, { when: e.target.value })} style={{ ...inputStyle, gridColumn: "1 / -1" }} placeholder="Kapan, mis. saat booking" aria-label={`Kapan termin ${i + 1}`} />
+                    </div>
+                  );
+                })}
+                <button onClick={() => set({ schedule: [...sched, { label: "", percent: Math.max(0, 100 - sum), when: "" }] })} style={{ ...chip, alignSelf: "flex-start", fontSize: 13, fontWeight: 700, color: "var(--brand-text)", padding: "10px 14px" }}>+ Termin</button>
+                <div className="tabnum" style={{ fontSize: 13, color: sum === 100 ? "var(--app-muted)" : "var(--hot)" }}>Total {sum}%{sum === 100 ? "" : " — harus 100%"}</div>
+              </div>
+            </Section>
+          )}
 
           <Section t="Catatan untuk klien" hint="Opsional. Hal lain yang belum masuk di atas.">
             <textarea id="doc-notes" aria-label="Catatan untuk klien" value={d.notes} onChange={e => set({ notes: e.target.value })}
@@ -188,7 +224,7 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
         {/* Footer: the total and the way to save, always in view. */}
         <div style={{ padding: "12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px)", borderTop: "1px solid var(--app-border)", background: "var(--app-card)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, marginBottom: 10 }}>
-            <span style={{ fontSize: 12, color: "var(--app-muted)" }}>Subtotal {rupiah(subtotal(d.items))}{d.discount ? ` · diskon ${rupiah(d.discount)}` : ""}</span>
+            <span style={{ fontSize: 12, color: "var(--app-muted)" }}>Subtotal {rupiah(subtotal(d.items))}{d.discount ? ` · diskon ${rupiah(d.discount)}` : ""}{d.taxPercent ? ` · pajak ${rupiah(taxAmount(d))}` : ""}</span>
             <b style={{ fontSize: 16, color: "var(--ok)" }}>{rupiah(total(d))}</b>
           </div>
           {(missing || err) && <div role="status" style={{ fontSize: 12, marginBottom: 8, color: err ? "color-mix(in srgb, #ff4444 55%, var(--app-text))" : "var(--app-muted)" }}>{err || missing}</div>}
@@ -210,7 +246,7 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
 // Brief fields as stored: empty ones left out.
 export function briefOf(d: Brief): Brief {
   const out: Brief = {};
-  (["project", "eventDate", "eventTime", "venue", "deliverables"] as const).forEach(k => { const v = (d[k] || "").trim(); if (v) out[k] = v; });
+  (["project", "eventDate", "eventTime", "venue", "deliverables", "timeline", "exclusions"] as const).forEach(k => { const v = (d[k] || "").trim(); if (v) out[k] = v; });
   return out;
 }
 
