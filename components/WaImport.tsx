@@ -8,6 +8,7 @@ import { WaMessage, WaSummary, guessThem, parseWaExport, readExportFile, senders
 import { parseVCards } from "@/lib/vcard";
 import { downscaleImage } from "@/lib/image";
 import { authFetch } from "@/lib/authFetch";
+import { today as localToday } from "@/lib/billing";
 import Icon from "@/components/Icon";
 
 // Tarik dari WhatsApp (PRD-008 §5), a bottom sheet: pick a source, see what was
@@ -94,7 +95,7 @@ export default function WaImport({ leadName, profile, onSave, onClose, initialFi
 
   async function save() {
     const on = (k: string) => parts.some(p => p.key === k) && !off[k];
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localToday();
     const p: LeadProfile = { ...(profile || {}) };
     const patch: WaPatch = { profile: p };
     if (sum) {

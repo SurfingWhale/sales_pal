@@ -59,7 +59,9 @@ export interface Prospect {
   context?: PostContext;   // need, when, where… read from their post (lib/postContext.ts)
   sessionId?: string;
   history: ProspectEvent[];
-  closed: boolean;         // DNC: kept only so the request is honoured
+  closed: boolean;         // DNC (kept only so the request is honoured), or dropped (archivedAt)
+  archivedAt?: string | null;    // dropped after going quiet; can be brought back
+  archiveReason?: string | null;
   createdAt: number;
   updatedAt: number;
   ownerUid?: string;
@@ -74,8 +76,9 @@ export interface Strategy {
   parkDays: number;
   declinedParkDays: number;
   thinkDays: number;
+  dropDays: number;        // quiet this long after our last message: ready to drop
 }
-export const STRATEGY: Strategy = { maxAttempts: 3, gaps: [2, 5], parkDays: 60, declinedParkDays: 90, thinkDays: 3 };
+export const STRATEGY: Strategy = { maxAttempts: 3, gaps: [2, 5], parkDays: 60, declinedParkDays: 90, thinkDays: 3, dropDays: 15 };
 
 export function strategyFrom(s?: Partial<Strategy> | null): Strategy {
   const ok = (n: unknown, min = 1) => typeof n === "number" && n >= min;
@@ -85,6 +88,7 @@ export function strategyFrom(s?: Partial<Strategy> | null): Strategy {
     parkDays: ok(s?.parkDays) ? s!.parkDays! : STRATEGY.parkDays,
     declinedParkDays: ok(s?.declinedParkDays) ? s!.declinedParkDays! : STRATEGY.declinedParkDays,
     thinkDays: ok(s?.thinkDays) ? s!.thinkDays! : STRATEGY.thinkDays,
+    dropDays: ok(s?.dropDays) ? s!.dropDays! : STRATEGY.dropDays,
   };
 }
 
@@ -131,6 +135,71 @@ export function view(p: Prospect, on: string, s: Strategy = STRATEGY): View {
 export function isDue(p: Prospect, on: string, s: Strategy = STRATEGY): boolean {
   const v = view(p, on, s);
   return v.status !== "dnc" && v.status !== "tidak" && !!v.due && v.due <= on;
+}
+
+// ---- the cycle: quiet, dropped, picked up again (owner, 23 Okt) ------------
+
+// Days since our last message with nothing back after it; null when they
+// answered after it, or nothing was sent yet.
+export function silentDays(p: Prospect, on: string): number | null {
+  if (!p.lastSentAt) return null;
+  if (p.lastReplyAt && p.lastReplyAt >= p.lastSentAt) return null;
+  return daysFrom(p.lastSentAt, on);
+}
+
+// Quiet for dropDays since our last message, and not someone who said yes,
+// gave their data or asked not to be contacted.
+export function dropReady(p: Prospect, on: string, s: Strategy = STRATEGY): boolean {
+  if (p.closed || p.contact === "dnc" || p.convertedAt || p.result === "data" || p.result === "tertarik") return false;
+  const d = silentDays(p, on);
+  return d !== null && d >= s.dropDays;
+}
+
+// Dropped, not deleted: out of every list, history kept, back with one tap.
+export function archivePatch(p: Prospect, reason: string, ctx: Ctx): Partial<Prospect> {
+  return {
+    closed: true, archivedAt: ctx.on, archiveReason: reason, updatedAt: ctx.at,
+    history: withEvent(p.history, { at: ctx.at, kind: "status", text: `Dibuang: ${reason}` }),
+  };
+}
+
+export function restorePatch(p: Prospect, ctx: Ctx): Partial<Prospect> {
+  return {
+    closed: false, archivedAt: null, archiveReason: null, updatedAt: ctx.at,
+    history: withEvent(p.history, { at: ctx.at, kind: "status", text: "Dibalikin dari arsip" }),
+  };
+}
+
+// The last thing in a conversation, for a chat list.
+export function lastLine(p: Prospect): { who: "kamu" | "dia" | "info"; text: string; at: number } | null {
+  const e = (p.history || []).at(-1);
+  if (!e) return null;
+  if (e.kind === "sent") return { who: "kamu", text: e.text?.trim() || `(${e.template || "pesan"})`, at: e.at };
+  if (e.kind === "reply") return { who: "dia", text: e.text?.trim() || "(bales)", at: e.at };
+  if (e.kind === "post") return { who: "dia", text: e.text?.trim() || "(post)", at: e.at };
+  return { who: "info", text: e.text?.trim() || (e.kind === "convert" ? "Jadi ETB" : "Catatan"), at: e.at };
+}
+
+// Who to message next, by group (Kirim → Ambil dari antrian).
+export type QueueGroup = "due" | "baru" | "belum" | "lanjut" | "drop";
+export const QUEUE_GROUPS: { id: QueueGroup; label: string; hint: string }[] = [
+  { id: "due", label: "Follow-up hari ini", hint: "jadwal kirim berikutnya udah sampai" },
+  { id: "baru", label: "Baru, belum disapa", hint: "post disimpan, belum dikirimi" },
+  { id: "belum", label: "Belum respon", hint: "udah dikirimi, belum bales" },
+  { id: "lanjut", label: "Dibales, lanjut", hint: "tertarik atau pikir-pikir: gali, tawarin" },
+  { id: "drop", label: "Siap dibuang", hint: "diem lewat batas hari" },
+];
+
+export function queueGroup(ps: Prospect[], g: QueueGroup, on: string, s: Strategy = STRATEGY): Prospect[] {
+  const live = ps.filter(p => !p.closed && p.contact !== "dnc");
+  const quiet = (p: Prospect) => silentDays(p, on) ?? 0;
+  switch (g) {
+    case "due": return live.filter(p => isDue(p, on, s) && !dropReady(p, on, s)).sort((a, b) => (view(a, on, s).due || "").localeCompare(view(b, on, s).due || ""));
+    case "baru": return live.filter(p => p.contact === "baru").sort((a, b) => b.createdAt - a.createdAt);
+    case "belum": return live.filter(p => { const v = view(p, on, s).status; return (v === "belum" || v === "intro" || v === "tidak") && !dropReady(p, on, s); }).sort((a, b) => quiet(b) - quiet(a));
+    case "lanjut": return live.filter(p => p.contact === "terhubung" && p.result !== "tolak" && p.result !== "data").sort((a, b) => b.updatedAt - a.updatedAt);
+    case "drop": return live.filter(p => dropReady(p, on, s)).sort((a, b) => quiet(b) - quiet(a));
+  }
 }
 
 // What needs a move today, oldest first.

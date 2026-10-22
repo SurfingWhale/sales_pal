@@ -13,6 +13,8 @@ import {
 } from "@/lib/hunting";
 import ThreadsRadar from "@/components/ThreadsRadar";
 import ProspectList, { ProspectFilter } from "@/components/ProspectList";
+import Conversations from "@/components/Conversations";
+import ProspectThread, { type SendHow, type SendOut } from "@/components/ProspectThread";
 import Campaigns from "@/components/Campaigns";
 import HunterStats from "@/components/HunterStats";
 import CustomerContext from "@/components/CustomerContext";
@@ -22,8 +24,8 @@ import DefaultsSheet from "@/components/DefaultsSheet";
 import { TOPICS, Tone, defaultTopic, fromLibrary, repliesFor } from "@/lib/replies";
 import { profileUrl } from "@/lib/threads";
 import {
-  Channel, HuntSession, Prospect, Strategy, newProspect, patchFromHunt, postPatch, prospectId, sessionMinutes,
-  threadsPostLink, view,
+  Channel, HuntSession, Prospect, QUEUE_GROUPS, QueueGroup, Strategy, newProspect, patchFromHunt, postPatch, prospectId, queueGroup, sessionMinutes,
+  silentDays, threadsPostLink, view,
 } from "@/lib/prospects";
 import { HuntInbox, bump, createProspect, ctx, recordSend, saveProspect, unfurl, useFillDefaults, useHuntInbox } from "@/lib/prospectStore";
 import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading, ink } from "@/components/ui";
@@ -33,7 +35,7 @@ type Filter = "Semua" | "Follow-up" | "Tertarik";
 // One part of Hunting at a time (QA 15 Okt: "tiap component mesti scroll panjang"):
 // writing the message, the people, the log, and the numbers.
 type Pane = "kirim" | "journey" | "log" | "performa";
-const PANES: [Pane, string][] = [["kirim", "Kirim"], ["journey", "Journey"], ["log", "Log DM"], ["performa", "Performa"]];
+const PANES: [Pane, string][] = [["kirim", "Kirim"], ["journey", "Journey"], ["log", "Percakapan"], ["performa", "Performa"]];
 // An inline editor under a log row: the field on its own line, Batal beside the action.
 const inlineEditor: CSSProperties = { marginTop: 10, padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)" };
 const editorButtons: CSSProperties = { display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap", marginTop: 10 };
@@ -78,6 +80,10 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   const [goalError, setGoalError] = useState("");
   const [savingGoal, setSavingGoal] = useState(false);
   const [pane, setPane] = useState<Pane>("kirim");
+  // The cycle (owner, 23 Okt): one person's conversation, and who's next from a queue.
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [queued, setQueued] = useState<{ group: QueueGroup; ids: string[] } | null>(null);
   const [editDefaults, setEditDefaults] = useState(false);
   const allQuotes = useSpaceCollection<Quote>(space, "quotes");
   const allInvoices = useSpaceCollection<Invoice>(space, "invoices");
@@ -291,6 +297,47 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     }
   }
 
+  // Sending to someone from their conversation, the same way Kirim does.
+  function sendFor(p: Prospect): SendOut {
+    const h = p.handle.replace(/^@/, "").replace(/[^A-Za-z0-9._]/g, "");
+    const post = [...(p.history || [])].reverse().find(e => e.kind === "post");
+    if (p.platform === "WA") return { how: "wa", label: "Buka WA" };
+    if (p.contact === "baru" && post?.url) return { how: "open", label: "Copy & buka post", url: post.url };
+    if ((p.platform === "Threads" || p.platform === "IG") && h) return { how: "open", label: p.platform === "IG" ? "Copy & DM" : "Copy & DM (via IG)", url: `https://ig.me/m/${h}` };
+    if (p.url) return { how: "open", label: "Copy & buka profil", url: p.url };
+    return { how: "wa", label: "Buka WA" };
+  }
+
+  async function sendTo(p: Prospect, t: PitchTemplate | null, text: string, how: SendHow): Promise<(() => Promise<void>) | null> {
+    const out = sendFor(p);
+    if (how === "copy") copy(text, `th_${p.id}`, setCopiedId);
+    else if (how === "open" && out.url) { copy(text, `th_${p.id}`, setCopiedId); window.open(out.url, "_blank", "noopener"); }
+    else window.open(waLinkFor(p.handle, text), "_blank");
+    try {
+      return await recordSend(space, {
+        target: p.handle, platform: p.platform, url: p.url || undefined, templateId: t?.id || "manual", templateTitle: t?.title || "Pesan sendiri",
+        text, channel: out.label === "Copy & buka post" ? "post" : "dm",
+      }, p, live?.id, strategy);
+    } catch { return null; }
+  }
+
+  // Take the next person from a queue group into Kirim; "Berikutnya" walks the rest.
+  function takeFrom(group: QueueGroup, p: Prospect) {
+    const ids = queueGroup(prospects, group, now, strategy).map(x => x.id);
+    setQueued({ group, ids: ids.slice(ids.indexOf(p.id) + 1) });
+    setPicking(false);
+    compose(p);
+  }
+  function takeNext() {
+    if (!queued) return;
+    const rest = queued.ids.map(id => prospects.find(x => x.id === id)).filter((x): x is Prospect => !!x);
+    const next = rest[0];
+    if (!next) { setQueued(null); return; }
+    setQueued({ group: queued.group, ids: queued.ids.slice(queued.ids.indexOf(next.id) + 1) });
+    setUndo(null);
+    compose(next);
+  }
+
   function clearTarget() {
     setTarget(""); setUrl(""); setSource({ kind: "manual" }); setChannel("dm"); setPasteMsg("");
     targetRef.current?.focus();
@@ -456,7 +503,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       <div role="tablist" aria-label="Bagian Hunting" className="sp-hunt-panes"
         style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 4, padding: 4, marginBottom: 16, borderRadius: 12, background: "var(--app-inner)", border: "1px solid var(--app-border)" }}>
         {PANES.map(([k, l]) => {
-          const n = k === "log" ? stale.length : 0;
+          const n = k === "log" ? queueGroup(prospects, "due", now, strategy).length : 0;
           return (
             <button key={k} role="tab" id={`hp-${k}`} aria-selected={pane === k} aria-controls={`hpane-${k}`} onClick={() => { setPane(k); }}
               aria-label={n ? `${l}, ${n} perlu follow-up` : l}
@@ -468,6 +515,48 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         })}
       </div>
 
+      {threadId && (() => {
+        const p = prospects.find(x => x.id === threadId);
+        if (!p) return null;
+        return <ProspectThread key={p.id} p={p} strategy={strategy} templates={templates} fill={dataFor(p.handle, p, business.name, defaults)}
+          sendOut={sendFor(p)} onSend={sendTo} onClose={() => setThreadId(null)} />;
+      })()}
+      {picking && (
+        <div className="modal-overlay" onClick={() => setPicking(false)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="queue-h" onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 520 }}>
+            <div id="queue-h" style={{ fontSize: 17, fontWeight: 700, fontFamily: font }}>Ambil dari antrian</div>
+            <p style={{ fontSize: 13, color: "var(--app-muted)", margin: "4px 0 12px" }}>Pilih orangnya; abis kirim, tombol Berikutnya bawa orang selanjutnya dari grup yang sama.</p>
+            {QUEUE_GROUPS.map(g => {
+              const ps = queueGroup(prospects, g.id, now, strategy);
+              return (
+                <section key={g.id} aria-label={g.label} style={{ borderTop: "1px solid var(--app-border)", padding: "10px 0" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{g.label} <span className="tabnum" style={{ color: "var(--app-muted)", fontWeight: 500 }}>{ps.length}</span></div>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{g.id === "drop" ? `diem ${strategy.dropDays}+ hari` : g.hint}</div>
+                  </div>
+                  {ps.length > 0 && (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                      {ps.slice(0, 8).map(p => {
+                        const q = silentDays(p, now);
+                        return (
+                          <button key={p.id} onClick={() => g.id === "drop" ? (setPicking(false), setThreadId(p.id)) : takeFrom(g.id, p)}
+                            style={{ ...chip, minHeight: 40, fontWeight: 600, color: "var(--app-text)" }}>
+                            {p.name || p.handle}{q !== null && q >= 2 ? <span style={{ color: "var(--app-muted)", fontWeight: 400 }}> · {q} hr</span> : null}
+                          </button>
+                        );
+                      })}
+                      {ps.length > 8 && <span style={{ fontSize: 12, color: "var(--app-muted)", alignSelf: "center" }}>+{ps.length - 8} lagi</span>}
+                    </div>
+                  )}
+                </section>
+              );
+            })}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+              <button onClick={() => setPicking(false)} style={{ ...btnMuted, minHeight: 44 }}>Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div id="hpane-kirim" role="tabpanel" aria-labelledby="hp-kirim" hidden={pane !== "kirim"}>
       {/* The hunt itself: who, where, which message */}
       <div style={{ ...card, padding: 20, marginBottom: 20 }}>
@@ -487,9 +576,17 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
               style={{ position: "absolute", right: 2, top: "50%", transform: "translateY(-50%)", width: 40, height: 40, border: "none", background: "none", color: "var(--app-muted)", fontSize: 18, cursor: "pointer" }}>×</button>}
           </div>
           {/* Phones can't paste into a field as easily; a mouse and keyboard can (⌘V), with no extra prompt. */}
+          <button onClick={() => setPicking(true)} aria-label="Ambil target dari antrian" style={{ ...chip, flexShrink: 0, minHeight: 44, padding: "0 12px", fontSize: 12, fontWeight: 700, color: "var(--brand-text)" }}>☰ Antrian</button>
           <button onClick={pasteLink} className="touch-only" aria-label="Tempel link profil dari clipboard" style={{ ...chip, flexShrink: 0, minHeight: 44, padding: "0 12px", fontSize: 12, fontWeight: 700, color: "var(--app-text)" }}>📋 Tempel link</button>
         </div>
         {url && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>🔗 {url}</div>}
+        {queued && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>
+            <span>Dari antrian <b style={{ color: "var(--app-text)" }}>{QUEUE_GROUPS.find(g => g.id === queued.group)!.label}</b> · {queued.ids.length} lagi</span>
+            {queued.ids.length > 0 && <button onClick={takeNext} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)" }}>Berikutnya →</button>}
+            <button onClick={() => setQueued(null)} aria-label="Berhenti ambil dari antrian" style={{ ...chip, minHeight: 36 }}>Selesai</button>
+          </div>
+        )}
         <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginBottom: pasteMsg ? 12 : 0 }}>{pasteMsg}</div>
         <div role="radiogroup" aria-label="Platform" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
           {PLATFORMS.map(p => (
@@ -538,6 +635,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
             <div className="sp-toast">
               <div style={{ fontSize: 14, minWidth: 0, flex: 1 }}>{undo.label}</div>
               <button onClick={takeBack} aria-label="Batal catat" style={{ ...btnMuted, minHeight: 44, padding: "8px 16px", flexShrink: 0, background: "#fff", color: "#141414" }}>Batal</button>
+              {queued && queued.ids.length > 0 && <button onClick={takeNext} style={{ ...btnMuted, minHeight: 44, padding: "8px 16px", flexShrink: 0, background: "#005eb0", color: "#fff" }}>Berikutnya →</button>}
               <button onClick={() => setUndo(null)} aria-label="Tutup pemberitahuan" style={{ width: 44, height: 44, border: 0, background: "transparent", color: "#fff", fontSize: 20, cursor: "pointer", flexShrink: 0 }}>×</button>
             </div>
           )}
@@ -545,17 +643,25 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       </div>
 
         <ThreadsRadar uid={space.me.uid} hunts={hunts} onTarget={targetFromRadar} />
+
       </div>
 
       <div id="hpane-journey" role="tabpanel" aria-labelledby="hp-journey" hidden={pane !== "journey"}>
         <ProspectList prospects={prospects} ready={journey.ready} hunts={hunts} strategy={strategy} sessionId={live?.id}
-          filter={prospectFilter} setFilter={setProspectFilter} onCompose={compose} />
+          filter={prospectFilter} setFilter={setProspectFilter} onCompose={compose} onOpen={p => setThreadId(p.id)} />
         <Campaigns prospects={prospects} templates={templates} strategy={strategy} sessionId={live?.id} defaults={defaults} />
       </div>
 
       <div id="hpane-log" role="tabpanel" aria-labelledby="hp-log" hidden={pane !== "log"}>
-      {/* Log */}
-      <div style={{ ...card, padding: 20, marginBottom: 20 }}>
+      <div style={{ ...card, padding: 20, marginBottom: 12 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>Percakapan</div>
+        <div style={{ fontSize: 12, color: "var(--app-muted)", margin: "2px 0 12px" }}>Tiap orang kayak chat: pesan terakhir, kapan, dan perlu apa. Tap buat buka dan kirim lanjutan.</div>
+        <Conversations prospects={prospects} strategy={strategy} onOpen={p => setThreadId(p.id)} />
+      </div>
+      {/* The old per-message log, folded: every send is in its conversation now. */}
+      <details style={{ ...card, padding: "4px 20px", marginBottom: 20 }}>
+        <summary style={{ cursor: "pointer", minHeight: 44, display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700 }}>Log kiriman ({sorted.length})</summary>
+      <div style={{ padding: "4px 0 16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
           <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>Log DM</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -692,6 +798,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         })}
         {shown.length > limit && <button onClick={() => setLimit(limit + PAGE)} style={{ ...chip, width: "100%", marginTop: 8, minHeight: 40 }}>Tampilkan {Math.min(PAGE, shown.length - limit)} lagi</button>}
       </div>
+      </details>
 
       </div>
 

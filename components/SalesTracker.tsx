@@ -532,7 +532,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           status: normStatus(colMap.status ? r[colMap.status] : ""),
           value: parseValue(colMap.value ? r[colMap.value] : ""),
           notes: get("notes"),
-          lastContact: new Date().toISOString().split("T")[0],
+          lastContact: today(),
           ...mapsFields({ address: get("address"), website: get("website"), rating: get("rating"), reviewCount: get("reviewCount"), mapsUrl: get("mapsUrl"), weak: get("weak") }),
         }));
       });
@@ -582,7 +582,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     try {
       const id = `lead_${Date.now()}`;
       await setDoc(spaceDoc(space, "leads", id), stamp(space, {
-        ...newLead, name: newLead.name.trim(), lastContact: new Date().toISOString().split("T")[0],
+        ...newLead, name: newLead.name.trim(), lastContact: today(),
         value: parseInt(newLead.value.replace(/\D/g, "")) || 5000000,
       }));
       setNewLead({ name: "", contact: "", source: "GMaps", status: "Cold", email: "", phone: "", category: "F&B", notes: "", value: "" });
