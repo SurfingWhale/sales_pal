@@ -644,6 +644,19 @@ input[type="date"], input[type="time"], input[type="datetime-local"], input[type
 }
 input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-date-and-time-value { text-align: left; min-height: 1.3em; }
 .modal-overlay input, .modal-overlay select, .modal-overlay textarea { box-sizing: border-box; min-width: 0; max-width: 100%; }
+/* A dropdown as tall as the text field beside it. macOS draws a native select
+   at its own short height and ignores padding; drawn by us it takes the field's
+   padding, with a chevron of its own. !important because the fields' inline
+   `background` shorthand would clear the chevron. */
+.modal-overlay select:not([multiple]):not([size]) {
+  -webkit-appearance: none; appearance: none; line-height: normal;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235b636c' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important; background-position: right 12px center !important; background-size: 12px !important;
+  padding-right: 34px !important;
+}
+[data-theme="dark"] .modal-overlay select:not([multiple]):not([size]) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a3abb5' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+}
 
 @media (max-width: 640px) {
   /* Every dialog is a full-screen sheet, like a native form; the bottom sheets
