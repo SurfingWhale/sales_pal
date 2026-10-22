@@ -15,6 +15,9 @@ cd "${CLAUDE_PROJECT_DIR:-$(dirname "$0")/../..}"
 
 npm install --no-audit --no-fund --loglevel=error
 
+# Firebase CLI: the flow tests (npm run test:flows) start the emulators with it.
+command -v firebase >/dev/null 2>&1 || npm install -g firebase-tools@14 --loglevel=error
+
 RTK_REV=f16becacd2f40616839333b3e0e281e40a0bc823   # rtk 0.49.0
 export PATH="$HOME/.cargo/bin:$PATH"
 if ! command -v rtk >/dev/null 2>&1 || ! rtk gain >/dev/null 2>&1; then
