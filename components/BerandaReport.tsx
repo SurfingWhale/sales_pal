@@ -59,6 +59,7 @@ export default function BerandaReport({ now, numbers, paid, receivable, leadsByS
   const weekHours = sessions.filter(s => s.startedAt >= t - 7 * 86400000).reduce((a, s) => a + sessionMinutes(s, t), 0) / 60;
   const pct = numbers.closingTarget ? Math.min(100, (numbers.closedThisMonth / numbers.closingTarget) * 100) : 0;
   const links: [string, string, string][] = [
+    ["Log aktivitas", "Log aktivitas", "Heat map & semua yang kamu kerjain"],
     ["Report Tim", "Guild", "Target & capaian tiap sales"],
     ["Report Klien", "Report Klien", "Konten → chat → lunas, report bulanan"],
     ["Performa hunter", "Hunting", "Contact rate, konversi, biaya"],
