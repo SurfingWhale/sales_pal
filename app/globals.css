@@ -737,18 +737,44 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .sp-print-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .sp-print-msg:empty { display: none; }
 .sp-paper-qp { display: none; }
+.sp-short { display: none; }
 @media (max-width: 640px) {
+  .sp-long { display: none; }
+  .sp-short { display: inline; }
   .sp-sell button { min-height: 44px; font-size: 14px !important; }
   .sp-sell .sp-tight { min-height: 0; }
-  .sp-doc-actions { flex-direction: column; align-items: stretch; }
-  .sp-doc-main > button, .sp-doc-main > span { flex: 1 1 calc(50% - 3px); }
-  .sp-doc-tools { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) 48px; }
-  .sp-doc-tools > button { padding-left: 4px !important; padding-right: 4px !important; white-space: nowrap; }
-  .sp-doc-tools .sp-del { margin-left: 0; }
+  /* Card actions: two tight rows, the main moves then the tools, delete last. */
+  .sp-doc-actions { flex-direction: column; align-items: stretch; gap: 4px !important; }
+  .sp-doc-main, .sp-doc-tools { display: flex !important; flex-wrap: wrap; gap: 6px !important; }
+  .sp-doc-main > button, .sp-doc-main > span { flex: 0 1 auto; }
+  .sp-doc-tools > button { white-space: nowrap; }
+  .sp-doc-tools .sp-del { margin-left: auto; }
   .sp-dates { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sp-dates input { min-height: 44px; padding: 8px !important; }
-  /* Only odd stat cards: the last one spans the row instead of sitting alone. */
-  .sp-stats > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  /* Stats: one strip, split by hairlines, instead of a stack of big cards. */
+  .sp-stats { gap: 0 !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; margin-bottom: 12px !important; background: linear-gradient(180deg, color-mix(in srgb, #005eb0 6%, var(--app-card)) 0%, var(--app-card) 100%); border: 1px solid var(--app-border); border-radius: 14px; overflow: hidden; }
+  .sp-stats > * { min-width: 0; padding: 10px 12px !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; }
+  .sp-stats > * + * { box-shadow: inset 1px 0 0 var(--app-border) !important; }
+  .sp-stats > * > :first-child { font-size: 17px !important; line-height: 1.2; overflow-wrap: anywhere; }
+  .sp-stats > * > :nth-child(2) { font-size: 11px !important; line-height: 1.3; }
+  .sp-stats > * > :nth-child(3) { font-size: 11px !important; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Page title with its main button on one line. */
+  .sp-page-head { flex-wrap: nowrap !important; align-items: flex-start !important; margin-bottom: 12px !important; }
+  .sp-page-head > :first-child { min-width: 0; }
+  .sp-page-head > :last-child { flex-shrink: 0; }
+
+  /* Controls on a page (not in dialogs) are drawn 32px inside a 44px tap:
+     a transparent block border keeps the target, the fill and ring sit on
+     the padding box, and the text decides the ring's tint. */
+  :is(.sp-sell .sp-page-head, .sp-sell .sp-chiprow, .sp-sell .sp-doc-actions, .sp-leads-head, .sp-leads .sp-chiprow) button {
+    height: 44px !important; min-height: 44px !important; padding: 0 12px !important;
+    border: 0 solid transparent !important; border-block-width: 6px !important; background-clip: padding-box !important;
+    border-radius: 14px !important; font-size: 13px !important; line-height: 1 !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 26%, transparent) !important;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  :is(.sp-sell .sp-chiprow, .sp-leads .sp-chiprow) { gap: 6px !important; }
   .sp-form-foot { bottom: calc(-28px - env(safe-area-inset-bottom, 0px)); margin: 20px -20px calc(-28px - env(safe-area-inset-bottom, 0px)); padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px)); }
 
   /* PDF on a phone: a full-screen page — name and Tutup on top, the paper,

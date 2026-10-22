@@ -1,11 +1,12 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import { setDoc, deleteDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import {
   Business, Invoice, LineItem, QUOTE_STATUS, Quote, QuoteStatus, Service,
-  addDays, issuerOf, isIssued, paid, scheduleOf, termAmounts, termsOf, daysBetween, longDate, nextNumber, quoteColor, quoteText, rupiah, subtotal, today, total, waLink, waNumber,
+  addDays, issuerOf, isIssued, paid, scheduleOf, termAmounts, termsOf, daysBetween, longDate, nextNumber, quoteColor, quoteText, rupiah, rupiahShort, subtotal, today, total, waLink, waNumber,
 } from "@/lib/billing";
 import PrintSheet from "@/components/PrintSheet";
 import DocEditor, { DocDraft, LeadRef, briefOf, cleanItems } from "@/components/DocEditor";
@@ -44,6 +45,8 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
   const [printing, setPrinting] = useState<Quote | null>(null);
   const [copied, setCopied] = useState("");
   const [filter, setFilter] = useState<"All" | QuoteStatus>("All");
+  // Ten at a time: the list ends, and the rest is one tap away.
+  const [limit, setLimit] = useState(10);
   const [deleting, setDeleting] = useState<Quote | null>(null);
   const [failed, setFailed] = useState("");
   const [sending, setSending] = useState<Quote | null>(null);
@@ -180,7 +183,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
 
   return (
     <div className="sp-sell">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+      <div className="sp-page-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
           <div style={heading}>Penawaran</div>
           <div style={subheading}>Susun dari paket, kirim lewat WA, pantau sampai disetujui.</div>
@@ -190,8 +193,8 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
 
       <div className="sp-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 20 }}>
         {[
-          { l: "Menunggu jawaban", v: open.length, s: rupiah(open.reduce((a, q) => a + total(q), 0)), c: "var(--brand-text)" },
-          { l: "Disetujui", v: won.length, s: rupiah(won.reduce((a, q) => a + total(q), 0)), c: "var(--ok)" },
+          { l: "Menunggu jawaban", v: open.length, s: rupiahShort(open.reduce((a, q) => a + total(q), 0)), c: "var(--brand-text)" },
+          { l: "Disetujui", v: won.length, s: rupiahShort(won.reduce((a, q) => a + total(q), 0)), c: "var(--ok)" },
           { l: "Win rate", v: decided ? `${Math.round((won.length / decided) * 100)}%` : "—", s: `${decided} sudah dijawab`, c: "var(--violet-text)" },
         ].map(x => (
           <div key={x.l} style={{ ...card, padding: 16 }}>
@@ -205,7 +208,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
       {quotes.length > 0 && (
         <div className="sp-chiprow" role="group" aria-label="Saring penawaran" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
           {(["All", ...QUOTE_STATUS] as const).map(s => (
-            <button key={s} onClick={() => setFilter(s)} aria-pressed={filter === s}
+            <button key={s} onClick={() => { setFilter(s); setLimit(10); }} aria-pressed={filter === s}
               style={{ ...chip, background: filter === s ? (s === "All" ? "#005eb0" : quoteColor[s]) : "var(--app-card)", color: filter === s ? "#fff" : "var(--app-muted)", fontWeight: 600 }}>
               {s === "All" ? "Semua" : s}
             </button>
@@ -230,7 +233,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {shown.map(q => {
+          {shown.slice(0, limit).map(q => {
             const waiting = q.status === "Terkirim" && q.sentAt ? daysBetween(q.sentAt, today()) : 0;
             const expired = q.status !== "Disetujui" && q.status !== "Ditolak" && q.validUntil < today();
             return (
@@ -283,7 +286,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                     {q.status === "Disetujui"
                       ? <button onClick={() => { setRevising(q); setEditing({ ...draftOf(q), id: "", number: "" }); }} title="Yang disetujui tetap tersimpan; revisi berlaku setelah disetujui" style={{ ...chip, color: "var(--app-text)" }}>Revisi</button>
                       : q.status !== "Digantikan" && <button onClick={() => { setRevising(null); setEditing(draftOf(q)); }} style={{ ...chip, color: "var(--app-text)" }}>Edit</button>}
-                    <button className="sp-del" onClick={() => setDeleting(q)} aria-label={`Hapus ${q.number}`} title="Hapus" style={{ ...chip, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}>🗑</button>
+                    <button className="sp-del" onClick={() => setDeleting(q)} aria-label={`Hapus ${q.number}`} title="Hapus" style={{ ...chip, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}><Icon name="trash" size={16} /></button>
                   </div>
                 </div>
                 {(q.status === "Disetujui" || q.status === "Digantikan") && (() => {
@@ -313,6 +316,11 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
               </div>
             );
           })}
+          {shown.length > limit && (
+            <button onClick={() => setLimit(limit + 10)} style={{ ...chip, alignSelf: "center", minHeight: 44, padding: "0 18px", color: "var(--brand-text)", fontWeight: 600 }}>
+              Tampilkan 10 lagi · {shown.length - limit} tersisa
+            </button>
+          )}
         </div>
       )}
 

@@ -193,6 +193,13 @@ export function rupiah(n: number): string {
   return "Rp " + Math.round(n || 0).toLocaleString("id-ID");
 }
 
+// The same amount in a narrow cell: "Rp 27,5 jt", "Rp 1,2 M", "Rp 750 rb".
+export function rupiahShort(n: number): string {
+  const v = Math.round(n || 0), a = Math.abs(v);
+  const f = (x: number) => x.toLocaleString("id-ID", { maximumFractionDigits: 1 });
+  return a >= 1e9 ? `Rp ${f(v / 1e9)} M` : a >= 1e6 ? `Rp ${f(v / 1e6)} jt` : a >= 1e3 ? `Rp ${f(v / 1e3)} rb` : rupiah(v);
+}
+
 export function longDate(iso: string): string {
   if (!iso) return "—";
   return new Date(iso + "T00:00:00").toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });

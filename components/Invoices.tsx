@@ -1,11 +1,12 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useState } from "react";
 import { deleteDoc, setDoc, updateDoc } from "firebase/firestore";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import {
   Business, Invoice, InvoiceState, Service, addDays, issuerOf, balance, nextNumber, daysBetween, dpAmount, invoiceColor, invoiceState, invoiceText,
-  isIssued, longDate, owed, paid, rupiah, today, total, waLink,
+  isIssued, longDate, owed, paid, rupiah, rupiahShort, today, total, waLink,
 } from "@/lib/billing";
 import PrintSheet from "@/components/PrintSheet";
 import DocEditor, { DocDraft, LeadRef, briefOf, cleanItems } from "@/components/DocEditor";
@@ -20,6 +21,8 @@ export default function Invoices({ invoices, business, leads, services }: { invo
   const [paying, setPaying] = useState<{ inv: Invoice; amount: string; date: string; note: string } | null>(null);
   const [printing, setPrinting] = useState<Invoice | null>(null);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
+  // Ten at a time: the list ends, and the rest is one tap away.
+  const [limit, setLimit] = useState(10);
   const [copied, setCopied] = useState("");
   const [showIn, setShowIn] = useState(false);
   const [moving, setMoving] = useState<{ id: string; n: number; date: string } | null>(null);
@@ -142,7 +145,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
 
   return (
     <div className="sp-sell">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+      <div className="sp-page-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
         <div>
           <div style={heading}>Invoice & Pembayaran</div>
           <div style={subheading}>Dari penawaran yang disetujui, atau langsung kalau udah closing. Catat DP & pelunasan di sini.</div>
@@ -153,16 +156,16 @@ export default function Invoices({ invoices, business, leads, services }: { invo
       <div className="sp-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 20 }}>
         {[
           { l: "Belum tertagih", v: rupiah(receivable), s: `${invoices.filter(i => owed(i) > 0).length} invoice terbuka`, c: "var(--warn-text)" },
-          { l: "Telat bayar", v: late.length, s: rupiah(late.reduce((a, i) => a + balance(i), 0)), c: "color-mix(in srgb, #ff4444 55%, var(--app-text))" },
+          { l: "Telat bayar", v: late.length, s: rupiahShort(late.reduce((a, i) => a + balance(i), 0)), c: "color-mix(in srgb, #ff4444 55%, var(--app-text))" },
         ].map(x => (
           <div key={x.l} style={{ ...card, padding: 16 }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: x.c, fontFamily: font }}>{x.v}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: x.c, fontFamily: font }}>{typeof x.v === "number" ? x.v : <><span className="sp-long">{rupiah(receivable)}</span><span className="sp-short">{rupiahShort(receivable)}</span></>}</div>
             <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{x.l}</div>
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{x.s}</div>
           </div>
         ))}
         <button onClick={() => setShowIn(!showIn)} aria-expanded={showIn} style={{ ...card, padding: 16, textAlign: "left", cursor: "pointer", color: "inherit", fontFamily: "inherit" }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--ok)", fontFamily: font }}>{rupiah(inThisMonth)}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--ok)", fontFamily: font }}><span className="sp-long">{rupiah(inThisMonth)}</span><span className="sp-short">{rupiahShort(inThisMonth)}</span></div>
           <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>Masuk {monthName}</div>
           <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{inRows.length} pembayaran · {showIn ? "tutup rincian" : "lihat rincian"}</div>
         </button>
@@ -183,7 +186,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
                 <b style={{ fontSize: 13, color: "var(--ok)" }}>+{rupiah(p.amount)}</b>
                 {moving?.id === inv.id && moving.n === n
                   ? moveEditor(inv, n, inv.leadName)
-                  : <button onClick={() => setMoving({ id: inv.id, n, date: p.date })} aria-label={`Ganti tanggal ${longDate(p.date)} ${inv.leadName}`} style={{ ...chip, minHeight: 32, color: "var(--app-text)" }}>{longDate(p.date)} ✎</button>}
+                  : <button onClick={() => setMoving({ id: inv.id, n, date: p.date })} aria-label={`Ganti tanggal ${longDate(p.date)} ${inv.leadName}`} style={{ ...chip, minHeight: 32, color: "var(--app-text)", display: "inline-flex", alignItems: "center", gap: 4 }}>{longDate(p.date)} <Icon name="pencil" size={13} /></button>}
               </div>
             </div>
           ))}
@@ -193,7 +196,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
       {invoices.length > 0 && (
         <div className="sp-chiprow" role="group" aria-label="Saring invoice" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
           {FILTERS.map(s => (
-            <button key={s} onClick={() => setFilter(s)} aria-pressed={filter === s}
+            <button key={s} onClick={() => { setFilter(s); setLimit(10); }} aria-pressed={filter === s}
               style={{ ...chip, background: filter === s ? (s === "All" ? "#005eb0" : invoiceColor[s as InvoiceState]) : "var(--app-card)", color: filter === s ? "#fff" : "var(--app-muted)", fontWeight: 600 }}>
               {s === "All" ? "Semua" : s}
             </button>
@@ -216,7 +219,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {shown.map(inv => {
+          {shown.slice(0, limit).map(inv => {
             const st = invoiceState(inv, now);
             const t = total(inv);
             const p = paid(inv);
@@ -264,7 +267,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
                         {moving?.id === inv.id && moving.n === n
                           ? moveEditor(inv, n, inv.leadName)
                           : <button onClick={() => setMoving({ id: inv.id, n, date: pm.date })} aria-label={`Ganti tanggal pembayaran ${longDate(pm.date)}`} title="Ganti tanggal"
-                              style={{ background: "none", border: "none", padding: "0 4px 0 0", color: "inherit", font: "inherit", cursor: "pointer", textAlign: "left", minWidth: 0 }}>{longDate(pm.date)}{pm.note ? ` · ${pm.note}` : ""} ✎</button>}
+                              style={{ background: "none", border: "none", padding: "0 4px 0 0", color: "inherit", font: "inherit", cursor: "pointer", textAlign: "left", minWidth: 0 }}>{longDate(pm.date)}{pm.note ? ` · ${pm.note}` : ""} <Icon name="pencil" size={12} style={{ verticalAlign: "-1px" }} /></button>}
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 2, marginLeft: "auto" }}>
                           <b style={{ color: "var(--ok)" }}>+{rupiah(pm.amount)}</b>
                           <button onClick={() => setAsking({ inv, n })} aria-label={`Hapus pembayaran ${longDate(pm.date)}`} title="Hapus pembayaran" style={{ background: "none", border: "none", color: "var(--app-muted)", cursor: "pointer", fontSize: 18, lineHeight: 1, minWidth: 44, minHeight: 32 }}>×</button>
@@ -295,13 +298,18 @@ export default function Invoices({ invoices, business, leads, services }: { invo
                       <button onClick={() => setEditing({ ...inv })} style={{ ...chip, color: "var(--app-text)" }}>Edit</button>
                       {p === 0 && <button onClick={() => setAsking({ inv, cancel: true })} style={{ ...chip, color: "var(--app-text)" }}>Batalkan</button>}
                     </>}
-                    <button className="sp-del" onClick={() => setAsking({ inv })} aria-label={`Hapus ${inv.number}`} title="Hapus" style={{ ...chip, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}>🗑</button>
+                    <button className="sp-del" onClick={() => setAsking({ inv })} aria-label={`Hapus ${inv.number}`} title="Hapus" style={{ ...chip, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}><Icon name="trash" size={16} /></button>
                   </div>
                 </div>
                 {failed === inv.id && <div role="alert" style={{ fontSize: 12, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", marginTop: 8 }}>Gagal menyalin. Buka PDF atau Tagih via WA aja.</div>}
               </div>
             );
           })}
+          {shown.length > limit && (
+            <button onClick={() => setLimit(limit + 10)} style={{ ...chip, alignSelf: "center", minHeight: 44, padding: "0 18px", color: "var(--brand-text)", fontWeight: 600 }}>
+              Tampilkan 10 lagi · {shown.length - limit} tersisa
+            </button>
+          )}
         </div>
       )}
 
