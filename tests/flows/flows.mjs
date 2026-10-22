@@ -547,6 +547,19 @@ export const flows = [
         await sheet.waitFor({ state: "detached" });
         await page.getByText(/Muncul di Peta 3D · ditandai di peta/).first().waitFor();
       });
+      await t.step("paste a Google Maps link: the point is read on the phone", async () => {
+        await page.getByRole("button", { name: "Ubah", exact: true }).first().click();
+        const sheet = page.getByRole("dialog", { name: "Lokasi lead" });
+        const link = "https://www.google.com/maps/place/Kopi+Tempel+Flow/@-6.22,106.84,17z/data=!3m1!4b1!8m2!3d-6.2253771!4d106.8487123";
+        await sheet.locator("#geo-addr").evaluate((el, text) => {
+          const data = new DataTransfer();
+          data.setData("text/plain", text);
+          el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+        }, link);
+        await sheet.getByRole("list", { name: "Hasil alamat" }).getByRole("button", { name: /Kopi Tempel Flow/ }).click();
+        await sheet.waitFor({ state: "detached" });
+        await page.getByText(/Muncul di Peta 3D · dari link peta/).first().waitFor();
+      });
     },
   },
   {

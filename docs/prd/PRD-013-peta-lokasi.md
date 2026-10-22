@@ -36,17 +36,18 @@ Halamannya satu scroll vertikal yang pendek dan ada ujungnya. Tiap bagian punya 
 
 ## 4. Lokasi lead
 
-- `leads/{id}.geo = { lat, lng, by }`, `by` ∈ `maps | alamat | pin | gps`; `address` teks. Ga ada perubahan rules (dokumen lead ga dibatasi bentuknya).
+- `leads/{id}.geo = { lat, lng, by }`, `by` ∈ `maps | alamat | pin | gps | link`; `address` teks. Ga ada perubahan rules (dokumen lead ga dibatasi bentuknya).
 - **Cari bisnis** langsung nyimpen titik dari Google (field `places.location` ditambah di field mask).
 - Di detail lead (panel desktop dan halaman HP) ada baris **Lokasi**: alamat, sumber titiknya, **Rute**, **Atur lokasi / Ubah** → sheet:
-  1. **Cari alamat** → `POST /api/geocode` (login wajib, kuota `GEOCODE_DAILY_LIMIT` bawaan 100/hari, pakai `GOOGLE_PLACES_API_KEY` yang sama dengan Cari bisnis, ga ada API baru yang perlu dinyalain). Pilih hasil → tersimpan.
-  2. **Pakai lokasi saya sekarang** (GPS HP, buat yang lagi di tempat klien).
-  3. **Geser peta** sampai pin merah pas → **Pakai titik ini**.
-  4. **Hapus lokasi**.
+  1. **Cari alamat** → `POST /api/geocode` (login wajib, kuota `GEOCODE_DAILY_LIMIT` bawaan 100/hari). Pakai Google Places kalau `GOOGLE_PLACES_API_KEY` ada (paling kenal nama usaha). Tanpa key, atau Google nolak: **gratis lewat OpenStreetMap**, Photon dulu lalu Nominatim, dibatasi ke Indonesia. OSM bagus buat jalan/kelurahan/tempat terkenal, tipis buat UMKM kecil; hasilnya diberi kredit "Data © OpenStreetMap" + saran tempel link. Pilih hasil → tersimpan.
+  2. **Tempel link Maps** (tombol baca clipboard, atau tempel langsung di kolom): dibaca di HP tanpa server kalau link/teksnya udah ada titiknya: link Google Maps panjang (`!3d…!4d…`, lalu `@lat,lng`), `?q=lat,lng` (lokasi WhatsApp), `?query=`, Apple Maps `coordinate=`, OpenStreetMap `#map=` / `mlat`, koordinat polos ("-6.175392, 106.827153", minimal 4 desimal biar harga/no HP ga kebaca) dan derajat-menit-detik. **Link pendek** (`maps.app.goo.gl`, `goo.gl/maps`, `maps.apple`) dibuka di server (browser ga bisa baca redirect-nya): cuma host itu yang di-request, maks 4 lompatan, titik dibaca dari URL tujuan; kalau tujuannya cuma nama/alamat (`?q=`), itu yang dicari. Teks share sheet di sekitar link (nama + alamat) jadi alamat lead. Tersimpan sebagai `by: "link"` → "dari link peta".
+  3. **Pakai lokasi saya sekarang** (GPS HP, buat yang lagi di tempat klien).
+  4. **Geser peta** sampai pin merah pas → **Pakai titik ini**.
+  5. **Hapus lokasi**.
 
 ## 5. Tes
 
-- Flow `lokasi lead`: cari alamat (respon di-mock) → titik tersimpan "dari alamat" → geser peta → "ditandai di peta".
+- Flow `lokasi lead`: cari alamat (respon di-mock) → titik tersimpan "dari alamat" → geser peta → "ditandai di peta" → tempel link Google Maps (event paste) → "dari link peta".
 - Flow `akun besar`: separuh lead punya titik; Peta 3D nampilin pin, pin dibuka jadi kartu dengan Rute, chip lead tanpa lokasi muncul; antrian Perlu ditindak dibatasi, sheet scroll sendiri.
 - Tile di tes diganti style polos (`stubMap`), jadi tes ga bergantung internet.
 
@@ -55,3 +56,4 @@ Halamannya satu scroll vertikal yang pendek dan ada ujungnya. Tiap bagian punya 
 - Titik di peta Potensi versi desktop masih 28px; di iPad (layar sentuh) di bawah 44pt. Disengaja karena 200 titik 44px bakal tumpang tindih; rencana: tap area kosong → pilih titik terdekat.
 - Foto tempat di pin (kayak di video) butuh Places Photos (berbayar per foto): fase berikutnya, opsional.
 - Clustering pin kalau ratusan lead di satu kota.
+- **Bagikan dari Google Maps langsung ke SalesPal** (share target PWA): pilih lead → titik tersimpan, tanpa salin-tempel.
