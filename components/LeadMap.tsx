@@ -237,7 +237,7 @@ export default function LeadMap({ leads, onOpen, onAll, onAdd, onImport }: { lea
               );
             })}
           </ul>
-          <button onClick={onAll} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "12px 8px", fontSize: 14, fontWeight: 500, color: "var(--brand-text)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+          <button onClick={onAll} style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 44, padding: "0 8px", fontSize: 14, fontWeight: 500, color: "var(--brand-text)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
             Buka semua di Leads <Icon name="arrowRight" size={16} />
           </button>
         </section>
