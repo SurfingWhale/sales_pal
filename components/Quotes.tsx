@@ -157,14 +157,17 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
       ...(whole ? {} : { term: { index, label: t.label, percent: t.percent } }),
       ...briefOf(q),
     };
-    await setDoc(spaceDoc(space, "invoices", id), stamp(space, inv, q as { ownerUid?: string; ownerName?: string }));
+    await setDoc(spaceDoc(space, "invoices", id), stamp(space, JSON.parse(JSON.stringify(inv)), q as { ownerUid?: string; ownerName?: string }));
     await updateDoc(spaceDoc(space, "quotes", q.id), { ...(q.invoiceId ? {} : { invoiceId: id }), invoiceIds: arrayUnion(id) });
     onInvoiceCreated();
   }
 
-  // The money on an accepted quote: agreed, billed, received, left.
+  // The money on an accepted quote: agreed, billed, received, left. A revision
+  // carries what was billed on the versions before it, so a term isn't billed twice.
   function money(q: Quote) {
-    const linked = invoices.filter(i => i.quoteId === q.id && i.issue !== "Dibatalkan");
+    const chain = new Set<string>();
+    for (let x: Quote | undefined = q; x && !chain.has(x.id); x = quotes.find(o => o.id === x!.supersedes)) chain.add(x.id);
+    const linked = invoices.filter(i => chain.has(i.quoteId) && i.issue !== "Dibatalkan");
     const terms = scheduleOf(q, q.terms || termsOf(business));
     const billedIdx = new Set<number>();
     linked.forEach(i => { if (i.term) billedIdx.add(i.term.index); else terms.forEach((_, n) => billedIdx.add(n)); });
@@ -287,7 +290,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                   const m = money(q);
                   const cell = (k: string, v: number, c?: string) => <span key={k}><span style={{ color: "var(--app-muted)" }}>{k} </span><b className="tabnum" style={{ color: c }}>{rupiah(v)}</b></span>;
                   return (
-                    <div aria-label="Uang penawaran ini" style={{ display: "flex", gap: "4px 16px", flexWrap: "wrap", marginTop: 10, padding: "10px 12px", borderRadius: 12, background: "var(--app-inner)", fontSize: 13 }}>
+                    <div role="group" aria-label="Uang penawaran ini" style={{ display: "flex", gap: "4px 16px", flexWrap: "wrap", marginTop: 10, padding: "10px 12px", borderRadius: 12, background: "var(--app-inner)", fontSize: 13 }}>
                       {cell("Disepakati", m.agreed)}{cell("Ditagih", m.billed)}{cell("Diterima", m.received, "var(--ok)")}{cell("Sisa", m.left)}
                       {m.drafts > 0 && <span style={{ color: "var(--app-sub)" }}>{m.drafts} invoice masih draft</span>}
                     </div>

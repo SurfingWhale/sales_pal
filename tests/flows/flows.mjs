@@ -527,6 +527,7 @@ export const flows = [
         await page.locator("#biz-doc-dpWhen").fill("saat booking");
         await page.locator("#biz-doc-finalWhen").fill("H-1 acara");
         await page.locator("#biz-doc-revisions").fill("1x revisi minor");
+        await page.locator("#biz-doc-spkAuto").check();
         await page.getByRole("button", { name: "Simpan kop" }).click();
         await page.locator("#biz-name").waitFor({ state: "detached" });
       });
@@ -556,8 +557,11 @@ export const flows = [
         const downloads = [];
         page.on("download", d => downloads.push(d));
         await sheet.getByRole("button", { name: "Bagikan PDF (2)" }).click();
-        await sheet.waitFor({ state: "detached" });
         for (let i = 0; i < 100 && downloads.length < 2; i++) await page.waitForTimeout(100);
+        // Handing the files over isn't sending them: the seller confirms first.
+        const ask = page.getByRole("dialog", { name: "Udah kekirim ke Bakso Flow?" });
+        await ask.getByRole("button", { name: "Udah, tandai terkirim" }).click();
+        await ask.waitFor({ state: "detached" });
         if (downloads.length !== 2) throw new Error(`expected 2 PDFs (quote + SPK), got ${downloads.length}`);
         const spk = downloads.find(d => d.suggestedFilename().startsWith("SPK-"));
         if (!spk) throw new Error(`files: ${downloads.map(d => d.suggestedFilename()).join(", ")}`);
@@ -571,7 +575,7 @@ export const flows = [
         await page.getByRole("button", { name: "Tandai SPK ditandatangani" }).click();
         await page.getByText(/Perjanjian Kerja · ditandatangani/).waitFor();
         await page.getByRole("button", { name: "✓ Disetujui" }).click();
-        await page.getByRole("button", { name: "Buat invoice →" }).waitFor();
+        await page.getByRole("button", { name: "Buat invoice DP 50% →" }).waitFor();
       });
       await t.step("a sent quote keeps the letterhead it went out with", async () => {
         await go(page, "Jualan", "Paket");
@@ -592,17 +596,35 @@ export const flows = [
         await go(page, "Jualan", "Penawaran");
       });
       await t.step("accepting closed the lead", async () => { await go(page, "Jualan", "Leads"); await page.locator(".lead-row", { hasText: "Bakso Flow" }).getByText("Closed").first().waitFor(); });
-      await t.step("raise the invoice", async () => {
+      await t.step("raise the DP invoice: one term, as a draft", async () => {
         await go(page, "Jualan", "Penawaran");
-        await page.getByRole("button", { name: "Buat invoice →" }).click();
+        await page.getByRole("button", { name: "Buat invoice DP 50% →" }).click();
+        await page.getByRole("button", { name: "Buat invoice Pelunasan 50% →" }).waitFor();
         await go(page, "Jualan", "Invoice");
-        await expectText(page, "INV-");
+        await expectText(page, "DP 50%");
+        await page.getByRole("button", { name: "Terbitkan" }).waitFor();
       });
-      await t.step("record the DP → DP masuk", async () => {
+      await t.step("money in issues the draft and settles the DP term", async () => {
         await page.getByRole("button", { name: "+ Catat pembayaran" }).click();
-        await modal(page).locator("input").first().fill("750000");
+        await modal(page).locator("#pay-amount").fill("750000");
         await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
-        await page.getByText("DP masuk").first().waitFor();
+        await page.getByText("Lunas").first().waitFor();
+        await page.getByRole("button", { name: "Terbitkan" }).waitFor({ state: "detached" });
+      });
+      await t.step("the quote shows what's received and what's left", async () => {
+        await go(page, "Jualan", "Penawaran");
+        const m = page.getByRole("group", { name: "Uang penawaran ini" });
+        await m.getByText("Rp 750.000").first().waitFor();
+      });
+      await t.step("an accepted quote changes by revision; the DP already billed carries over", async () => {
+        await page.getByRole("button", { name: "Revisi", exact: true }).click();
+        await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
+        await page.getByText(/^Revisi dari /).waitFor();
+        await page.getByRole("button", { name: "✓ Disetujui" }).click();
+        await page.getByText(/^Digantikan .* \(yang berlaku\)/).waitFor();
+        await page.getByRole("button", { name: "Buat invoice Pelunasan 50% →" }).waitFor();
+        if (await page.getByRole("button", { name: "Buat invoice DP 50% →" }).count()) throw new Error("the revision offers the DP again");
+        await go(page, "Jualan", "Invoice");
       });
       await t.step("money this month opens to the payments behind it", async () => {
         await page.getByRole("button", { name: /^Rp 750\.000 Masuk / }).click();
