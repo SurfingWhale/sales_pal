@@ -9,8 +9,14 @@ const OWNER_EMAIL = readFileSync(new URL("../../firestore.rules", import.meta.ur
 
 // ---------- helpers ----------
 // One DM in Hunting's log: the row that holds this target and its delete button.
-// Hunting shows one part at a time: Kirim, Journey, Log DM, Performa.
+// Hunting shows one part at a time: Kirim, Journey, Percakapan, Performa.
 const pane = (page, name) => page.getByRole("tablist", { name: "Bagian Hunting" }).getByRole("tab", { name: new RegExp(`^${name}`) }).click();
+// The per-message log sits folded under Percakapan.
+const openLog = async (page) => {
+  await pane(page, "Percakapan");
+  const log = page.locator("details").filter({ has: page.locator("summary", { hasText: /^Log kiriman/ }) });
+  if (!(await log.evaluate(d => d.open))) await log.locator("summary").click();
+};
 const huntRow = (page, target) => page.locator("div").filter({ has: page.getByText(target, { exact: true }) }).filter({ has: page.getByRole("button", { name: /^Hapus DM/ }) }).last();
 
 // ---- Production-size account (PRD-010): written straight into the emulator
@@ -1083,7 +1089,7 @@ export const flows = [
         await card.getByRole("button", { name: "Ringkas ▴" }).click();
       });
       await t.step("the log row says when it went out and what to do next", async () => {
-        await pane(page, "Log DM");
+        await openLog(page);
         await page.getByRole("link", { name: "Profil ↗" }).first().waitFor();
         await huntRow(page, "@kopiflow").getByText(/(DM|balas di post) hari ini \d{2}\.\d{2}/).waitFor();
         await huntRow(page, "@kopiflow").getByText("Nunggu balasan. Begitu dia bales, tandai di bawah.").waitFor();
@@ -1098,7 +1104,7 @@ export const flows = [
         await pane(page, "Kirim");
         await page.locator("#hunt-target").fill("@rotiflow");
         await page.getByRole("button", { name: "Copy", exact: true }).first().click();
-        await pane(page, "Log DM");
+        await openLog(page);
         await page.getByRole("button", { name: "Hapus DM ke @rotiflow" }).click();
         // Asked in the app, not the browser's confirm(): Batal keeps the row.
         const ask = page.getByRole("dialog", { name: "Hapus catatan DM?" });
@@ -1174,7 +1180,7 @@ export const flows = [
         await page.locator("#hunt-target").fill("");
       });
       await t.step("the referral editor has Batal, and status buttons sit in a grid", async () => {
-        await pane(page, "Log DM");
+        await openLog(page);
         await huntRow(page, "@rotiflow").getByRole("button", { name: "↪ Rekomendasiin orang" }).click();
         await page.getByLabel("Akun yang direkomendasiin").waitFor();
         await huntRow(page, "@rotiflow").getByRole("button", { name: "Batal", exact: true }).click();
@@ -1193,7 +1199,8 @@ export const flows = [
       const { page, base } = t;
       const row = (who) => page.getByRole("button", { name: `Journey ${who}`, exact: true });
       const pick = async (f) => { await pane(page, "Journey"); await page.getByRole("group", { name: "Saring prospek" }).getByRole("button", { name: new RegExp(`^${f}`) }).click(); };
-      await t.step("sign up and open Hunting", async () => { await mockUnfurl(page); await signup(t); await go(page, "Hunting"); await pane(page, "Journey"); await expectText(page, "Journey prospek"); await pane(page, "Kirim"); });
+      let email = "";
+      await t.step("sign up and open Hunting", async () => { await mockUnfurl(page); email = await signup(t); await go(page, "Hunting"); await pane(page, "Journey"); await expectText(page, "Journey prospek"); await pane(page, "Kirim"); });
       await t.step("a post shared from Threads opens as a prospect with its words", async () => {
         // /share redirects to /dashboard, which then rewrites its own URL; waitForURL
         // reads that rewrite as an aborted navigation, so wait on the page instead.
@@ -1252,7 +1259,7 @@ export const flows = [
         const r = await bar.boundingBox();
         if (!r || r.y + r.height > page.viewportSize().height) throw new Error("the undo bar is off screen");
         await page.getByRole("button", { name: "Batal catat" }).click();
-        await pane(page, "Log DM");
+        await openLog(page);
         await expectText(page, "Belum ada DM.");
         await pane(page, "Journey");
         await row("Toko Kue (@tokokue)").getByText("Baru").waitFor();
@@ -1273,7 +1280,7 @@ export const flows = [
         await page.getByLabel("Tempel balasannya (opsional)").fill("boleh kak, pricelist-nya berapa?");
         await page.getByRole("button", { name: "Simpan", exact: true }).click();
         await pick("Terhubung");
-        await page.getByText("boleh kak, pricelist-nya berapa?").waitFor();
+        await page.locator("#hpane-journey").getByText("boleh kak, pricelist-nya berapa?").first().waitFor();
         await page.getByRole("group", { name: /Hasil untuk/ }).getByRole("button", { name: "✅ Tertarik" }).click();
         await row("Toko Kue (@tokokue)").getByText("Tertarik").waitFor();
       });
@@ -1287,8 +1294,48 @@ export const flows = [
         await page.getByRole("region", { name: "Sesi hunting" }).getByText(/1 data/).waitFor();
       });
       await t.step("the DM log follows the journey", async () => {
-        await pane(page, "Log DM");
+        await openLog(page);
         await huntRow(page, "@tokokue").getByText("Tertarik").first().waitFor();
+      });
+      await t.step("percakapan: a person reads like a chat, and the next message goes from there", async () => {
+        await pane(page, "Percakapan");
+        await page.getByRole("button", { name: "Buka percakapan Toko Kue (@tokokue)" }).click();
+        const th = page.getByRole("dialog", { name: "Toko Kue (@tokokue)" });
+        const chat = th.getByRole("log", { name: "Percakapan dengan Toko Kue (@tokokue)" });
+        await chat.getByText("ada yang open jasa foto katalog buat UMKM?").first().waitFor();
+        await chat.getByText("boleh kak, pricelist-nya berapa?").waitFor();
+        await th.getByRole("radiogroup", { name: "Tahap" }).getByRole("radio", { name: /Penawaran/ }).click();
+        await th.locator("#th-text").fill("Halo kak, ini pricelist paket katalog ya");
+        await th.getByRole("button", { name: "Copy", exact: true }).click();
+        await th.getByText("Tercatat terkirim.").waitFor();
+        await chat.getByText("Halo kak, ini pricelist paket katalog ya").waitFor();
+        await th.getByRole("button", { name: "Tutup", exact: true }).last().click();
+        await th.waitFor({ state: "detached" });
+      });
+      await t.step("the next person comes from a queue; a quiet one is dropped to Arsip and brought back", async () => {
+        const uid = await uidOf(t.project, email);
+        const day = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+        await seedDocs(t.project, [
+          [`users/${uid}/prospects/Threads_kopibaru`, { platform: "Threads", handle: "@kopibaru", segment: "NTB", contact: "baru", attempts: 0, firstSeenAt: day(0), source: { kind: "manual" }, history: [], closed: false, createdAt: Date.now(), updatedAt: Date.now() }],
+          [`users/${uid}/prospects/Threads_diamlama`, { platform: "Threads", handle: "@diamlama", segment: "NTB", contact: "intro", attempts: 1, firstSeenAt: day(25), firstSentAt: day(20), lastSentAt: day(20), source: { kind: "manual" },
+            history: [{ at: Date.now() - 20 * 864e5, kind: "sent", channel: "dm", text: "Halo kak, aku Studio Contoh" }], closed: false, createdAt: Date.now() - 25 * 864e5, updatedAt: Date.now() - 20 * 864e5 }],
+        ]);
+        await pane(page, "Kirim");
+        await page.getByRole("button", { name: "Ambil target dari antrian" }).click();
+        const q = page.getByRole("dialog", { name: "Ambil dari antrian" });
+        await q.getByRole("region", { name: "Baru, belum disapa" }).getByRole("button", { name: /^@kopibaru/ }).click();
+        await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@kopibaru", null, { timeout: 10000 });
+        await page.getByText(/^Dari antrian/).waitFor();
+        await page.getByRole("button", { name: "Berhenti ambil dari antrian" }).click();
+        await pick("Siap dibuang");
+        await row("@diamlama").waitFor();
+        await page.getByRole("button", { name: "🗑 Buang semua (1)" }).click();
+        await page.getByRole("dialog", { name: "Buang 1 prospek?" }).getByRole("button", { name: "Buang", exact: true }).click();
+        await expectText(page, "1 prospek dibuang ke Arsip.");
+        await pick("Arsip");
+        await row("@diamlama").click();
+        await page.getByRole("button", { name: "↩ Balikin" }).click();
+        await expectText(page, "@diamlama dibalikin ke journey.");
       });
       await t.step("pasted from the bar; asking not to be contacted locks them", async () => {
         await page.evaluate(() => navigator.clipboard.writeText("https://www.threads.com/@rotikeju/post/XYZ9"));
@@ -1310,7 +1357,7 @@ export const flows = [
         await page.getByLabel("Cari prospek pakai ID atau @username").fill("Threads_tokokue");
         await expectText(page, "1 ketemu");
         if ((await row("Toko Kue (@tokokue)").getAttribute("aria-expanded")) !== "true") await row("Toko Kue (@tokokue)").click();
-        await page.getByRole("region", { name: /Riwayat Toko Kue/ }).getByText(/ID Threads_tokokue · 1 pesan/).waitFor();
+        await page.getByRole("region", { name: /Riwayat Toko Kue/ }).getByText(/ID Threads_tokokue · \d+ pesan/).waitFor();
         await page.getByLabel("Cari prospek pakai ID atau @username").fill("");
       });
       await t.step("ending the session leaves a summary", async () => {

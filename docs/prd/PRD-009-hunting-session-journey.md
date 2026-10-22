@@ -416,3 +416,26 @@ Ga ada koleksi atau aturan Firestore baru (`statusAt`, `eventDate`, `description
 - Di guild cuma aktivitas lu sendiri; aktivitas tim tetap di Guild → Aktivitas.
 - Kotak heat map dikecualiin dari aturan 44px di HP (grid padat; daftar di bawahnya jalur ukuran penuh), dicatat di `app/globals.css`.
 - Flow: journey (hari ini di heat map, daftar hari itu, filter Respon), navigation (tab kosong).
+
+**Susulan 23 Okt — Siklus prospek nyambung:** "Target perlu tombol filter, gw ga apal mana yang ghosting. Di journey ga bisa filter yang ga respon N hari, dan harusnya ada mekanisme buang yang udah 15 hari ga ngerespon. Log DM bukan kaya chat WA yang bisa di-track; siklus datanya terputus, user cuma bisa paste script pas pertama kali."
+- **Percakapan per orang** (`components/ProspectThread.tsx`):
+  - Tab **Log DM jadi Percakapan** (`components/Conversations.tsx`): daftar orang kayak chat WA, isinya pesan terakhir, jamnya, dan tanda follow-up / diem N hari / siap dibuang.
+  - Saringan: Semua · Follow-up hari ini · Dibales · Diem 7+ hari · Siap dibuang. Ada kolom cari.
+  - Tap satu orang: post awal, tiap pesan yang dikirim (teks lengkap dari riwayat), balasan, dan perubahan status, dikelompokin per hari.
+  - Di bawahnya: Dia bales / Tertarik / Nolak / Catatan / Jangan hubungi, terus **Pesan berikutnya**. Tahap kepilih otomatis (●), template tahap itu keisi data orangnya, teksnya bisa diubah.
+  - Tombol kirim ngikutin channel orangnya (Buka WA, Copy & DM via IG, Copy & buka post). Kecatat sebagai kiriman, ada Batal 10 detik.
+  - Log kiriman lama tetap ada, dilipat di bawah daftar.
+- **Siap dibuang**:
+  - Aturan `dropDays` di `settings/hunting.strategy`, default 15: diem 15 hari sejak pesan terakhir kita, dan belum tertarik / kasih data / DNC.
+  - Journey punya saringan **Siap dibuang** dengan **Buang semua (N)** (konfirmasi), plus tombol Buang per orang.
+  - Dibuang = `closed` + `archivedAt` + alasannya: keluar dari semua daftar, riwayat tetap, bisa **Balikin** dari saringan **Arsip**.
+  - DNC tetap terpisah: riwayatnya dihapus, ga bisa dibalikin.
+- **Ambil dari antrian** (Kirim):
+  - Tombol **☰ Antrian** di sebelah Target, dengan grup Follow-up hari ini, Baru belum disapa, Belum respon, Dibales lanjut, Siap dibuang. Tiap grup ada jumlahnya, plus 8 orang pertama (dengan hari diem).
+  - Pilih satu → target keisi dengan konteksnya.
+  - Abis kirim, **Berikutnya →** (di bar Batal dan di bawah Target) bawa orang selanjutnya dari grup yang sama. Sesi hunting jalan terus tanpa nyari manual.
+- **Journey:** tiap baris nunjukin "diem N hari", dan ada tombol **💬 Percakapan**.
+- **Flow journey:**
+  - percakapan Toko Kue: post + balasan kelihatan; kirim pesan Penawaran dari situ; tercatat;
+  - antrian: @kopibaru dari "Baru" ke Target;
+  - @diamlama (diem 20 hari, di-seed): Siap dibuang → Buang semua → Arsip → Balikin.
