@@ -49,40 +49,146 @@ function greeting(d = new Date()) {
 }
 
 const css = `
+.sp-b-panel { display: flex; flex-direction: column; }
 .sp-b-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.sp-b-date { margin: 0 0 10px; font-size: 14px; color: var(--app-muted); text-transform: capitalize; }
 .sp-b-h1 { margin: 0; font-size: 34px; line-height: 1.15; font-weight: 600; letter-spacing: -0.025em; max-width: 620px; }
-.sp-kpis { margin-top: 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1px; background: var(--app-border); border-top: 1px solid var(--app-border); border-bottom: 1px solid var(--app-border); }
+
+/* Segmented control: a 36px track and 32px thumb, inside a 44px tap row. */
+.sp-seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; max-width: 440px; margin-bottom: clamp(16px, 3vw, 28px); padding: 0 2px; }
+.sp-seg::before { content: ""; position: absolute; inset: 4px 0; border-radius: 9px; background: color-mix(in srgb, var(--app-text) 7%, transparent); }
+.sp-seg-btn { position: relative; height: 44px; padding: 6px 0; border: 0; background: none; cursor: pointer; color: var(--app-ink-2); font: 500 13px 'Plus Jakarta Sans', sans-serif; }
+.sp-seg-btn > span { display: flex; align-items: center; justify-content: center; height: 32px; border-radius: 7px; white-space: nowrap; transition: background-color .18s ease; }
+.sp-seg-btn[aria-selected="true"] { color: var(--app-text); font-weight: 600; }
+.sp-seg-btn[aria-selected="true"] > span { background: var(--thumb); box-shadow: 0 1px 2px rgba(15,30,60,0.10), 0 2px 6px rgba(15,30,60,0.06); }
+
+.sp-card { background: var(--app-card); border: 1px solid var(--app-border); border-radius: 16px; }
+.sp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 16px; border-radius: 12px; font: 600 14px 'Plus Jakarta Sans', sans-serif; cursor: pointer; text-decoration: none; white-space: nowrap; border: 0; }
+.sp-btn.line { border: 1px solid var(--app-line-strong); background: transparent; color: var(--app-text); }
+.sp-btn.blue { background: #005eb0; color: #fff; }
+.sp-btn.hunt { background: #b93a06; color: #fff; }
+.sp-btn.ghost { background: transparent; color: var(--app-ink-2); font-weight: 500; padding: 0 12px; }
+
+.sp-find { display: flex; align-items: center; gap: 14px; padding: 16px; margin-top: 12px; }
+.sp-find-ic { width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; background: #005eb0; color: #fff; }
+.sp-find-sub { display: block; font-size: 13px; color: var(--app-muted); }
+
+.sp-today { margin-top: 20px; display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 12px 16px; }
+.sp-today-txt { font-size: 14px; min-width: 0; flex: 1 1 200px; display: flex; align-items: center; gap: 10px; }
+.sp-today-main { display: contents; }
+.sp-today-bar { display: none; }
+
+.sp-kpis { margin-top: 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--app-border); border-top: 1px solid var(--app-border); border-bottom: 1px solid var(--app-border); }
 .sp-kpi { background: var(--app-bg); padding: 24px 24px 26px; }
 .sp-kpi:first-child { padding-left: 0; }
+.sp-kpi .lbl { margin: 0; font-size: 13px; font-weight: 500; color: var(--app-muted); }
+.sp-kpi .val { margin: 14px 0 0; display: flex; align-items: baseline; gap: 6px; }
+.sp-kpi .unit { font-size: 16px; font-weight: 600; color: var(--app-muted); }
+.sp-kpi .sub { margin: 10px 0 0; font-size: 13px; color: var(--app-muted); }
+/* A tablet is touched too: the target link keeps a 44pt row. */
+.sp-kpi .sub button { min-height: 44px; vertical-align: baseline; }
 .sp-kpi .big { font-size: 64px; }
+
+.sp-todo-sec { margin-top: clamp(24px, 5vw, 56px); }
+.sp-todo-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.sp-todo-more { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; background: none; border: none; padding: 0; color: var(--brand-text); font: 500 14px 'Plus Jakarta Sans', sans-serif; cursor: pointer; }
 .sp-todo { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
-.sp-todo > article { border-radius: 20px; padding: 20px; min-height: 216px; gap: 14px; }
-.sp-todo h3 { font-size: 20px; }
-.sp-pill { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 999px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; text-decoration: none; white-space: nowrap; }
+.sp-task { display: flex; flex-direction: column; border-radius: 20px; padding: 20px; min-height: 216px; gap: 14px; background: var(--app-card); color: var(--app-text); border: 1px solid var(--app-border); }
+.sp-task h3 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.015em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-task-meta { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--app-muted); }
+.sp-task-when { margin-left: auto; white-space: nowrap; }
+.sp-task-when.is-late { color: var(--hot); font-weight: 600; }
+.sp-task-when.is-today { color: var(--app-text); font-weight: 600; }
+.sp-task-flag { margin-left: auto; font-size: 12px; padding: 3px 8px; border-radius: 999px; white-space: nowrap; background: rgba(255,255,255,0.16); color: #fff; }
+.sp-task-what { margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--app-muted); }
+.sp-task-acts { margin-top: auto; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.sp-task .sp-btn { border-radius: 999px; }
+.sp-task.is-first { background: #005eb0; color: #fff; border-color: #005eb0; }
+.sp-task.is-first .sp-task-meta { color: rgba(255,255,255,0.88); }
+.sp-task.is-first .sp-task-what { color: rgba(255,255,255,0.92); }
+.sp-task.is-first .sp-btn.line { background: #fff; color: #004a8c; border-color: #fff; }
+.sp-task.is-first .sp-btn.ghost { color: #fff; }
+.sp-b-more { margin-top: clamp(24px, 5vw, 56px); display: flex; flex-direction: column; gap: 32px; }
+
+@media (min-width: 768px) and (max-width: 1099px) {
+  .sp-kpi { padding: 20px 16px 22px; }
+  .sp-kpi .big { font-size: 48px; }
+}
 @media (max-width: 767px) {
   .sp-b-desk { display: none !important; }
-  .sp-b-h1 { font-size: 26px; line-height: 1.2; letter-spacing: -0.02em; }
-  .sp-kpis { margin-top: 18px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .sp-kpi { padding: 12px 10px 12px 14px; }
-  .sp-kpi:first-child { padding-left: 0; }
+  /* One rhythm on a phone: 16px between blocks, 8/12px inside them. */
+  .sp-b-panel { gap: 16px; }
+  .sp-b-date { margin: 0 0 4px; font-size: 13px; }
+  .sp-b-h1 { font-size: 22px; line-height: 1.25; letter-spacing: -0.015em; }
+  .sp-seg { max-width: none; margin-bottom: 12px; }
+  .sp-card { border-radius: 14px; }
+
+  /* Buttons: a 44px tap box drawn as a 32px shape. The transparent block
+     border keeps the target; the fill and line sit on the padding box, and
+     the negative margin gives the 12px back to the layout. */
+  .sp-btn { height: 44px; margin-block: -6px; border: 0 solid transparent; border-block-width: 6px; background-clip: padding-box; border-radius: 14px; padding: 0 12px; font-size: 13px; gap: 6px; }
+  .sp-btn.line { border-color: transparent; border-inline-width: 0; box-shadow: inset 0 0 0 1px var(--app-line-strong); }
+  .sp-btn.tint { background-color: color-mix(in srgb, #005eb0 10%, transparent); color: var(--brand-text); }
+
+  .sp-find { margin: 0; padding: 12px; gap: 12px; }
+  .sp-find-ic { width: 32px; height: 32px; border-radius: 8px; }
+  .sp-find-ttl { font-size: 14px !important; }
+  .sp-find-sub { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* One filled action per screen (Mulai hunting): Cari bisnis steps down to a tint. */
+  .sp-find .sp-find-go { background-color: color-mix(in srgb, #005eb0 10%, transparent); color: var(--brand-text); }
+
+  .sp-today { margin: 0; flex-wrap: nowrap; gap: 12px; padding: 12px; }
+  .sp-today-main { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
+  .sp-today-txt { flex: none; font-size: 13px; gap: 8px; align-items: flex-start; line-height: 1.35; }
+  .sp-today-txt > svg { margin-top: 1px; flex-shrink: 0; }
+  .sp-today-sep { display: none; }
+  .sp-today-q { display: block; color: var(--app-muted); }
+  .sp-today-bar { display: block; height: 3px; border-radius: 2px; background: var(--app-inner); overflow: hidden; margin-left: 26px; }
+  .sp-today-bar > span { display: block; height: 100%; border-radius: 2px; background: #b93a06; }
+  .sp-today .sp-btn { flex-shrink: 0; height: 48px; margin-block: -6px; padding: 0 14px; font-size: 14px; }
+
+  .sp-kpis { margin: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; background: var(--app-card); border: 1px solid var(--app-border); border-radius: 14px; overflow: hidden; }
+  .sp-kpi { background: transparent; padding: 12px; }
+  .sp-kpi:first-child { padding-left: 12px; }
+  .sp-kpi + .sp-kpi { box-shadow: inset 1px 0 0 var(--app-border); }
   .sp-kpi.closing { display: none; }
-  .sp-kpi .big { font-size: 38px; }
+  .sp-kpi.closing + .sp-kpi { box-shadow: inset 1px 0 0 var(--app-border); }
+  .sp-kpi .lbl { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sp-kpi .val { margin-top: 4px; gap: 3px; }
+  .sp-kpi .big { font: 700 24px/1.15 'Plus Jakarta Sans', sans-serif; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .sp-kpi .unit { font-size: 13px; }
   .sp-kpi .sub { display: none; }
-  .sp-kpi .lbl { font-size: 12px !important; }
-  .sp-todo { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 272px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 12px -16px 0; padding: 0 16px 4px; scroll-padding: 16px; scrollbar-width: none; gap: 10px; }
-  .sp-todo::-webkit-scrollbar { display: none; }
-  .sp-todo > article { scroll-snap-align: start; border-radius: 22px; padding: 18px; min-height: 176px; gap: 10px; }
-  .sp-todo h3 { font-size: 18px; }
+
+  /* Perlu ditindak: one grouped list, rows split by hairlines — no card in a card. */
+  .sp-todo-sec { margin: 0; }
+  .sp-todo-head { margin-bottom: 4px; }
+  .sp-todo { display: flex; flex-direction: column; gap: 0; background: var(--app-card); border: 1px solid var(--app-border); border-radius: 14px; overflow: hidden; }
+  .sp-task, .sp-task.is-first { min-height: 0; border: 0; border-radius: 0; padding: 12px 16px; gap: 10px; background: transparent; color: var(--app-text); }
+  .sp-task + .sp-task { box-shadow: inset 0 1px 0 var(--app-border); }
+  .sp-task h3 { font-size: 15px; line-height: 1.3; }
+  .sp-task-meta, .sp-task.is-first .sp-task-meta { font-size: 12px; gap: 6px; color: var(--app-muted); }
+  .sp-task-what, .sp-task.is-first .sp-task-what { margin-top: 2px; font-size: 13px; line-height: 1.4; color: var(--app-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sp-task-flag { background: color-mix(in srgb, #005eb0 12%, transparent); color: var(--brand-text); font-weight: 600; padding: 2px 8px; }
+  .sp-task-acts { margin-top: 0; gap: 4px; }
+  .sp-task .sp-btn { border-radius: 14px; }
+  .sp-task .sp-btn.ghost { padding: 0 8px; }
+  /* The most urgent row leads with a tint, not a third filled button. */
+  .sp-task.is-first .sp-btn.line { background-color: color-mix(in srgb, #005eb0 10%, transparent); color: var(--brand-text); box-shadow: none; }
+  .sp-task.is-first .sp-btn.ghost { color: var(--app-ink-2); }
+  .sp-b-more { margin-top: 8px; gap: 24px; }
 }
 @media (max-width: 360px) {
-  .sp-kpi .lbl { min-height: 2.7em; }
-  .sp-mode-tab { padding: 0 12px !important; }
+  .sp-today { flex-direction: column; align-items: stretch; }
+  .sp-today .sp-btn { width: 100%; }
+  .sp-kpi .lbl { white-space: normal; min-height: 2.6em; line-height: 1.3; }
+  .sp-seg-btn { font-size: 12px; }
 }
+@media (prefers-reduced-motion: reduce) { .sp-seg-btn > span { transition: none; } }
 `;
 
-export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onImport, onAdd, onAllLeads, onSetTarget, hunting, report, learn, children }: {
+export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onImport, onFind, onAdd, onAllLeads, onSetTarget, hunting, report, learn, children }: {
   now: string; todo: Todo[]; numbers: Numbers; mapLeads: MapLead[];
-  onOpenLead: (id: string) => void; onImport: () => void; onAdd: () => void; onAllLeads: () => void; onSetTarget: () => void;
+  onOpenLead: (id: string) => void; onImport: () => void; onFind?: () => void; onAdd: () => void; onAllLeads: () => void; onSetTarget: () => void;
   hunting?: HuntingStrip; report?: React.ReactNode; learn?: React.ReactNode;
   children?: React.ReactNode;
 }) {
@@ -95,11 +201,10 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
   const pct = numbers.closingTarget ? Math.min(100, (numbers.closedThisMonth / numbers.closingTarget) * 100) : 0;
 
   const tabs = (
-    <div role="tablist" aria-label="Mode Beranda" style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", marginBottom: "clamp(16px, 3vw, 28px)" }}>
+    <div role="tablist" aria-label="Mode Beranda" className="sp-seg">
       {MODES.map(([m, l]) => (
-        <button key={m} role="tab" className="sp-mode-tab" id={`bm-${m}`} aria-selected={mode === m} aria-controls="beranda-panel" onClick={() => setMode(m)}
-          style={{ flexShrink: 0, height: 40, padding: "0 16px", borderRadius: 999, border: `1px solid ${mode === m ? "var(--app-text)" : "var(--app-line-strong)"}`, background: mode === m ? "var(--app-text)" : "transparent", color: mode === m ? "var(--app-card)" : "var(--app-ink-2)", font: "500 14px 'Plus Jakarta Sans', sans-serif", cursor: "pointer", whiteSpace: "nowrap" }}>
-          {l}
+        <button key={m} role="tab" className="sp-seg-btn" id={`bm-${m}`} aria-selected={mode === m} aria-controls="beranda-panel" onClick={() => setMode(m)}>
+          <span>{l}</span>
         </button>
       ))}
     </div>
@@ -119,10 +224,10 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
     <div style={{ display: "flex", flexDirection: "column" }}>
       <style>{css}</style>
       {tabs}
-      <div id="beranda-panel" role="tabpanel" aria-labelledby="bm-jualan" style={{ display: "flex", flexDirection: "column" }}>
+      <div id="beranda-panel" role="tabpanel" aria-labelledby="bm-jualan" className="sp-b-panel">
       <div className="sp-b-head">
         <div style={{ minWidth: 0 }}>
-          <p style={{ margin: "0 0 10px", fontSize: 14, color: "var(--app-muted)", textTransform: "capitalize" }}>{day}</p>
+          <p className="sp-b-date">{day}</p>
           <h1 className="sp-b-h1">
             {due ? (
               <><span className="sp-b-desk">{greeting()}. Ada </span>{due} hal <span className="sp-b-desk">yang </span>perlu ditindak hari ini.</>
@@ -132,37 +237,53 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
           </h1>
         </div>
         <div className="sp-b-desk" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={onImport} className="sp-pill" style={{ border: "1px solid var(--app-line-strong)", background: "transparent", color: "var(--app-text)" }}><Icon name="upload" stroke={1.6} />Import</button>
-          <button onClick={onAdd} className="sp-pill" style={{ border: 0, background: "#005eb0", color: "#fff" }}><Icon name="plus" stroke={1.8} />Tambah lead</button>
+          <button onClick={onImport} className="sp-btn line" style={{ borderRadius: 999 }}><Icon name="upload" stroke={1.6} />Import</button>
+          <button onClick={onAdd} className="sp-btn blue" style={{ borderRadius: 999 }}><Icon name="plus" stroke={1.8} />Tambah lead</button>
         </div>
       </div>
 
       {hunting && (
-        <section aria-label="Hunting hari ini" style={{ marginTop: 20, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: "12px 16px" }}>
-          <Icon name="target" size={18} />
-          <span style={{ fontSize: 14, minWidth: 0, flex: "1 1 200px" }}>
-            <b className="tabnum">{hunting.sentToday}/{hunting.goal}</b> DM hari ini · <b className="tabnum">{hunting.queued}</b> prospek di antrian
+        // The day's one main move: today's DMs against the goal, then start.
+        <section aria-label="Hunting hari ini" className="sp-card sp-today">
+          <span className="sp-today-main">
+          <span className="sp-today-txt">
+            <Icon name="target" size={18} />
+            <span><b className="tabnum">{hunting.sentToday}/{hunting.goal}</b> DM hari ini<span className="sp-today-sep"> · </span><span className="sp-today-q"><b className="tabnum">{hunting.queued}</b> prospek di antrian</span></span>
+          </span>
+          <span className="sp-today-bar" aria-hidden="true"><span style={{ width: `${hunting.goal ? Math.min(100, (hunting.sentToday / hunting.goal) * 100) : 0}%` }} /></span>
           </span>
           {hunting.live
-            ? <button onClick={hunting.onOpen} className="sp-pill" style={{ border: "1px solid var(--app-line-strong)", background: "transparent", color: "var(--app-text)", height: 40 }}>Sesi jalan · buka Hunting</button>
-            : <button onClick={hunting.onStart} className="sp-pill" style={{ border: 0, background: "#b93a06", color: "#fff", height: 40 }}>▶ Mulai hunting</button>}
+            ? <button onClick={hunting.onOpen} className="sp-btn line">Sesi jalan · buka Hunting</button>
+            : <button onClick={hunting.onStart} className="sp-btn hunt">▶ Mulai hunting</button>}
+        </section>
+      )}
+
+      {onFind && (
+        // Cari bisnis (PRD-012): new prospects from Google Maps or an Excel list.
+        <section aria-label="Cari calon klien" className="sp-card sp-find">
+          <span aria-hidden="true" className="sp-find-ic"><Icon name="search" size={18} stroke={1.8} /></span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span className="sp-find-ttl" style={{ display: "block", fontSize: 15, fontWeight: 700 }}>Cari calon klien</span>
+            <span className="sp-find-sub">Bisnis dari Google Maps, titik lemahnya, dan pesan pembuka. Atau import daftar Excel.</span>
+          </span>
+          <button onClick={onFind} className="sp-btn blue sp-find-go" style={{ flexShrink: 0 }}>Cari bisnis</button>
         </section>
       )}
 
       <section aria-label="Ringkasan pipeline" className="sp-kpis">
         <div className="sp-kpi">
-          <p className="lbl" style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "var(--app-muted)" }}>Lead aktif</p>
-          <p className="num big" style={{ margin: "14px 0 0" }}>{numbers.active}</p>
-          <p className="sub" style={{ margin: "10px 0 0", fontSize: 13, color: "var(--app-muted)" }}>{numbers.newThisWeek ? `+${numbers.newThisWeek} minggu ini` : "Belum ada yang baru minggu ini"}</p>
+          <p className="lbl">Lead aktif</p>
+          <p className="val"><span className="num big">{numbers.active}</span></p>
+          <p className="sub">{numbers.newThisWeek ? `+${numbers.newThisWeek} minggu ini` : "Belum ada yang baru minggu ini"}</p>
         </div>
         <div className="sp-kpi">
-          <p className="lbl" style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "var(--app-muted)" }}>Potensi tinggi</p>
-          <p className="num big" style={{ margin: "14px 0 0" }}>{numbers.high}</p>
-          <p className="sub" style={{ margin: "10px 0 0", fontSize: 13, color: "var(--app-muted)" }}>Skor 70 ke atas</p>
+          <p className="lbl">Potensi tinggi</p>
+          <p className="val"><span className="num big">{numbers.high}</span></p>
+          <p className="sub">Skor 70 ke atas</p>
         </div>
         <div className="sp-kpi closing">
-          <p className="lbl" style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "var(--app-muted)" }}>Closing bulan ini</p>
-          <p style={{ margin: "14px 0 0", display: "flex", alignItems: "baseline", gap: 6 }}>
+          <p className="lbl">Closing bulan ini</p>
+          <p className="val">
             <span className="num big">{numbers.closedThisMonth}</span>
             {numbers.closingTarget > 0 && <span className="num" style={{ fontSize: 30, color: "var(--app-muted)" }}>/ {numbers.closingTarget}</span>}
           </p>
@@ -171,27 +292,27 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
               <span style={{ display: "block", height: 4, borderRadius: 999, background: "var(--app-border)", overflow: "hidden" }}><span style={{ display: "block", width: `${pct}%`, height: "100%", borderRadius: 999, background: "#005eb0" }} /></span>
             </button>
           ) : (
-            <p className="sub" style={{ margin: "10px 0 0", fontSize: 13, color: "var(--app-muted)" }}>{numbers.paidThisMonth} · <button onClick={onSetTarget} style={{ padding: 0, border: 0, background: "none", color: "var(--brand-text)", font: "inherit", fontWeight: 600, cursor: "pointer" }}>Atur target</button></p>
+            <p className="sub">{numbers.paidThisMonth} · <button onClick={onSetTarget} style={{ padding: 0, border: 0, background: "none", color: "var(--brand-text)", font: "inherit", fontWeight: 600, cursor: "pointer" }}>Atur target</button></p>
           )}
         </div>
         <div className="sp-kpi">
-          <p className="lbl" style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "var(--app-muted)" }}>Nilai pipeline</p>
-          <p style={{ margin: "14px 0 0", display: "flex", alignItems: "baseline", gap: 6 }}>
-            <span style={{ fontSize: 16, fontWeight: 600, color: "var(--app-muted)" }}>Rp</span>
+          <p className="lbl">Nilai pipeline</p>
+          <p className="val">
+            <span className="unit">Rp</span>
             <span className="num big">{jtNum(numbers.pipeline)}</span>
-            <span style={{ fontSize: 16, fontWeight: 600, color: "var(--app-muted)" }}>jt</span>
+            <span className="unit">jt</span>
           </p>
-          <p className="sub" style={{ margin: "10px 0 0", fontSize: 13, color: "var(--app-muted)" }}>Rp {jtNum(numbers.pipelineHigh)} jt di potensi tinggi</p>
+          <p className="sub">Rp {jtNum(numbers.pipelineHigh)} jt di potensi tinggi</p>
         </div>
       </section>
 
-      <section aria-labelledby="todo-h" style={{ marginTop: "clamp(24px, 5vw, 56px)" }}>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 16, marginBottom: 16 }}>
+      <section aria-labelledby="todo-h" className="sp-todo-sec">
+        <div className="sp-todo-head">
           <h2 id="todo-h" style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em" }}>Perlu ditindak <span style={{ color: "var(--app-muted)", fontWeight: 500 }}>{todo.length}</span></h2>
-          {todo.length > 4 && <button onClick={() => setAll(!all)} style={{ background: "none", border: "none", padding: 0, color: "var(--brand-text)", fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>{all ? "Ringkas" : "Lihat semua"}</button>}
+          {todo.length > 4 && <button onClick={() => setAll(!all)} className="sp-todo-more">{all ? "Ringkas" : "Lihat semua"}<Icon name={all ? "chevronDown" : "chevronRight"} size={14} stroke={1.8} /></button>}
         </div>
         {todo.length === 0 ? (
-          <div style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 20, padding: 20, fontSize: 14, color: "var(--app-muted)" }}>
+          <div className="sp-card" style={{ padding: 16, fontSize: 14, color: "var(--app-muted)" }}>
             Aman. Ga ada follow-up, penawaran, deal macet, atau tagihan yang nunggu. Pasang jadwal follow-up dari detail lead.
           </div>
         ) : (
@@ -200,28 +321,25 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
               const first = i === 0;
               const late = t.when < now;
               const whenText = late ? `Telat ${Math.round((Date.parse(now) - Date.parse(t.when)) / 86400000)} hari` : t.when === now ? "Hari ini" : longDate(t.when);
-              const main: React.CSSProperties = first
-                ? { border: 0, background: "#ffffff", color: "#004a8c" }
-                : { border: "1px solid var(--app-line-strong)", background: "transparent", color: "var(--app-text)" };
               return (
-                <article key={t.key} className={first ? undefined : "lift"} style={{ background: first ? "#005eb0" : "var(--app-card)", color: first ? "#fff" : "var(--app-text)", border: first ? "none" : "1px solid var(--app-border)", display: "flex", flexDirection: "column" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 500, color: first ? "rgba(255,255,255,0.88)" : "var(--app-muted)" }}>
+                <article key={t.key} className={`sp-task${first ? " is-first" : " lift"}`}>
+                  <div className="sp-task-meta">
                     <Icon name={t.icon} size={16} />
                     {t.kind}
                     {first
-                      ? <span style={{ marginLeft: "auto", fontSize: 12, padding: "3px 8px", borderRadius: 999, background: "rgba(255,255,255,0.16)", color: "#fff", whiteSpace: "nowrap" }}>Paling mendesak</span>
-                      : <span className="tabnum" style={{ marginLeft: "auto", whiteSpace: "nowrap", color: late ? "var(--hot)" : t.when === now ? "var(--app-text)" : "var(--app-muted)", fontWeight: t.when <= now ? 600 : 500 }}>{whenText}</span>}
+                      ? <span className="sp-task-flag">Paling mendesak</span>
+                      : <span className={`sp-task-when tabnum${late ? " is-late" : t.when === now ? " is-today" : ""}`}>{whenText}</span>}
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <h3 style={{ margin: 0, fontWeight: 600, letterSpacing: "-0.015em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</h3>
-                    <p style={{ margin: "6px 0 0", fontSize: 14, lineHeight: 1.5, color: first ? "rgba(255,255,255,0.92)" : "var(--app-muted)" }}>{t.what}{first ? ` · ${whenText.toLowerCase()}` : ""}</p>
+                    <h3>{t.title}</h3>
+                    <p className="sp-task-what">{t.what}{first ? ` · ${whenText.toLowerCase()}` : ""}</p>
                   </div>
-                  <div style={{ marginTop: "auto", display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
+                  <div className="sp-task-acts">
                     {t.wa && t.phone
-                      ? <a href={waLink(t.phone, t.text)} target="_blank" rel="noreferrer" className="sp-pill" style={main}>{t.action}</a>
-                      : <button onClick={t.open} className="sp-pill" style={main}>{t.action}</button>}
-                    {t.snooze && <button onClick={t.snooze} className="sp-pill" style={{ border: 0, background: "transparent", color: first ? "#fff" : "var(--app-ink-2)", fontWeight: 500, padding: "0 14px" }}>Tunda</button>}
-                    {!t.snooze && t.wa && t.phone && <button onClick={t.open} className="sp-pill" style={{ border: 0, background: "transparent", color: first ? "#fff" : "var(--app-ink-2)", fontWeight: 500, padding: "0 14px" }}>Buka</button>}
+                      ? <a href={waLink(t.phone, t.text)} target="_blank" rel="noreferrer" className="sp-btn line">{t.action}</a>
+                      : <button onClick={t.open} className="sp-btn line">{t.action}</button>}
+                    {t.snooze && <button onClick={t.snooze} className="sp-btn ghost">Tunda</button>}
+                    {!t.snooze && t.wa && t.phone && <button onClick={t.open} className="sp-btn ghost">Buka</button>}
                   </div>
                 </article>
               );
@@ -230,7 +348,7 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
         )}
       </section>
 
-      <div style={{ marginTop: "clamp(24px, 5vw, 56px)", display: "flex", flexDirection: "column", gap: 32 }}>
+      <div className="sp-b-more">
         <LeadMap leads={mapLeads} onOpen={onOpenLead} onAll={onAllLeads} onAdd={onAdd} onImport={onImport} />
         {children}
       </div>

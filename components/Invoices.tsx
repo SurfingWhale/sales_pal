@@ -4,15 +4,15 @@ import { useState } from "react";
 import { deleteDoc, setDoc, updateDoc } from "firebase/firestore";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import {
-  Business, Invoice, InvoiceState, Service, addDays, balance, nextNumber, daysBetween, dpAmount, invoiceColor, invoiceState, invoiceText,
-  longDate, paid, rupiah, today, total, waLink,
+  Business, Invoice, InvoiceState, Service, addDays, issuerOf, balance, nextNumber, daysBetween, dpAmount, invoiceColor, invoiceState, invoiceText,
+  isIssued, longDate, owed, paid, rupiah, today, total, waLink,
 } from "@/lib/billing";
 import PrintSheet from "@/components/PrintSheet";
 import DocEditor, { DocDraft, LeadRef, briefOf, cleanItems } from "@/components/DocEditor";
 import ConfirmSheet from "@/components/ConfirmSheet";
 import { badge, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, label, modalBox, subheading, WA_INK } from "@/components/ui";
 
-const FILTERS = ["All", "Belum bayar", "DP masuk", "Telat", "Lunas"] as const;
+const FILTERS = ["All", "Draft", "Belum bayar", "DP masuk", "Telat", "Lunas", "Dibatalkan"] as const;
 
 export default function Invoices({ invoices, business, leads, services }: { invoices: Invoice[]; business: Business; leads: LeadRef[]; services: Service[] }) {
   const space = useSpace();
@@ -23,7 +23,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
   const [copied, setCopied] = useState("");
   const [showIn, setShowIn] = useState(false);
   const [moving, setMoving] = useState<{ id: string; n: number; date: string } | null>(null);
-  const [asking, setAsking] = useState<{ inv: Invoice; n?: number } | null>(null);
+  const [asking, setAsking] = useState<{ inv: Invoice; n?: number; cancel?: boolean } | null>(null);
   const [payErr, setPayErr] = useState("");
   const [payBusy, setPayBusy] = useState(false);
   const [failed, setFailed] = useState("");
@@ -32,7 +32,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
   const month = now.slice(0, 7);
   const sorted = invoices.slice().sort((a, b) => b.date.localeCompare(a.date) || b.number.localeCompare(a.number));
   const shown = filter === "All" ? sorted : sorted.filter(i => invoiceState(i, now) === filter);
-  const receivable = invoices.reduce((a, i) => a + balance(i), 0);
+  const receivable = invoices.reduce((a, i) => a + owed(i), 0);
   const late = invoices.filter(i => invoiceState(i, now) === "Telat");
   // Money counts in the month it arrived: the payment's own date, never the invoice's.
   const inRows = invoices.flatMap(i => (i.payments || []).map((p, n) => ({ inv: i, p, n }))).filter(r => r.p.date.startsWith(month))
@@ -54,7 +54,8 @@ export default function Invoices({ invoices, business, leads, services }: { invo
     const payments = [...(paying.inv.payments || []), { date: paying.date, amount, note: paying.note.trim() }];
     setPayBusy(true); setPayErr("");
     try {
-      await updateDoc(spaceDoc(space, "invoices", paying.inv.id), { payments });
+      // Money in means the client has it: a draft becomes issued.
+      await updateDoc(spaceDoc(space, "invoices", paying.inv.id), { payments, ...(isIssued(paying.inv) ? {} : { issue: "Diterbitkan", issuedAt: now }) });
       setPaying(null);
     } catch { setPayErr("Gagal nyimpen. Cek koneksi lalu coba lagi."); }
     finally { setPayBusy(false); }
@@ -62,6 +63,21 @@ export default function Invoices({ invoices, business, leads, services }: { invo
 
   async function undoPayment(inv: Invoice, n: number) {
     await updateDoc(spaceDoc(space, "invoices", inv.id), { payments: inv.payments.filter((_, i) => i !== n) });
+  }
+
+  // A draft is only a plan; issuing it is what puts it in "belum tertagih".
+  async function issue(inv: Invoice) {
+    if (isIssued(inv)) return;
+    await updateDoc(spaceDoc(space, "invoices", inv.id), { issue: "Diterbitkan", issuedAt: now });
+  }
+
+  async function cancel(inv: Invoice) {
+    await updateDoc(spaceDoc(space, "invoices", inv.id), { issue: "Dibatalkan" });
+  }
+
+  function bill(inv: Invoice) {
+    window.open(waLink(inv.phone, invoiceText(inv, inv.issuer || business)), "_blank");
+    issue(inv);
   }
 
   async function setDue(inv: Invoice, dueDate: string) {
@@ -79,7 +95,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
   }
 
   async function copy(inv: Invoice) {
-    try { await navigator.clipboard.writeText(invoiceText(inv, business)); } catch { setFailed(inv.id); setTimeout(() => setFailed(""), 3000); return; }
+    try { await navigator.clipboard.writeText(invoiceText(inv, inv.issuer || business)); } catch { setFailed(inv.id); setTimeout(() => setFailed(""), 3000); return; }
     setCopied(inv.id);
     setTimeout(() => setCopied(""), 1800);
   }
@@ -98,9 +114,13 @@ export default function Invoices({ invoices, business, leads, services }: { invo
       quoteId: old?.quoteId || "", leadId: d.leadId, leadName: d.leadName.trim(), contact: d.contact.trim(), phone: d.phone.trim(),
       items: cleanItems(d.items), discount: d.discount, dpPercent: d.dpPercent, notes: d.notes.trim(),
       date: d.date, dueDate: d.dueDate || addDays(d.date, 7), payments: old?.payments || [],
+      issuer: old?.issuer || issuerOf(business),
+      ...(d.taxPercent ? { taxPercent: d.taxPercent } : {}),
+      // New ones start as a draft; an old one keeps its state (none = issued).
+      ...(old ? { ...(old.issue ? { issue: old.issue } : {}), ...(old.issuedAt ? { issuedAt: old.issuedAt } : {}), ...(old.term ? { term: old.term } : {}) } : { issue: "Draft" as const }),
       ...briefOf(d),
     };
-    await setDoc(spaceDoc(space, "invoices", id), stamp(space, doc, old as { ownerUid?: string; ownerName?: string } | undefined));
+    await setDoc(spaceDoc(space, "invoices", id), stamp(space, JSON.parse(JSON.stringify(doc)), old as { ownerUid?: string; ownerName?: string } | undefined));
     setEditing(null);
   }
 
@@ -132,7 +152,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
 
       <div className="sp-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 20 }}>
         {[
-          { l: "Belum tertagih", v: rupiah(receivable), s: `${invoices.filter(i => balance(i) > 0).length} invoice terbuka`, c: "var(--warn-text)" },
+          { l: "Belum tertagih", v: rupiah(receivable), s: `${invoices.filter(i => owed(i) > 0).length} invoice terbuka`, c: "var(--warn-text)" },
           { l: "Telat bayar", v: late.length, s: rupiah(late.reduce((a, i) => a + balance(i), 0)), c: "color-mix(in srgb, #ff4444 55%, var(--app-text))" },
         ].map(x => (
           <div key={x.l} style={{ ...card, padding: 16 }}>
@@ -208,6 +228,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
                     <div style={{ fontSize: 12, color: "var(--app-muted)", fontFamily: "monospace" }}>{inv.number} · {longDate(inv.date)}</div>
                     <div style={{ fontSize: 15, fontWeight: 700, fontFamily: font, marginTop: 2 }}>{inv.leadName}</div>
                     {inv.project && <div style={{ fontSize: 12, color: "var(--app-sub)", marginTop: 2 }}>{inv.project}</div>}
+                    {inv.term && <div style={{ fontSize: 12, color: "var(--app-sub)", marginTop: 2 }}>Termin {inv.term.label} {inv.term.percent}%</div>}
                     {space.kind === "guild" && inv.ownerName && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>Sales: {inv.ownerName}</div>}
                     <div className="sp-dates">
                       <div>
@@ -254,16 +275,26 @@ export default function Invoices({ invoices, business, leads, services }: { invo
                 )}
 
                 <div className="sp-doc-actions">
-                  {st !== "Lunas" && (
+                  {st === "Draft" && (
+                    <div className="sp-doc-main">
+                      <button onClick={() => issue(inv)} style={{ ...chip, background: "#005eb0", color: "#fff", border: "none", fontWeight: 700 }}>Terbitkan</button>
+                      <button onClick={() => bill(inv)} style={{ ...chip, background: "#25D366", color: WA_INK, border: "none", fontWeight: 700 }}>Tagih via WA</button>
+                      <button onClick={() => startPayment(inv)} style={{ ...chip, color: "var(--app-text)" }}>+ Catat pembayaran</button>
+                    </div>
+                  )}
+                  {st !== "Lunas" && st !== "Draft" && st !== "Dibatalkan" && (
                     <div className="sp-doc-main">
                       <button onClick={() => startPayment(inv)} style={{ ...chip, background: "#005eb0", color: "#fff", border: "none", fontWeight: 700 }}>+ Catat pembayaran</button>
-                      <button onClick={() => window.open(waLink(inv.phone, invoiceText(inv, business)), "_blank")} style={{ ...chip, background: "#25D366", color: WA_INK, border: "none", fontWeight: 700 }}>Tagih via WA</button>
+                      <button onClick={() => bill(inv)} style={{ ...chip, background: "#25D366", color: WA_INK, border: "none", fontWeight: 700 }}>Tagih via WA</button>
                     </div>
                   )}
                   <div className="sp-doc-tools">
-                    <button onClick={() => copy(inv)} style={{ ...chip, color: copied === inv.id ? "var(--ok)" : "var(--app-text)" }}>{copied === inv.id ? "✓ Tersalin" : "Copy teks"}</button>
-                    <button onClick={() => setPrinting(inv)} style={{ ...chip, color: "var(--app-text)" }}>PDF</button>
-                    <button onClick={() => setEditing({ ...inv })} style={{ ...chip, color: "var(--app-text)" }}>Edit</button>
+                    {st !== "Dibatalkan" && <>
+                      <button onClick={() => copy(inv)} style={{ ...chip, color: copied === inv.id ? "var(--ok)" : "var(--app-text)" }}>{copied === inv.id ? "✓ Tersalin" : "Copy teks"}</button>
+                      <button onClick={() => setPrinting(inv)} style={{ ...chip, color: "var(--app-text)" }}>PDF</button>
+                      <button onClick={() => setEditing({ ...inv })} style={{ ...chip, color: "var(--app-text)" }}>Edit</button>
+                      {p === 0 && <button onClick={() => setAsking({ inv, cancel: true })} style={{ ...chip, color: "var(--app-text)" }}>Batalkan</button>}
+                    </>}
                     <button className="sp-del" onClick={() => setAsking({ inv })} aria-label={`Hapus ${inv.number}`} title="Hapus" style={{ ...chip, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}>🗑</button>
                   </div>
                 </div>
@@ -296,8 +327,12 @@ export default function Invoices({ invoices, business, leads, services }: { invo
       )}
 
       {editing && <DocEditor kind="invoice" initial={editing} leads={leads} services={services} onSave={saveInvoice} onClose={() => setEditing(null)} />}
-      {printing && <PrintSheet kind="invoice" data={printing} business={business} onClose={() => setPrinting(null)} />}
-      {asking && (asking.n === undefined
+      {printing && <PrintSheet kind="invoice" data={printing} business={printing.issuer || business} frozen={!!printing.issuer} onClose={() => setPrinting(null)} />}
+      {asking && (asking.cancel
+        ? <ConfirmSheet title="Batalkan invoice?" action="Batalkan invoice" busyLabel="Membatalkan…" onConfirm={() => cancel(asking.inv)} onClose={() => setAsking(null)}>
+            <b>{asking.inv.number}</b> untuk {asking.inv.leadName || "klien"} tetap tersimpan sebagai arsip, tapi ga dihitung lagi di tagihan dan laporan.
+          </ConfirmSheet>
+        : asking.n === undefined
         ? <ConfirmSheet title="Hapus invoice?" onConfirm={() => remove(asking.inv)} onClose={() => setAsking(null)}>
             <b>{asking.inv.number}</b> untuk {asking.inv.leadName || "klien"} hilang, bersama {asking.inv.payments?.length || 0} catatan pembayarannya. Ini ga bisa dibatalkan.
           </ConfirmSheet>

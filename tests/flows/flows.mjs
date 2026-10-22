@@ -24,7 +24,7 @@ const fv = (v) =>
   : Array.isArray(v) ? { arrayValue: { values: v.map(fv) } }
   : { mapValue: { fields: Object.fromEntries(Object.entries(v).filter(([, x]) => x !== undefined).map(([k, x]) => [k, fv(x)])) } };
 
-async function uidOf(project, email) {
+export async function uidOf(project, email) {
   const r = await fetch(`http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/${project}/accounts:query`, {
     method: "POST", headers: { Authorization: "Bearer owner", "Content-Type": "application/json" }, body: "{}",
   });
@@ -32,7 +32,7 @@ async function uidOf(project, email) {
   return (j.userInfo || []).find(u => u.email === email)?.localId;
 }
 
-async function seedDocs(project, docs) {
+export async function seedDocs(project, docs) {
   const root = `projects/${project}/databases/(default)/documents`;
   for (let i = 0; i < docs.length; i += 400) {
     const writes = docs.slice(i, i + 400).map(([path, data]) => ({ update: { name: `${root}/${path}`, fields: fv(data).mapValue.fields } }));
@@ -47,7 +47,7 @@ const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0
 const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return ymd(d); };
 
 // 200 leads, 40 quotes, 50 invoices, 60 prospects, 120 DMs, 3 clients.
-function bigAccount(uid) {
+export function bigAccount(uid) {
   const u = `users/${uid}`;
   const docs = [];
   const STATUS = ["Cold", "Warm", "Hot", "Closed", "Lost"];
@@ -111,7 +111,7 @@ function bigAccount(uid) {
   return docs;
 }
 
-async function signup(t) {
+export async function signup(t) {
   const { page, base } = t;
   await page.goto(`${base}/login`);
   await page.getByRole("button", { name: "Daftar gratis" }).click();
@@ -124,7 +124,7 @@ async function signup(t) {
   return email;
 }
 
-async function go(page, place, tab) {
+export async function go(page, place, tab) {
   await page.locator(".sp-nav-btn", { hasText: place }).click();
   if (tab) await page.locator(".sp-sub-btn", { hasText: new RegExp(`^${tab}$`) }).click();
   await page.waitForTimeout(300);
@@ -211,6 +211,86 @@ async function ownerLogin(t) {
 
 // ---------- flows ----------
 export const flows = [
+  {
+    // Cari bisnis (PRD-012): Google Maps results with their weak spots become
+    // leads once; a list from elsewhere comes in through the Excel template.
+    name: "cari bisnis: maps results to leads, template to import",
+    async run(t) {
+      const { page } = t;
+      const place = (id, name, extra) => ({ id, name, category: "Coffee shop", address: `Jl. Contoh ${id}, Jakarta`, phone: `0812000000${id.slice(-2)}`, website: "", rating: 4.0, reviewCount: 12, mapsUrl: `https://maps.google.com/?cid=${id}`, reviews: [{ rating: 2, text: "Pelayanannya lama banget, nunggu 30 menit", when: "" }], ...extra });
+      await page.route("**/api/places", r => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+        places: [place("p01", "Kopi Uji Satu"), place("p02", "Kopi Uji Dua", { website: "https://kopiujidua.id", rating: 4.7, reviewCount: 320, reviews: [] })], nextPageToken: "" }) }));
+      await t.step("sign up", () => signup(t));
+      await t.step("Beranda opens Cari bisnis", async () => {
+        await page.getByRole("region", { name: "Cari calon klien" }).getByRole("button", { name: "Cari bisnis" }).click();
+        await page.getByRole("dialog", { name: "Cari bisnis" }).waitFor();
+      });
+      const sheet = page.getByRole("dialog", { name: "Cari bisnis" });
+      await t.step("a search shows each business with its weak spots", async () => {
+        await sheet.locator("#lf-q").fill("coffee shop Jakarta Selatan");
+        await sheet.getByRole("button", { name: "Cari", exact: true }).click();
+        const one = sheet.getByRole("article", { name: "Kopi Uji Satu" });
+        for (const w of ["Belum punya website", "Rating 4 dari 12 ulasan", "Ulasan masih sedikit (12)", "Keluhan soal lama nunggu"]) await one.getByText(w).waitFor();
+        await sheet.getByText("2 bisnis · 1 dipilih").waitFor();
+      });
+      await t.step("the opening message names them and their weak spot", async () => {
+        await sheet.getByRole("article", { name: "Kopi Uji Satu" }).getByRole("button", { name: "Salin pesan" }).click();
+        const text = await page.evaluate(() => navigator.clipboard.readText());
+        if (!text.includes("Kopi Uji Satu") || !text.includes("belum ada website")) throw new Error(`message: ${text}`);
+      });
+      await t.step("save as leads, once", async () => {
+        await sheet.getByRole("checkbox", { name: "Pilih Kopi Uji Dua" }).check();
+        await sheet.getByRole("button", { name: "Simpan 2 jadi lead" }).click();
+        await sheet.getByText("2 bisnis masuk Leads.").waitFor();
+        await sheet.getByRole("button", { name: "Cari", exact: true }).click();
+        await sheet.getByText(/Kopi Uji Satu|udah ada di Leads/).first().waitFor();
+        await sheet.getByRole("article", { name: "Kopi Uji Satu" }).getByText(/udah ada di Leads/).waitFor();
+        await sheet.getByText("2 bisnis · 0 dipilih").waitFor();
+      });
+      await t.step("the Excel template downloads with its columns", async () => {
+        const [dl] = await Promise.all([page.waitForEvent("download"), sheet.getByRole("button", { name: "Download template Excel" }).click()]);
+        if (dl.suggestedFilename() !== "SalesPal-template-leads.xlsx") throw new Error(dl.suggestedFilename());
+        const XLSX = (await import("xlsx")).default;
+        const wb = XLSX.readFile(await dl.path());
+        const head = XLSX.utils.sheet_to_json(wb.Sheets.Leads, { header: 1 })[0];
+        for (const c of ["Nama Bisnis", "No. HP", "Website", "Rating", "Link Google Maps", "Titik Lemah"]) if (!head.includes(c)) throw new Error(`template lacks ${c}`);
+        await dl.saveAs(new URL("./out/template.xlsx", import.meta.url).pathname);
+      });
+      await t.step("the filled template imports itself", async () => {
+        await sheet.getByRole("button", { name: "Import Excel" }).click();
+        await page.locator('input[type="file"][accept*=".xlsx"]').setInputFiles(new URL("./out/template.xlsx", import.meta.url).pathname);
+        await page.getByRole("button", { name: "Import 1 lead" }).click();
+        await page.getByRole("button", { name: "Selesai" }).click();
+        await go(page, "Jualan", "Leads");
+        await page.locator(".lead-row", { hasText: "Kopi Contoh" }).first().waitFor();
+        await page.locator(".lead-row", { hasText: "Kopi Uji Satu" }).first().waitFor();
+      });
+    },
+  },
+  {
+    // The landing (TasteSkill v2): the hero is a quote you can fill in, and every way in leads to the login.
+    name: "landing: fill the quote, then sign in",
+    async run(t) {
+      const { page, base } = t;
+      await t.step("the landing opens on its headline", async () => { await page.goto(`${base}/`); await page.getByRole("heading", { level: 1, name: "Dari DM sampai lunas." }).waitFor(); });
+      await t.step("the quote follows the name and the package", async () => {
+        await page.locator("#lp-client").fill("Kedai Contoh");
+        await page.getByRole("radiogroup", { name: "Paket" }).getByRole("radio", { name: /Liputan event sehari/ }).click();
+        await page.getByText("DP 50% buat Kedai Contoh").waitFor();
+        await page.getByText("Rp 3.000.000").first().waitFor();
+        const href = await page.getByRole("link", { name: "Kirim contoh ini ke WhatsApp" }).getAttribute("href");
+        if (!href || !decodeURIComponent(href).includes("Kedai Contoh")) throw new Error(`WhatsApp link: ${href}`);
+      });
+      await t.step("the showcase tabs switch", async () => {
+        await page.getByRole("tablist", { name: "Bagian app" }).getByRole("tab", { name: "Guild" }).click();
+        await page.getByRole("heading", { name: "Satu tim, satu angka." }).waitFor();
+      });
+      await t.step("Mulai gratis leads to the login", async () => {
+        await page.getByRole("link", { name: "Mulai gratis" }).click();
+        await page.waitForURL("**/login");
+      });
+    },
+  },
   {
     name: "sign up and land on the dashboard",
     async run(t) {
@@ -444,6 +524,10 @@ export const flows = [
         await page.locator("#biz-accountNo").fill("1234567");
         await page.locator("#biz-accountName").fill("Flow");
         await page.locator("#biz-footer").fill("DP mengunci jadwal.");
+        await page.locator("#biz-doc-dpWhen").fill("saat booking");
+        await page.locator("#biz-doc-finalWhen").fill("H-1 acara");
+        await page.locator("#biz-doc-revisions").fill("1x revisi minor");
+        await page.locator("#biz-doc-spkAuto").check();
         await page.getByRole("button", { name: "Simpan kop" }).click();
         await page.locator("#biz-name").waitFor({ state: "detached" });
       });
@@ -463,23 +547,86 @@ export const flows = [
         await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
         await expectText(page, "Rp 1.500.000");
       });
-      await t.step("mark sent, then accepted", async () => {
-        await page.getByRole("button", { name: "Tandai terkirim" }).click();
+      await t.step("send the quote with its SPK, filled from the quote and the defaults", async () => {
+        await page.getByRole("button", { name: "Kirim penawaran" }).click();
+        const sheet = page.getByRole("dialog", { name: "Kirim penawaran" });
+        await sheet.getByRole("checkbox", { name: /Perjanjian Kerja/ }).waitFor();
+        await sheet.getByText("Lihat & ubah isi Perjanjian Kerja").click();
+        const body = await sheet.locator("#spk-body").inputValue();
+        for (const want of ["Bakso Flow", "Studio Flow", "Rp 1.500.000", "saat booking", "H-1 acara", "1x revisi minor"]) if (!body.includes(want)) throw new Error(`SPK text is missing "${want}"`);
+        const downloads = [];
+        page.on("download", d => downloads.push(d));
+        await sheet.getByRole("button", { name: "Bagikan PDF (2)" }).click();
+        for (let i = 0; i < 100 && downloads.length < 2; i++) await page.waitForTimeout(100);
+        // Handing the files over isn't sending them: the seller confirms first.
+        const ask = page.getByRole("dialog", { name: "Udah kekirim ke Bakso Flow?" });
+        await ask.getByRole("button", { name: "Udah, tandai terkirim" }).click();
+        await ask.waitFor({ state: "detached" });
+        if (downloads.length !== 2) throw new Error(`expected 2 PDFs (quote + SPK), got ${downloads.length}`);
+        const spk = downloads.find(d => d.suggestedFilename().startsWith("SPK-"));
+        if (!spk) throw new Error(`files: ${downloads.map(d => d.suggestedFilename()).join(", ")}`);
+        const { readFileSync } = await import("node:fs");
+        const pdf = readFileSync(await spk.path()).toString("latin1");
+        for (const want of ["PERJANJIAN KERJA", "Bakso Flow", "PIHAK KEDUA", "Pihak Pertama"]) if (!pdf.includes(want)) throw new Error(`SPK PDF is missing "${want}"`);
+        await page.getByText("Perjanjian Kerja · dikirim, belum ditandatangani").waitFor();
+        await page.getByText("Terkirim").first().waitFor();
+      });
+      await t.step("signing is marked by hand, then the quote is accepted", async () => {
+        await page.getByRole("button", { name: "Tandai SPK ditandatangani" }).click();
+        await page.getByText(/Perjanjian Kerja · ditandatangani/).waitFor();
         await page.getByRole("button", { name: "✓ Disetujui" }).click();
-        await page.getByRole("button", { name: "Buat invoice →" }).waitFor();
+        await page.getByRole("button", { name: "Buat invoice DP 50% →" }).waitFor();
+      });
+      await t.step("a sent quote keeps the letterhead it went out with", async () => {
+        await go(page, "Jualan", "Paket");
+        await page.getByRole("button", { name: "Kop & logo" }).click();
+        await page.locator("#biz-name").fill("Studio Baru");
+        await page.getByRole("button", { name: "Simpan kop" }).click();
+        await page.locator("#biz-name").waitFor({ state: "detached" });
+        await go(page, "Jualan", "Penawaran");
+        await page.getByRole("button", { name: "PDF", exact: true }).first().click();
+        await page.locator(".print-root").getByText("Studio Flow").first().waitFor();
+        await page.getByText(/Kop dan syarat di dokumen ini dikunci/).waitFor();
+        await modal(page).getByRole("button", { name: "Tutup", exact: true }).click();
+        await go(page, "Jualan", "Paket");
+        await page.getByRole("button", { name: "Kop & logo" }).click();
+        await page.locator("#biz-name").fill("Studio Flow");
+        await page.getByRole("button", { name: "Simpan kop" }).click();
+        await page.locator("#biz-name").waitFor({ state: "detached" });
+        await go(page, "Jualan", "Penawaran");
       });
       await t.step("accepting closed the lead", async () => { await go(page, "Jualan", "Leads"); await page.locator(".lead-row", { hasText: "Bakso Flow" }).getByText("Closed").first().waitFor(); });
-      await t.step("raise the invoice", async () => {
+      await t.step("raise the DP invoice: one term, as a draft", async () => {
         await go(page, "Jualan", "Penawaran");
-        await page.getByRole("button", { name: "Buat invoice →" }).click();
+        await page.getByRole("button", { name: "Buat invoice DP 50% →" }).click();
+        await page.getByRole("button", { name: "Buat invoice Pelunasan 50% →" }).waitFor();
         await go(page, "Jualan", "Invoice");
-        await expectText(page, "INV-");
+        await expectText(page, "DP 50%");
+        await page.getByRole("button", { name: "Terbitkan" }).waitFor();
       });
-      await t.step("record the DP → DP masuk", async () => {
+      await t.step("money in issues the draft and settles the DP term", async () => {
         await page.getByRole("button", { name: "+ Catat pembayaran" }).click();
-        await modal(page).locator("input").first().fill("750000");
+        await modal(page).locator("#pay-amount").fill("750000");
         await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
-        await page.getByText("DP masuk").first().waitFor();
+        await page.getByText("Lunas").first().waitFor();
+        await page.getByRole("button", { name: "Terbitkan" }).waitFor({ state: "detached" });
+      });
+      await t.step("the quote shows what's received and what's left", async () => {
+        await go(page, "Jualan", "Penawaran");
+        const m = page.getByRole("group", { name: "Uang penawaran ini" });
+        await m.getByText("Rp 750.000").first().waitFor();
+      });
+      await t.step("an accepted quote changes by revision; the DP already billed carries over", async () => {
+        await page.getByRole("button", { name: "Revisi", exact: true }).click();
+        await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
+        await page.getByText(/^Revisi dari /).waitFor();
+        await page.getByText(/-r1 ·/).waitFor();
+        await page.getByRole("button", { name: "Tandai terkirim" }).click();
+        await page.getByRole("button", { name: "✓ Disetujui" }).click();
+        await page.getByText(/^Digantikan .* \(yang berlaku\)/).waitFor();
+        await page.getByRole("button", { name: "Buat invoice Pelunasan 50% →" }).waitFor();
+        if (await page.getByRole("button", { name: "Buat invoice DP 50% →" }).count()) throw new Error("the revision offers the DP again");
+        await go(page, "Jualan", "Invoice");
       });
       await t.step("money this month opens to the payments behind it", async () => {
         await page.getByRole("button", { name: /^Rp 750\.000 Masuk / }).click();

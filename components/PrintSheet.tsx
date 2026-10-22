@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Business, Invoice, Quote, balance, dpAmount, longDate, paid, rupiah, subtotal, total } from "@/lib/billing";
+import { Business, Invoice, Quote, balance, useBusiness, dpAmount, longDate, paid, rupiah, subtotal, total } from "@/lib/billing";
 import { canEditCatalog, useSpace } from "@/lib/space";
 import { fullDay } from "@/lib/when";
 import BusinessEditor from "@/components/BusinessEditor";
@@ -14,8 +14,8 @@ import { btnMuted, btnPrimary, chip } from "@/components/ui";
 // only the sheet: globals.css hides everything else under @media print.
 
 type Props =
-  | { kind: "quote"; data: Quote; business: Business; onClose: () => void }
-  | { kind: "invoice"; data: Invoice; business: Business; onClose: () => void };
+  | { kind: "quote"; data: Quote; business: Business; frozen?: boolean; onClose: () => void }
+  | { kind: "invoice"; data: Invoice; business: Business; frozen?: boolean; onClose: () => void };
 
 const ink = "#141414";
 const soft = "#57606a";
@@ -28,6 +28,9 @@ export default function PrintSheet(props: Props) {
   const q = isQuote ? (props.data as Quote) : null;
   const space = useSpace();
   const [kop, setKop] = useState(false);
+  // Kop & logo edits the live letterhead (for new documents), never this
+  // document's frozen copy.
+  const live = useBusiness(space);
   const canEdit = canEditCatalog(space);
   const doc = (isQuote ? { kind: "quote", data: q! } : { kind: "invoice", data: inv! }) as Doc;
   const [pdf, setPdf] = useState<Blob | null>(null);
@@ -80,6 +83,11 @@ export default function PrintSheet(props: Props) {
           <button onClick={onClose} aria-label="Tutup" title="Tutup (Esc)" style={{ ...btnMuted, minHeight: 44, padding: "0 16px" }}>Tutup</button>
         </div>
         <div className="no-print sp-print-msg" role="status" style={{ fontSize: 13, color: "#fff", textAlign: "right" }}>{pdfMsg}</div>
+        {props.frozen && (
+          <p className="no-print" role="note" style={{ fontSize: 13, lineHeight: 1.5, color: "var(--app-text)", background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 10, padding: "10px 12px", margin: "0 0 12px" }}>
+            Kop dan syarat di dokumen ini dikunci sejak {isQuote ? "dikirim" : "dibuat"}. Ubahan di Kop & logo berlaku buat dokumen baru.
+          </p>
+        )}
         {!b.name && (
           <div className="no-print" role="status" style={{ padding: 12, borderRadius: 10, background: "var(--app-card)", border: "1px solid #ff990060", fontSize: 13, lineHeight: 1.5, color: "var(--app-text)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <span style={{ flex: "1 1 220px" }}>Kop masih kosong: nama bisnis, logo, dan syarat & ketentuan belum diisi.{canEdit ? "" : " Minta Leader/Officer guild ngisi di Paket → Kop & logo."}</span>
@@ -208,7 +216,7 @@ export default function PrintSheet(props: Props) {
           )}
         </div>
       </div>
-      {kop && <div onClick={e => e.stopPropagation()}><BusinessEditor business={b} onClose={() => setKop(false)} /></div>}
+      {kop && <div onClick={e => e.stopPropagation()}><BusinessEditor business={live} onClose={() => setKop(false)} /></div>}
     </div>,
     document.body
   );

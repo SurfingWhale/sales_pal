@@ -12,6 +12,8 @@ import HeatDots from "@/components/HeatDots";
 import { DetailActions, LeadPage, LeadPanel } from "@/components/LeadDetail";
 import Icon, { IconName } from "@/components/Icon";
 import ProfileSheet, { MeAvatar, useMyAvatar } from "@/components/ProfileSheet";
+import LeadFinder, { Found } from "@/components/LeadFinder";
+import { snippet } from "@/lib/places";
 import { downscaleImage } from "@/lib/image";
 import { registerWorker, takeSharedFile } from "@/lib/share";
 import type { LeadProfile } from "@/lib/profile";
@@ -47,7 +49,7 @@ import { useHuntSession, useProspects, useStrategy } from "@/lib/prospectStore";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { parseVCards } from "@/lib/vcard";
 import { authFetch } from "@/lib/authFetch";
-import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, longDate, rupiah, today, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
+import { Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, owed, longDate, rupiah, today, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
 import { useConfirm } from "@/components/ConfirmSheet";
 
 // Five places, in the order the work goes (owner, 2026-10-10): find people,
@@ -153,6 +155,13 @@ const IMPORT_FIELDS: { key: string; label: string; required?: boolean; keywords:
   { key: "status", label: "Status", keywords: ["status", "stage", "tahap"] },
   { key: "value", label: "Value (Rp)", keywords: ["value", "nilai", "deal", "amount", "harga", "estimasi", "potensi"] },
   { key: "notes", label: "Notes", keywords: ["notes", "catatan", "note", "keterangan", "remark"] },
+  // The Google Maps columns of the Excel template (lib/places.ts, PRD-012).
+  { key: "address", label: "Alamat", keywords: ["alamat", "address"] },
+  { key: "website", label: "Website", keywords: ["website", "situs", "web"] },
+  { key: "rating", label: "Rating", keywords: ["rating", "bintang"] },
+  { key: "reviewCount", label: "Jumlah ulasan", keywords: ["jumlah ulasan", "ulasan", "reviews", "review"] },
+  { key: "mapsUrl", label: "Link Google Maps", keywords: ["google maps", "maps", "gmaps"] },
+  { key: "weak", label: "Titik lemah", keywords: ["titik lemah", "kelemahan", "lemah", "weak"] },
 ];
 
 const VALID_STATUS = ["Cold", "Warm", "Hot", "Closed"];
@@ -167,6 +176,21 @@ function autoMap(headers: string[]): Record<string, string> {
     if (hit) map[f.key] = hit;
   }
   return map;
+}
+
+// The Google Maps columns, typed, only when filled; weak spots also go to the
+// lead profile's pain so pitches and the Simulator can use them.
+function mapsFields(r: { address: string; website: string; rating: string; reviewCount: string; mapsUrl: string; weak: string }) {
+  const out: Record<string, unknown> = {};
+  if (r.address) out.address = r.address;
+  if (r.website) out.website = r.website;
+  const rating = parseFloat(r.rating.replace(",", "."));
+  if (rating > 0 && rating <= 5) out.rating = rating;
+  const n = parseInt(r.reviewCount.replace(/\D/g, ""), 10);
+  if (n >= 0) out.reviewCount = n;
+  if (r.mapsUrl) out.mapsUrl = r.mapsUrl;
+  if (r.weak) out.profile = { pain: r.weak.split(/;|\n/).map(x => x.trim()).filter(Boolean).join("; ") };
+  return out;
 }
 
 function normStatus(v: unknown): string {
@@ -249,6 +273,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [newLead, setNewLead] = useState({ name: "", contact: "", source: "GMaps", status: "Cold", email: "", phone: "", category: "F&B", notes: "", value: "" });
   const [showImport, setShowImport] = useState(false);
+  const [showFinder, setShowFinder] = useState(false);
   const [importHeaders, setImportHeaders] = useState<string[]>([]);
   const [importRows, setImportRows] = useState<Record<string, unknown>[]>([]);
   const [colMap, setColMap] = useState<Record<string, string>>({});
@@ -503,6 +528,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           value: parseValue(colMap.value ? r[colMap.value] : ""),
           notes: get("notes"),
           lastContact: new Date().toISOString().split("T")[0],
+          ...mapsFields({ address: get("address"), website: get("website"), rating: get("rating"), reviewCount: get("reviewCount"), mapsUrl: get("mapsUrl"), weak: get("weak") }),
         }));
       });
       await batch.commit();
@@ -511,6 +537,26 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     setImporting(false);
     setImportDone(written);
     setImportRows([]); setImportHeaders([]); setColMap({});
+  }
+
+  // Cari bisnis → Leads (PRD-012). One lead per Google Maps place: the id is
+  // the place's, so finding it again never makes a second lead.
+  async function saveFound(rows: Found[]): Promise<number> {
+    const batch = writeBatch(db);
+    const on = today();
+    rows.forEach(p => {
+      const worst = p.reviews.filter(r => r.rating <= 3 && r.text.trim()).sort((a, b) => a.rating - b.rating)[0];
+      batch.set(spaceDoc(space, "leads", `gm_${p.id.replace(/[^A-Za-z0-9_-]/g, "")}`), stamp(space, {
+        name: p.name, contact: "", email: p.email || "", phone: p.phone, category: p.category || "Lainnya",
+        source: "Google Maps", status: "Cold", value: 0, lastContact: on,
+        notes: [p.weak.length ? `Titik lemah: ${p.weak.map(w => w.label).join("; ")}` : "", worst ? `Ulasan ${worst.rating}★: "${snippet(worst.text, 200)}"` : ""].filter(Boolean).join("\n"),
+        ...(p.address ? { address: p.address } : {}), ...(p.website ? { website: p.website } : {}),
+        ...(p.rating !== null ? { rating: p.rating } : {}), reviewCount: p.reviewCount, ...(p.mapsUrl ? { mapsUrl: p.mapsUrl } : {}), placeId: p.id,
+        ...(p.weak.length ? { profile: { pain: p.weak.map(w => w.label).join("; ") } } : {}),
+      }));
+    });
+    await batch.commit();
+    return rows.length;
   }
 
   function closeImport() {
@@ -693,7 +739,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       kind: "Coba lagi", action: "Lihat catatan", wa: false,
       open: () => setActiveTab("Rejection Log"),
     })),
-    ...invoices.filter(i => balance(i) > 0 && i.dueDate && i.dueDate <= soon).map(i => ({
+    ...invoices.filter(i => owed(i) > 0 && i.dueDate && i.dueDate <= soon).map(i => ({
       key: `i_${i.id}`, when: i.dueDate, icon: "receipt" as IconName, title: i.leadName,
       what: `${invoiceState(i, now) === "Telat" ? "Telat bayar" : "Jatuh tempo"} ${i.number} · sisa ${rupiah(balance(i))}`, phone: i.phone,
       text: `Halo ${i.contact || i.leadName}, reminder invoice ${i.number} jatuh tempo ${longDate(i.dueDate)}, sisa ${rupiah(balance(i))}. Terima kasih!`,
@@ -729,7 +775,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     active: active.length,
     newThisWeek: active.filter(l => Number(l.id.match(/_(\d{13})/)?.[1] || 0) > weekAgo).length,
     high: highPotential,
-    closedThisMonth: invoices.filter(i => (i.date || "").startsWith(month)).length,
+    closedThisMonth: invoices.filter(i => i.issue !== "Dibatalkan" && (i.date || "").startsWith(month)).length,
     closingTarget,
     paidThisMonth: paidThisMonth ? `${rupiah(paidThisMonth)} masuk bulan ini` : "invoice dibuat bulan ini",
     pipeline: active.reduce((a, l) => a + (Number(l.value) || 0), 0),
@@ -748,12 +794,13 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         .sp-top { position: sticky; top: 0; z-index: 50; }
         .sp-top-in { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 0 32px; height: 68px; display: flex; align-items: center; gap: 24px; }
         .sp-nav { margin: 0 auto; display: flex; gap: 2px; padding: 3px; border-radius: 999px; }
-        .sp-nav-btn { position: relative; height: 38px; padding: 0 16px; display: flex; align-items: center; gap: 6px; border: none; border-radius: 999px; background: transparent; color: var(--app-ink-2); font: 500 14px 'Plus Jakarta Sans', sans-serif; cursor: pointer; white-space: nowrap; }
+        .sp-nav-btn { position: relative; height: 44px; padding: 0 16px; display: flex; align-items: center; gap: 6px; border: none; border-radius: 999px; background: transparent; color: var(--app-ink-2); font: 500 14px 'Plus Jakarta Sans', sans-serif; cursor: pointer; white-space: nowrap; }
         .sp-nav-btn.is-on { color: var(--app-text); font-weight: 600; background: var(--thumb); box-shadow: var(--thumb-shadow); }
         .sp-nav-icon { display: none; }
         .sp-nav-short { display: none; }
         .sp-subhint { max-width: 1200px; margin: 0 auto; padding: 8px 32px 0; font-size: 13px; color: var(--app-muted); position: relative; z-index: 1; }
         .sp-iconbtn { width: 44px; height: 44px; border: 0; border-radius: 999px; color: var(--app-ink-2); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; flex-shrink: 0; font-family: inherit; }
+        .sp-iconbtn:not(.glass) { background: transparent; }
         .sp-space { display: flex; align-items: center; height: 44px; border-radius: 999px; color: var(--app-ink-2); font-size: 13px; font-weight: 500; padding: 0 12px 0 16px; gap: 6px; }
         .sp-space select { appearance: none; -webkit-appearance: none; background: transparent; border: none; color: inherit; font: inherit; max-width: 150px; text-overflow: ellipsis; cursor: pointer; outline: none; }
         .sp-subnav { display: flex; gap: 8px; max-width: 1200px; margin: 0 auto; padding: 8px 32px 0; overflow-x: auto; scrollbar-width: none; }
@@ -761,24 +808,54 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         .sp-sub-btn { flex-shrink: 0; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--app-line-strong); background: transparent; color: var(--app-ink-2); font: 500 13px 'Plus Jakarta Sans', sans-serif; cursor: pointer; white-space: nowrap; }
         .sp-sub-btn.is-on { background: var(--app-text); border-color: var(--app-text); color: var(--app-card); }
         @media (max-width: 767px) {
-          .sp-top-in { padding: 0 14px 0 20px; height: 60px; gap: 8px; }
+          .sp-top-in { padding: 0 8px 0 16px; height: 52px; gap: 4px; }
           .sp-brand-word { font-size: 17px !important; }
-          .sp-nav { position: fixed; z-index: 60; left: 14px; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); height: 64px; padding: 4px; border-radius: 32px; margin: 0; gap: 0; }
-          .sp-nav-btn { flex: 1; min-width: 0; height: auto; flex-direction: column; justify-content: center; gap: 3px; padding: 0; border-radius: 28px; font-size: 12px; }
-          .sp-nav-btn.is-on { background: var(--tab-on); box-shadow: none; color: var(--brand-text); }
+          /* An iOS tab bar: docked to the bottom edge, 50pt over the home indicator. */
+          .sp-nav { position: fixed; z-index: 60; left: 0; right: 0; bottom: 0; height: calc(50px + env(safe-area-inset-bottom, 0px)); padding: 0 4px env(safe-area-inset-bottom, 0px); border-radius: 0; margin: 0; gap: 0; box-shadow: inset 0 0.5px 0 var(--app-line-strong); }
+          .sp-nav::before { display: none; }
+          .sp-nav.glass { background: var(--app-bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
+          /* Header buttons: a light chip, not a floating shadow. */
+          /* The bell: a 36px chip inside its 44px tap box. */
+          .sp-top .sp-iconbtn.glass { box-shadow: none; background: radial-gradient(circle closest-side, var(--glass-strong) 0 17px, var(--app-line-strong) 17px 17.6px, transparent 18px); -webkit-backdrop-filter: none; backdrop-filter: none; }
+          .sp-top .sp-iconbtn.glass::before { display: none; }
+          .sp-nav-btn { flex: 1; min-width: 0; height: 50px; flex-direction: column; justify-content: center; gap: 2px; padding: 0; border-radius: 0; font-size: 11px; font-weight: 500; }
+          .sp-nav-btn.is-on { background: transparent; box-shadow: none; color: var(--brand-text); font-weight: 600; }
           .sp-nav-icon { display: block; }
           .sp-nav-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
           .sp-nav-short { display: inline; }
           .sp-subhint { padding: 6px 16px 0; font-size: 12px; }
           .sp-space { padding: 0 10px 0 12px; font-size: 12px; }
-          .sp-space select { max-width: 96px; }
+          .sp-space select { max-width: 132px; }
           .sp-space { min-width: 0; }
           .sp-subnav { padding: 6px 16px 4px; }
           /* 40px pills, 44px to the finger: the hit area reaches past the pill. */
           .sp-sub-btn { position: relative; height: 40px; }
           .sp-sub-btn::after { content: ""; position: absolute; left: 0; right: 0; top: -2px; bottom: -2px; }
-          .sp-main { padding: 16px 16px calc(110px + env(safe-area-inset-bottom, 0px)) !important; }
-          .sp-fab { bottom: calc(92px + env(safe-area-inset-bottom, 0px)) !important; }
+          /* Room for the tab bar and Quick Pitch above it: the page always ends clear. */
+          .sp-main { padding: 16px 16px calc(124px + env(safe-area-inset-bottom, 0px)) !important; }
+          /* Quick Pitch sits just above the tab bar and steps aside while scrolling down. */
+          .sp-fab { right: 16px !important; bottom: calc(62px + env(safe-area-inset-bottom, 0px)) !important; width: 48px !important; height: 48px !important; font-size: 20px !important; box-shadow: 0 4px 12px rgba(0,94,176,0.28) !important; }
+          /* Filter rows stay one line and slide sideways, bleeding to the screen edge. */
+          .sp-chiprow { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding-inline: 16px; scroll-padding-inline: 16px; }
+          .sp-chiprow::-webkit-scrollbar { display: none; }
+        }
+        /* Scrolling feels alive: the header gains its edge as content slides
+           under it, and each block rises into place as it enters the screen.
+           Transform only (contrast never dips); off under Reduce Motion. */
+        @supports (animation-timeline: scroll()) {
+          .sp-top::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--app-border); opacity: 0; pointer-events: none;
+            animation: sp-edge linear both; animation-timeline: scroll(root); animation-range: 0 56px; }
+          @keyframes sp-edge { to { opacity: 1; } }
+        }
+        @supports (animation-timeline: view()) {
+          /* A moving ancestor would trap a fixed dialog inside it, so a block
+             that holds an open dialog (or the pinned undo bar) stays still. */
+          @media (prefers-reduced-motion: no-preference) {
+            .sp-main > * > :not(.modal-overlay):not(.sp-toast):not([role="tablist"]):not(style):not(:has(.modal-overlay, .sp-toast, [role="dialog"])) {
+              animation: sp-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 45%;
+            }
+            @keyframes sp-rise { from { transform: translateY(32px) scale(.98); } to { transform: none; } }
+          }
         }
         /* A small phone with the workspace picker: the paw alone says SalesPal,
            so the bell and the avatar keep their place on screen. */
@@ -809,7 +886,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         <div className="pb t" aria-hidden="true" style={{ top: 0, height: 96 }}><span /><span /><span /><span /><span /><span /></div>
         <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 96, background: "linear-gradient(to bottom, var(--bar-tint) 0%, var(--bar-tint) 40%, transparent 100%)", pointerEvents: "none" }} />
         <div className={`sp-top-in${spaces.length > 0 ? " has-space" : ""}`}>
-          <button onClick={() => setActiveTab("Dashboard")} aria-label="SalesPal, ke Beranda" style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--app-text)", background: "none", border: "none", padding: 0, cursor: "pointer", flexShrink: 0 }}>
+          <button onClick={() => setActiveTab("Dashboard")} aria-label="SalesPal, ke Beranda" style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 44, color: "var(--app-text)", background: "none", border: "none", padding: 0, cursor: "pointer", flexShrink: 0 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-mark.png" alt="" width={18} height={18} style={{ width: 18, height: 18, objectFit: "contain" }} />
             <span className="num sp-brand-word" style={{ fontSize: 19, letterSpacing: "0.06em", paddingTop: 3 }}>SALESPAL</span>
@@ -846,7 +923,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               {todo.some(t => t.when <= now) && <span aria-hidden="true" style={{ position: "absolute", top: 10, right: 11, width: 8, height: 8, borderRadius: "50%", background: "#005eb0", boxShadow: "0 0 0 2px var(--app-bg)" }} />}
             </button>
             <button className="sp-iconbtn" onClick={() => { setShowProfile(true); setUpdateInfo(null); }} aria-label="Profil dan pengaturan" title="Profil & pengaturan">
-              <MeAvatar avatar={myAvatar} name={user.displayName || user.email || "U"} size={34} />
+              <MeAvatar avatar={myAvatar} name={user.displayName || user.email || "U"} size={32} />
             </button>
           </div>
         </div>
@@ -873,8 +950,9 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             ))}
           </div>
         )}
-        {TAB_HINT[activeTab] && <p className="sp-subhint">{TAB_HINT[activeTab]}</p>}
       </header>
+      {/* The hint scrolls away with the page, so the sticky header stays short. */}
+      {TAB_HINT[activeTab] && <p className="sp-subhint">{TAB_HINT[activeTab]}</p>}
 
       <div className="sp-main" style={{ padding: "32px 32px 96px", maxWidth: 1200, margin: "0 auto" }}>
 
@@ -883,13 +961,13 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           <Beranda now={now} todo={todo} numbers={numbers} mapLeads={mapLeads}
             hunting={{ live: Boolean(huntSession.live), sentToday: hunts.filter(h => h.date === now).length, goal: huntGoal, queued: queue(prospects, now, strategy).length,
               onStart: async () => { await huntSession.start(); setActiveTab("Hunting"); }, onOpen: gotoHunting }}
-            report={<BerandaReport now={now} numbers={numbers} paid={paidThisMonth} receivable={invoices.reduce((a, i) => a + balance(i), 0)}
+            report={<BerandaReport now={now} numbers={numbers} paid={paidThisMonth} receivable={invoices.reduce((a, i) => a + owed(i), 0)}
               leadsByStatus={leads.reduce((m, l) => ({ ...m, [l.status]: (m[l.status] || 0) + 1 }), {} as Record<string, number>)}
               prospects={prospects} hunts={hunts} sessions={huntSession.sessions} onGo={tab => { setActiveTab(tab); window.scrollTo({ top: 0 }); }}
               onSetTarget={setClosingTarget} />}
             learn={<BerandaLearn prospects={prospects} hunts={hunts} rejections={rejections} onGo={tab => { setActiveTab(tab); window.scrollTo({ top: 0 }); }} />}
             onOpenLead={id => { const l = leads.find(x => x.id === id); if (l) openLead(l); }}
-            onImport={() => setShowImport(true)} onAdd={() => setShowAddLead(true)} onAllLeads={() => setActiveTab("Leads")}
+            onImport={() => setShowImport(true)} onFind={() => setShowFinder(true)} onAdd={() => setShowAddLead(true)} onAllLeads={() => setActiveTab("Leads")}
             onSetTarget={setClosingTarget}>
             {space.kind === "guild" && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: -16 }}>Ruang guild {space.name} — {showOwner ? "angka seluruh tim" : "angka kamu di guild ini"}.</div>}
             {seedCount > 0 && (
@@ -930,13 +1008,19 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                 <select id="status-filter" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...leadField, padding: "0 14px", flex: wide ? "0 0 auto" : "1 1 0", minWidth: 0 }}>
                   {[["All", "Semua status"], ["Hot", "Hot"], ["Warm", "Warm"], ["Cold", "Cold"], ["Closed", "Closed"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
-                <button onClick={() => setShowImport(true)} style={{ height: 44, padding: "0 18px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>Import</button>
+                {leads.length > 0 && <>
+                  <label className="vh" htmlFor="lead-sort">Urutkan</label>
+                  <select id="lead-sort" value={leadSort} onChange={e => setLeadSort(e.target.value as Sort)} style={{ ...leadField, padding: "0 14px", flex: wide ? "0 0 auto" : "1 1 0", minWidth: 0 }}>
+                    {SORTS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </select>
+                </>}
+                <button onClick={() => setShowImport(true)} aria-label="Import lead dari file" title="Import" style={{ height: 44, minWidth: 44, padding: wide ? "0 18px" : 0, border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Icon name="upload" stroke={1.7} />{wide && "Import"}</button>
                 {wide && <button onClick={() => setShowAddLead(true)} style={{ display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}><Icon name="plus" stroke={1.8} />Tambah lead</button>}
               </div>
             </div>
 
             {leads.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 16 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 12 }}>
                 {dueLeads.length > 0 && (
                   <button onClick={() => setFuRun(dueLeads)} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                     ▶ Follow-up beruntun <span className="tabnum" style={{ background: "rgba(0,0,0,0.28)", borderRadius: 999, padding: "1px 8px" }}>{dueLeads.length}</span>
@@ -955,21 +1039,17 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                     );
                   })}
                 </div>
-                <label className="vh" htmlFor="lead-sort">Urutkan</label>
-                <select id="lead-sort" value={leadSort} onChange={e => setLeadSort(e.target.value as Sort)} style={{ ...leadField, padding: "0 14px", flex: "0 0 auto" }}>
-                  {SORTS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-                </select>
               </div>
             )}
 
             {leads.length > 0 && (
-              <div role="group" aria-label="Saring menurut potensi" className="sp-chiprow" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 24 }}>
+              <div role="group" aria-label="Saring menurut potensi" className="sp-chiprow" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
                 {([0, 5, 4, 3, 2, 1] as (0 | Level)[]).map(lv => {
                   const on = filterLevel === lv;
                   const n = lv ? leads.filter(l => sc(l).level === lv).length : leads.length;
                   return (
                     <button key={lv} onClick={() => setFilterLevel(lv)} aria-pressed={on}
-                      style={{ height: wide ? 36 : 44, padding: "0 14px", borderRadius: 999, border: `1px solid ${on ? "var(--app-text)" : "var(--app-line-strong)"}`, background: on ? "var(--app-text)" : "transparent", color: on ? "var(--app-card)" : "var(--app-ink-2)", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, fontFamily: "inherit" }}>
+                      style={{ flexShrink: 0, whiteSpace: "nowrap", height: wide ? 36 : 44, padding: "0 14px", borderRadius: 999, border: `1px solid ${on ? "var(--app-text)" : "var(--app-line-strong)"}`, background: on ? "var(--app-text)" : "transparent", color: on ? "var(--app-card)" : "var(--app-ink-2)", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, fontFamily: "inherit" }}>
                       {lv > 0 && <HeatDots level={lv as Level} size={5} gap={2} />}
                       {lv ? LEVEL_WORD[lv as Level] : "Semua"} <span className="tabnum" style={{ fontWeight: 500 }}>{n}</span>
                     </button>
@@ -1251,6 +1331,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           onSchedule={(id, action, date) => updateDoc(spaceDoc(space, "leads", id), { nextAction: action, nextActionDate: date })}
           onOpen={id => { const l = leads.find(x => x.id === id); setFuRun(null); if (l) openLead(l); }}
           onClose={() => setFuRun(null)} />
+      )}
+      {showFinder && (
+        <LeadFinder known={leads.map(l => ({ name: l.name, phone: l.phone }))} me={{ name: business.name, tagline: business.tagline }}
+          onSave={saveFound} onImport={() => { setShowFinder(false); setShowImport(true); }} onClose={() => setShowFinder(false)} />
       )}
       {showImport && (
         <div className="modal-overlay" onClick={closeImport}>

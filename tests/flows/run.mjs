@@ -61,7 +61,8 @@ async function audit(page, touch) {
   if (!/^https?:/.test(page.url())) return [];
   // Judge the screen at rest: a dialog fading in reads as low contrast.
   await page.evaluate(() => Promise.race([
-    Promise.all(document.getAnimations().map(a => a.finished.catch(() => undefined))),
+    // Scroll-linked animations never "finish"; only wait for time-based ones.
+    Promise.all(document.getAnimations().filter(a => !a.timeline || a.timeline === document.timeline).map(a => a.finished.catch(() => undefined))),
     new Promise(r => setTimeout(r, 1500)),
   ])).catch(() => undefined);
   const found = await page.evaluate((touch) => {

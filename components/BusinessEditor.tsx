@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { setDoc } from "firebase/firestore";
 import { spaceDoc, useSpace } from "@/lib/space";
-import { Business, EMPTY_BUSINESS } from "@/lib/billing";
+import { Business, DocDefaults, EMPTY_BUSINESS } from "@/lib/billing";
+import { DEFAULT_NDA, DEFAULT_SPK, DEFAULT_SPK_TITLE } from "@/lib/agreements";
 import { logoImage } from "@/lib/image";
 import { btnMuted, btnPrimary, chip, font, inputStyle, label, modalBox } from "@/components/ui";
 
@@ -43,7 +44,8 @@ export default function BusinessEditor({ business, onClose }: { business: Busine
   async function save() {
     setBusy(true);
     try {
-      await setDoc(spaceDoc(space, "settings", "business"), b);
+      // Emptied defaults come out as undefined, which Firestore refuses.
+      await setDoc(spaceDoc(space, "settings", "business"), JSON.parse(JSON.stringify(b)));
       onClose();
     } catch {
       setMsg("Gagal nyimpen. Cek koneksi lalu coba lagi.");
@@ -51,6 +53,17 @@ export default function BusinessEditor({ business, onClose }: { business: Busine
       setBusy(false);
     }
   }
+
+  // Defaults copied into each new quote and its papers (PRD-011).
+  const docs = b.docs || {};
+  const setDocs = (p: Partial<DocDefaults>) => setB({ ...b, docs: { ...docs, ...p } });
+  const dfield = (k: keyof DocDefaults, l: string, ph: string, col = "auto", numeric = false) => (
+    <div style={{ gridColumn: col, minWidth: 0 }}>
+      <label htmlFor={`biz-doc-${k}`} style={label}>{l}</label>
+      <input id={`biz-doc-${k}`} inputMode={numeric ? "numeric" : undefined} value={docs[k] === undefined ? "" : String(docs[k])} placeholder={ph} style={inputStyle}
+        onChange={e => setDocs({ [k]: numeric ? (e.target.value.trim() === "" ? undefined : Math.max(0, Math.min(numeric && (k === "dpPercent" || k === "taxPercent") ? 100 : 365, parseInt(e.target.value.replace(/\D/g, ""), 10) || 0))) : e.target.value })} />
+    </div>
+  );
 
   const field = (k: keyof Business, l: string, ph: string, col = "auto", type = "text") => (
     <div style={{ gridColumn: col, minWidth: 0 }}>
@@ -106,6 +119,40 @@ export default function BusinessEditor({ business, onClose }: { business: Busine
             <textarea id="biz-footer" value={b.footer} onChange={e => setB({ ...b, footer: e.target.value })} style={{ ...inputStyle, resize: "vertical", height: 96 }}
               placeholder={"DP 50% mengunci jadwal dan tidak dapat dikembalikan.\nFile dikirim maks. 7 hari setelah acara.\n1x revisi minor."} />
           </div>
+
+          <div style={{ gridColumn: "1/-1", marginTop: 12 }}>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>Default dokumen</div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>Disalin ke tiap penawaran baru dan ke SPK-nya. Ubah di sini ga mengubah dokumen yang udah dikirim.</div>
+          </div>
+          {dfield("validDays", "Penawaran berlaku (hari)", "14", "auto", true)}
+          {dfield("dpPercent", "DP (%)", "50 · kosongin kalau bayar penuh", "auto", true)}
+          {dfield("dpWhen", "DP dibayar kapan", "mis. saat booking")}
+          {dfield("finalWhen", "Pelunasan kapan", "mis. H-1 acara")}
+          {dfield("taxPercent", "Pajak (%)", "kosongin kalau ga ada, mis. 11", "auto", true)}
+          <label style={{ gridColumn: "1/-1", display: "flex", alignItems: "center", gap: 12, minHeight: 44, cursor: "pointer" }}>
+            <input id="biz-doc-spkAuto" type="checkbox" checked={!!docs.spkAuto} onChange={e => setDocs({ spkAuto: e.target.checked || undefined })}
+              style={{ width: 22, height: 22, accentColor: "#005eb0", flexShrink: 0 }} />
+            <span style={{ fontSize: 14 }}>Sertakan SPK otomatis saat kirim penawaran</span>
+          </label>
+          {dfield("revisions", "Revisi", "mis. 1x revisi minor, maks. 7 hari setelah file dikirim", "1/-1")}
+          <div style={{ gridColumn: "1/-1" }}>
+            <label htmlFor="biz-doc-cancellation" style={label}>Pembatalan & jadwal ulang</label>
+            <textarea id="biz-doc-cancellation" value={docs.cancellation || ""} onChange={e => setDocs({ cancellation: e.target.value })} style={{ ...inputStyle, resize: "vertical", height: 72 }}
+              placeholder="mis. Jadwal ulang maks. 1x tanpa biaya bila dikabari H-7. Pembatalan: DP mengikuti kesepakatan." />
+          </div>
+          <details style={{ gridColumn: "1/-1" }}>
+            <summary style={{ cursor: "pointer", minHeight: 44, display: "flex", alignItems: "center", fontWeight: 700 }}>Template SPK & NDA</summary>
+            <p style={{ fontSize: 12, color: "var(--app-muted)", margin: "0 0 10px" }}>
+              Kata dalam kurung kurawal diisi otomatis: {"{bisnis} {klien} {project} {nomor} {tanggal_acara} {lokasi} {total} {pembayaran} {revisi} {pembatalan}"}.
+              Template bukan nasihat hukum; sesuaikan dengan kesepakatan kamu.
+            </p>
+            <label htmlFor="biz-doc-spkTitle" style={label}>Judul SPK</label>
+            <input id="biz-doc-spkTitle" value={docs.spkTitle ?? ""} placeholder={DEFAULT_SPK_TITLE} onChange={e => setDocs({ spkTitle: e.target.value })} style={{ ...inputStyle, marginBottom: 10 }} />
+            <label htmlFor="biz-doc-spkTemplate" style={label}>Isi SPK</label>
+            <textarea id="biz-doc-spkTemplate" value={docs.spkTemplate ?? DEFAULT_SPK} onChange={e => setDocs({ spkTemplate: e.target.value })} style={{ ...inputStyle, resize: "vertical", height: 200, lineHeight: 1.5, marginBottom: 10 }} />
+            <label htmlFor="biz-doc-ndaTemplate" style={label}>Isi NDA</label>
+            <textarea id="biz-doc-ndaTemplate" value={docs.ndaTemplate ?? DEFAULT_NDA} onChange={e => setDocs({ ndaTemplate: e.target.value })} style={{ ...inputStyle, resize: "vertical", height: 160, lineHeight: 1.5 }} />
+          </details>
         </div>
         <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", marginTop: msg ? 10 : 0 }}>{msg}</div>
         <div className="sp-form-foot">
