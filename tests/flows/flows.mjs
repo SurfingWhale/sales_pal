@@ -754,6 +754,27 @@ export const flows = [
         await page.reload();
         await page.waitForURL("**/dashboard");
       });
+      await t.step("Perlu ditindak is a bounded queue: ten cards, the rest in a sheet that scrolls itself", async () => {
+        await go(page, "Beranda");
+        const queue = page.locator(".sp-todo");
+        await queue.locator(".sp-task").first().waitFor({ timeout: 15000 });
+        const cards = await queue.locator("article.sp-task").count();
+        if (cards > 10) throw new Error(`${cards} cards on Beranda`);
+        if (!isWide(page)) {
+          const { sw, cw } = await queue.evaluate(e => ({ sw: e.scrollWidth, cw: e.clientWidth }));
+          if (sw <= cw) throw new Error("the queue does not swipe sideways");
+          await queue.getByRole("button", { name: /^Lihat semua \d+/ }).waitFor({ state: "attached" });
+        }
+        await page.getByRole("button", { name: "Lihat semua", exact: true }).first().click();
+        const sheet = page.getByRole("dialog", { name: /^Perlu ditindak/ });
+        const rows = await sheet.locator("li").count();
+        if (rows <= cards) throw new Error(`the sheet lists ${rows}, the queue shows ${cards}`);
+        const own = await sheet.locator(".sp-todo-list").evaluate(e => e.scrollHeight > e.clientHeight && getComputedStyle(e).overflowY === "auto");
+        if (!own) throw new Error("the sheet's list does not scroll on its own");
+        await t.audit("Beranda → Lihat semua sheet (big account)");
+        await sheet.getByRole("button", { name: "Tutup" }).click();
+        await sheet.waitFor({ state: "detached" });
+      });
       const places = [
         ["Beranda", null, /Usaha Contoh|perlu ditindak/i],
         ["Hunting", null, /contoh_0/],
@@ -1118,7 +1139,7 @@ export const flows = [
       });
       // After the share's page load: a write still in flight when a page reloads is lost.
       await t.step("start a session: the bar shows over the page", async () => {
-        await page.getByRole("button", { name: "▶ Mulai hunting" }).click();
+        await page.getByRole("button", { name: "Mulai hunting" }).click();
         await page.getByRole("region", { name: "Sesi hunting" }).getByText(/0 intro/).waitFor();
       });
       await t.step("Copy logs the intro at once; Batal takes it back", async () => {
@@ -1262,7 +1283,7 @@ export const flows = [
         await go(page, "Beranda");
         await tab("Jualan").click();
         await page.getByRole("heading", { name: /^Perlu ditindak/ }).waitFor();
-        await page.getByRole("region", { name: "Hunting hari ini" }).getByRole("button", { name: "▶ Mulai hunting" }).click();
+        await page.getByRole("region", { name: "Hunting hari ini" }).getByRole("button", { name: "Mulai hunting" }).click();
         await page.getByRole("region", { name: "Sesi hunting" }).waitFor();
         await expectText(page, "Hunting Mode");
       });

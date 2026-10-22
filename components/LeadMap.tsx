@@ -271,8 +271,8 @@ export default function LeadMap({ leads, onOpen, onAll, onAdd, onImport }: { lea
           </div>
         </div>
       </section>
-      <section aria-labelledby="ph-top" className="sp-only-phone">
-        <h2 id="ph-top" style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em" }}>Kejar sekarang</h2>
+      <section aria-labelledby="ph-top" className="sp-only-phone" style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 14, padding: "12px 16px 4px" }}>
+        <h2 id="ph-top" style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 600, letterSpacing: "-0.01em" }}>Kejar sekarang <span style={{ color: "var(--app-muted)", fontWeight: 500 }}>· 5 teratas</span></h2>
         {chase.length === 0 && <p style={{ margin: 0, fontSize: 13, color: "var(--app-muted)" }}>Belum ada lead dengan skor {SCORE_LINE}+ dan nilai {jt(VALUE_LINE)}+.</p>}
         <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
           {chase.slice(0, 5).map(l => (

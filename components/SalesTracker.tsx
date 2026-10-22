@@ -818,6 +818,9 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           /* The bell: a 36px chip inside its 44px tap box. */
           .sp-top .sp-iconbtn.glass { box-shadow: none; background: radial-gradient(circle closest-side, var(--glass-strong) 0 17px, var(--app-line-strong) 17px 17.6px, transparent 18px); -webkit-backdrop-filter: none; backdrop-filter: none; }
           .sp-top .sp-iconbtn.glass::before { display: none; }
+          /* The workspace picker: the same flat 36px chip, 44px to the finger. */
+          .sp-top .sp-space.glass { border: 0 solid transparent; border-block-width: 4px; background-clip: padding-box; background-color: var(--glass-strong); box-shadow: inset 0 0 0 0.5px var(--app-line-strong); -webkit-backdrop-filter: none; backdrop-filter: none; }
+          .sp-top .sp-space.glass::before { display: none; }
           .sp-nav-btn { flex: 1; min-width: 0; height: 50px; flex-direction: column; justify-content: center; gap: 2px; padding: 0; border-radius: 0; font-size: 11px; font-weight: 500; }
           .sp-nav-btn.is-on { background: transparent; box-shadow: none; color: var(--brand-text); font-weight: 600; }
           .sp-nav-icon { display: block; }

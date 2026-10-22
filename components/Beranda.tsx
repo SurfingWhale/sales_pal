@@ -48,6 +48,19 @@ function greeting(d = new Date()) {
   return h < 11 ? "Selamat pagi" : h < 15 ? "Selamat siang" : h < 18 ? "Selamat sore" : "Selamat malam";
 }
 
+const CAROUSEL = 10;
+
+// One colour per kind of task, on its icon tile, so the queue reads at a glance.
+function kindColor(kind: string): string {
+  if (/telat/i.test(kind)) return "#c62828";
+  if (/invoice/i.test(kind)) return "#0f7b4a";
+  if (/hunting/i.test(kind)) return "#b93a06";
+  if (/penawaran/i.test(kind)) return "#005eb0";
+  if (/follow/i.test(kind)) return "#6d4fc2";
+  if (/macet/i.test(kind)) return "#9a6700";
+  return "#5b636c";
+}
+
 const css = `
 .sp-b-panel { display: flex; flex-direction: column; }
 .sp-b-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 24px; }
@@ -108,6 +121,22 @@ const css = `
 .sp-task.is-first .sp-task-what { color: rgba(255,255,255,0.92); }
 .sp-task.is-first .sp-btn.line { background: #fff; color: #004a8c; border-color: #fff; }
 .sp-task.is-first .sp-btn.ghost { color: #fff; }
+.sp-task-tile { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; color: color-mix(in srgb, var(--k) 75%, var(--app-text)); background: color-mix(in srgb, var(--k) 12%, transparent); }
+.sp-task-kind { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-task.is-first .sp-task-tile { color: #fff; background: rgba(255,255,255,0.16); }
+.sp-task-end { align-items: center; justify-content: center; gap: 4px; cursor: pointer; font-family: inherit; }
+@media (min-width: 768px) { .sp-todo > .sp-task:nth-child(n+5), .sp-todo > .sp-task-end { display: none; } }
+
+/* The whole queue: a sheet that scrolls inside itself. */
+.sp-todo-sheet { background: var(--app-card); color: var(--app-text); border-radius: 20px; width: 100%; max-width: 480px; max-height: min(80dvh, 640px); display: flex; flex-direction: column; overflow: hidden; }
+.sp-todo-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 8px 4px 20px; box-shadow: inset 0 -1px 0 var(--app-border); flex-shrink: 0; }
+.sp-todo-list { list-style: none; margin: 0; padding: 0 0 8px; overflow-y: auto; overscroll-behavior: contain; }
+.sp-todo-list button { width: 100%; min-height: 60px; display: flex; align-items: center; gap: 12px; padding: 8px 16px 8px 20px; border: 0; background: none; color: inherit; text-align: start; font-family: inherit; cursor: pointer; }
+.sp-todo-list li + li button { box-shadow: inset 0 1px 0 var(--app-border); }
+.sp-todo-list button > svg:last-child { color: var(--app-muted); flex-shrink: 0; }
+.sp-row-title { display: block; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-row-sub { display: block; margin-top: 2px; font-size: 13px; color: var(--app-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-row-sub .is-late { color: var(--hot); font-weight: 600; }
 .sp-b-more { margin-top: clamp(24px, 5vw, 56px); display: flex; flex-direction: column; gap: 32px; }
 
 @media (min-width: 768px) and (max-width: 1099px) {
@@ -159,23 +188,29 @@ const css = `
   .sp-kpi .unit { font-size: 13px; }
   .sp-kpi .sub { display: none; }
 
-  /* Perlu ditindak: one grouped list, rows split by hairlines — no card in a card. */
+  /* Perlu ditindak: a swipe queue. Cards snap, the next one peeks, and every
+     card is the same height so the row never jumps. */
   .sp-todo-sec { margin: 0; }
-  .sp-todo-head { margin-bottom: 4px; }
-  .sp-todo { display: flex; flex-direction: column; gap: 0; background: var(--app-card); border: 1px solid var(--app-border); border-radius: 14px; overflow: hidden; }
-  .sp-task, .sp-task.is-first { min-height: 0; border: 0; border-radius: 0; padding: 12px 16px; gap: 10px; background: transparent; color: var(--app-text); }
-  .sp-task + .sp-task { box-shadow: inset 0 1px 0 var(--app-border); }
-  .sp-task h3 { font-size: 15px; line-height: 1.3; }
-  .sp-task-meta, .sp-task.is-first .sp-task-meta { font-size: 12px; gap: 6px; color: var(--app-muted); }
-  .sp-task-what, .sp-task.is-first .sp-task-what { margin-top: 2px; font-size: 13px; line-height: 1.4; color: var(--app-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sp-todo-head { margin-bottom: 8px; }
+  .sp-todo { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: min(80%, 300px); gap: 12px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scroll-padding-inline: 16px; margin: 0 -16px; padding: 2px 16px 4px; scrollbar-width: none; }
+  .sp-todo::-webkit-scrollbar { display: none; }
+  .sp-task, .sp-task.is-first { scroll-snap-align: start; height: 176px; min-height: 0; padding: 14px; border-radius: 16px; gap: 8px; background: var(--app-card); color: var(--app-text); border: 1px solid var(--app-border); }
+  .sp-task.is-first { border-color: color-mix(in srgb, #005eb0 40%, var(--app-border)); }
+  .sp-task.is-first .sp-task-tile { color: color-mix(in srgb, var(--k) 75%, var(--app-text)); background: color-mix(in srgb, var(--k) 12%, transparent); }
+  .sp-task h3 { font-size: 16px; line-height: 1.3; }
+  .sp-task-meta, .sp-task.is-first .sp-task-meta { font-size: 12px; gap: 8px; color: var(--app-muted); }
+  .sp-task-what, .sp-task.is-first .sp-task-what { margin-top: 2px; font-size: 13px; line-height: 1.4; color: var(--app-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .sp-task-flag { background: color-mix(in srgb, #005eb0 12%, transparent); color: var(--brand-text); font-weight: 600; padding: 2px 8px; }
-  .sp-task-acts { margin-top: 0; gap: 4px; }
+  .sp-task-acts { margin-top: auto; gap: 4px; flex-wrap: nowrap; }
   .sp-task .sp-btn { border-radius: 14px; }
   .sp-task .sp-btn.ghost { padding: 0 8px; }
-  /* The most urgent row leads with a tint, not a third filled button. */
   .sp-task.is-first .sp-btn.line { background-color: color-mix(in srgb, #005eb0 10%, transparent); color: var(--brand-text); box-shadow: none; }
   .sp-task.is-first .sp-btn.ghost { color: var(--app-ink-2); }
-  .sp-b-more { margin-top: 8px; gap: 24px; }
+  .sp-task-end { background: var(--app-inner) !important; border-style: dashed !important; }
+  /* On a phone the sheet rises from the bottom edge. */
+  .sp-todo-sheet { max-width: none; width: calc(100% + 32px); margin: 0 -16px calc(-1 * max(20px, env(safe-area-inset-bottom))); border-radius: 20px 20px 0 0; max-height: 85dvh; padding-bottom: env(safe-area-inset-bottom); }
+  .sp-b-more { margin-top: 8px; gap: 16px; }
+  .sp-sources { padding: 16px !important; margin-bottom: 0 !important; border-radius: 14px !important; }
 }
 @media (max-width: 360px) {
   .sp-today { flex-direction: column; align-items: stretch; }
@@ -194,9 +229,12 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
 }) {
   const [mode, setModeState] = useState<BerandaMode>(savedMode);
   const setMode = (m: BerandaMode) => { setModeState(m); try { localStorage.setItem(MODE_KEY, m); } catch { /* private mode */ } };
-  const [all, setAll] = useState(false);
+  const [sheet, setSheet] = useState(false);
   const due = todo.filter(t => t.when <= now).length;
-  const shown = all ? todo : todo.slice(0, 4);
+  // A queue, not a feed: the phone swipes through the first ten (the desktop
+  // grid shows four), and the whole list opens in its own scrolling sheet.
+  const shown = todo.slice(0, CAROUSEL);
+  const whenOf = (t: Todo) => t.when < now ? `Telat ${Math.round((Date.parse(now) - Date.parse(t.when)) / 86400000)} hari` : t.when === now ? "Hari ini" : longDate(t.when);
   const day = new Date(now + "T00:00:00").toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long" });
   const pct = numbers.closingTarget ? Math.min(100, (numbers.closedThisMonth / numbers.closingTarget) * 100) : 0;
 
@@ -254,7 +292,7 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
           </span>
           {hunting.live
             ? <button onClick={hunting.onOpen} className="sp-btn line">Sesi jalan · buka Hunting</button>
-            : <button onClick={hunting.onStart} className="sp-btn hunt">▶ Mulai hunting</button>}
+            : <button onClick={hunting.onStart} className="sp-btn hunt"><Icon name="play" size={16} />Mulai hunting</button>}
         </section>
       )}
 
@@ -309,7 +347,7 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
       <section aria-labelledby="todo-h" className="sp-todo-sec">
         <div className="sp-todo-head">
           <h2 id="todo-h" style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em" }}>Perlu ditindak <span style={{ color: "var(--app-muted)", fontWeight: 500 }}>{todo.length}</span></h2>
-          {todo.length > 4 && <button onClick={() => setAll(!all)} className="sp-todo-more">{all ? "Ringkas" : "Lihat semua"}<Icon name={all ? "chevronDown" : "chevronRight"} size={14} stroke={1.8} /></button>}
+          {todo.length > 1 && <button onClick={() => setSheet(true)} className="sp-todo-more" aria-haspopup="dialog">Lihat semua<Icon name="chevronRight" size={14} stroke={1.8} /></button>}
         </div>
         {todo.length === 0 ? (
           <div className="sp-card" style={{ padding: 16, fontSize: 14, color: "var(--app-muted)" }}>
@@ -320,12 +358,12 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
             {shown.map((t, i) => {
               const first = i === 0;
               const late = t.when < now;
-              const whenText = late ? `Telat ${Math.round((Date.parse(now) - Date.parse(t.when)) / 86400000)} hari` : t.when === now ? "Hari ini" : longDate(t.when);
+              const whenText = whenOf(t);
               return (
-                <article key={t.key} className={`sp-task${first ? " is-first" : " lift"}`}>
+                <article key={t.key} className={`sp-task${first ? " is-first" : " lift"}`} style={{ "--k": kindColor(t.kind) } as React.CSSProperties}>
                   <div className="sp-task-meta">
-                    <Icon name={t.icon} size={16} />
-                    {t.kind}
+                    <span className="sp-task-tile" aria-hidden="true"><Icon name={t.icon} size={16} /></span>
+                    <span className="sp-task-kind">{t.kind}</span>
                     {first
                       ? <span className="sp-task-flag">Paling mendesak</span>
                       : <span className={`sp-task-when tabnum${late ? " is-late" : t.when === now ? " is-today" : ""}`}>{whenText}</span>}
@@ -344,6 +382,37 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
                 </article>
               );
             })}
+            {todo.length > CAROUSEL && (
+              <button className="sp-task sp-task-end" onClick={() => setSheet(true)} aria-haspopup="dialog">
+                <span style={{ fontSize: 28, fontWeight: 700 }} className="tabnum">+{todo.length - CAROUSEL}</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: "var(--brand-text)" }}>Lihat semua {todo.length}</span>
+              </button>
+            )}
+          </div>
+        )}
+        {sheet && (
+          // The full queue scrolls inside its own sheet; the page stays short.
+          <div className="modal-overlay" onClick={() => setSheet(false)} style={{ alignItems: "flex-end" }}>
+            <div role="dialog" aria-modal="true" aria-labelledby="todo-all-h" data-own-layout className="sp-todo-sheet" onClick={e => e.stopPropagation()}>
+              <div className="sp-todo-sheet-head">
+                <h2 id="todo-all-h" style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>Perlu ditindak <span style={{ color: "var(--app-muted)", fontWeight: 500 }}>{todo.length}</span></h2>
+                <button onClick={() => setSheet(false)} className="sp-btn ghost" style={{ color: "var(--brand-text)", fontWeight: 600 }}>Tutup</button>
+              </div>
+              <ul className="sp-todo-list">
+                {todo.map(t => (
+                  <li key={t.key} style={{ "--k": kindColor(t.kind) } as React.CSSProperties}>
+                    <button onClick={() => { setSheet(false); t.open(); }}>
+                      <span className="sp-task-tile" aria-hidden="true"><Icon name={t.icon} size={16} /></span>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span className="sp-row-title">{t.title}</span>
+                        <span className="sp-row-sub">{t.kind} · <span className={t.when < now ? "is-late" : undefined}>{whenOf(t)}</span></span>
+                      </span>
+                      <Icon name="chevronRight" size={16} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         )}
       </section>

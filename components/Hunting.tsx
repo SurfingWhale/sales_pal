@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { type CSSProperties, type Dispatch, type SetStateAction, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { deleteDoc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { Invoice, Quote, addDays, daysBetween, longDate, today, useBusiness, useSpaceCollection } from "@/lib/billing";
@@ -430,7 +431,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         </div>
         {live
           ? <button onClick={journey.end} style={{ ...btnMuted, minHeight: 44 }}>■ Akhiri sesi</button>
-          : <button onClick={journey.start} style={{ ...btnPrimary, minHeight: 44, background: "#b93a06" }}>▶ Mulai hunting</button>}
+          : <button onClick={journey.start} style={{ ...btnPrimary, minHeight: 44, background: "#b93a06", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Icon name="play" size={16} />Mulai hunting</button>}
       </div>
 
       {/* Today in one line; the full numbers are under Performa. */}
