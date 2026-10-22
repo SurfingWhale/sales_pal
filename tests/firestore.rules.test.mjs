@@ -74,6 +74,9 @@ await t("another account cannot read the vault", assertFails(getDocs(collection(
 await t("no browser reads or writes push subscriptions", assertFails(getDocs(collection(owner, "pushSubs"))));
 await t("no browser stores a push subscription", assertFails(setDoc(doc(other, "pushSubs", "x"), { uid: "u9", endpoint: "https://push.example/1" })));
 await t("nobody reads the access switch", assertFails(getDoc(doc(owner, "config", "access"))));
+await t("nobody approves themselves", assertFails(setDoc(doc(other, "accessRequests", "u2"), { status: "approved", tools: ["places"] })));
+await t("nobody makes themselves an admin", assertFails(setDoc(doc(other, "accessAdmins", "u2"), { email: "x@y.z" })));
+await t("nobody reads the applications", assertFails(getDocs(collection(owner, "accessRequests"))));
 await t("nobody opens the app to everyone", assertFails(setDoc(doc(other, "config", "access"), { open: true })));
 await t("nobody reads usage quotas", assertFails(getDoc(doc(owner, "usage", "owner1_scan_2026-10-08"))));
 await t("nobody resets their quota", assertFails(setDoc(doc(other, "usage", "u9_scan_2026-10-08"), { count: 0 })));

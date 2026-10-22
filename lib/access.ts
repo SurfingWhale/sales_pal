@@ -5,6 +5,8 @@
 //   in firestore.rules names).
 // - Anyone in a guild whose Leader is the owner. For a paid tool, only the
 //   roles that Leader allowed in guilds/{g}/settings/tools.
+// - Anyone an admin approved (accessRequests/{uid}), with the paid tools the
+//   admin ticked for them. Admins are named by the owner (accessAdmins/{uid}).
 // - Everyone signed in, while config/access.open is true (or ACCESS_OPEN=1
 //   when that document doesn't exist). The flow tests run this way.
 //
@@ -75,6 +77,7 @@ async function ownerGuilds(uid: string, only?: string | null): Promise<OwnerGuil
 // alone, since mayUse finds no guild either.
 export async function mayEnter(c: Caller): Promise<boolean> {
   if (isOwner(c) || (await isOpen()) || !canStore()) return true;
+  if ((await requestOf(c.uid))?.status === "approved" || (await isAdmin(c))) return true;
   return (await ownerGuilds(c.uid)).length > 0;
 }
 
@@ -85,11 +88,83 @@ export const enforced = () => canStore();
 // May this person spend the key on a tool? A guild id narrows it to that guild.
 export async function mayUse(c: Caller, tool: PaidTool, guildId?: string | null): Promise<{ ok: true } | { ok: false; why: string }> {
   if (isOwner(c) || (await isOpen())) return { ok: true };
+  const granted = await requestOf(c.uid);
+  if (granted?.status === "approved" && granted.tools.includes(tool)) return { ok: true };
   const gs = await ownerGuilds(c.uid, guildId);
   if (gs.some(g => rolesFor(g.tools, tool).includes(g.role))) return { ok: true };
   return { ok: false, why: gs.length
     ? `${TOOL_LABEL[tool]} belum dibuka buat peran kamu. Minta Leader guild buka aksesnya di Guild → Atur guild.`
     : `${TOOL_LABEL[tool]} cuma buat tim yang diundang. Minta link undangan guild ke Leader kamu.` };
+}
+
+// ---- applying, and the admins who approve (PRD-015 §2b) ----------------------
+// accessRequests/{uid} and accessAdmins/{uid}, server only. Only the owner
+// names admins; an admin approves or refuses applicants and ticks which paid
+// tools each may use, but never decides their own application.
+
+export type RequestStatus = "pending" | "approved" | "refused" | "revoked";
+export interface AccessRequest {
+  uid: string; email: string; name: string; note: string; at: number;
+  status: RequestStatus; tools: PaidTool[]; decidedBy?: string; decidedAt?: number;
+}
+export interface AccessAdmin { uid: string; email: string; by: string; at: number }
+
+const TOOLS: PaidTool[] = ["places", "geocode", "scan"];
+const requests = () => adminDb().collection("accessRequests");
+const admins = () => adminDb().collection("accessAdmins");
+
+export async function requestOf(uid: string): Promise<AccessRequest | null> {
+  if (!canStore()) return null;
+  const d = await requests().doc(uid).get().catch(() => null);
+  if (!d?.exists) return null;
+  const r = d.data() as AccessRequest;
+  return { ...r, tools: Array.isArray(r.tools) ? r.tools.filter(t => TOOLS.includes(t)) : [] };
+}
+
+export async function isAdmin(c: Caller): Promise<boolean> {
+  if (isOwner(c)) return true;
+  if (!canStore()) return false;
+  return Boolean((await admins().doc(c.uid).get().catch(() => null))?.exists);
+}
+
+// Ask to come in. A refusal stands for a day before asking again.
+export async function apply(c: Caller, name: string, note: string): Promise<AccessRequest> {
+  const old = await requestOf(c.uid);
+  if (old?.status === "approved") return old;
+  if (old?.status === "refused" && Date.now() - (old.decidedAt || 0) < 86_400_000) return old;
+  const r: AccessRequest = { uid: c.uid, email: c.email || "", name: name.slice(0, 80), note: note.slice(0, 500), at: Date.now(), status: "pending", tools: [] };
+  await requests().doc(c.uid).set(r);
+  return r;
+}
+
+export async function listRequests(): Promise<AccessRequest[]> {
+  const [p, a] = await Promise.all([
+    requests().where("status", "==", "pending").limit(100).get(),
+    requests().where("status", "==", "approved").limit(200).get(),
+  ]);
+  return [...p.docs, ...a.docs].map(d => d.data() as AccessRequest).sort((x, y) => (y.decidedAt || y.at) - (x.decidedAt || x.at));
+}
+
+export async function decide(by: Caller, uid: string, status: "approved" | "refused" | "revoked", tools: string[]): Promise<void> {
+  if (uid === by.uid && !isOwner(by)) throw new Error("Permintaan kamu sendiri diputusin admin lain atau owner.");
+  const ref = requests().doc(uid);
+  const d = await ref.get();
+  if (!d.exists) throw new Error("Permintaannya ga ketemu.");
+  await ref.update({ status, tools: status === "approved" ? TOOLS.filter(t => tools.includes(t)) : [], decidedBy: by.email || by.uid, decidedAt: Date.now() });
+}
+
+export async function listAdmins(): Promise<AccessAdmin[]> {
+  return (await admins().limit(100).get()).docs.map(d => d.data() as AccessAdmin).sort((a, b) => a.at - b.at);
+}
+
+// Owner only: make an account an admin (or not) by its sign-in address.
+export async function setAdmin(by: Caller, email: string, on: boolean): Promise<AccessAdmin | null> {
+  const user = await adminAuth().getUserByEmail(email.trim().toLowerCase()).catch(() => null);
+  if (!user) throw new Error("Akun dengan email itu belum pernah login ke SalesPal.");
+  if (!on) { await admins().doc(user.uid).delete(); return null; }
+  const a: AccessAdmin = { uid: user.uid, email: user.email || email, by: by.email || by.uid, at: Date.now() };
+  await admins().doc(user.uid).set(a);
+  return a;
 }
 
 // ---- the whole app's monthly allowance --------------------------------------

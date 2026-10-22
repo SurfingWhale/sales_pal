@@ -26,6 +26,27 @@ Sebelumnya:
 - **Tanpa `FIREBASE_SERVICE_ACCOUNT`** (status production per 22 Okt): server ga bisa baca guild atau ngitung jatah antar-instance. App tetap kebuka buat semua yang login, biar tim owner ga kekunci. Alat berbayar cuma buat owner. Batas bulanan cuma kehitung per instance. Owner dapet peringatan di layar Cari bisnis.
 - **Pengecekan server.** Layar tertutup cuma tampilan. Tiap route berbayar ngecek sendiri (`mayUse`). Kalau `/api/access` ga bisa dihubungi, app tetap kebuka; route-nya yang tetap nolak.
 
+## 2b. Minta akses & admin (owner, 22 Okt: "gimana caranya user gw juga bisa jadi admin, grant access orang yang iseng apply")
+
+- **Orang luar.** Yang ketahan di layar tertutup bisa ngisi **Minta akses** (siapa, buat apa). Statusnya keliatan di layar itu:
+  - **terkirim** → nunggu admin;
+  - **ditolak** atau **dicabut** → bisa minta lagi besok.
+- **Admin dan owner** buka **Profil → Akses & admin**:
+  - permintaan masuk (ada badge jumlahnya);
+  - centang **alat berbayar per orang** (Cari bisnis / Cari alamat / Scan AI; kosong = cuma masuk app);
+  - **Setujui / Tolak**;
+  - daftar yang udah disetujui, dengan **Cabut**.
+
+  Admin ga bisa mutusin permintaannya sendiri.
+- **Ngangkat & nyabut admin.** Cuma owner, pakai email akun yang pernah login.
+- **Data.** `accessRequests/{uid}` `{ email, name, note, at, status, tools, decidedBy, decidedAt }` dan `accessAdmins/{uid}` `{ email, by, at }`.
+  - Dua-duanya khusus server; rules nolak semua browser.
+  - Jalurnya cuma lewat `/api/access/request` dan `/api/access/admin`.
+  - Butuh `FIREBASE_SERVICE_ACCOUNT` (§5). Tanpa itu, route-nya jawab 503.
+- **Siapa boleh apa.**
+  - `mayEnter`: owner, admin, yang disetujui, atau anggota guild owner.
+  - `mayUse`: owner, yang disetujui dengan alat itu dicentang, atau peran yang diizinin Leader.
+
 ## 3. Batas pemakaian (biar tetap di jatah gratis)
 
 | Alat | SKU / penyedia | Gratis/bulan | Batas app/bulan | Per akun/hari |

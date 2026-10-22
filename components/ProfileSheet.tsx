@@ -7,6 +7,8 @@ import { AVATARS } from "@/lib/guild";
 import { PushState, disablePush, enablePush, pushState, testPush } from "@/lib/push";
 import Icon from "@/components/Icon";
 import { btnMuted, btnPrimary, font } from "@/components/ui";
+import { authFetch } from "@/lib/authFetch";
+import AccessAdmin from "@/components/AccessAdmin";
 
 // Profil & Pengaturan as a settings list (QA 16 Okt: "belum halus"): one
 // avatar you can change, then grouped rows of one height — an icon tile, a
@@ -88,6 +90,20 @@ export default function ProfileSheet({ uid, name, email, version, isDark, onThem
   const [pushBusy, setPushBusy] = useState(false);
   const [msg, setMsg] = useState("");
   useEffect(() => { pushState().then(setPush).catch(() => setPush("unsupported")); }, []);
+  // Admins and the owner decide who may come in (PRD-015 §2b).
+  const [admin, setAdmin] = useState(false);
+  const [waiting, setWaiting] = useState(0);
+  const [admining, setAdmining] = useState(false);
+  useEffect(() => {
+    let live = true;
+    authFetch("/api/access").then(r => (r.ok ? r.json() : null)).then(async j => {
+      if (!live || !j?.admin) return;
+      setAdmin(true);
+      const a = await authFetch("/api/access/admin").then(r => (r.ok ? r.json() : null)).catch(() => null);
+      if (live && a?.requests) setWaiting(a.requests.filter((r: { status: string }) => r.status === "pending").length);
+    }, () => undefined);
+    return () => { live = false; };
+  }, [admining]);
 
   async function runPush(f: () => Promise<string | void>) {
     setPushBusy(true); setMsg("");
@@ -125,7 +141,10 @@ export default function ProfileSheet({ uid, name, email, version, isDark, onThem
 
         <div style={caption}>Akun</div>
         <div style={group}>
-          <Row icon="person" label="Foto profil" trailing={<><span style={{ fontSize: 14, color: "var(--app-muted)" }}>{avatar ? LABEL[avatar] : "Inisial"}</span><Chevron /></>} onClick={() => setPicking(true)} last />
+          <Row icon="person" label="Foto profil" trailing={<><span style={{ fontSize: 14, color: "var(--app-muted)" }}>{avatar ? LABEL[avatar] : "Inisial"}</span><Chevron /></>} onClick={() => setPicking(true)} last={!admin} />
+          {admin && <Row icon="shield" tint="#7c3aed" label="Akses & admin" hint={waiting ? `${waiting} orang minta akses` : "Siapa yang boleh masuk & pakai alat berbayar"}
+            trailing={<>{waiting > 0 && <span style={{ minWidth: 22, height: 22, borderRadius: 11, background: "#dc2626", color: "#fff", fontSize: 12, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 6px" }}>{waiting}</span>}<Chevron /></>}
+            onClick={() => setAdmining(true)} last />}
         </div>
 
         <div style={caption}>Aplikasi</div>
@@ -152,6 +171,7 @@ export default function ProfileSheet({ uid, name, email, version, isDark, onThem
         </div>
       </div>
       {picking && <AvatarPicker uid={uid} current={avatar} name={name || email} onClose={() => setPicking(false)} />}
+      {admining && <AccessAdmin onClose={() => setAdmining(false)} />}
     </div>
   );
 }

@@ -25,11 +25,31 @@ export default function DashboardPage() {
   // come in. If it can't be asked, let them in: every paid route checks again.
   const [entry, setEntry] = useState<"checking" | "in" | "closed">("checking");
   const [tries, setTries] = useState(0);
+  // Asking an admin to let you in (PRD-015 §2b).
+  const [asked, setAsked] = useState<"pending" | "refused" | "revoked" | null>(null);
+  const [note, setNote] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendErr, setSendErr] = useState("");
+  async function ask() {
+    setSending(true); setSendErr("");
+    try {
+      const r = await authFetch("/api/access/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: user?.displayName || "", note }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.error || "Gagal ngirim. Coba lagi.");
+      setAsked(j.status === "approved" ? null : j.status);
+      if (j.status === "approved") setTries(t => t + 1);
+    } catch (e) { setSendErr((e as Error).message); }
+    setSending(false);
+  }
   useEffect(() => {
     if (!user) return;
     let live = true;
     setEntry("checking");
-    authFetch("/api/access").then(r => (r.ok ? r.json() : null)).then(j => { if (live) setEntry(j && j.app === false ? "closed" : "in"); }, () => { if (live) setEntry("in"); });
+    authFetch("/api/access").then(r => (r.ok ? r.json() : null)).then(j => {
+      if (!live) return;
+      setEntry(j && j.app === false ? "closed" : "in");
+      setAsked(j?.request?.status && j.request.status !== "approved" ? j.request.status : null);
+    }, () => { if (live) setEntry("in"); });
     return () => { live = false; };
   }, [user, tries]);
 
@@ -41,12 +61,31 @@ export default function DashboardPage() {
           <p style={{ margin: "0 0 12px", fontSize: 14, lineHeight: 1.55, color: "var(--app-muted)" }}>
             Lagi uji coba terbatas, cuma buat tim yang diundang. Akun <b style={{ color: "var(--app-text)" }}>{user.email || "ini"}</b> belum ada di tim mana pun.
           </p>
-          <p style={{ margin: "0 0 20px", fontSize: 14, lineHeight: 1.55, color: "var(--app-muted)" }}>
+          <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.55, color: "var(--app-muted)" }}>
             Punya link undangan? Buka lagi link-nya, lalu tap <b style={{ color: "var(--app-text)" }}>Gabung guild</b>.
           </p>
+          {asked === "pending" ? (
+            <p role="status" style={{ margin: "0 0 20px", fontSize: 14, lineHeight: 1.55, padding: "10px 12px", borderRadius: 10, background: "var(--app-inner)" }}>
+              Permintaan akses terkirim. Tunggu admin nyetujui, lalu tap <b>Cek lagi</b>.
+            </p>
+          ) : asked === "refused" || asked === "revoked" ? (
+            <p role="status" style={{ margin: "0 0 20px", fontSize: 14, lineHeight: 1.55, padding: "10px 12px", borderRadius: 10, background: "var(--app-inner)" }}>
+              {asked === "refused" ? "Permintaan akses kamu belum disetujui." : "Akses kamu udah dicabut admin."} Bisa minta lagi besok.
+            </p>
+          ) : (
+            <form onSubmit={e => { e.preventDefault(); ask(); }} style={{ margin: "0 0 20px" }}>
+              <label htmlFor="ask-note" style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Atau minta akses ke admin</label>
+              <textarea id="ask-note" value={note} onChange={e => setNote(e.target.value)} maxLength={500} rows={3} placeholder="Kamu siapa, dan mau dipakai buat apa?"
+                style={{ width: "100%", boxSizing: "border-box", fontSize: 16, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--app-border)", background: "var(--app-card)", color: "var(--app-text)", fontFamily: "inherit", resize: "vertical" }} />
+              {sendErr && <div role="alert" style={{ fontSize: 13, color: "var(--hot)", marginTop: 6 }}>{sendErr}</div>}
+              <button type="submit" disabled={sending || !note.trim()} style={{ marginTop: 8, minHeight: 44, padding: "10px 16px", borderRadius: 10, border: 0, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", opacity: sending || !note.trim() ? 0.6 : 1 }}>
+                {sending ? "Mengirim…" : "Minta akses"}
+              </button>
+            </form>
+          )}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button onClick={() => setTries(tries + 1)} style={{ minHeight: 44, padding: "10px 16px", borderRadius: 10, border: "1px solid var(--app-border)", background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>Cek lagi</button>
-            <button onClick={() => signOut(auth)} style={{ minHeight: 44, padding: "10px 16px", borderRadius: 10, border: 0, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>Keluar</button>
+            <button onClick={() => signOut(auth)} style={{ minHeight: 44, padding: "10px 16px", borderRadius: 10, border: "1px solid var(--app-border)", background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>Keluar</button>
           </div>
         </div>
       </main>
