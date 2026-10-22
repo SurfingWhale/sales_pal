@@ -56,6 +56,21 @@ export interface Quote extends Brief {
   invoiceId?: string;
   ownerUid?: string;
   ownerName?: string;
+  // Frozen when the quote is sent (PRD-011): the letterhead and the terms it
+  // went out with. Changing the business later never rewrites it.
+  issuer?: Issuer;
+  terms?: DocTerms;
+  // Optional papers sent with it. Sending is not signing: signedAt is set
+  // only when the owner marks it signed.
+  spk?: Agreement;
+  nda?: Agreement;
+}
+
+export interface Agreement {
+  title: string;
+  body: string;            // the filled text, as sent
+  sentAt: string;
+  signedAt?: string;
 }
 
 export interface Payment {
@@ -81,6 +96,7 @@ export interface Invoice extends Brief {
   payments: Payment[];
   ownerUid?: string;      // guild: the seller (lib/space.ts stamp)
   ownerName?: string;
+  issuer?: Issuer;        // frozen when the invoice is made (PRD-011)
 }
 
 export interface Business {
@@ -94,9 +110,38 @@ export interface Business {
   tagline?: string;        // what you do, under the name: "Fotografi & video event"
   logo?: string;           // small PNG/JPEG data URL (lib/image.ts), max ~120 KB
   address?: string;
+  docs?: DocDefaults;      // copied into each new quote, then the quote's own
 }
 
+// The business's defaults for new paperwork (PRD-011 §4). Every field is
+// optional; nothing assumes a 50% deposit or that it is non-refundable.
+export interface DocDefaults {
+  validDays?: number;      // quote valid for
+  dpPercent?: number;
+  dpWhen?: string;         // "saat booking"
+  finalWhen?: string;      // "H-1 acara"
+  revisions?: string;      // "1x revisi minor"
+  cancellation?: string;   // cancellation and rescheduling
+  spkTitle?: string;       // "Perjanjian Kerja"
+  spkTemplate?: string;
+  ndaTemplate?: string;
+}
+
+// What a sent quote carries of the defaults.
+export type DocTerms = Pick<DocDefaults, "dpWhen" | "finalWhen" | "revisions" | "cancellation">;
+
+export type Issuer = Omit<Business, "docs">;
+
 export const EMPTY_BUSINESS: Business = { name: "", phone: "", email: "", bank: "", accountNo: "", accountName: "", footer: "", tagline: "", logo: "", address: "" };
+
+export function issuerOf(b: Business): Issuer {
+  const { docs: _docs, ...rest } = b; // eslint-disable-line @typescript-eslint/no-unused-vars
+  return { ...EMPTY_BUSINESS, ...rest };
+}
+export function termsOf(b: Business): DocTerms {
+  const d = b.docs || {};
+  return { dpWhen: d.dpWhen || "", finalWhen: d.finalWhen || "", revisions: d.revisions || "", cancellation: d.cancellation || "" };
+}
 
 // ---- dates & money -------------------------------------------------------
 

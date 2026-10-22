@@ -5,21 +5,24 @@ import { setDoc, deleteDoc, updateDoc } from "firebase/firestore";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import {
   Business, Invoice, LineItem, QUOTE_STATUS, Quote, QuoteStatus, Service,
-  addDays, daysBetween, longDate, nextNumber, quoteColor, quoteText, rupiah, subtotal, today, total, waLink, waNumber,
+  addDays, issuerOf, daysBetween, longDate, nextNumber, quoteColor, quoteText, rupiah, subtotal, today, total, waLink, waNumber,
 } from "@/lib/billing";
 import PrintSheet from "@/components/PrintSheet";
 import DocEditor, { DocDraft, LeadRef, briefOf, cleanItems } from "@/components/DocEditor";
 import ConfirmSheet from "@/components/ConfirmSheet";
+import SendQuoteSheet, { SentPatch } from "@/components/SendQuoteSheet";
 import { badge, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, label, modalBox, subheading, WA_INK } from "@/components/ui";
 
 export type { LeadRef };
 
-function blank(lead?: LeadRef): DocDraft {
+// A new quote takes the business's defaults (Kop & logo → Default dokumen).
+function blank(b: Business, lead?: LeadRef): DocDraft {
   const d = today();
+  const docs = b.docs || {};
   return {
     id: "", number: "",
     leadId: lead?.id || "", leadName: lead?.name || "", contact: lead?.contact || "", phone: lead?.phone || "",
-    items: [], discount: 0, dpPercent: 50, notes: "", date: d, validUntil: addDays(d, 14),
+    items: [], discount: 0, dpPercent: docs.dpPercent ?? 50, notes: "", date: d, validUntil: addDays(d, docs.validDays || 14),
   };
 }
 
@@ -40,11 +43,31 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
   const [filter, setFilter] = useState<"All" | QuoteStatus>("All");
   const [deleting, setDeleting] = useState<Quote | null>(null);
   const [failed, setFailed] = useState("");
+  const [sending, setSending] = useState<Quote | null>(null);
+
+  // Sent: the letterhead and terms are frozen on it, with the papers that went along.
+  async function markSent(q: Quote, p: SentPatch) {
+    const on = today();
+    const keep = (a: Quote["spk"], n?: { title: string; body: string }) =>
+      a?.signedAt ? a : n ? { ...n, sentAt: on } : undefined;
+    const spk = keep(q.spk, p.spk), nda = keep(q.nda, p.nda);
+    await updateDoc(spaceDoc(space, "quotes", q.id), {
+      issuer: q.issuer || p.issuer, terms: q.terms || p.terms,
+      ...(spk ? { spk } : {}), ...(nda ? { nda } : {}),
+      ...(q.status === "Draft" ? { status: "Terkirim" } : {}), ...(q.sentAt ? {} : { sentAt: on }),
+    });
+  }
+
+  async function markSigned(q: Quote, kind: "spk" | "nda") {
+    const a = q[kind];
+    if (!a) return;
+    await updateDoc(spaceDoc(space, "quotes", q.id), { [kind]: { ...a, signedAt: today() } });
+  }
 
   // Opened from a lead's detail: start a quote already addressed to them.
   useEffect(() => {
-    if (startFor) { setEditing(blank(startFor)); onStarted(); }
-  }, [startFor, onStarted]);
+    if (startFor) { setEditing(blank(business, startFor)); onStarted(); }
+  }, [startFor, onStarted]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sorted = quotes.slice().sort((a, b) => b.date.localeCompare(a.date) || b.number.localeCompare(a.number));
   const shown = filter === "All" ? sorted : sorted.filter(q => q.status === filter);
@@ -78,12 +101,12 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
   }
 
   async function sendWA(q: Quote) {
-    window.open(waLink(q.phone, quoteText(q, business)), "_blank");
+    window.open(waLink(q.phone, quoteText(q, q.issuer || business)), "_blank");
     if (q.status === "Draft") await setStatus(q, "Terkirim");
   }
 
   async function copy(q: Quote) {
-    try { await navigator.clipboard.writeText(quoteText(q, business)); } catch { setFailed(q.id); setTimeout(() => setFailed(""), 3000); return; }
+    try { await navigator.clipboard.writeText(quoteText(q, q.issuer || business)); } catch { setFailed(q.id); setTimeout(() => setFailed(""), 3000); return; }
     setCopied(q.id);
     setTimeout(() => setCopied(""), 1800);
   }
@@ -100,6 +123,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
       quoteId: q.id, leadId: q.leadId, leadName: q.leadName, contact: q.contact, phone: q.phone,
       items: q.items, discount: q.discount, dpPercent: q.dpPercent, notes: q.notes,
       date: d, dueDate: addDays(d, 7), payments: [],
+      issuer: q.issuer || issuerOf(business),
       ...briefOf(q),
     };
     await setDoc(spaceDoc(space, "invoices", id), stamp(space, inv, q as { ownerUid?: string; ownerName?: string }));
@@ -114,7 +138,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
           <div style={heading}>Penawaran</div>
           <div style={subheading}>Susun dari paket, kirim lewat WA, pantau sampai disetujui.</div>
         </div>
-        <button onClick={() => setEditing(blank())} style={btnPrimary}>+ Penawaran</button>
+        <button onClick={() => setEditing(blank(business))} style={btnPrimary}>+ Penawaran</button>
       </div>
 
       <div className="sp-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 20 }}>
@@ -155,7 +179,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
           <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>
             {services.length ? "Pilih lead, masukin paket, kirim." : "Isi dulu tab Paket biar penawaran tinggal pilih."}
           </div>
-          <button onClick={() => setEditing(blank())} style={btnPrimary}>+ Buat penawaran</button>
+          <button onClick={() => setEditing(blank(business))} style={btnPrimary}>+ Buat penawaran</button>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -183,9 +207,11 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                 </div>
                 <div className="sp-doc-actions">
                   <div className="sp-doc-main">
-                    <button onClick={() => sendWA(q)} style={{ ...chip, background: "#25D366", color: WA_INK, border: "none", fontWeight: 700 }}>
-                      {q.status === "Terkirim" ? "Follow-up WA" : "Kirim WA"}
-                    </button>
+                    {q.status === "Draft"
+                      ? <button onClick={() => setSending(q)} style={{ ...chip, background: "#005eb0", color: "#fff", border: "none", fontWeight: 700 }}>Kirim penawaran</button>
+                      : <button onClick={() => sendWA(q)} style={{ ...chip, background: "#25D366", color: WA_INK, border: "none", fontWeight: 700 }}>
+                          {q.status === "Terkirim" ? "Follow-up WA" : "Kirim WA"}
+                        </button>}
                     {q.status === "Terkirim" && (
                       <>
                         <button onClick={() => setStatus(q, "Disetujui")} style={{ ...chip, color: "var(--ok)", borderColor: "#00a86260", fontWeight: 700 }}>✓ Disetujui</button>
@@ -205,6 +231,18 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
                     <button className="sp-del" onClick={() => setDeleting(q)} aria-label={`Hapus ${q.number}`} title="Hapus" style={{ ...chip, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}>🗑</button>
                   </div>
                 </div>
+                {(q.spk || q.nda) && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 10, fontSize: 13 }}>
+                    {(["spk", "nda"] as const).map(k => q[k] && (
+                      <span key={k} style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={badge(q[k]!.signedAt ? "#00a862" : "#64748b")}>
+                          {k === "spk" ? q[k]!.title : "NDA"} · {q[k]!.signedAt ? `ditandatangani ${longDate(q[k]!.signedAt!)}` : "dikirim, belum ditandatangani"}
+                        </span>
+                        {!q[k]!.signedAt && <button onClick={() => markSigned(q, k)} style={{ ...chip, color: "var(--app-text)", fontWeight: 600 }}>Tandai {k === "spk" ? "SPK" : "NDA"} ditandatangani</button>}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {failed === q.id && <div role="alert" style={{ fontSize: 12, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", marginTop: 8 }}>Gagal menyalin. Buka PDF atau Kirim WA aja.</div>}
                 {!waNumber(q.phone) && <div style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 8 }}>Belum ada nomor WA — Kirim WA akan minta pilih kontak.</div>}
               </div>
@@ -215,7 +253,8 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
 
       {editing && <DocEditor kind="quote" initial={editing} leads={leads} services={services} onSave={save} onClose={() => setEditing(null)} />}
 
-      {printing && <PrintSheet kind="quote" data={printing} business={business} onClose={() => setPrinting(null)} />}
+      {printing && <PrintSheet kind="quote" data={printing} business={printing.issuer || business} frozen={!!printing.issuer} onClose={() => setPrinting(null)} />}
+      {sending && <SendQuoteSheet q={sending} business={business} onSent={p => markSent(sending, p)} onClose={() => setSending(null)} />}
 
       {deleting && (
         <ConfirmSheet title="Hapus penawaran?" onConfirm={() => remove(deleting)} onClose={() => setDeleting(null)}>

@@ -1,6 +1,6 @@
 # PRD-011 — Guild sebagai identitas bisnis, dan alur dokumen jualan
 
-- **Status:** DRAF / audit + usulan. **Belum ada perubahan arsitektur.** Nunggu persetujuan owner sebelum dibangun.
+- **Status:** Disetujui owner 22 Okt ("SPK dll buat lebih mudah digunakan ketika mau mengirimkan penawaran"). Tahap 1 dibangun (§9). Sisanya ikut urutan §5.
 - **Tanggal:** 2026-10-22
 - **Konteks:** Owner ngejalanin BeUntamed (fotografi, punya nama brand dan logo PNG) dan mau Guild jadi lapisan identitas + konfigurasi bisnis yang beneran, bukan sekadar field profil. SalesPal juga bakal dipakai bisnis lain, jadi BeUntamed harus jadi *satu bisnis yang pakai SalesPal*, bukan model bawaan aplikasi. Permintaan kedua: alur dokumen jualan (penawaran, perjanjian kerja, invoice, DP/termin, NDA, creative brief) buat freelancer kreatif.
 - **Terkait:** PRD-005 (Report Klien), PRD-007 (Guild + ruang kerja), PRD-009 (Hunting), PRD-010 (standar native).
@@ -131,3 +131,14 @@ NDA, Creative brief: dokumen opsional yang nempel ke lead/penawaran, ga wajib.
 4. Urutan MVP di §5 oke, atau Perjanjian Kerja mau dinaikkan sebelum item 5–7?
 5. Jadwal bayar bawaan BeUntamed: berapa baris dan persennya (mis. DP 50% saat booking, pelunasan 50% H-1 acara)?
 6. NPWP/pajak perlu dicetak di invoice BeUntamed sekarang, atau cukup opsional?
+
+## 9. Tahap 1 — dibangun 22 Okt
+
+Owner minta SPK dkk. gampang dipakai **pas ngirim penawaran**, jadi Perjanjian Kerja naik ke depan dan nempel ke alur kirim:
+- **Kirim penawaran** (`components/SendQuoteSheet.tsx`): tombol di penawaran Draft. Penawaran selalu ikut; **Perjanjian Kerja (SPK)** dicentang bawaan; **NDA** opsional. Isi SPK/NDA keisi dari penawaran (klien, project, tanggal & lokasi acara, total, DP dan pelunasan) dan Default dokumen; bisa dibaca dan diubah sebelum dikirim. **Bagikan PDF** ngirim semua PDF sekaligus (share sheet di HP, unduhan di laptop); **Kirim teks WA** ngirim ringkasan.
+- **Snapshot (MVP #1):** saat dikirim, kop (`issuer`) dan syarat (`terms`) dikunci ke penawaran; invoice dikunci saat dibuat. PDF dan teks WA pakai salinan itu. Pratinjau bilang kopnya dikunci; Kop & logo dari situ mengubah kop live buat dokumen baru. Dokumen lama tanpa snapshot tetap pakai kop live.
+- **Status perjanjian terpisah:** `spk/nda = { title, body, sentAt, signedAt? }` di penawaran. Kartu nampilin "dikirim, belum ditandatangani" sampai owner menekan **Tandai SPK ditandatangani**. Disetujui ≠ ditandatangani.
+- **Default dokumen (MVP #4)** di Kop & logo: masa berlaku, DP %, DP kapan, pelunasan kapan, revisi, pembatalan & jadwal ulang, judul + template SPK, template NDA (`{bisnis} {klien} {project} {nomor} {tanggal_acara} {lokasi} {total} {pembayaran} {revisi} {pembatalan}`). Penawaran baru ngambil masa berlaku dan DP dari sini.
+- PDF SPK/NDA (`lib/agreements.ts`): kop, judul, nomor `SPK-<nomor penawaran>`, para pihak, isi, dua blok tanda tangan kosong.
+- Ga ada perubahan rules (semua field di dokumen `quotes`/`invoices`/`settings` yang udah dicakup).
+- Flow `sell`: default diisi → kirim penawaran + SPK → isi SPK memuat klien, bisnis, total, DP/pelunasan, revisi → dua PDF (penawaran + SPK) dengan para pihak → tandai ditandatangani → disetujui → ganti nama kop → PDF penawaran tetap pakai nama lama.

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { deleteDoc, setDoc, updateDoc } from "firebase/firestore";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import {
-  Business, Invoice, InvoiceState, Service, addDays, balance, nextNumber, daysBetween, dpAmount, invoiceColor, invoiceState, invoiceText,
+  Business, Invoice, InvoiceState, Service, addDays, issuerOf, balance, nextNumber, daysBetween, dpAmount, invoiceColor, invoiceState, invoiceText,
   longDate, paid, rupiah, today, total, waLink,
 } from "@/lib/billing";
 import PrintSheet from "@/components/PrintSheet";
@@ -79,7 +79,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
   }
 
   async function copy(inv: Invoice) {
-    try { await navigator.clipboard.writeText(invoiceText(inv, business)); } catch { setFailed(inv.id); setTimeout(() => setFailed(""), 3000); return; }
+    try { await navigator.clipboard.writeText(invoiceText(inv, inv.issuer || business)); } catch { setFailed(inv.id); setTimeout(() => setFailed(""), 3000); return; }
     setCopied(inv.id);
     setTimeout(() => setCopied(""), 1800);
   }
@@ -98,6 +98,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
       quoteId: old?.quoteId || "", leadId: d.leadId, leadName: d.leadName.trim(), contact: d.contact.trim(), phone: d.phone.trim(),
       items: cleanItems(d.items), discount: d.discount, dpPercent: d.dpPercent, notes: d.notes.trim(),
       date: d.date, dueDate: d.dueDate || addDays(d.date, 7), payments: old?.payments || [],
+      issuer: old?.issuer || issuerOf(business),
       ...briefOf(d),
     };
     await setDoc(spaceDoc(space, "invoices", id), stamp(space, doc, old as { ownerUid?: string; ownerName?: string } | undefined));
@@ -257,7 +258,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
                   {st !== "Lunas" && (
                     <div className="sp-doc-main">
                       <button onClick={() => startPayment(inv)} style={{ ...chip, background: "#005eb0", color: "#fff", border: "none", fontWeight: 700 }}>+ Catat pembayaran</button>
-                      <button onClick={() => window.open(waLink(inv.phone, invoiceText(inv, business)), "_blank")} style={{ ...chip, background: "#25D366", color: WA_INK, border: "none", fontWeight: 700 }}>Tagih via WA</button>
+                      <button onClick={() => window.open(waLink(inv.phone, invoiceText(inv, inv.issuer || business)), "_blank")} style={{ ...chip, background: "#25D366", color: WA_INK, border: "none", fontWeight: 700 }}>Tagih via WA</button>
                     </div>
                   )}
                   <div className="sp-doc-tools">
@@ -296,7 +297,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
       )}
 
       {editing && <DocEditor kind="invoice" initial={editing} leads={leads} services={services} onSave={saveInvoice} onClose={() => setEditing(null)} />}
-      {printing && <PrintSheet kind="invoice" data={printing} business={business} onClose={() => setPrinting(null)} />}
+      {printing && <PrintSheet kind="invoice" data={printing} business={printing.issuer || business} frozen={!!printing.issuer} onClose={() => setPrinting(null)} />}
       {asking && (asking.n === undefined
         ? <ConfirmSheet title="Hapus invoice?" onConfirm={() => remove(asking.inv)} onClose={() => setAsking(null)}>
             <b>{asking.inv.number}</b> untuk {asking.inv.leadName || "klien"} hilang, bersama {asking.inv.payments?.length || 0} catatan pembayarannya. Ini ga bisa dibatalkan.

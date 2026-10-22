@@ -468,6 +468,9 @@ export const flows = [
         await page.locator("#biz-accountNo").fill("1234567");
         await page.locator("#biz-accountName").fill("Flow");
         await page.locator("#biz-footer").fill("DP mengunci jadwal.");
+        await page.locator("#biz-doc-dpWhen").fill("saat booking");
+        await page.locator("#biz-doc-finalWhen").fill("H-1 acara");
+        await page.locator("#biz-doc-revisions").fill("1x revisi minor");
         await page.getByRole("button", { name: "Simpan kop" }).click();
         await page.locator("#biz-name").waitFor({ state: "detached" });
       });
@@ -487,10 +490,50 @@ export const flows = [
         await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
         await expectText(page, "Rp 1.500.000");
       });
-      await t.step("mark sent, then accepted", async () => {
-        await page.getByRole("button", { name: "Tandai terkirim" }).click();
+      await t.step("send the quote with its SPK, filled from the quote and the defaults", async () => {
+        await page.getByRole("button", { name: "Kirim penawaran" }).click();
+        const sheet = page.getByRole("dialog", { name: "Kirim penawaran" });
+        await sheet.getByRole("checkbox", { name: /Perjanjian Kerja/ }).waitFor();
+        await sheet.getByText("Lihat & ubah isi Perjanjian Kerja").click();
+        const body = await sheet.locator("#spk-body").inputValue();
+        for (const want of ["Bakso Flow", "Studio Flow", "Rp 1.500.000", "saat booking", "H-1 acara", "1x revisi minor"]) if (!body.includes(want)) throw new Error(`SPK text is missing "${want}"`);
+        const downloads = [];
+        page.on("download", d => downloads.push(d));
+        await sheet.getByRole("button", { name: "Bagikan PDF (2)" }).click();
+        await sheet.waitFor({ state: "detached" });
+        for (let i = 0; i < 100 && downloads.length < 2; i++) await page.waitForTimeout(100);
+        if (downloads.length !== 2) throw new Error(`expected 2 PDFs (quote + SPK), got ${downloads.length}`);
+        const spk = downloads.find(d => d.suggestedFilename().startsWith("SPK-"));
+        if (!spk) throw new Error(`files: ${downloads.map(d => d.suggestedFilename()).join(", ")}`);
+        const { readFileSync } = await import("node:fs");
+        const pdf = readFileSync(await spk.path()).toString("latin1");
+        for (const want of ["PERJANJIAN KERJA", "Bakso Flow", "PIHAK KEDUA", "Pihak Pertama"]) if (!pdf.includes(want)) throw new Error(`SPK PDF is missing "${want}"`);
+        await page.getByText("Perjanjian Kerja · dikirim, belum ditandatangani").waitFor();
+        await page.getByText("Terkirim").first().waitFor();
+      });
+      await t.step("signing is marked by hand, then the quote is accepted", async () => {
+        await page.getByRole("button", { name: "Tandai SPK ditandatangani" }).click();
+        await page.getByText(/Perjanjian Kerja · ditandatangani/).waitFor();
         await page.getByRole("button", { name: "✓ Disetujui" }).click();
         await page.getByRole("button", { name: "Buat invoice →" }).waitFor();
+      });
+      await t.step("a sent quote keeps the letterhead it went out with", async () => {
+        await go(page, "Jualan", "Paket");
+        await page.getByRole("button", { name: "Kop & logo" }).click();
+        await page.locator("#biz-name").fill("Studio Baru");
+        await page.getByRole("button", { name: "Simpan kop" }).click();
+        await page.locator("#biz-name").waitFor({ state: "detached" });
+        await go(page, "Jualan", "Penawaran");
+        await page.getByRole("button", { name: "PDF", exact: true }).first().click();
+        await page.locator(".print-root").getByText("Studio Flow").first().waitFor();
+        await page.getByText(/Kop dan syarat di dokumen ini dikunci/).waitFor();
+        await modal(page).getByRole("button", { name: "Tutup", exact: true }).click();
+        await go(page, "Jualan", "Paket");
+        await page.getByRole("button", { name: "Kop & logo" }).click();
+        await page.locator("#biz-name").fill("Studio Flow");
+        await page.getByRole("button", { name: "Simpan kop" }).click();
+        await page.locator("#biz-name").waitFor({ state: "detached" });
+        await go(page, "Jualan", "Penawaran");
       });
       await t.step("accepting closed the lead", async () => { await go(page, "Jualan", "Leads"); await page.locator(".lead-row", { hasText: "Bakso Flow" }).getByText("Closed").first().waitFor(); });
       await t.step("raise the invoice", async () => {

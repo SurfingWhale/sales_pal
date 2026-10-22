@@ -22,7 +22,7 @@ export function safe(s: string): string {
 }
 
 // Any logo (PNG, WEBP, SVG data URL) as a PNG the PDF can hold, with its size.
-async function pngOf(src: string): Promise<{ url: string; w: number; h: number } | null> {
+export async function pngOf(src: string): Promise<{ url: string; w: number; h: number } | null> {
   try {
     const img = new Image();
     img.src = src;
@@ -204,5 +204,28 @@ export async function sharePdf(blob: Blob, name: string): Promise<"shared" | "do
   a.href = url; a.download = name; a.rel = "noopener";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  return "downloaded";
+}
+
+// Several PDFs in one share (a quote with its agreement): one share sheet on
+// phones, one download per file elsewhere.
+export async function sharePdfs(files: { blob: Blob; name: string }[]): Promise<"shared" | "downloaded" | "cancelled"> {
+  const list = files.map(f => new File([f.blob], f.name, { type: "application/pdf" }));
+  const nav = navigator as Navigator & { canShare?: (x: { files: File[] }) => boolean };
+  if (nav.share && nav.canShare?.({ files: list })) {
+    try {
+      await nav.share({ files: list, title: list[0]?.name });
+      return "shared";
+    } catch (e) {
+      if ((e as Error).name === "AbortError") return "cancelled";
+    }
+  }
+  for (const f of list) {
+    const url = URL.createObjectURL(f);
+    const a = document.createElement("a");
+    a.href = url; a.download = f.name; a.rel = "noopener";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }
   return "downloaded";
 }
