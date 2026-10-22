@@ -39,7 +39,9 @@ export function leadIdFor(l: InboundLead, docId: string): string {
 }
 
 function today(): string {
-  return new Date().toISOString().split("T")[0];
+  // The local day: toISOString() is UTC, a day behind before 07.00 WIB.
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export function leadFromInbound(l: InboundLead): LeadFields {

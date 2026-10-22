@@ -190,7 +190,10 @@ export interface MonthNumbers {
   hasData: boolean;
 }
 
-export function computeMonth(month: string, deals: Deal[], posts: Post[], threshold = 5_000_000, today = new Date().toISOString().slice(0, 10)): MonthNumbers {
+// The local day (toISOString() is UTC, a day behind before 07.00 WIB).
+const localDay = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+
+export function computeMonth(month: string, deals: Deal[], posts: Post[], threshold = 5_000_000, today = localDay()): MonthNumbers {
   const paid = deals.filter(d => d.paidAt && monthOf(d.paidAt) === month);
   const amounts = paid.map(d => d.paidAmount || 0);
   const revenue = amounts.reduce((a, b) => a + b, 0);

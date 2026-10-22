@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { setDoc } from "firebase/firestore";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
+import { today } from "@/lib/billing";
 import { FormNote, useDiscard, useSave } from "@/components/FormGuard";
 import { badge, btnMuted, btnPrimary, card, font, heading, ink, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
@@ -26,7 +27,8 @@ const STATUS: [string, string, string][] = [
 ];
 const statusOf = (s: string) => STATUS.find(x => x[0] === s) || [s, s, "#64748b"];
 const icon = (type: string) => (type === "Email" ? "📧" : type === "DM Instagram" ? "📸" : type === "Telepon" ? "📞" : "💬");
-const day = () => new Date().toISOString().split("T")[0];
+// The local day, not UTC: before 07.00 WIB the UTC date is still yesterday.
+const day = () => today();
 
 function Header({ title, sub, action, onAdd }: { title: string; sub: string; action: string; onAdd: () => void }) {
   return (
