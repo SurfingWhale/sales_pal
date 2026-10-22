@@ -1,6 +1,6 @@
 # PRD-011 — Guild sebagai identitas bisnis, dan alur dokumen jualan
 
-- **Status:** Disetujui owner 22 Okt ("SPK dll buat lebih mudah digunakan ketika mau mengirimkan penawaran"). Tahap 1 dibangun (§9). Sisanya ikut urutan §5.
+- **Status:** Disetujui owner 22 Okt ("SPK dll buat lebih mudah digunakan ketika mau mengirimkan penawaran"). Tahap 1 (§9) dan tahap 2 (§10) dibangun. Sisanya ikut urutan §5.
 - **Tanggal:** 2026-10-22
 - **Konteks:** Owner ngejalanin BeUntamed (fotografi, punya nama brand dan logo PNG) dan mau Guild jadi lapisan identitas + konfigurasi bisnis yang beneran, bukan sekadar field profil. SalesPal juga bakal dipakai bisnis lain, jadi BeUntamed harus jadi *satu bisnis yang pakai SalesPal*, bukan model bawaan aplikasi. Permintaan kedua: alur dokumen jualan (penawaran, perjanjian kerja, invoice, DP/termin, NDA, creative brief) buat freelancer kreatif.
 - **Terkait:** PRD-005 (Report Klien), PRD-007 (Guild + ruang kerja), PRD-009 (Hunting), PRD-010 (standar native).
@@ -142,3 +142,16 @@ Owner minta SPK dkk. gampang dipakai **pas ngirim penawaran**, jadi Perjanjian K
 - PDF SPK/NDA (`lib/agreements.ts`): kop, judul, nomor `SPK-<nomor penawaran>`, para pihak, isi, dua blok tanda tangan kosong.
 - Ga ada perubahan rules (semua field di dokumen `quotes`/`invoices`/`settings` yang udah dicakup).
 - Flow `sell`: default diisi → kirim penawaran + SPK → isi SPK memuat klien, bisnis, total, DP/pelunasan, revisi → dua PDF (penawaran + SPK) dengan para pihak → tandai ditandatangani → disetujui → ganti nama kop → PDF penawaran tetap pakai nama lama.
+
+## 10. Tahap 2 — dibangun 22 Okt
+
+Dibandingin sama riset alur dokumen kreatif, tiga hal di tahap 1 masih nyalahin aturan. Ini yang dibenerin, plus termin dan status invoice:
+- **Kirim ≠ kebuka.** Abis Bagikan PDF (atau unduh) dan abis buka WA, sheet nanya **"Udah kekirim ke {klien}?"**. Baru setelah **Udah, tandai terkirim** penawaran jadi Terkirim dan kop + syarat dikunci. **Belum, kembali** ga mengubah apa-apa.
+- **SPK ga wajib.** Bawaannya ga dicentang; nyala sendiri kalau **Sertakan SPK otomatis** di Default dokumen dicentang, atau penawaran itu udah punya SPK.
+- **Yang disetujui dikunci.** Penawaran Disetujui ga punya Edit lagi, gantinya **Revisi**: bikin penawaran baru `<nomor>-r1`, `-r2`, … dengan "Revisi dari …". Pas revisi disetujui, yang lama jadi **Digantikan** ("Digantikan … (yang berlaku)"). Tagihan yang udah dibuat di versi lama ikut dihitung di revisinya, jadi termin ga ketagih dua kali.
+- **Jadwal pembayaran bebas.** Penawaran punya daftar termin (`schedule: { label, percent, when? }[]`, `+ Termin`, total wajib 100%). Tanpa daftar, diturunkan dari DP % lama (DP + Pelunasan, atau Pembayaran penuh). Nominal termin terakhir ngambil sisa pembulatan. Tampil di PDF penawaran (Jadwal pembayaran), teks WA, dan `{pembayaran}` di SPK.
+- **Invoice per termin.** Kartu penawaran yang disetujui punya **Buat invoice {termin} {persen}% →** buat termin berikutnya yang belum ditagih (satu termin = satu invoice berisi seluruh item). Ringkasan **Disepakati · Ditagih · Diterima · Sisa** di kartu penawaran.
+- **Status terbit invoice:** `issue: Draft | Diterbitkan | Dibatalkan` (kosong = diterbitkan, buat data lama). Invoice baru mulai **Draft** dan ga dihitung di Belum tertagih, laporan, atau ringkasan harian. **Terbitkan**, **Tagih via WA**, atau mencatat pembayaran menerbitkannya. **Batalkan** (cuma kalau belum ada pembayaran) nyimpen invoice sebagai arsip di luar hitungan. Filter: Draft dan Dibatalkan.
+- **Field penawaran:** **Pajak (%)** (dihitung dari subtotal − diskon; default di Kop & logo), **Waktu pengerjaan**, **Di luar scope** (satu per baris). Ketiganya masuk PDF dan teks WA.
+- Ga ada perubahan rules.
+- Flow `sell`: SPK otomatis dinyalain → kirim + konfirmasi → **Buat invoice DP 50%** → invoice Draft → pembayaran menerbitkan dan melunasi termin DP → ringkasan uang di penawaran → Revisi `-r1` → terkirim → disetujui → yang lama Digantikan, tombol berikutnya **Pelunasan 50%** (DP ga ditawarin lagi).
