@@ -807,11 +807,13 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         .sp-sub-btn { flex-shrink: 0; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--app-line-strong); background: transparent; color: var(--app-ink-2); font: 500 13px 'Plus Jakarta Sans', sans-serif; cursor: pointer; white-space: nowrap; }
         .sp-sub-btn.is-on { background: var(--app-text); border-color: var(--app-text); color: var(--app-card); }
         @media (max-width: 767px) {
-          .sp-top-in { padding: 0 14px 0 20px; height: 60px; gap: 8px; }
+          .sp-top-in { padding: 0 8px 0 16px; height: 52px; gap: 4px; }
           .sp-brand-word { font-size: 17px !important; }
-          .sp-nav { position: fixed; z-index: 60; left: 14px; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); height: 64px; padding: 4px; border-radius: 32px; margin: 0; gap: 0; }
-          .sp-nav-btn { flex: 1; min-width: 0; height: auto; flex-direction: column; justify-content: center; gap: 3px; padding: 0; border-radius: 28px; font-size: 12px; }
-          .sp-nav-btn.is-on { background: var(--tab-on); box-shadow: none; color: var(--brand-text); }
+          /* An iOS tab bar: docked to the bottom edge, 50pt over the home indicator. */
+          .sp-nav { position: fixed; z-index: 60; left: 0; right: 0; bottom: 0; height: calc(50px + env(safe-area-inset-bottom, 0px)); padding: 0 4px env(safe-area-inset-bottom, 0px); border-radius: 0; margin: 0; gap: 0; box-shadow: inset 0 0.5px 0 var(--app-line-strong); }
+          .sp-nav::before { display: none; }
+          .sp-nav-btn { flex: 1; min-width: 0; height: 50px; flex-direction: column; justify-content: center; gap: 2px; padding: 0; border-radius: 0; font-size: 11px; font-weight: 500; }
+          .sp-nav-btn.is-on { background: transparent; box-shadow: none; color: var(--brand-text); font-weight: 600; }
           .sp-nav-icon { display: block; }
           .sp-nav-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
           .sp-nav-short { display: inline; }
@@ -823,12 +825,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           /* 40px pills, 44px to the finger: the hit area reaches past the pill. */
           .sp-sub-btn { position: relative; height: 40px; }
           .sp-sub-btn::after { content: ""; position: absolute; left: 0; right: 0; top: -2px; bottom: -2px; }
-          .sp-main { padding: 16px 16px calc(110px + env(safe-area-inset-bottom, 0px)) !important; }
-          /* Quick Pitch docks beside the tab bar (like iOS 26's accessory
-             button), so it never sits on top of a card. */
-          .sp-nav { right: 88px; }
-          .sp-fab { right: 14px !important; bottom: calc(14px + env(safe-area-inset-bottom, 0px)) !important; width: 64px !important; height: 64px !important; }
-          .sp-fab.is-tucked { transform: none !important; opacity: 1 !important; visibility: visible !important; pointer-events: auto !important; }
+          /* Room for the tab bar and Quick Pitch above it: the page always ends clear. */
+          .sp-main { padding: 16px 16px calc(124px + env(safe-area-inset-bottom, 0px)) !important; }
+          /* Quick Pitch sits just above the tab bar and steps aside while scrolling down. */
+          .sp-fab { right: 16px !important; bottom: calc(62px + env(safe-area-inset-bottom, 0px)) !important; width: 48px !important; height: 48px !important; font-size: 20px !important; box-shadow: 0 4px 12px rgba(0,94,176,0.28) !important; }
           /* Filter rows stay one line and slide sideways, bleeding to the screen edge. */
           .sp-chiprow { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding-inline: 16px; scroll-padding-inline: 16px; }
           .sp-chiprow::-webkit-scrollbar { display: none; }
@@ -917,7 +917,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               {todo.some(t => t.when <= now) && <span aria-hidden="true" style={{ position: "absolute", top: 10, right: 11, width: 8, height: 8, borderRadius: "50%", background: "#005eb0", boxShadow: "0 0 0 2px var(--app-bg)" }} />}
             </button>
             <button className="sp-iconbtn" onClick={() => { setShowProfile(true); setUpdateInfo(null); }} aria-label="Profil dan pengaturan" title="Profil & pengaturan">
-              <MeAvatar avatar={myAvatar} name={user.displayName || user.email || "U"} size={34} />
+              <MeAvatar avatar={myAvatar} name={user.displayName || user.email || "U"} size={32} />
             </button>
           </div>
         </div>
