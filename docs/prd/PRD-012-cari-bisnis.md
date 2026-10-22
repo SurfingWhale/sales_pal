@@ -73,10 +73,37 @@ Kenapa Places API dan bukan scraping: fitur yang jalan di Vercel dengan akun Goo
 - **Tes:** flow `cari bisnis` (respon Google di-mock): titik lemah muncul, pesan berisi nama + titik lemah, simpan sekali (pencarian ulang menandai "udah ada di Leads"), template punya kolomnya, template yang diisi bisa di-import balik. Audit HIG 0.
 
 ### Yang harus owner lakukan biar pencarian Google jalan
-1. Google Cloud Console → project → **APIs & Services → Library → Places API (New) → Enable** (butuh billing aktif).
-2. **Credentials → Create API key**, batasi ke **Places API (New)** saja.
-3. Vercel → project SalesPal → Settings → Environment Variables: `GOOGLE_PLACES_API_KEY` = key tadi (Production). Opsional `PLACES_DAILY_LIMIT`.
-4. Redeploy. Sebelum key ada, tombol Cari ngasih tahu dan Import Excel tetap jalan.
+
+Satu key dipakai buat dua hal: **Cari bisnis** (`/api/places`) dan **Cari alamat** lokasi lead (`/api/geocode`, PRD-013). Key cuma disimpan di server Vercel, ga pernah sampai ke browser.
+
+1. **Bikin project.** Buka https://console.cloud.google.com/projectcreate → nama mis. `salespal` → Create. Pastikan project itu yang kepilih di atas.
+2. **Nyalain billing.** https://console.cloud.google.com/billing → Link a billing account (kartu kredit/debit). Wajib walau pemakaiannya masih di jatah gratis bulanan.
+3. **Aktifin API-nya.** https://console.cloud.google.com/apis/library/places.googleapis.com → pastiin judulnya **Places API (New)**, bukan "Places API" lama → **Enable**.
+4. **Bikin key.** https://console.cloud.google.com/apis/credentials → **Create credentials → API key** → salin.
+5. **Kunci key-nya** (tombol Edit API key di halaman yang sama):
+   - *API restrictions* → **Restrict key** → centang **Places API (New)** aja → Save.
+   - *Application restrictions* → biarin **None**: key dipanggil dari server Vercel yang IP-nya ganti-ganti, bukan dari browser.
+6. **Pasang rem biaya:**
+   - Kuota: https://console.cloud.google.com/apis/api/places.googleapis.com/quotas → *SearchText requests per day* → mis. **300**.
+   - Budget: Billing → **Budgets & alerts** → Create budget mis. **Rp 100.000/bulan**, alert email 50% dan 90%.
+   - Di app sendiri udah ada batas per user per hari: `PLACES_DAILY_LIMIT` (bawaan 30 pencarian) dan `GEOCODE_DAILY_LIMIT` (bawaan 100 cari alamat).
+7. **Masukin ke Vercel.** Vercel → project SalesPal → **Settings → Environment Variables** → Add:
+   - `GOOGLE_PLACES_API_KEY` = key tadi, centang **Production** dan **Preview**.
+   - Opsional: `PLACES_DAILY_LIMIT`, `GEOCODE_DAILY_LIMIT`.
+8. **Redeploy.** Vercel → Deployments → deployment terbaru → ⋯ → **Redeploy** (env baru cuma kebaca di build berikutnya).
+9. **Tes.** Beranda → Cari calon klien → Cari bisnis → "coffee shop Jakarta Selatan". Terus buka satu lead → Lokasi → Atur lokasi → Cari.
+
+**Biaya:** Cari bisnis minta ulasan, jadi kena SKU *Text Search Enterprise + Atmosphere*; Cari alamat kena SKU *Text Search Pro*. Google ngasih jatah gratis per SKU tiap bulan (sejak Maret 2025 bentuknya kuota gratis per SKU, bukan kredit $200). Cek angka terbaru di halaman pricing Google Maps Platform sebelum dipakai banyak.
+
+**Kalau error:**
+
+| Pesan di app | Artinya | Benerin |
+|---|---|---|
+| "…GOOGLE_PLACES_API_KEY belum diisi di server…" | Env belum ada di deployment ini | Langkah 7–8 (jangan lupa Redeploy) |
+| "Google Maps nolak permintaan: …has not been used in project… / disabled" | API belum di-enable, atau enable-nya belum nyebar | Langkah 3, tunggu ±5 menit |
+| "…API key not valid…" | Salah salin key, atau key dibatasi ke API lain | Salin ulang; cek langkah 5 |
+| "…billing…" | Billing belum ke-link | Langkah 2 |
+| "Batas pencarian hari ini (30) udah habis" | Batas per user di app | Naikin `PLACES_DAILY_LIMIT` |
 
 ## 7. Fase berikutnya
 

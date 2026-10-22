@@ -836,10 +836,12 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           .sp-space { padding: 0 10px 0 12px; font-size: 12px; }
           .sp-space select { max-width: 132px; }
           .sp-space { min-width: 0; }
-          .sp-subnav { padding: 6px 16px 4px; }
+          /* Sub-tabs: one segmented control, every tab in view (no sideways scroll). */
+          .sp-subnav { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0; margin: 4px 16px 0; padding: 0 2px; overflow: visible; }
+          .sp-subnav::before { content: ""; position: absolute; inset: 4px 0; border-radius: 10px; background: color-mix(in srgb, var(--app-text) 7%, transparent); }
           /* 40px pills, 44px to the finger: the hit area reaches past the pill. */
-          .sp-sub-btn { position: relative; height: 40px; }
-          .sp-sub-btn::after { content: ""; position: absolute; left: 0; right: 0; top: -2px; bottom: -2px; }
+          .sp-sub-btn { position: relative; height: 44px; min-width: 0; padding: 0 4px; border: 0 solid transparent; border-block-width: 6px; background: transparent; background-clip: padding-box; border-radius: 14px; font-size: 13px; color: var(--app-ink-2); overflow: hidden; text-overflow: ellipsis; }
+          .sp-sub-btn.is-on { background-color: var(--thumb); border-color: transparent; color: var(--app-text); font-weight: 600; }
           /* Room for the tab bar and Quick Pitch above it: the page always ends clear. */
           .sp-main { padding: 16px 16px calc(124px + env(safe-area-inset-bottom, 0px)) !important; }
           /* Quick Pitch sits just above the tab bar and steps aside while scrolling down. */
@@ -1004,8 +1006,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             )}
             {/* Phone: title with Tambah lead, then search, then status + Import.
                 Wide: title left, everything in one row on the right. */}
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: wide ? 16 : 12 }}>
-              <h1 style={{ margin: 0, fontSize: wide ? 34 : 30, lineHeight: 1.1, fontWeight: 600, letterSpacing: "-0.025em" }}>Leads <span className="tabnum" style={{ fontSize: 20, fontWeight: 500, color: "var(--app-muted)", letterSpacing: 0 }}>{leads.length}</span></h1>
+            <div className="sp-leads-head" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: wide ? 16 : 12 }}>
+              <h1 style={{ margin: 0, fontSize: wide ? 34 : 26, lineHeight: 1.1, fontWeight: 600, letterSpacing: "-0.025em" }}>Leads <span className="tabnum" style={{ fontSize: 20, fontWeight: 500, color: "var(--app-muted)", letterSpacing: 0 }}>{leads.length}</span></h1>
               {!wide && <button onClick={() => setShowAddLead(true)} style={{ display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}><Icon name="plus" stroke={1.8} />Tambah lead</button>}
               <div style={{ display: "flex", gap: 8, flexWrap: wide ? "nowrap" : "wrap", alignItems: "center", width: wide ? "auto" : "100%" }}>
                 <div style={{ position: "relative", flex: wide ? "0 0 auto" : "1 1 100%" }}>
@@ -1029,10 +1031,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             </div>
 
             {leads.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 12 }}>
+              <div className="sp-leads-head" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 12 }}>
                 {dueLeads.length > 0 && (
                   <button onClick={() => setFuRun(dueLeads)} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                    ▶ Follow-up beruntun <span className="tabnum" style={{ background: "rgba(0,0,0,0.28)", borderRadius: 999, padding: "1px 8px" }}>{dueLeads.length}</span>
+                    <Icon name="play" size={14} />Follow-up beruntun <span className="tabnum" style={{ background: "rgba(0,0,0,0.28)", borderRadius: 999, padding: "1px 8px" }}>{dueLeads.length}</span>
                   </button>
                 )}
                 <div role="group" aria-label="Tampilan cepat" className="sp-chiprow" style={{ display: "flex", gap: 8, overflowX: "auto", flex: "1 1 260px", minWidth: 0 }}>

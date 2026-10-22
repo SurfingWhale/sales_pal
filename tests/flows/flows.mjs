@@ -672,7 +672,7 @@ export const flows = [
         await go(page, "Jualan", "Invoice");
       });
       await t.step("money this month opens to the payments behind it", async () => {
-        await page.getByRole("button", { name: /^Rp 750\.000 Masuk / }).click();
+        await page.getByRole("button", { name: /^Rp 750(\.000| rb) Masuk / }).click();
         await page.getByRole("region", { name: /^Uang masuk/ }).getByText("Bakso Flow").waitFor();
       });
       await t.step("the PDF carries the letterhead and the terms", async () => {

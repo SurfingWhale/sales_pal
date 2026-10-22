@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useState } from "react";
 import { setDoc, deleteDoc } from "firebase/firestore";
 import { canEditCatalog, spaceDoc, useSpace } from "@/lib/space";
@@ -55,7 +56,7 @@ export default function Services({ services, business }: { services: Service[]; 
 
   return (
     <div className="sp-sell">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+      <div className="sp-page-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
           <div style={heading}>Paket & Harga</div>
           <div style={subheading}>Daftar jasa yang kamu jual. Dipakai buat nyusun penawaran.</div>
@@ -86,7 +87,7 @@ export default function Services({ services, business }: { services: Service[]; 
 
       {services.length === 0 ? (
         <div style={{ ...card, padding: "56px 24px", textAlign: "center" }}>
-          <div style={{ fontSize: 34, marginBottom: 12 }}>🏷️</div>
+          <div aria-hidden="true" style={{ width: 52, height: 52, margin: "0 auto 12px", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "color-mix(in srgb, #005eb0 10%, transparent)", color: "var(--brand-text)" }}><Icon name="receipt" size={26} /></div>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ada paket</div>
           <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>{canEdit ? "Tulis paket jasa kamu sekali, pakai terus di tiap penawaran." : "Paket tim diatur Leader atau Officer guild."}</div>
           {canEdit && <button onClick={() => edit(BLANK)} style={btnPrimary}>+ Tambah paket pertama</button>}
@@ -98,8 +99,8 @@ export default function Services({ services, business }: { services: Service[]; 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 12, color: "var(--app-muted)", letterSpacing: "1px", fontWeight: 600 }}>{s.category.toUpperCase()}</span>
                 {canEdit && <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={() => edit({ ...s, price: String(s.price) })} aria-label={`Edit ${s.name}`} style={{ ...chip, color: "var(--app-text)" }}>✎ Edit</button>
-                  <button onClick={() => setDeleting(s)} aria-label={`Hapus ${s.name}`} title="Hapus" style={{ ...chip, minWidth: 44, borderColor: "#ff444440", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}>🗑</button>
+                  <button onClick={() => edit({ ...s, price: String(s.price) })} aria-label={`Edit ${s.name}`} style={{ ...chip, color: "var(--app-text)", display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="pencil" size={14} />Edit</button>
+                  <button onClick={() => setDeleting(s)} aria-label={`Hapus ${s.name}`} title="Hapus" style={{ ...chip, minWidth: 44, borderColor: "#ff444440", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Icon name="trash" size={16} /></button>
                 </div>}
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, fontFamily: font }}>{s.name}</div>

@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useState } from "react";
 import { Invoice, Quote, rupiah, today, total } from "@/lib/billing";
 import { fullDay } from "@/lib/when";
@@ -39,7 +40,7 @@ export default function OccupancyCalendar({ quotes, invoices }: { quotes: Quote[
     <section aria-label="Kalender okupansi" style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 14, marginBottom: 16, overflow: "hidden" }}>
       <button onClick={() => setOpen(!open)} aria-expanded={open}
         style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 56, padding: "10px 16px", border: 0, background: "transparent", color: "var(--app-text)", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
-        <span aria-hidden="true" style={{ fontSize: 20 }}>📅</span>
+        <span aria-hidden="true" style={{ width: 36, height: 36, flexShrink: 0, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "color-mix(in srgb, #ff9900 14%, transparent)", color: "color-mix(in srgb, #ff9900 55%, var(--app-text))" }}><Icon name="calendar" size={18} /></span>
         <span style={{ flex: 1, minWidth: 0 }}>
           <span style={{ display: "block", fontSize: 14, fontWeight: 700 }}>Kalender {label}</span>
           <span className="tabnum" style={{ display: "block", fontSize: 13, color: "var(--app-sub)" }}>
