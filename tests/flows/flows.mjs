@@ -860,6 +860,15 @@ export const flows = [
         await t.audit("Beranda → Peta 3D with a lead card (big account)");
         await card.getByRole("button", { name: "Tutup kartu lead" }).click();
         await map.getByRole("button", { name: /belum ada lokasinya/ }).waitFor();
+        // Lokasi saya: a blue dot where the phone is, and how far each lead is.
+        await page.context().grantPermissions(["geolocation"]);
+        await page.context().setGeolocation({ latitude: -6.19, longitude: 106.83 });
+        await map.getByRole("button", { name: "Tampilkan lokasi saya" }).click();
+        await map.locator(".sp-me").waitFor();
+        await map.locator(".sp-pin").first().dispatchEvent("click");
+        await card.getByText(/dari kamu/).waitFor();
+        await t.audit("Beranda → Peta 3D with my location (big account)");
+        await card.getByRole("button", { name: "Tutup kartu lead" }).click();
         await map.getByRole("button", { name: "Potensi" }).click();
       });
       await t.step("Perlu ditindak is a bounded queue: ten cards, the rest in a sheet that scrolls itself", async () => {

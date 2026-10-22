@@ -5,7 +5,7 @@ import type { Map as MlMap, Marker as MlMarker } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import Icon from "@/components/Icon";
 import { animalSrc } from "@/components/AnimalArt";
-import { HOME, LeadGeo, routeUrl } from "@/lib/geo";
+import { HOME, LeadGeo, distanceKm, distanceText, routeUrl } from "@/lib/geo";
 import { waLink } from "@/lib/billing";
 import { archetypes } from "@/lib/salespal-data";
 
@@ -112,6 +112,17 @@ const css = `
 .sp-geo-bar.hot > span { background: #005eb0; }
 .sp-geo-acts { display: flex; gap: 8px; margin-top: 12px; }
 .sp-geo-acts > * { flex: 1; height: 40px; min-height: 44px; border: 0; border-block: 2px solid transparent; background-clip: padding-box; border-radius: 14px; font: 600 13px 'Plus Jakarta Sans', sans-serif; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; cursor: pointer; }
+/* You are here: a live blue dot, like the Maps apps. */
+.sp-me { width: 22px; height: 22px; pointer-events: none; }
+.sp-me::before { content: ""; position: absolute; inset: -9px; border-radius: 50%; background: rgba(26,115,232,0.22); animation: sp-me-pulse 2.2s ease-out infinite; }
+.sp-me-dot { position: absolute; inset: 3px; border-radius: 50%; background: #1a73e8; box-shadow: 0 0 0 3px #fff, 0 2px 6px rgba(0,0,0,0.35); }
+@keyframes sp-me-pulse { from { transform: scale(.45); opacity: 1; } to { transform: scale(1.35); opacity: 0; } }
+.sp-geo-locate { position: absolute; z-index: 3; right: 12px; bottom: 30px; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--app-text); background: var(--glass-strong); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); box-shadow: inset 0 0 0 0.5px var(--app-line-strong), 0 4px 12px rgba(0,0,0,0.18); }
+.sp-geo-locate.on { color: #1a73e8; }
+.sp-geo-locate[aria-busy="true"] svg { animation: sp-spin 1s linear infinite; }
+@keyframes sp-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .sp-me::before { animation: none; opacity: .5; } .sp-geo-locate svg { animation: none !important; } }
+.sp-geo-msg { position: absolute; z-index: 3; right: 64px; bottom: 32px; max-width: min(260px, calc(100% - 88px)); margin: 0; padding: 8px 12px; border-radius: 12px; font-size: 12px; line-height: 1.4; color: var(--app-text); background: var(--glass-strong); box-shadow: inset 0 0 0 0.5px var(--app-line-strong), 0 4px 12px rgba(0,0,0,0.15); }
 .sp-geo-credit { position: absolute; z-index: 2; right: 8px; bottom: 4px; margin: 0; font-size: 10px; color: #3d444c; background: rgba(255,255,255,0.75); padding: 1px 6px; border-radius: 6px; }
 .sp-geo-credit a { color: inherit; }
 .sp-geo-cross { position: absolute; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, -100%); pointer-events: none; color: #c62828; filter: drop-shadow(0 3px 4px rgba(0,0,0,0.35)); }
@@ -135,6 +146,17 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
   const [sel, setSel] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const selRef = useRef(setSel);
+  const mlRef = useRef<typeof import("maplibre-gl") | null>(null);
+  const leadsRef = useRef(leads);
+  leadsRef.current = leads;
+  // The view is fitted once; later data (a lead edited, a new one) never yanks it back.
+  const fitted = useRef(false);
+  const autoTried = useRef(false);
+  const meMarker = useRef<MlMarker | null>(null);
+  const watch = useRef<number | null>(null);
+  const [me, setMe] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [geoMsg, setGeoMsg] = useState("");
 
   // One map for the component's life.
   useEffect(() => {
@@ -143,16 +165,71 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
       if (!box.current) return;
       try {
         const first = leads[0]?.geo;
-        const { map } = await makeMap(box.current, first ? [first.lng, first.lat] : HOME, first ? 13 : 11, tilt);
+        const { ml, map } = await makeMap(box.current, first ? [first.lng, first.lat] : HOME, first ? 13 : 11, tilt);
         if (gone) { map.remove(); return; }
+        mlRef.current = ml;
         mapRef.current = map;
         map.on("click", () => selRef.current(null));
         map.on("moveend", () => declutter(markers.current.map(m => m.getElement())));
       } catch { if (!gone) setFailed(true); }
     })();
-    return () => { gone = true; markers.current.forEach(m => m.remove()); mapRef.current?.remove(); mapRef.current = null; };
+    return () => {
+      gone = true;
+      if (watch.current != null) navigator.geolocation.clearWatch(watch.current);
+      meMarker.current?.remove();
+      markers.current.forEach(m => m.remove()); mapRef.current?.remove(); mapRef.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!geoMsg) return;
+    const t = setTimeout(() => setGeoMsg(""), 6000);
+    return () => clearTimeout(t);
+  }, [geoMsg]);
+
+  // The blue dot follows the phone; the view moves only when asked.
+  function showMe(p: { lat: number; lng: number }) {
+    setMe(p);
+    const map = mapRef.current, ml = mlRef.current;
+    if (!map || !ml) return;
+    if (meMarker.current) { meMarker.current.setLngLat([p.lng, p.lat]); return; }
+    const el = document.createElement("span");
+    el.className = "sp-me";
+    el.setAttribute("aria-hidden", "true");
+    el.innerHTML = '<span class="sp-me-dot"></span>';
+    meMarker.current = new ml.Marker({ element: el, anchor: "center" }).setLngLat([p.lng, p.lat]).addTo(map);
+  }
+
+  // You and the leads nearest to you, in one view.
+  function frameNear(p: { lat: number; lng: number }) {
+    const map = mapRef.current, ml = mlRef.current;
+    if (!map || !ml) return;
+    fitted.current = true;
+    const near = [...leadsRef.current].sort((a, b) => distanceKm(p, a.geo) - distanceKm(p, b.geo)).slice(0, 6);
+    const b = new ml.LngLatBounds([p.lng, p.lat], [p.lng, p.lat]);
+    near.forEach(l => b.extend([l.geo.lng, l.geo.lat]));
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    map.fitBounds(b, { padding: 72, maxZoom: 15, duration: still ? 0 : 900, pitch: tilt ? 55 : 0, bearing: tilt ? -17 : 0 });
+  }
+
+  function locate(frame: boolean) {
+    if (!("geolocation" in navigator)) { setGeoMsg("Browser ini ga bisa baca lokasi."); return; }
+    setLocating(true);
+    setGeoMsg("");
+    navigator.geolocation.getCurrentPosition(pos => {
+      const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setLocating(false);
+      showMe(p);
+      if (frame) frameNear(p);
+      if (watch.current == null) {
+        watch.current = navigator.geolocation.watchPosition(q => showMe({ lat: q.coords.latitude, lng: q.coords.longitude }), () => {}, { enableHighAccuracy: true, maximumAge: 15000 });
+      }
+    }, err => {
+      setLocating(false);
+      setGeoMsg(err.code === 1 ? "Izin lokasi ditolak. Nyalain di pengaturan browser, lalu tap lagi." : "Lokasi belum kebaca. Coba lagi sebentar.");
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+  }
 
   // Pins follow the data; the view fits them once they arrive.
   useEffect(() => {
@@ -193,12 +270,23 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
         el.addEventListener("click", e => { e.stopPropagation(); selRef.current(l.id); });
         return new ml.Marker({ element: el, anchor: "bottom" }).setLngLat([l.geo.lng, l.geo.lat]).addTo(map);
       });
-      if (leads.length > 1) {
-        const b = new ml.LngLatBounds();
-        leads.forEach(l => b.extend([l.geo.lng, l.geo.lat]));
-        map.fitBounds(b, { padding: 64, maxZoom: 15, duration: 0, pitch: tilt ? 55 : 0, bearing: tilt ? -17 : 0 });
-      } else if (leads.length === 1) {
-        map.jumpTo({ center: [leads[0].geo.lng, leads[0].geo.lat], zoom: 15 });
+      if (!fitted.current && leads.length) {
+        fitted.current = true;
+        if (leads.length > 1) {
+          const b = new ml.LngLatBounds();
+          leads.forEach(l => b.extend([l.geo.lng, l.geo.lat]));
+          map.fitBounds(b, { padding: 64, maxZoom: 15, duration: 0, pitch: tilt ? 55 : 0, bearing: tilt ? -17 : 0 });
+        } else {
+          map.jumpTo({ center: [leads[0].geo.lng, leads[0].geo.lat], zoom: 15 });
+        }
+      }
+      // Already allowed to read the location: start from where you are. Never
+      // asks on its own; the button does that.
+      if (!autoTried.current) {
+        autoTried.current = true;
+        navigator.permissions?.query({ name: "geolocation" as PermissionName })
+          .then(s => { if (s.state === "granted") locate(true); })
+          .catch(() => { /* no Permissions API: wait for the button */ });
       }
       requestAnimationFrame(() => declutter(markers.current.map(m => m.getElement())));
     }, 60);
@@ -217,6 +305,7 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
   const sType = typeOf(s?.archetype);
   const sFam = sType ? undefined : familyOf(s?.category);
   const pin = (sType ? { "--pin": sType.color } : sFam ? { "--cat": sFam.color } : {}) as React.CSSProperties;
+  const away = me && s ? `${distanceText(distanceKm(me, s.geo))} dari kamu` : "";
 
   return (
     <div className="sp-geo" role="group" aria-label="Peta lokasi lead">
@@ -228,6 +317,13 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
         </p>
       )}
       <p className="sp-geo-credit">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> · <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a></p>
+      {!failed && (
+        <button className={`sp-geo-locate${me ? " on" : ""}`} onClick={() => locate(true)} aria-busy={locating}
+          aria-label={me ? "Lokasi saya dan lead terdekat" : "Tampilkan lokasi saya"}>
+          <Icon name="target" size={20} />
+        </button>
+      )}
+      {geoMsg && <p className="sp-geo-msg" role="status">{geoMsg}</p>}
       {s && (
         <div className="sp-geo-card" role="region" aria-label={`Lead ${s.name}`} style={pin}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
@@ -238,7 +334,7 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
                   {sType ? <img src={animalSrc(sType.id)} alt="" /> : initials(s.name)}
                 </span>}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: s.hot ? "var(--brand-text)" : "var(--app-muted)" }}>{[s.category, s.status].filter(Boolean).join(" · ") || "Lead"}</p>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: s.hot ? "var(--brand-text)" : "var(--app-muted)" }}>{[s.category, s.status, away].filter(Boolean).join(" · ") || "Lead"}</p>
               <h3 style={{ margin: "2px 0 0", fontSize: 17, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</h3>
               {s.address && <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--app-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.address}</p>}
             </div>
