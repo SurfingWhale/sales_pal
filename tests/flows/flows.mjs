@@ -1716,6 +1716,15 @@ export const flows = [
         await expectText(page, `Dashboard ${memberName}`);
         await page.getByText(`Log aktivitas ${memberName}`).waitFor();
         await page.getByText("Email ke Kopi Tim").first().waitFor();
+        await page.getByLabel("Lihat dashboard siapa").selectOption("");
+        await page.getByRole("button", { name: "PDF laporan" }).click();
+        await expectText(page, "LAPORAN SALES TIM");
+        await page.locator(".print-root").getByText("PER SALES").waitFor();
+        await page.locator(".print-root").getByText(memberName).first().waitFor();
+        const [dl] = await Promise.all([page.waitForEvent("download"), modal(page).getByRole("button", { name: "Simpan / kirim PDF" }).click()]);
+        if (!/^Report_Dashboard_Tim_Uji_\d{4}-\d{2}-\d{2}_\d{4}-\d{2}-\d{2}\.pdf$/.test(dl.suggestedFilename())) throw new Error(`file ${dl.suggestedFilename()}`);
+        await modal(page).getByRole("button", { name: "Tutup", exact: true }).click();
+        await page.locator(".print-root").waitFor({ state: "detached" });
         await page.locator("#space-pick").selectOption({ label: "👤 Pribadi" });
         await p2.locator("#space-pick").selectOption({ label: "👤 Pribadi" });
         await go(page, "Tim", "Guild");

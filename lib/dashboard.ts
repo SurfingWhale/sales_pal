@@ -3,6 +3,8 @@
 // set against the period before it.
 
 import { Activity, addDay } from "@/lib/activity";
+import { rupiah, today } from "@/lib/billing";
+import type { ReportDoc } from "@/lib/reportPdf";
 
 export type PeriodId = "7d" | "30d" | "month" | "lastMonth";
 export const PERIODS: { id: PeriodId; label: string }[] = [
@@ -97,3 +99,62 @@ export function perDay(acts: Activity[], r: Range): { day: string; n: number }[]
 export const ownerOf = (a: Activity, me: string) => a.owner || me;
 
 export const daysSince = (ms: number, now = Date.now()) => (ms ? Math.floor((now - ms) / 86400000) : Infinity);
+
+// A rate against one that didn't exist (nothing sent before) is new, not "+100 poin".
+export function rateChange(cur: number | null, prev: number | null): ReturnType<typeof change> {
+  if (prev === null) return { text: cur === null ? "sama" : "baru", dir: 0 };
+  return change(cur ?? 0, prev, "rate");
+}
+
+const dd = (d: string, year = false) => new Date(d + "T12:00:00").toLocaleDateString("id-ID", { day: "numeric", month: "short", ...(year ? { year: "numeric" } : {}) });
+export const rangeText = (r: Range) => (r.from === r.to ? dd(r.from, true) : `${dd(r.from)} – ${dd(r.to, true)}`);
+
+// The dashboard as a monthly-style report (PRD-014): the same numbers as on
+// screen, for the Leader to send. One seller = their own report.
+export function dashboardDoc(o: {
+  title: string; team: boolean; period: string; cur: Range; prev: Range; s: Stats; p: Stats;
+  trend: { day: string; n: number }[]; rows: { name: string; s: Stats }[]; quiet: { name: string; lastAt: number }[];
+}): ReportDoc {
+  const { s, p } = o;
+  const kpi = (label: string, a: string, b: string, ch: ReturnType<typeof change>) => [label, a, b, ch.text];
+  const rate = (x: Stats) => rateOf(x.replies, x.dms);
+  const peak = o.trend.reduce((m, d) => (d.n > m.n ? d : m), o.trend[0] || { day: o.cur.to, n: 0 });
+  const total = o.trend.reduce((a, d) => a + d.n, 0);
+  const funnel: [string, number][] = [["Prospek baru", s.prospects], ["DM terkirim", s.dms], ["Dibales", s.replies], ["Jadi ETB", s.etb], ["Penawaran dikirim", s.quotesSent], ["Closing", s.won]];
+  const busy = [...o.rows].filter(r => r.s.activities).sort((a, b) => b.s.activities - a.s.activities).slice(0, 3);
+  const money = [...o.rows].filter(r => r.s.paid).sort((a, b) => b.s.paid - a.s.paid)[0];
+  const n = o.trend.length;
+  return {
+    kicker: o.team ? "LAPORAN SALES TIM" : "LAPORAN SALES",
+    title: o.title,
+    subtitle: `${o.period} · ${rangeText(o.cur)}`,
+    meta: [`Dibanding ${rangeText(o.prev)}`, `Dibuat ${dd(today(), true)}`],
+    sections: [
+      { title: "Angka utama", table: { head: ["Metrik", "Periode ini", "Sebelumnya", "Perubahan"], widths: [3.2, 2, 2, 2], bold: [1], rows: [
+        kpi("Aktivitas", String(s.activities), String(p.activities), change(s.activities, p.activities)),
+        kpi("Prospek baru", String(s.prospects), String(p.prospects), change(s.prospects, p.prospects)),
+        kpi("DM terkirim", String(s.dms), String(p.dms), change(s.dms, p.dms)),
+        kpi("Dibales", pct(rate(s)), pct(rate(p)), rateChange(rate(s), rate(p))),
+        kpi("Jadi ETB (kasih data)", String(s.etb), String(p.etb), change(s.etb, p.etb)),
+        kpi("Penawaran dikirim", String(s.quotesSent), String(p.quotesSent), change(s.quotesSent, p.quotesSent)),
+        kpi("Closing (penawaran diterima)", String(s.won), String(p.won), change(s.won, p.won)),
+        kpi("Uang masuk", rupiah(s.paid), rupiah(p.paid), change(s.paid, p.paid, "money")),
+      ] } },
+      { title: "Aktivitas per hari", chart: { values: o.trend.map(d => d.n), labels: n ? [dd(o.trend[0].day), dd(o.trend[Math.floor((n - 1) / 2)].day), dd(o.trend[n - 1].day)] : [] },
+        note: total ? `Total ${total} aktivitas. Paling rame ${dd(peak.day)} (${peak.n}).` : "Belum ada aktivitas di periode ini." },
+      { title: "Funnel", table: { head: ["Tahap", "Jumlah", "Dari tahap sebelumnya"], widths: [4, 2, 3], bold: [1],
+        rows: funnel.map(([l, v], i) => [l, String(v), i ? pct(rateOf(v, funnel[i - 1][1])) : "—"]) },
+        note: "Dihitung dari kejadian di periode ini, bukan per orang yang sama (cohort ada di Report Klien)." },
+      ...(o.team && o.rows.length ? [{ title: "Per sales", table: {
+        head: ["Sales", "Aktivitas", "DM", "Dibales", "ETB", "Penawaran", "Closing", "Uang masuk"], widths: [3, 1.4, 1, 1.4, 1, 1.6, 1.3, 2.4], bold: [0, 7],
+        rows: o.rows.map(r => [r.name, String(r.s.activities), String(r.s.dms), pct(rate(r.s)), String(r.s.etb), String(r.s.quotesSent), String(r.s.won), rupiah(r.s.paid)]),
+      } }] : []),
+      ...(o.team ? [{ title: "Sorotan", lines: [
+        busy.length ? `Paling aktif: ${busy.map(r => `${r.name} (${r.s.activities})`).join(", ")}.` : "Belum ada yang aktif di periode ini.",
+        ...(money ? [`Uang masuk terbanyak: ${money.name} (${rupiah(money.s.paid)}).`] : []),
+        ...(o.quiet.length ? [`Perlu dicek, ga ada aktivitas 3 hari atau lebih: ${o.quiet.map(q => q.name).join(", ")}.`] : []),
+      ] }] : []),
+    ],
+    footer: "Dihitung dari yang tercatat di SalesPal: journey prospek, log DM, sesi hunting, penawaran, invoice & pembayaran, Outreach dan Rejection Log. Dibales dan ETB dihitung dari DM di periode yang sama. Perubahan di bawah 10 ditulis selisihnya, bukan persen. Omzet pipeline guild ada di Report Tim.",
+  };
+}
