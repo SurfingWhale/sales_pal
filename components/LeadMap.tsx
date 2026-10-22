@@ -18,7 +18,7 @@ const savedView = (): MapView => { try { return localStorage.getItem(VIEW_KEY) =
 // potensi across, deal value up; a glow where the leads worth chasing gather.
 // Beside it the "Kejar sekarang" list; below it one folder per quadrant.
 
-export interface MapLead { id: string; name: string; score: number; value: number; why: string; phone?: string; category?: string; address?: string; status?: string; geo?: LeadGeo }
+export interface MapLead { id: string; name: string; score: number; value: number; why: string; phone?: string; category?: string; address?: string; status?: string; archetype?: string; geo?: LeadGeo }
 
 const jt = (n: number) => `Rp ${(n / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`;
 const ORDER: Quadrant[] = ["kejar", "rawat", "cepat", "nanti"];

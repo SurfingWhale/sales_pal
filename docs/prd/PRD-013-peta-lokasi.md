@@ -29,7 +29,13 @@ Halamannya satu scroll vertikal yang pendek dan ada ujungnya. Tiap bagian punya 
 
 - Pill **Potensi | Peta 3D** di pojok peta (diingat di HP ini). Potensi = peta skor × nilai yang lama.
 - Peta 3D: **MapLibre GL** + tile **OpenFreeMap** (open source, gratis, tanpa API key, ada gedung 3D), dimiringin 55°. Mode gelap: tile dibalik warnanya jadi malam.
-- Tiap lead yang punya titik = pin bulat (inisial; biru gradien kalau layak dikejar) + label kategori. Tap → kartu: kategori · status, nama, alamat, skor, nilai; **Buka lead**, **Rute** (Google Maps), **Chat** kalau ada nomor.
+- Tiap lead yang punya titik = **pin**: muka bulat 40px di atas ekor pendek, ujung ekor = titik lead (anchor bawah).
+  - **Tipe customer ketahuan** (`profile.archetype`, dari impor chat WA atau form Profil) → karakter clay tipenya di muka pin, kepalanya nongol di atas lingkaran, latar warna tipe (Burung Hantu ungu, Singa kuning, Lumba-Lumba biru muda, Kelinci oranye). Belum ketahuan → inisial (abu; biru gradien kalau layak dikejar).
+  - Layak dikejar (kuadran "kejar") → cincin biru di luar cincin putih.
+  - Lencana skor di pojok kanan atas (biru kalau layak dikejar).
+  - Label nama + kategori di kanan pin, cuma tampil kalau zoom ≥ 14,5 atau pinnya dipilih, biar ga saling tumpuk.
+- Tap pin → kartu: karakter/inisial 56px, kategori · status, nama, alamat; baris **tipe** (nama tipe + gaya komunikasinya, atau ajakan impor chat WA kalau belum ketahuan); skor + bar + nilai; **Buka lead**, **Rute** (Google Maps), **Chat** kalau ada nomor.
+- Gambar karakter diambil dari `animalSrc()` di `components/AnimalArt.tsx`, satu sumber dengan bagian app lain (PRD-010 karakter tinggal ganti di situ).
 - Lead tanpa titik: chip "N belum ada lokasi · Atur" → buka lead pertama yang belum.
 - Library-nya baru dimuat waktu Peta 3D dibuka (dynamic import), jadi Beranda tetap ringan. Tanpa WebGL: pesan jelas, Potensi tetap jalan.
 - Kredit © OpenStreetMap · OpenFreeMap selalu tampil (wajib dari lisensi).
@@ -55,5 +61,6 @@ Halamannya satu scroll vertikal yang pendek dan ada ujungnya. Tiap bagian punya 
 
 - Titik di peta Potensi versi desktop masih 28px; di iPad (layar sentuh) di bawah 44pt. Disengaja karena 200 titik 44px bakal tumpang tindih; rencana: tap area kosong → pilih titik terdekat.
 - Foto tempat di pin (kayak di video) butuh Places Photos (berbayar per foto): fase berikutnya, opsional.
-- Clustering pin kalau ratusan lead di satu kota.
+- Clustering pin kalau ratusan lead di satu kota (pin karakter lebih besar dari titik lama, jadi lebih cepat numpuk).
+- **Logo asli bisnis** di muka pin dan kartu: urutan logo → karakter → inisial. Butuh field `logo` di lead + tempat ngunggah/nempel URL-nya.
 - **Bagikan dari Google Maps langsung ke SalesPal** (share target PWA): pilih lead → titik tersimpan, tanpa salin-tempel.

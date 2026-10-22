@@ -62,6 +62,8 @@ export function bigAccount(uid) {
       ...(i % 6 === 0 ? { lastReplyAt: daysAgo(i % 10) } : {}),
       // Half have a point around central Jakarta, for Peta 3D.
       ...(i % 2 === 0 ? { address: `Jl. Contoh No. ${i}, Jakarta`, geo: { lat: -6.17 - (i % 13) * 0.004, lng: 106.81 + (i % 11) * 0.005, by: "maps" } } : {}),
+      // Two in three have a customer type from their chat: their pin wears the character.
+      ...(i % 3 ? { profile: { archetype: ["owl", "lion", "dolphin", "rabbit"][Math.floor(i / 2) % 4], source: "wa-export" } } : {}),
     }]);
   }
   const item = (k) => ({ name: `Paket foto ${k}`, qty: 1, price: 750_000 + k * 250_000, description: "20 foto edit\n1x revisi" });
@@ -817,8 +819,11 @@ export const flows = [
         await map.getByRole("button", { name: "Peta 3D" }).click();
         const pins = map.locator(".sp-pin");
         await pins.first().waitFor({ timeout: 15000 });
-        await pins.first().click();
+        // A lead typed from its chat wears its character, on the pin and on the card.
+        await map.locator(".sp-pin.typed img").first().waitFor();
+        await map.locator(".sp-pin.typed").last().click();
         const card = map.getByRole("region", { name: /^Lead / });
+        await card.getByText(/^(Burung Hantu|Singa|Lumba-Lumba|Kelinci)$/).waitFor();
         await card.getByRole("link", { name: /Rute/ }).waitFor();
         await t.audit("Beranda → Peta 3D with a lead card (big account)");
         await card.getByRole("button", { name: "Tutup kartu lead" }).click();
