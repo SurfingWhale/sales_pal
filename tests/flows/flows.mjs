@@ -763,7 +763,7 @@ export const flows = [
         if (!isWide(page)) {
           const { sw, cw } = await queue.evaluate(e => ({ sw: e.scrollWidth, cw: e.clientWidth }));
           if (sw <= cw) throw new Error("the queue does not swipe sideways");
-          await queue.getByRole("button", { name: /^Lihat semua \d+/ }).waitFor({ state: "attached" });
+          await queue.getByRole("button", { name: /Lihat semua \d+/ }).waitFor({ state: "attached" });
         }
         await page.getByRole("button", { name: "Lihat semua", exact: true }).first().click();
         const sheet = page.getByRole("dialog", { name: /^Perlu ditindak/ });

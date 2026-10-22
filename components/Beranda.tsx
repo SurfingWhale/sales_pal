@@ -383,7 +383,7 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
               );
             })}
             {todo.length > CAROUSEL && (
-              <button className="sp-task sp-task-end" onClick={() => setSheet(true)} aria-haspopup="dialog">
+              <button className="sp-task sp-task-end" onClick={() => setSheet(true)} aria-haspopup="dialog" aria-label={`Lihat semua ${todo.length}`}>
                 <span style={{ fontSize: 28, fontWeight: 700 }} className="tabnum">+{todo.length - CAROUSEL}</span>
                 <span style={{ fontSize: 14, fontWeight: 600, color: "var(--brand-text)" }}>Lihat semua {todo.length}</span>
               </button>
