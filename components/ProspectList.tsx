@@ -8,8 +8,8 @@ import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import { Hunt, platformSource } from "@/lib/hunting";
 import { objections } from "@/lib/salespal-data";
 import {
-  Prospect, ProspectEvent, Result, Strategy, convertPatch, dncPatch, fromHunts, isDue, notePatch, replyPatch,
-  resultPatch, statusColor, statusLabel, view,
+  Prospect, ProspectEvent, Result, Strategy, archivePatch, convertPatch, dncPatch, dropReady, fromHunts, isDue, notePatch, replyPatch,
+  restorePatch, resultPatch, silentDays, statusColor, statusLabel, view,
 } from "@/lib/prospects";
 import { Counter, bump, clean, ctx, loadClosed, removeProspect, saveProspect, syncHunt } from "@/lib/prospectStore";
 import { badge, btnPrimary, btnMuted, card, chip, font, inputStyle, label, modalBox, ink } from "@/components/ui";
@@ -18,7 +18,7 @@ import { useConfirm } from "@/components/ConfirmSheet";
 // Every person hunted, one journey each (docs/prd/PRD-009 §6): where they
 // stand, what was said both ways, and the one-tap answer that moves them on.
 
-export const FILTERS = ["Antrian", "Baru", "Nunggu", "Terhubung", "Parkir", "ETB", "DNC"] as const;
+export const FILTERS = ["Antrian", "Baru", "Nunggu", "Terhubung", "Siap dibuang", "Parkir", "ETB", "DNC", "Arsip"] as const;
 export type ProspectFilter = (typeof FILTERS)[number];
 const PAGE = 30;
 
@@ -70,9 +70,10 @@ function Summary({ p, on }: { p: Prospect; on: string }) {
   );
 }
 
-export default function ProspectList({ prospects, ready, hunts, strategy, sessionId, filter, setFilter, onCompose }: {
+export default function ProspectList({ prospects, ready, hunts, strategy, sessionId, filter, setFilter, onCompose, onOpen }: {
   prospects: Prospect[]; ready: boolean; hunts: Hunt[]; strategy: Strategy; sessionId?: string;
   filter: ProspectFilter; setFilter: (f: ProspectFilter) => void; onCompose: (p: Prospect) => void;
+  onOpen?: (p: Prospect) => void;   // the person's conversation
 }) {
   const [ask, askSheet] = useConfirm();
   const space = useSpace();
@@ -87,7 +88,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   const on = today();
 
   useEffect(() => {
-    if (filter === "DNC" && closed === null) loadClosed(space).then(setClosed).catch(() => setClosed([]));
+    if ((filter === "DNC" || filter === "Arsip") && closed === null) loadClosed(space).then(setClosed).catch(() => setClosed([]));
   }, [filter, closed, space]);
 
   const rows = prospects.map(p => ({ p, v: view(p, on, strategy) }));
@@ -97,6 +98,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
       case "Baru": return v.status === "baru";
       case "Nunggu": return v.status === "intro" || v.status === "belum";
       case "Terhubung": return v.status === "terhubung" && p.result !== "data" && !v.parkedUntil;
+      case "Siap dibuang": return dropReady(p, on, strategy);
       case "Parkir": return v.status === "tidak" || !!v.parkedUntil;
       case "ETB": return p.segment === "ETB";
       default: return false;
@@ -107,8 +109,8 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   const hit = (p: Prospect) => [p.id, p.handle, p.name || ""].some(x => x.toLowerCase().replace(/^@/, "").includes(needle));
   const shown = needle
     ? [...rows, ...(closed || []).map(p => ({ p, v: view(p, on, strategy) }))].filter(({ p }) => hit(p))
-    : filter === "DNC"
-    ? (closed || []).map(p => ({ p, v: view(p, on, strategy) }))
+    : filter === "DNC" || filter === "Arsip"
+    ? (closed || []).filter(p => (filter === "Arsip") === !!p.archivedAt).map(p => ({ p, v: view(p, on, strategy) }))
     : inFilter(filter).sort((a, b) => filter === "Antrian" ? (a.v.due || "").localeCompare(b.v.due || "") : b.p.updatedAt - a.p.updatedAt);
   const unlinked = hunts.filter(h => !h.prospectId && h.target?.trim());
 
@@ -193,7 +195,26 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
     }
   }
 
-  const count = (f: ProspectFilter) => (f === "DNC" ? (closed ? closed.length : null) : inFilter(f).length);
+  const count = (f: ProspectFilter) => (f === "DNC" || f === "Arsip" ? (closed ? closed.filter(p => (f === "Arsip") === !!p.archivedAt).length : null) : inFilter(f).length);
+
+  // Dropped after going quiet: archived, history kept, back with one tap.
+  async function drop(ps: Prospect[]) {
+    setBusy(true); setMsg("");
+    try {
+      const c = ctx();
+      for (const p of ps) await saveProspect(space, p, archivePatch(p, `${silentDays(p, on) ?? strategy.dropDays} hari ga respon`, c));
+      setClosed(null);
+      setMsg(`${ps.length} prospek dibuang ke Arsip.`);
+    } catch { setMsg("Gagal nyimpen. Cek koneksi lalu coba lagi."); }
+    setBusy(false);
+  }
+  async function restore(p: Prospect) {
+    setBusy(true);
+    try { await saveProspect(space, p, restorePatch(p, ctx())); setClosed(null); setMsg(`${p.handle} dibalikin ke journey.`); }
+    catch { setMsg("Gagal nyimpen. Cek koneksi lalu coba lagi."); }
+    setBusy(false);
+  }
+  const dropping = filter === "Siap dibuang" ? inFilter("Siap dibuang").map(r => r.p) : [];
 
   return (
     <div id="journey-prospek" style={{ ...card, padding: 20, marginBottom: 20 }}>
@@ -230,10 +251,19 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
         })}
       </div>
 
+      {filter === "Siap dibuang" && dropping.length > 0 && !needle && (
+        <div role="note" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)", margin: "4px 0 10px", fontSize: 13 }}>
+          <span style={{ flex: "1 1 240px" }}>{dropping.length} orang diem {strategy.dropDays}+ hari sejak pesan terakhir. Dibuang = masuk Arsip, riwayat tetap ada, bisa dibalikin.</span>
+          <button onClick={() => ask(`Buang ${dropping.length} prospek?`, "Mereka pindah ke Arsip dan ga muncul di antrian. Bisa dibalikin dari saringan Arsip.", () => drop(dropping), "Buang", "Membuang…")} disabled={busy}
+            style={{ ...chip, minHeight: 40, fontWeight: 700, color: "color-mix(in srgb, #dc2626 55%, var(--app-text))", border: "1px solid #dc262640" }}>🗑 Buang semua ({dropping.length})</button>
+        </div>
+      )}
       {ready && shown.length === 0 && !needle && (
         <div style={{ fontSize: 12, color: "var(--app-muted)", padding: "14px 0" }}>
           {filter === "Antrian" ? "Antrian kosong. Share post Threads ke SalesPal atau tempel link-nya buat nambah prospek."
             : filter === "DNC" ? (closed ? "Belum ada yang minta ga dihubungi." : "Memuat…")
+            : filter === "Arsip" ? (closed ? "Arsip kosong." : "Memuat…")
+            : filter === "Siap dibuang" ? `Ga ada yang diem ${strategy.dropDays}+ hari. Bagus.`
             : "Belum ada prospek di sini."}
         </div>
       )}
@@ -246,6 +276,8 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
         const sub = [
           p.platform, p.segment,
           v.status === "intro" || v.status === "belum" ? `percobaan ${p.attempts}/${strategy.maxAttempts}` : "",
+          (silentDays(p, on) ?? 0) >= 2 && !p.archivedAt ? `diem ${silentDays(p, on)} hari` : "",
+          p.archivedAt ? `dibuang ${longDate(p.archivedAt)}` : "",
           v.due && v.status !== "dnc" ? (v.due <= on ? (v.due < on ? `telat sejak ${longDate(v.due)}` : "hari ini") : `${v.parkedUntil ? "parkir s.d." : "follow-up"} ${longDate(v.due)}`) : "",
         ].filter(Boolean).join(" · ");
         return (
@@ -274,7 +306,13 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                 </div>
                 {p.result && v.status === "intro" && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Hasil terakhir: {statusLabel({ ...p, contact: "terhubung" }, { ...v, status: "terhubung" })}{p.remark ? ` — ${p.remark}` : ""}</div>}
 
-                {v.status === "dnc" ? (
+                {p.archivedAt ? (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+                    <span style={{ fontSize: 12, color: "var(--app-sub)" }}>Dibuang {longDate(p.archivedAt)}{p.archiveReason ? ` · ${p.archiveReason}` : ""}.</span>
+                    <button onClick={() => restore(p)} disabled={busy} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)" }}>↩ Balikin</button>
+                    {onOpen && <button onClick={() => onOpen(p)} style={{ ...chip, minHeight: 36 }}>💬 Percakapan</button>}
+                  </div>
+                ) : v.status === "dnc" ? (
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
                     <span style={{ fontSize: 12, color: "var(--app-sub)" }}>Minta ga dihubungi sejak {p.dncAt ? longDate(p.dncAt) : "—"}{p.remark ? ` · ${p.remark}` : ""}.</span>
                     <button onClick={() => ask(`Hapus ${who} dari daftar Jangan dihubungi?`, "Kalau post-nya di-share lagi, dia masuk sebagai prospek baru.", async () => { await removeProspect(space, p); setClosed(null); })} style={{ ...chip, minHeight: 36 }}>Hapus dari daftar</button>
@@ -282,6 +320,8 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                 ) : (
                   <>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+                      {onOpen && <button onClick={() => onOpen(p)} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Percakapan</button>}
+                      {dropReady(p, on, strategy) && <button onClick={() => ask(`Buang ${who}?`, "Pindah ke Arsip, riwayat tetap ada, bisa dibalikin.", () => drop([p]), "Buang", "Membuang…")} style={{ ...chip, minHeight: 36 }}>🗑 Buang</button>}
                       <button onClick={() => onCompose(p)} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>{v.status === "baru" ? "✉ Kirim intro" : v.status === "belum" ? "↻ Follow-up" : "✉ Kirim pesan"}</button>
                       <button onClick={() => setEditing({ id: p.id, kind: "reply", text: "", date: "" })} aria-pressed={ed?.kind === "reply"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Dibales</button>
                       {(post?.url || p.url) && <a href={post?.url || p.url} target="_blank" rel="noreferrer" className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>{post?.url ? "Buka post ↗" : "Buka profil ↗"}</a>}
