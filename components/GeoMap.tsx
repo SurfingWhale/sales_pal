@@ -23,6 +23,49 @@ export interface GeoLead {
 
 const typeOf = (id?: string) => (id ? archetypes.find(a => a.id === id) : undefined);
 
+// A lead whose customer type is not known yet still shows what kind of business
+// it is: its category (Google's, or the seller's own) as a colour and a line icon.
+const svg = (paths: string, size: number) =>
+  `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+const FAMILIES: { re: RegExp; color: string; icon: string }[] = [
+  { re: /f&b|makan|kuliner|resto|kafe|cafe|kopi|coffee|bakery|roti|kue|warung|kedai|bakso|katering|catering|minuman|dessert|food/i, color: "#ea580c",
+    icon: '<path d="M5 9h11v4a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 10.5h1.5a2.5 2.5 0 0 1 0 5h-2"/><path d="M8.5 3.5v3M12 3.5v3"/>' },
+  { re: /salon|\bspa\b|kecantikan|beauty|barber|pangkas|kuku|nail|make ?up|estetik|aesthetic|skincare/i, color: "#db2777",
+    icon: '<path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9-1.9 5.1-1.9-5.1-5.1-1.9 5.1-1.9z"/><path d="M18.5 16.5v3M17 18h3"/>' },
+  { re: /olahraga|kebugaran|gym|fitness|yoga|pilates|futsal|badminton|renang|sport|crossfit|bela diri|muay|boxing|tenis|padel/i, color: "#16a34a",
+    icon: '<path d="M6.5 7v10M3.5 9.5v5M17.5 7v10M20.5 9.5v5M6.5 12h11"/>' },
+  { re: /klinik|kesehatan|health|dokter|gigi|dental|apotek|rumah sakit|fisioterapi|medis|bidan|laborator/i, color: "#e11d48",
+    icon: '<path d="M12 20s-7-4.35-7-10a4 4 0 0 1 7-2.65A4 4 0 0 1 19 10c0 5.65-7 10-7 10z"/><path d="M12 9.5v5M9.5 12h5"/>' },
+  { re: /hotel|villa|homestay|penginapan|guest ?house|resort|\bkost?\b/i, color: "#4f46e5",
+    icon: '<path d="M3 18.5v-12M3 14.5h18v4M21 14.5V12a3 3 0 0 0-3-3h-7v5.5"/><circle cx="7" cy="11.5" r="1.6"/>' },
+  { re: /sekolah|kursus|\bles\b|pendidikan|kampus|universitas|balai|komunitas|masjid|gereja|yayasan|akademi|paud|pesantren/i, color: "#b45309",
+    icon: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18 14.8c1.8.7 3 2.4 3.5 5.2"/>' },
+  { re: /toko|retail|shop|butik|boutique|store|mart|grosir|fashion|pakaian|elektronik|furnitur|outlet|distro/i, color: "#7c3aed",
+    icon: '<path d="M5 8.5h14l-1.2 11.5H6.2z"/><path d="M9 8.5V7a3 3 0 0 1 6 0v1.5"/>' },
+  { re: /service|jasa|kantor|agency|agensi|studio|percetakan|bengkel|laundry|konsultan|travel|properti|wedding|event|foto|digital/i, color: "#0369a1",
+    icon: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8.5 7V5.5A1.5 1.5 0 0 1 10 4h4a1.5 1.5 0 0 1 1.5 1.5V7"/><path d="M3 12.5h18"/>' },
+];
+const familyOf = (category?: string) => (category ? FAMILIES.find(f => f.re.test(category)) : undefined);
+
+// A name that would cover another name or another pin is hidden, the best
+// leads first; the chosen pin always keeps its name.
+function declutter(pins: HTMLElement[]) {
+  pins.forEach(el => el.classList.remove("sp-tag-off"));
+  const rank = (el: HTMLElement) => (el.getAttribute("aria-pressed") === "true" ? 1e6 : 0) + Number(el.dataset.rank || 0);
+  const faces = pins.map(el => (el.querySelector(".sp-pin-face") as HTMLElement).getBoundingClientRect());
+  const meets = (a: DOMRect, b: DOMRect) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  const shown: DOMRect[] = [];
+  const hide: HTMLElement[] = [];
+  for (const el of [...pins].sort((a, b) => rank(b) - rank(a))) {
+    const r = el.querySelector(".sp-pin-tag")?.getBoundingClientRect();
+    if (!r) continue;
+    const chosen = el.getAttribute("aria-pressed") === "true";
+    if (!chosen && (shown.some(s => meets(r, s)) || faces.some((f, i) => pins[i] !== el && meets(r, f)))) hide.push(el);
+    else shown.push(r);
+  }
+  hide.forEach(el => el.classList.add("sp-tag-off"));
+}
+
 export const MAP_STYLE = process.env.NEXT_PUBLIC_MAP_STYLE || "https://tiles.openfreemap.org/styles/liberty";
 
 const initials = (n: string) => n.replace(/[^A-Za-z0-9À-ÿ ]/g, "").split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?";
@@ -40,6 +83,7 @@ const css = `
 .sp-pin-face { position: absolute; left: 2px; top: 2px; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #fff; background: #5b636c; box-shadow: 0 0 0 2.5px #fff, 0 6px 14px rgba(0,0,0,0.3); transform-origin: 50% 120%; transition: transform .18s cubic-bezier(.2,0,0,1), box-shadow .18s ease; }
 .sp-pin.hot .sp-pin-face { background: linear-gradient(145deg, #2f86d6, #004a8c); }
 .sp-pin.typed .sp-pin-face { background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--pin) 18%, #fff), color-mix(in srgb, var(--pin) 60%, #fff)); }
+.sp-pin.cat .sp-pin-face, .sp-pin.hot.cat .sp-pin-face { background: linear-gradient(145deg, color-mix(in srgb, var(--cat) 72%, #fff), var(--cat)); }
 .sp-pin.hot .sp-pin-face, .sp-pin.hot.typed .sp-pin-face { box-shadow: 0 0 0 2.5px #fff, 0 0 0 5px #005eb0, 0 6px 14px rgba(0,0,0,0.3); }
 .sp-pin-face img { position: absolute; left: -5px; bottom: 0; width: 50px; height: 50px; object-fit: contain; object-position: bottom; clip-path: inset(0 5px 0 5px round 0 0 20px 20px); pointer-events: none; }
 .sp-pin-score { position: absolute; right: -8px; top: -5px; min-width: 22px; height: 18px; padding: 0 5px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font: 700 10px/1 'Plus Jakarta Sans', sans-serif; font-variant-numeric: tabular-nums; color: #14181d; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.25); }
@@ -48,9 +92,7 @@ const css = `
 .sp-pin-tag b, .sp-pin-tag small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-pin-tag b { font-size: 11px; font-weight: 700; }
 .sp-pin-tag small { font-size: 10px; font-weight: 500; color: #4a525b; }
-/* Zoomed out, names would cover each other: only the chosen pin keeps its. */
-.sp-far .sp-pin-tag { display: none; }
-.sp-far .sp-pin[aria-pressed="true"] .sp-pin-tag { display: grid; }
+.sp-pin.sp-tag-off .sp-pin-tag { display: none; }
 .sp-pin[aria-pressed="true"] { z-index: 3; }
 .sp-pin[aria-pressed="true"] .sp-pin-face { transform: scale(1.15); box-shadow: 0 0 0 3px #005eb0, 0 8px 18px rgba(0,0,0,0.35); }
 .sp-geo-card { position: absolute; z-index: 4; left: 12px; right: 12px; bottom: 12px; max-width: 360px; border-radius: 20px; padding: 14px 14px 12px; background: var(--glass-strong); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); box-shadow: inset 0 0 0 0.5px var(--app-line-strong), 0 12px 32px rgba(0,0,0,0.22); animation: sp-geo-in .22s cubic-bezier(.2,0,0,1) both; }
@@ -58,6 +100,7 @@ const css = `
 @media (prefers-reduced-motion: reduce) { .sp-geo-card { animation: none; } .sp-pin-face { transition: none; } }
 .sp-geo-face { position: relative; flex-shrink: 0; width: 56px; height: 56px; border-radius: 16px; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: #fff; background: #5b636c; }
 .sp-geo-face.hot { background: linear-gradient(145deg, #2f86d6, #004a8c); }
+.sp-geo-face.cat { background: linear-gradient(145deg, color-mix(in srgb, var(--cat) 72%, #fff), var(--cat)); }
 .sp-geo-face.typed { background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--pin) 18%, #fff), color-mix(in srgb, var(--pin) 60%, #fff)); }
 .sp-geo-face img { position: absolute; left: 0; bottom: 0; width: 56px; height: 56px; object-fit: contain; object-position: bottom; }
 .sp-geo-type { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 0; padding: 8px 10px; border-radius: 12px; font-size: 13px; line-height: 1.4; background: color-mix(in srgb, var(--pin, #7d93ad) 14%, transparent); }
@@ -104,9 +147,7 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
         if (gone) { map.remove(); return; }
         mapRef.current = map;
         map.on("click", () => selRef.current(null));
-        const far = () => box.current?.classList.toggle("sp-far", map.getZoom() < 14.5);
-        map.on("zoomend", far);
-        far();
+        map.on("moveend", () => declutter(markers.current.map(m => m.getElement())));
       } catch { if (!gone) setFailed(true); }
     })();
     return () => { gone = true; markers.current.forEach(m => m.remove()); mapRef.current?.remove(); mapRef.current = null; };
@@ -124,11 +165,14 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
       markers.current.forEach(m => m.remove());
       markers.current = leads.map(l => {
         const type = typeOf(l.archetype);
+        const fam = type ? undefined : familyOf(l.category);
         const el = document.createElement("button");
         el.type = "button";
-        el.className = `sp-pin${l.hot ? " hot" : ""}${type ? " typed" : ""}`;
+        el.className = `sp-pin${l.hot ? " hot" : ""}${type ? " typed" : fam ? " cat" : ""}`;
         if (type) el.style.setProperty("--pin", type.color);
+        if (fam) el.style.setProperty("--cat", fam.color);
         el.dataset.id = l.id;
+        el.dataset.rank = String(l.score + (l.hot ? 1000 : 0));
         el.setAttribute("aria-label", `${l.name}${l.category ? `, ${l.category}` : ""}${type ? `, tipe ${type.name}` : ""}, skor ${l.score}. Lihat di peta`);
         el.setAttribute("aria-pressed", "false");
         const part = (tag: string, cls: string, parent: HTMLElement = el) => {
@@ -140,6 +184,7 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
         part("span", "sp-pin-tail");
         const face = part("span", "sp-pin-face");
         if (type) { const img = part("img", "", face) as HTMLImageElement; img.src = animalSrc(type.id); img.alt = ""; img.draggable = false; }
+        else if (fam) face.innerHTML = svg(fam.icon, 20);
         else face.textContent = initials(l.name);
         part("span", "sp-pin-score").textContent = String(l.score);
         const tag = part("span", "sp-pin-tag");
@@ -155,6 +200,7 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
       } else if (leads.length === 1) {
         map.jumpTo({ center: [leads[0].geo.lng, leads[0].geo.lat], zoom: 15 });
       }
+      requestAnimationFrame(() => declutter(markers.current.map(m => m.getElement())));
     }, 60);
     return () => { live = false; clearInterval(wait); };
   }, [leads, tilt]);
@@ -162,13 +208,15 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
   // The tapped pin stands out and the map eases to it.
   useEffect(() => {
     markers.current.forEach(m => { const el = m.getElement(); el.setAttribute("aria-pressed", String(el.dataset.id === sel)); });
+    declutter(markers.current.map(m => m.getElement()));
     const l = leads.find(x => x.id === sel);
     if (l && mapRef.current) mapRef.current.easeTo({ center: [l.geo.lng, l.geo.lat], offset: [0, -60], duration: 450 });
   }, [sel, leads]);
 
   const s = leads.find(l => l.id === sel);
   const sType = typeOf(s?.archetype);
-  const pin = (sType ? { "--pin": sType.color } : {}) as React.CSSProperties;
+  const sFam = sType ? undefined : familyOf(s?.category);
+  const pin = (sType ? { "--pin": sType.color } : sFam ? { "--cat": sFam.color } : {}) as React.CSSProperties;
 
   return (
     <div className="sp-geo" role="group" aria-label="Peta lokasi lead">
@@ -183,10 +231,12 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
       {s && (
         <div className="sp-geo-card" role="region" aria-label={`Lead ${s.name}`} style={pin}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-            <span aria-hidden="true" className={`sp-geo-face${s.hot ? " hot" : ""}${sType ? " typed" : ""}`}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {sType ? <img src={animalSrc(sType.id)} alt="" /> : initials(s.name)}
-            </span>
+            {sFam
+              ? <span aria-hidden="true" className="sp-geo-face cat" dangerouslySetInnerHTML={{ __html: svg(sFam.icon, 28) }} />
+              : <span aria-hidden="true" className={`sp-geo-face${s.hot ? " hot" : ""}${sType ? " typed" : ""}`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {sType ? <img src={animalSrc(sType.id)} alt="" /> : initials(s.name)}
+                </span>}
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: s.hot ? "var(--brand-text)" : "var(--app-muted)" }}>{[s.category, s.status].filter(Boolean).join(" · ") || "Lead"}</p>
               <h3 style={{ margin: "2px 0 0", fontSize: 17, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</h3>
@@ -204,7 +254,7 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
           <div className="sp-geo-score tabnum">
             <span>Skor <b>{s.score}</b></span>
             <span className={`sp-geo-bar${s.hot ? " hot" : ""}`} aria-hidden="true"><span style={{ width: `${Math.max(4, Math.min(100, s.score))}%` }} /></span>
-            <b>{jt(s.value || 0)}</b>
+            <b>{s.value ? jt(s.value) : "Belum ada nilai"}</b>
           </div>
           <div className="sp-geo-acts">
             <button onClick={() => onOpen(s.id)} style={{ background: "#005eb0", color: "#fff" }}>Buka lead</button>

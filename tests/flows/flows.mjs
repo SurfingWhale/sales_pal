@@ -821,6 +821,8 @@ export const flows = [
         await pins.first().waitFor({ timeout: 15000 });
         // A lead typed from its chat wears its character, on the pin and on the card.
         await map.locator(".sp-pin.typed img").first().waitFor();
+        // The rest show their category as a coloured icon.
+        await map.locator(".sp-pin.cat svg").first().waitFor();
         await map.locator(".sp-pin.typed").last().click();
         const card = map.getByRole("region", { name: /^Lead / });
         await card.getByText(/^(Burung Hantu|Singa|Lumba-Lumba|Kelinci)$/).waitFor();

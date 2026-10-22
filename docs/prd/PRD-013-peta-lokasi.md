@@ -30,10 +30,11 @@ Halamannya satu scroll vertikal yang pendek dan ada ujungnya. Tiap bagian punya 
 - Pill **Potensi | Peta 3D** di pojok peta (diingat di HP ini). Potensi = peta skor × nilai yang lama.
 - Peta 3D: **MapLibre GL** + tile **OpenFreeMap** (open source, gratis, tanpa API key, ada gedung 3D), dimiringin 55°. Mode gelap: tile dibalik warnanya jadi malam.
 - Tiap lead yang punya titik = **pin**: muka bulat 40px di atas ekor pendek, ujung ekor = titik lead (anchor bawah).
-  - **Tipe customer ketahuan** (`profile.archetype`, dari impor chat WA atau form Profil) → karakter clay tipenya di muka pin, kepalanya nongol di atas lingkaran, latar warna tipe (Burung Hantu ungu, Singa kuning, Lumba-Lumba biru muda, Kelinci oranye). Belum ketahuan → inisial (abu; biru gradien kalau layak dikejar).
+  - **Tipe customer ketahuan** (`profile.archetype`, dari impor chat WA atau form Profil) → karakter clay tipenya di muka pin, kepalanya nongol di atas lingkaran, latar warna tipe (Burung Hantu ungu, Singa kuning, Lumba-Lumba biru muda, Kelinci oranye).
+  - **Belum ketahuan** → ikon garis putih di atas warna **keluarga kategorinya** (kategori Google dari Cari bisnis, atau kategori isian sendiri): kuliner oranye, kecantikan pink, olahraga & kebugaran hijau, kesehatan merah, penginapan indigo, sekolah & komunitas coklat, toko ungu, jasa & kantor biru. Kategori yang ga kebaca → inisial abu (biru gradien kalau layak dikejar). Kenapa: lead dari Cari bisnis belum punya chat, jadi tanpa ini semua pin abu-abu.
   - Layak dikejar (kuadran "kejar") → cincin biru di luar cincin putih.
   - Lencana skor di pojok kanan atas (biru kalau layak dikejar).
-  - Label nama + kategori di kanan pin, cuma tampil kalau zoom ≥ 14,5 atau pinnya dipilih, biar ga saling tumpuk.
+  - Label nama + kategori di kanan pin. Tiap peta berhenti geser/zoom, label yang nabrak label lain atau pin lain disembunyiin, mulai dari lead terbaik (layak dikejar, skor tertinggi); pin yang dipilih selalu tampil labelnya.
 - Tap pin → kartu: karakter/inisial 56px, kategori · status, nama, alamat; baris **tipe** (nama tipe + gaya komunikasinya, atau ajakan impor chat WA kalau belum ketahuan); skor + bar + nilai; **Buka lead**, **Rute** (Google Maps), **Chat** kalau ada nomor.
 - Gambar karakter diambil dari `animalSrc()` di `components/AnimalArt.tsx`, satu sumber dengan bagian app lain (PRD-010 karakter tinggal ganti di situ).
 - Lead tanpa titik: chip "N belum ada lokasi · Atur" → buka lead pertama yang belum.
