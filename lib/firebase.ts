@@ -63,7 +63,8 @@ export const db = app ? getFirestore(app) : (null as any);
 // production build never contains a path to them.
 if (app && process.env.NEXT_PUBLIC_FIREBASE_EMULATORS && !(globalThis as { __emulators?: boolean }).__emulators) {
   (globalThis as { __emulators?: boolean }).__emulators = true;
-  connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
-  connectFirestoreEmulator(db, "127.0.0.1", 8089);
+  // Ports move together when several test runs share a machine (FLOW_PORT_OFFSET).
+  connectAuthEmulator(auth, `http://127.0.0.1:${process.env.NEXT_PUBLIC_EMU_AUTH_PORT || 9099}`, { disableWarnings: true });
+  connectFirestoreEmulator(db, "127.0.0.1", Number(process.env.NEXT_PUBLIC_EMU_FS_PORT || 8089));
 }
 export const googleProvider = typeof window !== "undefined" ? new GoogleAuthProvider() : (null as any); // eslint-disable-line @typescript-eslint/no-explicit-any

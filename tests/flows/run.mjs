@@ -7,6 +7,8 @@
 //   DEVICE=iphone12 …             WebKit with Playwright's iPhone 12 profile (touch, DPR 3)
 //   DEVICE=safari …               WebKit as desktop Safari at 1440×900
 //   PROD=1 …                      against `next build && next start` (real timings)
+//   FLOW_PORT_OFFSET=100 …        every port +100 (app 3556, emulators 9199/8189, their
+//                                 hub), so a second worktree can run while another does
 //
 // Every run also measures each flow like a person would feel it (docs/prd/PRD-010):
 // taps, how long the page takes to answer a tap, any browser print/alert/
@@ -22,13 +24,21 @@
 import { spawn, execSync } from "node:child_process";
 import { connect, createServer } from "node:net";
 import { mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { chromium, webkit, devices } from "playwright";
 import AxeBuilder from "@axe-core/playwright";
 import { flows } from "./flows.mjs";
 
 const ROOT = new URL("../../", import.meta.url).pathname;
 const OUT = new URL("./out/", import.meta.url).pathname;
-const PORT = 3456;
+// FLOW_PORT_OFFSET=100 moves every port (app, emulators, their hub) so two
+// runs from different worktrees can go at once. Flows read the hosts back
+// from FLOW_AUTH_HOST / FLOW_FS_HOST.
+const OFFSET = Number(process.env.FLOW_PORT_OFFSET || 0);
+const PORT = 3456 + OFFSET;
+const AUTH_PORT = 9099 + OFFSET, FS_PORT = 8089 + OFFSET;
+process.env.FLOW_AUTH_HOST = `127.0.0.1:${AUTH_PORT}`;
+process.env.FLOW_FS_HOST = `127.0.0.1:${FS_PORT}`;
 const BASE = `http://localhost:${PORT}`;
 const filter = process.argv[2] || "";
 const DEVICE = process.env.DEVICE || "";
@@ -150,7 +160,7 @@ async function waitPortsFree(ports, ms) {
 
 async function main() {
   if (!checkJava()) process.exit(2);
-  const busy = await waitPortsFree([8089, 9099, PORT], 60000);
+  const busy = await waitPortsFree([FS_PORT, AUTH_PORT, PORT], 60000);
   if (busy.length) { console.error(`✗ ports still in use: ${busy.join(", ")} — another test run or emulator is up`); process.exit(2); }
   rmSync(OUT, { recursive: true, force: true });
   mkdirSync(OUT, { recursive: true });
@@ -161,15 +171,24 @@ async function main() {
   process.on("SIGINT", () => { stop(); process.exit(130); });
 
   console.log("… starting emulators and next dev");
-  procs.push(spawn("firebase", ["emulators:start", "--only", "auth,firestore", "--project", project], { cwd: ROOT, detached: true, stdio: "ignore" }));
+  // With an offset, a config of its own: every emulator port moved, rules the same.
+  let config = [];
+  if (OFFSET) {
+    const base = JSON.parse(readFileSync(new URL("../../firebase.json", import.meta.url), "utf8"));
+    base.emulators = { auth: { port: AUTH_PORT }, firestore: { port: FS_PORT, websocketPort: 9150 + OFFSET }, hub: { port: 20000 + OFFSET * 2 }, logging: { port: 20001 + OFFSET * 2 }, ui: { enabled: false } };
+    const path = new URL(`../../.firebase-flows-${OFFSET}.json`, import.meta.url);
+    writeFileSync(path, JSON.stringify(base, null, 2));
+    config = ["--config", fileURLToPath(path)];
+  }
+  procs.push(spawn("firebase", ["emulators:start", "--only", "auth,firestore", "--project", project, ...config], { cwd: ROOT, detached: true, stdio: "ignore" }));
   // Open to every signed-in test account; the access flow closes it itself (config/access).
-  const appEnv = { ...process.env, NEXT_PUBLIC_FIREBASE_EMULATORS: "1", ACCESS_OPEN: "1" };
+  const appEnv = { ...process.env, NEXT_PUBLIC_FIREBASE_EMULATORS: "1", ACCESS_OPEN: "1", NEXT_PUBLIC_EMU_AUTH_PORT: String(AUTH_PORT), NEXT_PUBLIC_EMU_FS_PORT: String(FS_PORT) };
   if (PROD) {
     console.log("… next build (PROD=1)");
     execSync("npx next build", { cwd: ROOT, env: appEnv, stdio: "ignore" });
   }
   procs.push(spawn("npx", ["next", PROD ? "start" : "dev", "-p", String(PORT)], { cwd: ROOT, detached: true, stdio: "ignore", env: appEnv }));
-  const up = (await waitFor("http://127.0.0.1:8089/", 90000)) && (await waitFor("http://127.0.0.1:9099/", 30000)) && (await waitFor(`${BASE}/login`, 120000));
+  const up = (await waitFor(`http://127.0.0.1:${FS_PORT}/`, 90000)) && (await waitFor(`http://127.0.0.1:${AUTH_PORT}/`, 30000)) && (await waitFor(`${BASE}/login`, 120000));
   if (!up) { console.error("✗ emulators or next dev did not start"); stop(); process.exit(2); }
 
   const browser = await engine.launch();
