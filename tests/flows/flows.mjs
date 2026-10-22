@@ -1478,6 +1478,11 @@ export const flows = [
           const scan = (await fetch(`${base}/api/scan`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await tokenOf(stranger)}` }, body: "{}" })).status;
           if (scan !== 403) throw new Error(`stranger's AI scan got ${scan}, not 403`);
         });
+        await t.step("they ask an admin to let them in", async () => {
+          await page.locator("#ask-note").fill("Sales freelance, mau coba buat follow-up klien");
+          await page.getByRole("button", { name: "Minta akses" }).click();
+          await page.getByText("Permintaan akses terkirim").waitFor();
+        });
         await t.step("the owner comes in and may search", async () => {
           await page.getByRole("button", { name: "Keluar" }).click();
           await page.waitForURL("**/login");
@@ -1485,6 +1490,25 @@ export const flows = [
           await page.getByRole("heading", { name: /^Perlu ditindak/ }).waitFor({ timeout: 20000 });
           const st = await places(OWNER_EMAIL);
           if (!passed(st)) throw new Error(`owner got ${st}`);
+        });
+        await t.step("the owner approves them for AI scan only, and makes them an admin", async () => {
+          await page.getByRole("button", { name: "Profil dan pengaturan" }).click();
+          await page.getByRole("button", { name: /^Akses & admin/ }).filter({ hasText: "1 orang minta akses" }).click();
+          const sheet = page.getByRole("dialog", { name: "Akses & admin" });
+          const req = sheet.getByRole("article", { name: `Permintaan ${stranger}` });
+          await req.getByText("Sales freelance").waitFor();
+          await req.getByRole("checkbox", { name: `Scan gambar (AI) buat ${stranger}` }).check();
+          await req.getByRole("button", { name: `Setujui ${stranger}` }).click();
+          await sheet.getByRole("heading", { name: "Udah disetujui (1)" }).waitFor();
+          await sheet.getByText("Scan gambar (AI) · oleh").waitFor();
+          await sheet.locator("#aa-email").fill(stranger);
+          await sheet.getByRole("button", { name: "Jadikan admin" }).click();
+          await sheet.getByRole("button", { name: `Cabut admin ${stranger}` }).waitFor();
+          await sheet.getByRole("button", { name: "Tutup", exact: true }).last().click();
+          await sheet.waitFor({ state: "detached" });
+          await page.getByRole("dialog", { name: "Profil & Pengaturan" }).getByRole("button", { name: "Tutup", exact: true }).click();
+          const scan = (await fetch(`${base}/api/scan`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await tokenOf(stranger)}` }, body: "{}" })).status;
+          if (!passed(scan)) throw new Error(`approved scan got ${scan}`);
         });
         await t.step("the owner's guild lets the invited person in, Cari bisnis not yet", async () => {
           await go(page, "Tim", "Guild");
@@ -1507,6 +1531,13 @@ export const flows = [
           await p2.getByRole("button", { name: "Gabung guild" }).click({ timeout: 20000 });
           await p2.waitForURL("**/dashboard?guild", { timeout: 20000 });
           if (await p2.getByRole("heading", { name: "SalesPal masih tertutup" }).count()) throw new Error("still closed after joining");
+          // An admin decides applications but can't name admins.
+          await p2.getByRole("button", { name: "Profil dan pengaturan" }).click();
+          await p2.getByRole("button", { name: /^Akses & admin/ }).click();
+          await p2.getByRole("dialog", { name: "Akses & admin" }).getByRole("heading", { name: /^Permintaan masuk/ }).waitFor();
+          if (await p2.getByRole("button", { name: "Jadikan admin" }).count()) throw new Error("an admin can name admins");
+          await p2.getByRole("dialog", { name: "Akses & admin" }).getByRole("button", { name: "Tutup", exact: true }).last().click();
+          await p2.getByRole("dialog", { name: "Profil & Pengaturan" }).getByRole("button", { name: "Tutup", exact: true }).click();
           const st = await places(stranger);
           if (st !== 403) throw new Error(`a member got ${st} before the Leader allowed it`);
         });
