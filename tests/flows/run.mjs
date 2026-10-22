@@ -152,7 +152,8 @@ async function main() {
 
   console.log("… starting emulators and next dev");
   procs.push(spawn("firebase", ["emulators:start", "--only", "auth,firestore", "--project", project], { cwd: ROOT, detached: true, stdio: "ignore" }));
-  const appEnv = { ...process.env, NEXT_PUBLIC_FIREBASE_EMULATORS: "1" };
+  // Open to every signed-in test account; the access flow closes it itself (config/access).
+  const appEnv = { ...process.env, NEXT_PUBLIC_FIREBASE_EMULATORS: "1", ACCESS_OPEN: "1" };
   if (PROD) {
     console.log("… next build (PROD=1)");
     execSync("npx next build", { cwd: ROOT, env: appEnv, stdio: "ignore" });

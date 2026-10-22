@@ -1450,6 +1450,82 @@ export const flows = [
     },
   },
   {
+    name: "access: invite-only, and who may spend the Google key",
+    async run(t) {
+      const { page, base, project } = t;
+      const A = "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1";
+      const tokenOf = async (email) => (await (await fetch(`${A}/accounts:signInWithPassword?key=fake`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password: "rahasia123", returnSecureToken: true }) })).json()).idToken;
+      // The search with no words: past the guard it stops at the missing key (503)
+      // or the empty query (400), so no test ever spends a real Google call.
+      const places = async (email) => (await fetch(`${base}/api/places`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await tokenOf(email)}` }, body: JSON.stringify({ query: "" }) })).status;
+      const passed = (s) => s === 400 || s === 503;
+      const stranger = `luar${Date.now()}@contoh.id`;
+      let p2, link = "";
+      await seedDocs(project, [["config/access", { open: false }]]);
+      try {
+        await t.step("someone who signs up on their own finds it closed", async () => {
+          await page.goto(`${base}/login`);
+          await page.getByRole("button", { name: "Daftar gratis" }).click();
+          await page.locator('input[type="email"]').fill(stranger);
+          await page.locator('input[type="password"]').fill("rahasia123");
+          await page.locator('form button[type="submit"]').click();
+          await page.getByRole("heading", { name: "SalesPal masih tertutup" }).waitFor({ timeout: 20000 });
+          if (await page.getByRole("heading", { name: /^Perlu ditindak/ }).count()) throw new Error("the app opened for a stranger");
+        });
+        await t.step("and the server refuses them the Google key", async () => {
+          const st = await places(stranger);
+          if (st !== 403) throw new Error(`stranger got ${st}, not 403`);
+          const scan = (await fetch(`${base}/api/scan`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await tokenOf(stranger)}` }, body: "{}" })).status;
+          if (scan !== 403) throw new Error(`stranger's AI scan got ${scan}, not 403`);
+        });
+        await t.step("the owner comes in and may search", async () => {
+          await page.getByRole("button", { name: "Keluar" }).click();
+          await page.waitForURL("**/login");
+          await ownerLogin(t);
+          await page.getByRole("heading", { name: /^Perlu ditindak/ }).waitFor({ timeout: 20000 });
+          const st = await places(OWNER_EMAIL);
+          if (!passed(st)) throw new Error(`owner got ${st}`);
+        });
+        await t.step("the owner's guild lets the invited person in, Cari bisnis not yet", async () => {
+          await go(page, "Tim", "Guild");
+          if (await page.getByRole("button", { name: "+ Bikin guild" }).count()) {
+            await page.getByRole("button", { name: "+ Bikin guild" }).click();
+            await modal(page).locator("#gd-name").fill("Tim Akses");
+            await modal(page).getByRole("button", { name: "Bikin guild" }).click();
+          }
+          await expectText(page, "Undang orang");
+          await page.getByRole("radiogroup", { name: "Peran undangan" }).getByRole("radio", { name: /^Member/ }).click();
+          await page.getByRole("button", { name: "Bikin link undangan" }).click();
+          link = await page.locator("#inv-link").inputValue();
+          const ctx2 = await page.context().browser().newContext(page.viewportSize() ? { viewport: page.viewportSize() } : {});
+          p2 = await ctx2.newPage();
+          await p2.goto(link);
+          await p2.getByRole("link", { name: "Login buat gabung" }).click();
+          await p2.locator('input[type="email"]').fill(stranger);
+          await p2.locator('input[type="password"]').fill("rahasia123");
+          await p2.locator('form button[type="submit"]').click();
+          await p2.getByRole("button", { name: "Gabung guild" }).click({ timeout: 20000 });
+          await p2.waitForURL("**/dashboard?guild", { timeout: 20000 });
+          if (await p2.getByRole("heading", { name: "SalesPal masih tertutup" }).count()) throw new Error("still closed after joining");
+          const st = await places(stranger);
+          if (st !== 403) throw new Error(`a member got ${st} before the Leader allowed it`);
+        });
+        await t.step("the Leader opens Cari bisnis to members, and the member may search", async () => {
+          await page.getByRole("button", { name: "Atur lambang & nama guild" }).click();
+          const sheet = modal(page);
+          await sheet.getByRole("checkbox", { name: "Cari bisnis buat Member" }).check();
+          await sheet.getByRole("button", { name: "Simpan" }).click();
+          await sheet.waitFor({ state: "detached" });
+          const st = await places(stranger);
+          if (!passed(st)) throw new Error(`member got ${st} after the Leader allowed it`);
+        });
+      } finally {
+        await seedDocs(project, [["config/access", { open: true }]]);
+        await p2?.context().close().catch(() => {});
+      }
+    },
+  },
+  {
     name: "dialogs work from the keyboard",
     async run(t) {
       const { page } = t;

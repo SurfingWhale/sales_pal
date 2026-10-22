@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser, takeQuota } from "@/lib/serverAuth";
+import { giveBackMonthly, mayUse, takeMonthly } from "@/lib/access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,10 +38,12 @@ function extractLeads(content: string): ScanLead[] {
 }
 
 export async function POST(req: Request) {
-  // Only signed-in SalesPal users, and only so many scans a day each: every
-  // scan spends the xAI key.
+  // Only people allowed to spend the xAI key (PRD-015), so many scans a day
+  // each, and so many a month for the whole app.
   const caller = await requireUser(req);
   if (caller instanceof NextResponse) return caller;
+  const allowed = await mayUse(caller, "scan");
+  if (!allowed.ok) return NextResponse.json({ error: allowed.why, denied: true }, { status: 403 });
   const limit = parseInt(process.env.SCAN_DAILY_LIMIT || "", 10) || 40;
   const quota = await takeQuota(caller.uid, "scan", limit);
   if (!quota.ok) {
@@ -67,6 +70,8 @@ export async function POST(req: Request) {
   }
 
   const model = process.env.XAI_VISION_MODEL || "grok-2-vision-1212";
+  const month = await takeMonthly("scan");
+  if (!month.ok) return NextResponse.json({ error: `Jatah scan bulan ini (${month.limit} buat semua akun) udah habis. Mulai lagi tanggal 1.` }, { status: 429 });
 
   try {
     const resp = await fetch("https://api.x.ai/v1/chat/completions", {
@@ -90,6 +95,7 @@ export async function POST(req: Request) {
 
     const data = await resp.json();
     if (!resp.ok) {
+      await giveBackMonthly("scan");
       const msg = data?.error?.message || data?.error || `Grok API error (${resp.status})`;
       return NextResponse.json({ error: String(msg) }, { status: 502 });
     }
@@ -98,6 +104,7 @@ export async function POST(req: Request) {
     const rows = extractLeads(content);
     return NextResponse.json({ rows });
   } catch {
+    await giveBackMonthly("scan");
     return NextResponse.json({ error: "Layanan scan lagi ga bisa dihubungi. Coba lagi sebentar, atau import pakai Excel/CSV." }, { status: 500 });
   }
 }
