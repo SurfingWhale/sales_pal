@@ -18,5 +18,6 @@ SalesPal: PWA buat freelancer & tim sales kecil di Indonesia — cari lead, ngob
 | [012](PRD-012-cari-bisnis.md) | Cari bisnis di Google Maps (Places API resmi, bukan scraping), titik lemah dari ulasan, pesan pembuka, simpan jadi lead; template Excel + import; rencana sumber pihak ketiga, verifikasi email, AI | MVP dibangun; perlu `GOOGLE_PLACES_API_KEY` | #60 |
 | [013](PRD-013-peta-lokasi.md) | Peta 3D (MapLibre + OpenFreeMap) dengan pin tiap lead, lokasi lead dari alamat/GPS/geser peta, Beranda dengan tipe scroll jelas (antrian geser, sheet, kotak terbatas), kartu bergaris tahap | Dibangun | #61 |
 | [014](PRD-014-dashboard-tim-dan-iklan.md) | Dashboard tim: angka utama + perubahan vs periode lalu, tren harian, funnel, per sales (tap → heat map & log), perlu dicek; iklan Meta (import Ads Manager → CPL, biaya per closing, ROAS) | A dibangun, B menyusul | |
+| [015](PRD-015-akses-dan-batas-api.md) | Akses tertutup (undangan guild owner), izin alat berbayar per peran dari Leader, batas bulanan di bawah jatah gratis (Cari bisnis 900, cari alamat 4.500, scan AI 300), header keamanan | Dibangun | |
 
 Uji otomatis: `npm run test:flows` (HP), `DESKTOP=1 npm run test:flows`, dan WebKit `DEVICE=iphone12|safari` (CI `native`) — 17 flow lewat emulator Firebase, dengan audit HIG di tiap langkah. Uji manual tiap deploy: skill `salespal-uat` (claude-config).

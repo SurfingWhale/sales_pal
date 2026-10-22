@@ -49,7 +49,11 @@ export function adminDb() {
   return getFirestore(admin());
 }
 
-export interface Caller { uid: string; email?: string }
+export function adminAuth() {
+  return getAuth(admin());
+}
+
+export interface Caller { uid: string; email?: string; emailVerified?: boolean }
 
 export function deny(error: string, status: number) {
   return NextResponse.json({ error }, { status, headers: { "Cache-Control": "no-store, max-age=0" } });
@@ -63,7 +67,7 @@ export async function requireUser(req: Request): Promise<Caller | NextResponse> 
   if (!token) return deny("Login dulu.", 401);
   try {
     const d = await getAuth(admin()).verifyIdToken(token);
-    return { uid: d.uid, email: d.email };
+    return { uid: d.uid, email: d.email, emailVerified: d.email_verified === true };
   } catch {
     return deny("Sesi login tidak valid. Coba muat ulang app.", 401);
   }

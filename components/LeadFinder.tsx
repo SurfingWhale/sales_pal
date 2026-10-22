@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { authFetch } from "@/lib/authFetch";
+import { useSpace } from "@/lib/space";
 import { waLink } from "@/lib/billing";
 import { DEFAULT_OPENER, Place, TEMPLATE_COLUMNS, TEMPLATE_EXAMPLE, TEMPLATE_GUIDE, Weakness, opener, snippet, weaknesses } from "@/lib/places";
 import { btnMuted, btnPrimary, chip, font, inputStyle, label, modalBox, WA_INK } from "@/components/ui";
@@ -38,6 +39,24 @@ export default function LeadFinder({ known, me, onSave, onImport, onClose }: {
   const [err, setErr] = useState("");
   const [found, setFound] = useState<Found[] | null>(null);
   const [next, setNext] = useState("");
+  // Who may search, and what's left, from the server (PRD-015). The search
+  // itself is checked again there.
+  const space = useSpace();
+  const guild = space.kind === "guild" ? space.id : "";
+  const [denied, setDenied] = useState("");
+  const [unguarded, setUnguarded] = useState(false);   // the owner is told when caps can't be counted
+  const [left, setLeft] = useState<{ today?: number; month: number } | null>(null);
+  const [asked, setAsked] = useState("");   // the search on screen: the same one isn't paid for twice
+  useEffect(() => {
+    let live = true;
+    authFetch(`/api/access${guild ? `?guild=${encodeURIComponent(guild)}` : ""}`).then(r => (r.ok ? r.json() : null)).then(j => {
+      if (!live || !j) return;
+      setDenied(j.tools?.places?.ok === false ? j.tools.places.why : "");
+      setUnguarded(Boolean(j.owner) && j.enforced === false);
+      if (j.left?.places) setLeft({ month: j.left.places.left });
+    }, () => undefined);
+    return () => { live = false; };
+  }, [guild]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [tpl, setTpl] = useState(DEFAULT_OPENER);
   const [copied, setCopied] = useState("");
@@ -50,11 +69,16 @@ export default function LeadFinder({ known, me, onSave, onImport, onClose }: {
 
   async function search(more = false) {
     if (!q.trim()) { setErr("Tulis dulu yang dicari, mis. \"coffee shop Jakarta Selatan\"."); return; }
+    const ask = `${q.trim().toLowerCase()}|${withEmail}`;
+    if (!more && found && ask === asked) { setErr(""); return; }
     setBusy(true); setErr(""); setSaved(null);
     try {
-      const res = await authFetch("/api/places", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q, withEmail, pageToken: more ? next : "" }) });
+      const res = await authFetch("/api/places", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q, withEmail, pageToken: more ? next : "", guild }) });
       const json = await res.json();
+      if (res.status === 403) setDenied(json?.error || "");
       if (!res.ok) throw new Error(json?.error || "Pencarian gagal. Coba lagi.");
+      if (json.left) setLeft(json.left);
+      setAsked(ask);
       const rows: Found[] = (json.places as Place[]).map(p => ({ ...p, weak: weaknesses(p) }));
       setFound(cur => (more && cur ? [...cur, ...rows] : rows));
       setNext(json.nextPageToken || "");
@@ -92,8 +116,23 @@ export default function LeadFinder({ known, me, onSave, onImport, onClose }: {
         <form onSubmit={e => { e.preventDefault(); search(); }} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <label htmlFor="lf-q" className="vh">Yang dicari</label>
           <input id="lf-q" value={q} onChange={e => setQ(e.target.value)} placeholder="mis. coffee shop Jakarta Selatan" style={{ ...inputStyle, flex: "1 1 240px" }} />
-          <button type="submit" disabled={busy} style={{ ...btnPrimary, minHeight: 48, opacity: busy ? 0.6 : 1 }}>{busy && !found ? "Mencari…" : "Cari"}</button>
+          <button type="submit" disabled={busy || Boolean(denied)} style={{ ...btnPrimary, minHeight: 48, opacity: busy || denied ? 0.6 : 1 }}>{busy && !found ? "Mencari…" : "Cari"}</button>
         </form>
+        {denied && (
+          <div role="note" style={{ fontSize: 13, lineHeight: 1.5, margin: "8px 0", padding: "10px 12px", borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)" }}>
+            🔒 {denied} Sementara itu, Import Excel di bawah tetap bisa.
+          </div>
+        )}
+        {unguarded && (
+          <div role="note" style={{ fontSize: 12, lineHeight: 1.5, margin: "8px 0", padding: "8px 10px", borderRadius: 10, background: "#b453090f", border: "1px solid #b4530940" }}>
+            Buat kamu (owner): batas bulanan & pintu undangan belum jalan penuh. Isi <code>FIREBASE_SERVICE_ACCOUNT</code> di Vercel. Sampai itu, alat berbayar cuma bisa dipakai kamu.
+          </div>
+        )}
+        {!denied && left && (
+          <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>
+            Sisa pencarian{typeof left.today === "number" ? `: ${left.today} hari ini ·` : ""} {left.month} bulan ini (jatah gratis semua akun)
+          </div>
+        )}
         <label style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 44, fontSize: 14 }}>
           <input type="checkbox" checked={withEmail} onChange={e => setWithEmail(e.target.checked)} style={{ width: 20, height: 20, accentColor: "#005eb0" }} />
           Cari juga email di website-nya (lebih lama)

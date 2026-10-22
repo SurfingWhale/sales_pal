@@ -19,6 +19,18 @@ const nextConfig = {
   // finishes there never reaches the app. With the handler on our own host the
   // result lands where the app can read it. Takes effect once
   // NEXT_PUBLIC_AUTH_HOST names this host (see lib/firebase.ts).
+  // Basic hardening (PRD-015): no MIME sniffing, no framing by other sites
+  // (Firebase's sign-in iframe is same-origin), and no full URLs leaked as referrers.
+  async headers() {
+    return [{
+      source: "/:path*",
+      headers: [
+        { key: "X-Content-Type-Options", value: "nosniff" },
+        { key: "X-Frame-Options", value: "SAMEORIGIN" },
+        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      ],
+    }];
+  },
   async rewrites() {
     return [
       { source: "/__/auth/:path*", destination: "https://sales-pal.firebaseapp.com/__/auth/:path*" },

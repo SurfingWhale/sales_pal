@@ -73,6 +73,8 @@ await t("owner cannot write a token", assertFails(setDoc(doc(owner, "connections
 await t("another account cannot read the vault", assertFails(getDocs(collection(other, "connections"))));
 await t("no browser reads or writes push subscriptions", assertFails(getDocs(collection(owner, "pushSubs"))));
 await t("no browser stores a push subscription", assertFails(setDoc(doc(other, "pushSubs", "x"), { uid: "u9", endpoint: "https://push.example/1" })));
+await t("nobody reads the access switch", assertFails(getDoc(doc(owner, "config", "access"))));
+await t("nobody opens the app to everyone", assertFails(setDoc(doc(other, "config", "access"), { open: true })));
 await t("nobody reads usage quotas", assertFails(getDoc(doc(owner, "usage", "owner1_scan_2026-10-08"))));
 await t("nobody resets their quota", assertFails(setDoc(doc(other, "usage", "u9_scan_2026-10-08"), { count: 0 })));
 
@@ -195,6 +197,10 @@ await t("member cannot change the packages", assertFails(setDoc(doc(M, "guilds",
 await t("officer sets a package", assertSucceeds(setDoc(doc(O, "guilds", G, "services", "s1"), { name: "Foto Menu", price: 1500000 })));
 await t("leader sets the business info", assertSucceeds(setDoc(doc(L, "guilds", G, "settings", "business"), { name: "Tim Uji" })));
 await t("member cannot change the business info", assertFails(setDoc(doc(M, "guilds", G, "settings", "business"), { name: "x" })));
+await t("leader sets who may use the paid tools", assertSucceeds(setDoc(doc(L, "guilds", G, "settings", "tools"), { places: ["officer", "member"] })));
+await t("officer cannot change who may use the paid tools", assertFails(setDoc(doc(O, "guilds", G, "settings", "tools"), { places: ["officer", "member"] })));
+await t("member cannot change who may use the paid tools", assertFails(setDoc(doc(M, "guilds", G, "settings", "tools"), { places: ["member"] })));
+await t("member reads who may use the paid tools", assertSucceeds(getDoc(doc(M, "guilds", G, "settings", "tools"))));
 await t("viewer cannot read the packages", assertFails(getDocs(collection(V, "guilds", G, "services"))));
 await t("no one writes an unknown guild collection", assertFails(setDoc(doc(L, "guilds", G, "secrets", "x"), { ownerUid: "lead" })));
 await t("member adds a client and logs a chat under it", assertSucceeds(setDoc(doc(M, "guilds", G, "clients", "c1"), { name: "Toko", ownerUid: "memb", ownerName: "memb" })
