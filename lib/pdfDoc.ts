@@ -5,7 +5,7 @@
 // save an invoice and send it). Text stays text: sharp, small, searchable.
 
 import type { jsPDF as JsPDF } from "jspdf";
-import { Business, Invoice, Quote, balance, dpAmount, longDate, paid, rupiah, subtotal, total } from "@/lib/billing";
+import { Business, Invoice, Quote, balance, dpAmount, longDate, paid, rupiah, scheduleOf, subtotal, taxAmount, termAmounts, total } from "@/lib/billing";
 import { fullDay } from "@/lib/when";
 
 export type Doc = { kind: "quote"; data: Quote } | { kind: "invoice"; data: Invoice };
@@ -140,15 +140,40 @@ export async function buildPdf(d: Doc, b: Business): Promise<Blob> {
     del.forEach(l => wrap(l, R - M - 6, 9.5).forEach((w, i) => { room(5); if (i === 0) text("•", M + 1, y, { size: 9.5 }); text(w, M + 6, y, { size: 9.5 }); y += 4.6; }));
     y += 5;
   }
+  const list = (title: string, body?: string) => {
+    const ls = (body || "").split("\n").map(l => l.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
+    if (!ls.length) return;
+    room(10);
+    text(title, M, y, { size: 7.5, color: SOFT }); y += 5;
+    ls.forEach(l => wrap(l, R - M - 6, 9.5).forEach((w, i) => { room(5); if (i === 0) text("•", M + 1, y, { size: 9.5 }); text(w, M + 6, y, { size: 9.5 }); y += 4.6; }));
+    y += 5;
+  };
+  if (x.timeline?.trim()) list("WAKTU PENGERJAAN", x.timeline);
+  list("DI LUAR SCOPE", x.exclusions);
 
   // Totals on the right.
   room(40);
   const tx = 120;
   const row = (k: string, v: string, strong = false) => { text(k, tx, y, { size: strong ? 11 : 9.5, bold: strong }); text(v, R, y, { size: strong ? 11 : 9.5, bold: strong, align: "right" }); y += strong ? 6 : 5; };
-  if (d.data.discount > 0) { row("Subtotal", rupiah(subtotal(d.data.items))); row("Diskon", `-${rupiah(d.data.discount)}`); }
+  if (d.data.discount > 0 || d.data.taxPercent) row("Subtotal", rupiah(subtotal(d.data.items)));
+  if (d.data.discount > 0) row("Diskon", `-${rupiah(d.data.discount)}`);
+  if (d.data.taxPercent) row(`Pajak ${d.data.taxPercent}%`, rupiah(taxAmount(d.data)));
   line(tx, y - 3, R, 0.5, INK); y += 1.5;
   row("Total", rupiah(total(d.data)), true);
-  if (d.kind === "quote" && d.data.dpPercent > 0) row(`DP ${d.data.dpPercent}%`, rupiah(dpAmount(d.data)));
+  if (d.kind === "quote") {
+    const terms = scheduleOf(d.data, d.data.terms);
+    if (terms.length > 1) {
+      const amt = termAmounts(total(d.data), terms);
+      room(8 + terms.length * 9);
+      y += 2; text("JADWAL PEMBAYARAN", M, y, { size: 7.5, color: SOFT }); y += 5;
+      terms.forEach((t, i) => {
+        text(`${t.label} ${t.percent}%`, M, y, { size: 9.5, bold: true });
+        text(rupiah(amt[i]), R, y, { size: 9.5, align: "right" });
+        if (t.when) { y += 4.2; text(t.when, M, y, { size: 8.5, color: SOFT }); }
+        y += 5.5;
+      });
+    }
+  }
   if (d.kind === "invoice") {
     const inv = d.data, p = paid(inv);
     if (p > 0) row("Sudah dibayar", `-${rupiah(p)}`);

@@ -26,7 +26,7 @@ export default function SendQuoteSheet({ q, business, onSent, onClose }: {
   const terms = useMemo(() => q.terms || termsOf(business), [q.terms, business]);
   const d = business.docs || {};
   const spkSigned = !!q.spk?.signedAt, ndaSigned = !!q.nda?.signedAt;
-  const [spkOn, setSpkOn] = useState(true);
+  const [spkOn, setSpkOn] = useState(!!d.spkAuto || !!q.spk);
   const [ndaOn, setNdaOn] = useState(!!q.nda);
   const [spkTitle, setSpkTitle] = useState(q.spk?.title || d.spkTitle || DEFAULT_SPK_TITLE);
   const [spkBody, setSpkBody] = useState(q.spk?.body || fillAgreement(d.spkTemplate || DEFAULT_SPK, q, issuer, terms));
@@ -34,6 +34,9 @@ export default function SendQuoteSheet({ q, business, onSent, onClose }: {
   const [files, setFiles] = useState<{ blob: Blob; name: string }[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  // Opening WhatsApp or a share sheet doesn't mean it went out, so the seller
+  // says so before the quote is marked sent and its letterhead frozen.
+  const [confirm, setConfirm] = useState<"" | "shared" | "downloaded" | "wa">("");
 
   // iOS shares only straight from a tap, so the PDFs are ready before it.
   useEffect(() => {
@@ -62,17 +65,20 @@ export default function SendQuoteSheet({ q, business, onSent, onClose }: {
 
   async function share() {
     if (!files) return;
-    setBusy(true); setMsg("");
+    setMsg("");
     const r = await sharePdfs(files);
-    if (r === "cancelled") { setBusy(false); return; }
-    try { await onSent(patch()); onClose(); } catch { setMsg("Terkirim, tapi gagal dicatat. Cek koneksi lalu tandai terkirim."); setBusy(false); }
+    if (r !== "cancelled") setConfirm(r);
   }
 
-  async function sendWa() {
+  function sendWa() {
     const extra = [spkOn && `${spkTitle} terlampir`, ndaOn && "NDA terlampir"].filter(Boolean).join(", ");
     window.open(waLink(q.phone, quoteText(q, issuer) + (extra ? `\n\n(${extra} dalam PDF.)` : "")), "_blank");
-    setBusy(true);
-    try { await onSent(patch()); onClose(); } catch { setMsg("Gagal dicatat. Cek koneksi."); setBusy(false); }
+    setConfirm("wa");
+  }
+
+  async function markSent() {
+    setBusy(true); setMsg("");
+    try { await onSent(patch()); onClose(); } catch { setMsg("Gagal dicatat. Cek koneksi lalu coba lagi."); setBusy(false); }
   }
 
   const row = (on: boolean, set: (v: boolean) => void, title: string, hint: string, locked?: boolean) => (
@@ -102,6 +108,20 @@ export default function SendQuoteSheet({ q, business, onSent, onClose }: {
   return (
     <div className="modal-overlay" onClick={() => { if (!busy) onClose(); }}>
       <div role="dialog" aria-modal="true" aria-labelledby="send-h" onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 520 }}>
+        {confirm ? <>
+          <div id="send-h" style={{ fontSize: 17, fontWeight: 700, fontFamily: font }}>Udah kekirim ke {q.leadName || "klien"}?</div>
+          <p style={{ fontSize: 14, color: "var(--app-sub)", margin: "6px 0 16px", lineHeight: 1.5 }}>
+            {confirm === "downloaded" ? "PDF-nya udah tersimpan di perangkat ini. Kirim ke klien dulu, baru tandai terkirim."
+              : confirm === "wa" ? "Tandai terkirim kalau pesannya udah beneran dikirim di WhatsApp."
+              : "Tandai terkirim kalau file-nya udah sampai ke klien."}
+            {" "}Saat ditandai, kop dan syarat dikunci ke penawaran ini.
+          </p>
+          <div role="status" style={{ fontSize: 13, color: "var(--hot)", marginBottom: msg ? 8 : 0 }}>{msg}</div>
+          <div className="sp-form-foot" style={{ flexWrap: "wrap" }}>
+            <button onClick={() => { setConfirm(""); setMsg(""); }} disabled={busy} style={btnMuted}>Belum, kembali</button>
+            <button onClick={markSent} disabled={busy} style={{ ...btnPrimary, flex: 1, opacity: busy ? 0.6 : 1 }}>{busy ? "Menyimpan…" : "Udah, tandai terkirim"}</button>
+          </div>
+        </> : <>
         <div id="send-h" style={{ fontSize: 17, fontWeight: 700, fontFamily: font }}>Kirim penawaran</div>
         <p style={{ fontSize: 13, color: "var(--app-muted)", margin: "4px 0 16px" }}>
           {q.number} buat {q.leadName || "klien"}. Pilih yang ikut dikirim; isinya udah keisi dari penawaran dan Kop & logo.
@@ -109,7 +129,7 @@ export default function SendQuoteSheet({ q, business, onSent, onClose }: {
 
         <div style={{ background: "var(--app-inner)", borderRadius: 14, overflow: "hidden", marginBottom: 12 }}>
           {row(true, () => {}, `Penawaran ${q.number}`, "Selalu ikut", true)}
-          {row(spkOn, setSpkOn, spkTitle || DEFAULT_SPK_TITLE, spkSigned ? "Udah ditandatangani" : "SPK: ruang lingkup, biaya & DP, revisi, pembatalan, tanda tangan", spkSigned)}
+          {row(spkOn, setSpkOn, spkTitle || DEFAULT_SPK_TITLE, spkSigned ? "Udah ditandatangani" : "Ruang lingkup, biaya & termin, revisi, pembatalan, tanda tangan", spkSigned)}
           {spkOn && editor("spk", spkTitle, setSpkTitle, spkBody, setSpkBody, spkSigned)}
           {row(ndaOn, setNdaOn, "NDA (kerahasiaan)", ndaSigned ? "Udah ditandatangani" : "Opsional, kalau project-nya rahasia", ndaSigned)}
           {ndaOn && editor("nda", "NDA", null, ndaBody, setNdaBody, ndaSigned)}
@@ -127,6 +147,7 @@ export default function SendQuoteSheet({ q, business, onSent, onClose }: {
             {!files ? "Menyiapkan PDF…" : `Bagikan PDF (${files.length})`}
           </button>
         </div>
+        </>}
       </div>
     </div>
   );

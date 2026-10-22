@@ -61,7 +61,7 @@ export default function BusinessEditor({ business, onClose }: { business: Busine
     <div style={{ gridColumn: col, minWidth: 0 }}>
       <label htmlFor={`biz-doc-${k}`} style={label}>{l}</label>
       <input id={`biz-doc-${k}`} inputMode={numeric ? "numeric" : undefined} value={docs[k] === undefined ? "" : String(docs[k])} placeholder={ph} style={inputStyle}
-        onChange={e => setDocs({ [k]: numeric ? (e.target.value.trim() === "" ? undefined : Math.max(0, Math.min(numeric && k === "dpPercent" ? 100 : 365, parseInt(e.target.value.replace(/\D/g, ""), 10) || 0))) : e.target.value })} />
+        onChange={e => setDocs({ [k]: numeric ? (e.target.value.trim() === "" ? undefined : Math.max(0, Math.min(numeric && (k === "dpPercent" || k === "taxPercent") ? 100 : 365, parseInt(e.target.value.replace(/\D/g, ""), 10) || 0))) : e.target.value })} />
     </div>
   );
 
@@ -128,6 +128,12 @@ export default function BusinessEditor({ business, onClose }: { business: Busine
           {dfield("dpPercent", "DP (%)", "50 · kosongin kalau bayar penuh", "auto", true)}
           {dfield("dpWhen", "DP dibayar kapan", "mis. saat booking")}
           {dfield("finalWhen", "Pelunasan kapan", "mis. H-1 acara")}
+          {dfield("taxPercent", "Pajak (%)", "kosongin kalau ga ada, mis. 11", "auto", true)}
+          <label style={{ gridColumn: "1/-1", display: "flex", alignItems: "center", gap: 12, minHeight: 44, cursor: "pointer" }}>
+            <input id="biz-doc-spkAuto" type="checkbox" checked={!!docs.spkAuto} onChange={e => setDocs({ spkAuto: e.target.checked || undefined })}
+              style={{ width: 22, height: 22, accentColor: "#005eb0", flexShrink: 0 }} />
+            <span style={{ fontSize: 14 }}>Sertakan SPK otomatis saat kirim penawaran</span>
+          </label>
           {dfield("revisions", "Revisi", "mis. 1x revisi minor, maks. 7 hari setelah file dikirim", "1/-1")}
           <div style={{ gridColumn: "1/-1" }}>
             <label htmlFor="biz-doc-cancellation" style={label}>Pembatalan & jadwal ulang</label>

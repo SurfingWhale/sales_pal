@@ -320,6 +320,9 @@ function briefLines(x: Brief): string[] {
   ].filter(Boolean);
   const del = (x.deliverables || "").split("\n").map(l => l.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
   if (del.length) out.push("Deliverables:", ...del.map(l => `- ${l}`));
+  if (x.timeline?.trim()) out.push(`Waktu pengerjaan: ${x.timeline.trim()}`);
+  const ex = (x.exclusions || "").split("\n").map(l => l.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
+  if (ex.length) out.push("Di luar scope:", ...ex.map(l => `- ${l}`));
   return out.length ? [...out, ""] : [];
 }
 
@@ -343,9 +346,15 @@ export function quoteText(q: Quote, b: Business): string {
     ...itemLines(q.items),
     "",
   ];
-  if (q.discount) lines.push(`Subtotal: ${rupiah(subtotal(q.items))}`, `Diskon: -${rupiah(q.discount)}`);
+  if (q.discount || q.taxPercent) lines.push(`Subtotal: ${rupiah(subtotal(q.items))}`);
+  if (q.discount) lines.push(`Diskon: -${rupiah(q.discount)}`);
+  if (q.taxPercent) lines.push(`Pajak ${q.taxPercent}%: ${rupiah(taxAmount(q))}`);
   lines.push(`*Total: ${rupiah(total(q))}*`);
-  if (q.dpPercent) lines.push(`DP ${q.dpPercent}% untuk kunci jadwal: ${rupiah(dpAmount(q))}`);
+  const terms = scheduleOf(q, q.terms);
+  if (terms.length > 1) {
+    const amt = termAmounts(total(q), terms);
+    lines.push("", "Pembayaran:", ...terms.map((t, i) => `- ${t.label} ${t.percent}%: ${rupiah(amt[i])}${t.when ? ` (${t.when})` : ""}`));
+  }
   if (q.notes) lines.push("", q.notes);
   lines.push(...signOff(b));
   return lines.join("\n");
@@ -364,6 +373,7 @@ export function invoiceText(inv: Invoice, b: Business): string {
     "",
   ];
   if (inv.discount) lines.push(`Diskon: -${rupiah(inv.discount)}`);
+  if (inv.taxPercent) lines.push(`Pajak ${inv.taxPercent}%: ${rupiah(taxAmount(inv))}`);
   lines.push(`Total: ${rupiah(total(inv))}`);
   if (p > 0) lines.push(`Sudah dibayar: ${rupiah(p)}`);
   lines.push(p === 0 && inv.dpPercent ? `*DP ${inv.dpPercent}% yang perlu dibayar: ${rupiah(due)}*` : `*Sisa tagihan: ${rupiah(due)}*`);

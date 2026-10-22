@@ -6,7 +6,7 @@
 // A template is not legal advice; the editor says so.
 
 import type { jsPDF as JsPDF } from "jspdf";
-import { Agreement, DocTerms, Issuer, Quote, dpAmount, longDate, rupiah, total } from "@/lib/billing";
+import { Agreement, DocTerms, Issuer, Quote, longDate, rupiah, scheduleOf, termAmounts, total } from "@/lib/billing";
 import { fullDay } from "@/lib/when";
 import { pngOf, safe } from "@/lib/pdfDoc";
 
@@ -47,12 +47,12 @@ Informasi yang sudah publik, sudah diketahui sebelumnya, atau wajib dibuka menur
 4. Jangka waktu
 Berlaku sejak ditandatangani sampai 1 tahun setelah {project} selesai, kecuali disepakati lain.`;
 
-// "{dp}% {dp_kapan}, sisanya {pelunasan_kapan}" in plain words.
-export function paymentLine(q: Pick<Quote, "items" | "discount" | "dpPercent">, t: DocTerms = {}): string {
-  const tot = total(q);
-  if (!q.dpPercent) return `Dibayar penuh${t.finalWhen ? ` ${t.finalWhen}` : ""}.`;
-  const dp = dpAmount(q);
-  return `DP ${q.dpPercent}% (${rupiah(dp)})${t.dpWhen ? ` ${t.dpWhen}` : ""}, pelunasan ${rupiah(tot - dp)}${t.finalWhen ? ` ${t.finalWhen}` : ""}.`;
+// The payment schedule in plain words: "DP 50% (Rp…) saat booking, Pelunasan 50% (Rp…) H-1 acara."
+export function paymentLine(q: Pick<Quote, "items" | "discount" | "dpPercent" | "taxPercent" | "schedule">, t: DocTerms = {}): string {
+  const terms = scheduleOf(q, t);
+  if (terms.length === 1) return `Dibayar penuh${terms[0].when ? ` ${terms[0].when}` : ""}.`;
+  const amt = termAmounts(total(q), terms);
+  return terms.map((x, i) => `${x.label} ${x.percent}% (${rupiah(amt[i])})${x.when ? ` ${x.when}` : ""}`).join(", ") + ".";
 }
 
 export function fillAgreement(template: string, q: Quote, issuer: Issuer, t: DocTerms = {}): string {
