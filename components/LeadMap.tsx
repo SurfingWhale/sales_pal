@@ -1,16 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+import type { LeadGeo } from "@/lib/geo";
 import { QUADRANTS, Quadrant, SCORE_LINE, VALUE_LINE, levelOf, quadrantOf } from "@/lib/score";
 import Icon from "@/components/Icon";
 import HeatDots from "@/components/HeatDots";
 import { waLink } from "@/lib/billing";
 
+// The street map loads only when someone switches to it (MapLibre is big).
+const GeoMap = dynamic(() => import("@/components/GeoMap"), { ssr: false, loading: () => <p role="status" style={{ position: "absolute", inset: 0, margin: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "var(--app-muted)" }}>Memuat peta…</p> });
+type MapView = "potensi" | "lokasi";
+const VIEW_KEY = "sp-map-view";
+const savedView = (): MapView => { try { return localStorage.getItem(VIEW_KEY) === "lokasi" ? "lokasi" : "potensi"; } catch { return "potensi"; } };
+
 // Peta lead (PRD-008 §1, canvas "Beranda"): one dot per lead in play, skor
 // potensi across, deal value up; a glow where the leads worth chasing gather.
 // Beside it the "Kejar sekarang" list; below it one folder per quadrant.
 
-export interface MapLead { id: string; name: string; score: number; value: number; why: string; phone?: string }
+export interface MapLead { id: string; name: string; score: number; value: number; why: string; phone?: string; category?: string; address?: string; status?: string; geo?: LeadGeo }
 
 const jt = (n: number) => `Rp ${(n / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`;
 const ORDER: Quadrant[] = ["kejar", "rawat", "cepat", "nanti"];
@@ -46,6 +54,13 @@ const css = `
 }
 @media (prefers-reduced-motion: reduce) { .sp-flap, .sp-sheet, .sp-folder, .sp-folder .arrow { transition: none; } }
 .sp-only-phone { display: none; }
+/* Two views of the same leads: by potential, or where they are. */
+.sp-mapmode { display: flex; align-items: center; height: 44px; padding: 0 3px; border-radius: 999px; }
+.sp-mapmode button { height: 44px; padding: 0; border: 0; background: none; cursor: pointer; color: var(--app-ink-2); font: 600 12px 'Plus Jakarta Sans', sans-serif; }
+.sp-mapmode button > span { display: flex; align-items: center; gap: 5px; height: 34px; padding: 0 12px; border-radius: 999px; transition: background-color .15s ease, color .15s ease; }
+.sp-mapmode button[aria-pressed="true"] > span { background: #005eb0; color: #fff; }
+.sp-unplaced { position: absolute; z-index: 3; left: 12px; bottom: 12px; height: 44px; padding: 0; border: 0; background: none; cursor: pointer; font: 600 12px 'Plus Jakarta Sans', sans-serif; color: var(--app-text); }
+.sp-unplaced > span { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--glass-strong); box-shadow: inset 0 0 0 0.5px var(--app-line-strong), 0 4px 12px rgba(0,0,0,0.15); }
 @media (max-width: 767px) { .sp-only-desk { display: none !important; } .sp-only-phone { display: block; } }
 `;
 
@@ -55,6 +70,8 @@ function Blur({ edge, height, z = 2 }: { edge: "t" | "b"; height: number; z?: nu
 
 export default function LeadMap({ leads, onOpen, onAll, onAdd, onImport }: { leads: MapLead[]; onOpen: (id: string) => void; onAll: () => void; onAdd?: () => void; onImport?: () => void }) {
   const [focus, setFocus] = useState<Quadrant | "">("");
+  const [view, setViewState] = useState<MapView>(savedView);
+  const setView = (v: MapView) => { setViewState(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* private mode */ } };
   const withQ = useMemo(() => leads.map(l => ({ ...l, q: quadrantOf(l.score, l.value) })), [leads]);
   const chase = withQ.filter(l => l.q === "kejar").sort((a, b) => b.score - a.score || b.value - a.value);
   const [selId, setSel] = useState<string | null | undefined>(undefined);
@@ -66,6 +83,25 @@ export default function LeadMap({ leads, onOpen, onAll, onAdd, onImport }: { lea
   const line = y(VALUE_LINE);
   const count = (q: Quadrant) => withQ.filter(l => l.q === q).length;
   const labelled = new Set(chase.slice(0, 2).map(l => l.id));
+  const placed = useMemo(() => withQ.filter(l => l.geo).map(l => ({ ...l, geo: l.geo as LeadGeo, hot: l.q === "kejar" })), [withQ]);
+  const unplaced = withQ.filter(l => !l.geo);
+  const modePill = (
+    <div role="group" aria-label="Mode peta" className="sp-mapmode glass">
+      {([["potensi", "Potensi"], ["lokasi", "Peta 3D"]] as [MapView, string][]).map(([v, l]) => (
+        <button key={v} aria-pressed={view === v} onClick={() => setView(v)}><span>{l}</span></button>
+      ))}
+    </div>
+  );
+  const geo = (
+    <>
+      <GeoMap leads={placed} onOpen={onOpen} />
+      {unplaced.length > 0 && (
+        <button className="sp-unplaced" onClick={() => onOpen(unplaced[0].id)} aria-label={`${unplaced.length} lead belum ada lokasinya. Atur lokasi ${unplaced[0].name}`}>
+          <span><Icon name="map" size={14} />{unplaced.length} belum ada lokasi · Atur</span>
+        </button>
+      )}
+    </>
+  );
 
   if (!leads.length) {
     return (
@@ -98,6 +134,7 @@ export default function LeadMap({ leads, onOpen, onAll, onAdd, onImport }: { lea
       {/* ---- desktop: the big map + Kejar sekarang ---- */}
       <div className="sp-only-desk" style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "flex-start" }}>
         <section aria-labelledby="map-h" style={{ flex: "999 1 560px", minWidth: 0, position: "relative", height: 560, borderRadius: 28, overflow: "hidden", isolation: "isolate", background: "var(--map-bg)", border: "1px solid var(--app-border)" }}>
+          {view === "lokasi" ? geo : <>
           <p id="map-desc" className="vh">Makin ke kanan, skor potensinya makin tinggi. Makin ke atas, nilai deal-nya makin besar. Satu titik satu lead. Warna biru pekat menandai kumpulan lead yang layak dikejar.</p>
           <div role="group" aria-label="Titik lead" aria-describedby="map-desc" style={{ position: "absolute", top: 100, right: 32, bottom: 76, left: 76 }}>
             {withQ.map(l => (
@@ -133,6 +170,7 @@ export default function LeadMap({ leads, onOpen, onAll, onAdd, onImport }: { lea
           <Blur edge="t" height={124} />
           <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 124, zIndex: 2, background: "linear-gradient(to bottom, var(--map-fade), transparent)", pointerEvents: "none" }} />
           <Blur edge="b" height={68} />
+          </>}
           <div style={{ position: "absolute", zIndex: 5, top: 16, left: 16, right: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <div className="glass" style={{ height: 44, padding: "0 18px 0 14px", borderRadius: 999, display: "flex", alignItems: "center", gap: 10 }}>
@@ -142,14 +180,15 @@ export default function LeadMap({ leads, onOpen, onAll, onAdd, onImport }: { lea
               </div>
               <button className="glass" onClick={onAll} aria-label="Lihat sebagai daftar di Leads" style={{ width: 44, height: 44, border: 0, borderRadius: 999, color: "var(--app-ink-2)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><Icon name="list" /></button>
             </div>
-            {focus && (
+            {modePill}
+            {view === "potensi" && focus && (
               <button className="glass" onClick={() => setFocus("")} aria-label={`Hapus saring: ${QUADRANTS[focus].label}`} style={{ height: 44, padding: "0 8px 0 16px", border: 0, borderRadius: 999, display: "flex", alignItems: "center", gap: 10, color: "var(--app-text)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                 {QUADRANTS[focus].label}
                 <span style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--glass-btn)", color: "var(--app-ink-2)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={12} stroke={2.4} /></span>
               </button>
             )}
           </div>
-          {sel && (
+          {view === "potensi" && sel && (
             <div className="frost" role="region" aria-label="Lead terpilih" style={{ position: "absolute", zIndex: 5, left: 16, bottom: 16, width: 304, maxWidth: "calc(100% - 32px)", borderRadius: 24, padding: "16px 16px 16px 18px", boxShadow: "inset 0 0 0 1px var(--frost-ring), 0 12px 32px var(--frost-float)" }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
                 <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
@@ -198,7 +237,7 @@ export default function LeadMap({ leads, onOpen, onAll, onAdd, onImport }: { lea
               );
             })}
           </ul>
-          <button onClick={onAll} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "12px 8px", fontSize: 14, fontWeight: 500, color: "var(--brand-text)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+          <button onClick={onAll} style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 44, padding: "0 8px", fontSize: 14, fontWeight: 500, color: "var(--brand-text)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
             Buka semua di Leads <Icon name="arrowRight" size={16} />
           </button>
         </section>
@@ -251,7 +290,8 @@ export default function LeadMap({ leads, onOpen, onAll, onAdd, onImport }: { lea
       </section>
 
       {/* ---- phone: a small map, then the list ---- */}
-      <section aria-labelledby="ph-map" className="sp-only-phone" style={{ position: "relative", height: 250, borderRadius: 26, overflow: "hidden", isolation: "isolate", background: "var(--map-bg)", border: "1px solid var(--app-border)" }}>
+      <section aria-labelledby="ph-map" className="sp-only-phone" style={{ position: "relative", height: view === "lokasi" ? 400 : 250, borderRadius: 26, overflow: "hidden", isolation: "isolate", background: "var(--map-bg)", border: "1px solid var(--app-border)" }}>
+        {view === "lokasi" ? geo : <>
         <div aria-hidden="true" style={{ position: "absolute", top: 58, right: 18, bottom: 22, left: 18 }}>
           {withQ.map(l => <span key={`pb${l.id}`} style={{ position: "absolute", left: `${l.score}%`, bottom: `${y(l.value)}%`, width: 140, height: 140, transform: "translate(-50%, 50%)", borderRadius: "50%", background: `radial-gradient(circle, ${l.q === "kejar" ? "var(--blob-hot)" : "var(--blob)"} 0%, transparent 68%)` }} />)}
           <div style={{ position: "absolute", left: `${SCORE_LINE}%`, right: 0, top: 0, bottom: `${line}%`, background: "var(--brand-tint)", borderRadius: "0 10px 0 0" }} />
@@ -261,18 +301,17 @@ export default function LeadMap({ leads, onOpen, onAll, onAdd, onImport }: { lea
         </div>
         <Blur edge="t" height={80} />
         <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 80, zIndex: 2, background: "linear-gradient(to bottom, var(--map-fade), transparent)", pointerEvents: "none" }} />
+        </>}
         <div style={{ position: "absolute", zIndex: 3, top: 12, left: 12, right: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
           <div className="glass" style={{ height: 36, padding: "0 14px 0 11px", borderRadius: 999, display: "flex", alignItems: "center", gap: 8 }}>
             <Icon name="map" size={16} style={{ color: "var(--brand-text)" }} />
             <h2 id="ph-map" style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>Peta lead</h2>
           </div>
-          <div className="glass" style={{ height: 36, padding: "0 12px", borderRadius: 999, display: "flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 600, color: "var(--brand-text)" }}>
-            <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: "50%", background: "#005eb0" }} /><span className="tabnum">{chase.length}</span> kejar sekarang
-          </div>
+          {modePill}
         </div>
       </section>
-      <section aria-labelledby="ph-top" className="sp-only-phone">
-        <h2 id="ph-top" style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em" }}>Kejar sekarang</h2>
+      <section aria-labelledby="ph-top" className="sp-only-phone" style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 14, padding: "12px 16px 4px" }}>
+        <h2 id="ph-top" style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 600, letterSpacing: "-0.01em" }}>Kejar sekarang <span style={{ color: "var(--app-muted)", fontWeight: 500 }}>· 5 teratas</span></h2>
         {chase.length === 0 && <p style={{ margin: 0, fontSize: 13, color: "var(--app-muted)" }}>Belum ada lead dengan skor {SCORE_LINE}+ dan nilai {jt(VALUE_LINE)}+.</p>}
         <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
           {chase.slice(0, 5).map(l => (

@@ -9,13 +9,17 @@ const MODES: [ReportMode, string][] = [["channel", "Sumber"], ["campaign", "Kamp
 
 export default function LeadSources({ leads, invoices }: { leads: SourcedLead[]; invoices: Invoice[] }) {
   const [mode, setMode] = useState<ReportMode>("channel");
+  const [all, setAll] = useState(false);
   const rows = sourceReport(leads, invoices, mode);
+  // A ranking, not a feed: the top three, the rest one tap away.
+  const TOP = 3;
+  const shown = all ? rows : rows.slice(0, TOP);
   const top = rows.reduce((m, r) => Math.max(m, r.collected || r.closedValue), 0);
 
   return (
-    <div style={{ ...card, padding: 24, marginBottom: 24 }}>
+    <section aria-label="Dari mana uangnya" className="sp-sources" style={{ ...card, padding: 24, marginBottom: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>💸 Dari mana uangnya?</div>
+        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, fontFamily: font }}>Dari mana uangnya?</h2>
         <div role="group" aria-label="Kelompokkan" style={{ display: "flex", gap: 6 }}>
           {MODES.map(([m, label]) => (
             <button key={m} onClick={() => setMode(m)} aria-pressed={mode === m}
@@ -33,7 +37,7 @@ export default function LeadSources({ leads, invoices }: { leads: SourcedLead[];
           {mode === "channel" ? "Belum ada lead. Tambah atau import lead dulu, nanti kelihatan sumber mana yang paling banyak closing." : "Belum ada lead dari link ber-UTM. Contoh: ?utm_source=instagram&utm_medium=paid&utm_campaign=2026-10-menu"}
         </div>
       )}
-      {rows.map(r => {
+      {shown.map(r => {
         const money = r.collected || r.closedValue;
         return (
           <div key={r.key} style={{ padding: "12px 0", borderTop: "1px solid var(--app-inner)" }}>
@@ -55,6 +59,11 @@ export default function LeadSources({ leads, invoices }: { leads: SourcedLead[];
           </div>
         );
       })}
-    </div>
+      {rows.length > TOP && (
+        <button onClick={() => setAll(!all)} aria-expanded={all} style={{ display: "inline-flex", alignItems: "center", minHeight: 44, padding: 0, border: 0, background: "none", color: "var(--brand-text)", font: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+          {all ? "Tampilkan 3 teratas" : `Lihat semua ${rows.length} ${mode === "channel" ? "sumber" : "kampanye"}`}
+        </button>
+      )}
+    </section>
   );
 }
