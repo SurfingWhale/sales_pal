@@ -18,7 +18,16 @@ export interface ReportTable {
   widths: number[];
   bold?: number[];
 }
-export interface ReportSection { title: string; lines?: string[]; table?: ReportTable; note?: string }
+// A count per day as bars (Laporan tim, PRD-014): labels under the first,
+// middle and last bar.
+export interface ReportChart { values: number[]; labels: string[] }
+export interface ReportSection { title: string; lines?: string[]; table?: ReportTable; chart?: ReportChart; note?: string }
+
+// Gridline steps for a bar chart: 0, half, top (top a round number ≥ the max).
+export function chartTop(max: number): number {
+  const step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000].find(s => s * 2 >= max) || Math.ceil(max / 2);
+  return step * 2;
+}
 export interface ReportDoc { kicker: string; title: string; subtitle: string; meta: string[]; sections: ReportSection[]; footer?: string }
 
 // "Kopi Senja", "2026-10" → Report_Kopi_Senja_2026-10.pdf
@@ -79,6 +88,22 @@ export async function buildReportPdf(r: ReportDoc): Promise<Blob> {
         row.slice(1).forEach((c, j) => text(c, right(j + 1), y, { size: 9.5, bold: t.bold?.includes(j + 1), align: "right" }));
         y += h - 4.4 + 1.2; line(y); y += 4.6;
       });
+    }
+    if (s.chart && s.chart.values.length) {
+      const c = s.chart, CH = 34, L = M + 8, n = c.values.length;
+      room(CH + 12);
+      const top = chartTop(Math.max(1, ...c.values));
+      const yAt = (v: number) => y + CH - (CH * v) / top;
+      [0, top / 2, top].forEach(v => {
+        pdf.setDrawColor(...RULE); pdf.setLineWidth(v ? 0.15 : 0.4); pdf.line(L, yAt(v), R, yAt(v));
+        text(String(v), L - 2, yAt(v) + 1, { size: 7, color: SOFT, align: "right" });
+      });
+      const slot = (R - L) / n, bw = Math.max(0.6, slot * 0.7);
+      pdf.setFillColor(...INK);
+      c.values.forEach((v, i) => { if (v > 0) pdf.rect(L + i * slot + (slot - bw) / 2, yAt(v), bw, (CH * v) / top, "F"); });
+      const at = [0, Math.floor((n - 1) / 2), n - 1];
+      c.labels.forEach((lab, k) => { if (lab && at[k] !== undefined) text(lab, L + at[k] * slot + slot / 2, y + CH + 4.5, { size: 7, color: SOFT, align: k === 0 ? "left" : k === 2 ? "right" : "left" }); });
+      y += CH + 9;
     }
     if (s.note) wrap(s.note, R - M, 8).forEach(w => { room(4.5); text(w, M, y, { size: 8, color: SOFT }); y += 3.8; });
     y += 6;
