@@ -19,6 +19,7 @@ import ConfirmSheet from "@/components/ConfirmSheet";
 import { FormNote, useDiscard, useSave } from "@/components/FormGuard";
 import { Pipeline } from "@/components/ClientHub";
 import { logoImage } from "@/lib/image";
+import { PAID_TOOLS, TOOL_HINT, TOOL_LABEL, rolesFor, type ToolRoles } from "@/lib/tools";
 import { badge, btnGhost, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
 type View = "pipeline" | "report" | "aktivitas" | "anggota";
@@ -413,8 +414,20 @@ function GuildSettings({ gid, guild, me, uid, look, onClose }: { gid: string; gu
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [f, setF] = useState(first);
   const [msg, setMsg] = useState("");
+  // Which roles may spend the paid Google tools (PRD-015), Leader only.
+  const [toolsFirst, setToolsFirst] = useState<ToolRoles | null>(null);
+  const [tools, setTools] = useState<ToolRoles>({});
+  useEffect(() => {
+    if (!leader) return;
+    getDoc(doc(db, "guilds", gid, "settings", "tools")).then(s => {
+      const t = (s.data() || {}) as ToolRoles;
+      const full = Object.fromEntries(PAID_TOOLS.map(k => [k, rolesFor(t, k)])) as ToolRoles;
+      setToolsFirst(full); setTools(full);
+    }, () => setToolsFirst({}));
+  }, [gid, leader]);
+  const toolsChanged = Boolean(toolsFirst) && JSON.stringify(tools) !== JSON.stringify(toolsFirst);
   const save = useSave();
-  const [close, ask] = useDiscard(JSON.stringify(f) !== JSON.stringify(first), onClose, "Perubahan guild");
+  const [close, ask] = useDiscard(JSON.stringify(f) !== JSON.stringify(first) || toolsChanged, onClose, "Perubahan guild");
   const preview: GuildLook = { color: f.color, emblem: f.emblem, logo: f.logo };
 
   async function pick(file?: File) {
@@ -431,6 +444,7 @@ function GuildSettings({ gid, guild, me, uid, look, onClose }: { gid: string; gu
         const titles = Object.fromEntries(ROLES.map(r => [r, f.titles[r].trim()]).filter(([, t]) => t));
         await updateDoc(doc(db, "guilds", gid), { name: f.name.trim().slice(0, 80), titles });
         await setDoc(doc(db, "users", uid, "guilds", gid), { name: f.name.trim().slice(0, 80) }, { merge: true });
+        if (toolsChanged) await setDoc(doc(db, "guilds", gid, "settings", "tools"), tools);
       }
     });
     if (ok) onClose();
@@ -507,6 +521,29 @@ function GuildSettings({ gid, guild, me, uid, look, onClose }: { gid: string; gu
                 </div>
               ))}
             </details>
+            <section aria-labelledby="gs-tools-h" style={{ ...section, marginTop: 16 }}>
+              <div id="gs-tools-h" style={h}>Akses alat berbayar</div>
+              <div style={{ fontSize: 12, color: "var(--app-muted)", margin: "-4px 0 12px", lineHeight: 1.5 }}>
+                Dua alat ini pakai key Google kamu. Pilih peran yang boleh. Leader selalu boleh.
+              </div>
+              {!toolsFirst ? <div role="status" style={{ fontSize: 13, color: "var(--app-muted)" }}>Memuat…</div> : PAID_TOOLS.map(k => (
+                <fieldset key={k} style={{ border: "1px solid var(--app-border)", borderRadius: 12, padding: "10px 12px", margin: "0 0 10px" }}>
+                  <legend style={{ fontSize: 14, fontWeight: 700, padding: "0 4px" }}>{TOOL_LABEL[k]}</legend>
+                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6, lineHeight: 1.5 }}>{TOOL_HINT[k]}</div>
+                  {(["officer", "member"] as Role[]).map(r => {
+                    const on = (tools[k] || []).includes(r);
+                    return (
+                      <label key={r} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 44, fontSize: 14 }}>
+                        <input type="checkbox" checked={on} aria-label={`${TOOL_LABEL[k]} buat ${titleOf(guild, r)}`}
+                          onChange={() => setTools({ ...tools, [k]: on ? (tools[k] || []).filter(x => x !== r) : [...(tools[k] || []), r] })}
+                          style={{ width: 20, height: 20, accentColor: "#005eb0" }} />
+                        {titleOf(guild, r)}
+                      </label>
+                    );
+                  })}
+                </fieldset>
+              ))}
+            </section>
           </>
         ) : <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>Nama guild & nama peran diatur Leader.</div>}
 

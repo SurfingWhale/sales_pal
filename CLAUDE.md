@@ -17,8 +17,10 @@ then here.
   and the shared catalogs `{services,pitchTemplates,settings,campaigns,costs}`
   (Guild, PRD-007 — role rules live in firestore.rules and are tested per role)
   plus `inbound_leads`, and the server-only `connections` (token vault),
-  `usage` (quotas) and `pushSubs` (Web Push subscriptions), which deny every browser and are reached only through
-  `lib/serverAuth.ts`.
+  `usage` (quotas), `pushSubs` (Web Push subscriptions), and `config`,
+  `accessRequests`, `accessAdmins` (the invite-only switch, applications and
+  the admins who approve them, PRD-015), which deny every browser and are reached only through
+  `lib/serverAuth.ts` / `lib/access.ts`.
   Merging a change to `main` deploys it: `.github/workflows/firestore-rules.yml`
   runs `tests/firestore.rules.test.mjs` on the emulator, then
   `firebase deploy --only firestore:rules --project sales-pal` with the

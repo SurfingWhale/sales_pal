@@ -38,6 +38,8 @@ function authErrorMessage(e: unknown): string {
     case "auth/weak-password": return "Password minimal 6 karakter.";
     case "auth/too-many-requests": return "Kebanyakan percobaan. Tunggu sebentar terus coba lagi.";
     case "auth/network-request-failed": return "Koneksi bermasalah. Cek internet kamu, lalu coba lagi.";
+    // Email sign-in is switched off while SalesPal is invite-only (PRD-015).
+    case "auth/operation-not-allowed": return "Masuk & daftar pakai email lagi ditutup. Pakai tombol Google di atas.";
     case "auth/popup-closed-by-user":
     case "auth/cancelled-popup-request": return "";
     default: return "Gagal masuk. Coba lagi ya.";

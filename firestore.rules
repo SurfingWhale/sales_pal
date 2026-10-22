@@ -3,8 +3,10 @@ rules_version = '2';
 // SalesPal's Firestore — and the one place every website's leads flow into.
 //
 //   users/{uid}/...        SalesPal's own data. Each account sees only its own.
-//   connections/, usage/, pushSubs/   Server only: platform tokens, quotas,
-//                          and notification subscriptions.
+//   connections/, usage/, pushSubs/, config/, accessRequests/, accessAdmins/
+//                          Server only: platform tokens, quotas, notification
+//                          subscriptions, and who may come in while the app
+//                          is invite-only (PRD-015).
 //   inbound_leads/{id}     Leads sent by the websites (Visufavor, BeUntamed,
 //                          UNTMD Sports). Anyone may ADD one, in exactly the
 //                          shape below; only the owner may read them, mark them
@@ -37,6 +39,9 @@ service cloud.firestore {
     function hasRole(g, roles) { return inGuild(g) && myRole(g) in roles; }
     function seller(g) { return hasRole(g, ['leader', 'officer', 'member']); }
     function manager(g) { return hasRole(g, ['leader', 'officer']); }
+    // settings/tools says which roles may spend the paid Google key (PRD-015):
+    // only the Leader changes it.
+    function notToolsUnlessLeader(g, coll, id) { return !(coll == 'settings' && id == 'tools') || hasRole(g, ['leader']); }
     function validInvite(g, code, role) {
       let p = /databases/$(database)/documents/guilds/$(g)/invites/$(code);
       return code is string && exists(p) && get(p).data.role == role && get(p).data.expiresAt > request.time.toMillis();
@@ -140,13 +145,13 @@ service cloud.firestore {
           || (catalog(coll) && seller(g));
         allow create: if (ownedData(coll) && seller(g) && request.resource.data.ownerUid is string
               && (request.resource.data.ownerUid == request.auth.uid || manager(g)))
-          || (catalog(coll) && manager(g));
+          || (catalog(coll) && manager(g) && notToolsUnlessLeader(g, coll, id));
         allow update: if (ownedData(coll) && (manager(g)
               || (seller(g) && resource.data.ownerUid == request.auth.uid
                   && request.resource.data.ownerUid == resource.data.ownerUid)))
-          || (catalog(coll) && manager(g));
+          || (catalog(coll) && manager(g) && notToolsUnlessLeader(g, coll, id));
         allow delete: if (ownedData(coll) && (manager(g) || (seller(g) && resource.data.ownerUid == request.auth.uid)))
-          || (catalog(coll) && manager(g));
+          || (catalog(coll) && manager(g) && notToolsUnlessLeader(g, coll, id));
       }
       // A client's chats, content and reports go with the client's owner.
       match /clients/{c}/{sub}/{id} {
@@ -173,6 +178,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /usage/{id} {
+      allow read, write: if false;
+    }
+    // config/access: open to everyone or invite-only (lib/access.ts).
+    match /config/{id} {
+      allow read, write: if false;
+    }
+    // Who asked to come in and who approves them (PRD-015 §2b), through
+    // /api/access/* only.
+    match /accessRequests/{id} {
+      allow read, write: if false;
+    }
+    match /accessAdmins/{id} {
       allow read, write: if false;
     }
     // Web Push subscriptions (lib/pushServer.ts), one per device.
