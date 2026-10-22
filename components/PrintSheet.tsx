@@ -84,7 +84,7 @@ export default function PrintSheet(props: Props) {
         </div>
         <div className="no-print sp-print-msg" role="status" style={{ fontSize: 13, color: "#fff", textAlign: "right" }}>{pdfMsg}</div>
         {props.frozen && (
-          <p style={{ fontSize: 13, color: "var(--app-muted)", margin: "0 0 12px" }}>
+          <p className="no-print" role="note" style={{ fontSize: 13, lineHeight: 1.5, color: "var(--app-text)", background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 10, padding: "10px 12px", margin: "0 0 12px" }}>
             Kop dan syarat di dokumen ini dikunci sejak {isQuote ? "dikirim" : "dibuat"}. Ubahan di Kop & logo berlaku buat dokumen baru.
           </p>
         )}

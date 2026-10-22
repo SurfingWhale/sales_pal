@@ -12,6 +12,8 @@ import HeatDots from "@/components/HeatDots";
 import { DetailActions, LeadPage, LeadPanel } from "@/components/LeadDetail";
 import Icon, { IconName } from "@/components/Icon";
 import ProfileSheet, { MeAvatar, useMyAvatar } from "@/components/ProfileSheet";
+import LeadFinder, { Found } from "@/components/LeadFinder";
+import { snippet } from "@/lib/places";
 import { downscaleImage } from "@/lib/image";
 import { registerWorker, takeSharedFile } from "@/lib/share";
 import type { LeadProfile } from "@/lib/profile";
@@ -153,6 +155,13 @@ const IMPORT_FIELDS: { key: string; label: string; required?: boolean; keywords:
   { key: "status", label: "Status", keywords: ["status", "stage", "tahap"] },
   { key: "value", label: "Value (Rp)", keywords: ["value", "nilai", "deal", "amount", "harga", "estimasi", "potensi"] },
   { key: "notes", label: "Notes", keywords: ["notes", "catatan", "note", "keterangan", "remark"] },
+  // The Google Maps columns of the Excel template (lib/places.ts, PRD-012).
+  { key: "address", label: "Alamat", keywords: ["alamat", "address"] },
+  { key: "website", label: "Website", keywords: ["website", "situs", "web"] },
+  { key: "rating", label: "Rating", keywords: ["rating", "bintang"] },
+  { key: "reviewCount", label: "Jumlah ulasan", keywords: ["jumlah ulasan", "ulasan", "reviews", "review"] },
+  { key: "mapsUrl", label: "Link Google Maps", keywords: ["google maps", "maps", "gmaps"] },
+  { key: "weak", label: "Titik lemah", keywords: ["titik lemah", "kelemahan", "lemah", "weak"] },
 ];
 
 const VALID_STATUS = ["Cold", "Warm", "Hot", "Closed"];
@@ -167,6 +176,21 @@ function autoMap(headers: string[]): Record<string, string> {
     if (hit) map[f.key] = hit;
   }
   return map;
+}
+
+// The Google Maps columns, typed, only when filled; weak spots also go to the
+// lead profile's pain so pitches and the Simulator can use them.
+function mapsFields(r: { address: string; website: string; rating: string; reviewCount: string; mapsUrl: string; weak: string }) {
+  const out: Record<string, unknown> = {};
+  if (r.address) out.address = r.address;
+  if (r.website) out.website = r.website;
+  const rating = parseFloat(r.rating.replace(",", "."));
+  if (rating > 0 && rating <= 5) out.rating = rating;
+  const n = parseInt(r.reviewCount.replace(/\D/g, ""), 10);
+  if (n >= 0) out.reviewCount = n;
+  if (r.mapsUrl) out.mapsUrl = r.mapsUrl;
+  if (r.weak) out.profile = { pain: r.weak.split(/;|\n/).map(x => x.trim()).filter(Boolean).join("; ") };
+  return out;
 }
 
 function normStatus(v: unknown): string {
@@ -249,6 +273,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [newLead, setNewLead] = useState({ name: "", contact: "", source: "GMaps", status: "Cold", email: "", phone: "", category: "F&B", notes: "", value: "" });
   const [showImport, setShowImport] = useState(false);
+  const [showFinder, setShowFinder] = useState(false);
   const [importHeaders, setImportHeaders] = useState<string[]>([]);
   const [importRows, setImportRows] = useState<Record<string, unknown>[]>([]);
   const [colMap, setColMap] = useState<Record<string, string>>({});
@@ -503,6 +528,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           value: parseValue(colMap.value ? r[colMap.value] : ""),
           notes: get("notes"),
           lastContact: new Date().toISOString().split("T")[0],
+          ...mapsFields({ address: get("address"), website: get("website"), rating: get("rating"), reviewCount: get("reviewCount"), mapsUrl: get("mapsUrl"), weak: get("weak") }),
         }));
       });
       await batch.commit();
@@ -511,6 +537,26 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     setImporting(false);
     setImportDone(written);
     setImportRows([]); setImportHeaders([]); setColMap({});
+  }
+
+  // Cari bisnis → Leads (PRD-012). One lead per Google Maps place: the id is
+  // the place's, so finding it again never makes a second lead.
+  async function saveFound(rows: Found[]): Promise<number> {
+    const batch = writeBatch(db);
+    const on = today();
+    rows.forEach(p => {
+      const worst = p.reviews.filter(r => r.rating <= 3 && r.text.trim()).sort((a, b) => a.rating - b.rating)[0];
+      batch.set(spaceDoc(space, "leads", `gm_${p.id.replace(/[^A-Za-z0-9_-]/g, "")}`), stamp(space, {
+        name: p.name, contact: "", email: p.email || "", phone: p.phone, category: p.category || "Lainnya",
+        source: "Google Maps", status: "Cold", value: 0, lastContact: on,
+        notes: [p.weak.length ? `Titik lemah: ${p.weak.map(w => w.label).join("; ")}` : "", worst ? `Ulasan ${worst.rating}★: "${snippet(worst.text, 200)}"` : ""].filter(Boolean).join("\n"),
+        ...(p.address ? { address: p.address } : {}), ...(p.website ? { website: p.website } : {}),
+        ...(p.rating !== null ? { rating: p.rating } : {}), reviewCount: p.reviewCount, ...(p.mapsUrl ? { mapsUrl: p.mapsUrl } : {}), placeId: p.id,
+        ...(p.weak.length ? { profile: { pain: p.weak.map(w => w.label).join("; ") } } : {}),
+      }));
+    });
+    await batch.commit();
+    return rows.length;
   }
 
   function closeImport() {
@@ -915,7 +961,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               onSetTarget={setClosingTarget} />}
             learn={<BerandaLearn prospects={prospects} hunts={hunts} rejections={rejections} onGo={tab => { setActiveTab(tab); window.scrollTo({ top: 0 }); }} />}
             onOpenLead={id => { const l = leads.find(x => x.id === id); if (l) openLead(l); }}
-            onImport={() => setShowImport(true)} onAdd={() => setShowAddLead(true)} onAllLeads={() => setActiveTab("Leads")}
+            onImport={() => setShowImport(true)} onFind={() => setShowFinder(true)} onAdd={() => setShowAddLead(true)} onAllLeads={() => setActiveTab("Leads")}
             onSetTarget={setClosingTarget}>
             {space.kind === "guild" && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: -16 }}>Ruang guild {space.name} — {showOwner ? "angka seluruh tim" : "angka kamu di guild ini"}.</div>}
             {seedCount > 0 && (
@@ -1279,6 +1325,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           onSchedule={(id, action, date) => updateDoc(spaceDoc(space, "leads", id), { nextAction: action, nextActionDate: date })}
           onOpen={id => { const l = leads.find(x => x.id === id); setFuRun(null); if (l) openLead(l); }}
           onClose={() => setFuRun(null)} />
+      )}
+      {showFinder && (
+        <LeadFinder known={leads.map(l => ({ name: l.name, phone: l.phone }))} me={{ name: business.name, tagline: business.tagline }}
+          onSave={saveFound} onImport={() => { setShowFinder(false); setShowImport(true); }} onClose={() => setShowFinder(false)} />
       )}
       {showImport && (
         <div className="modal-overlay" onClick={closeImport}>

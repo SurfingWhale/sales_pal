@@ -212,6 +212,62 @@ async function ownerLogin(t) {
 // ---------- flows ----------
 export const flows = [
   {
+    // Cari bisnis (PRD-012): Google Maps results with their weak spots become
+    // leads once; a list from elsewhere comes in through the Excel template.
+    name: "cari bisnis: maps results to leads, template to import",
+    async run(t) {
+      const { page } = t;
+      const place = (id, name, extra) => ({ id, name, category: "Coffee shop", address: `Jl. Contoh ${id}, Jakarta`, phone: `0812000000${id.slice(-2)}`, website: "", rating: 4.0, reviewCount: 12, mapsUrl: `https://maps.google.com/?cid=${id}`, reviews: [{ rating: 2, text: "Pelayanannya lama banget, nunggu 30 menit", when: "" }], ...extra });
+      await page.route("**/api/places", r => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+        places: [place("p01", "Kopi Uji Satu"), place("p02", "Kopi Uji Dua", { website: "https://kopiujidua.id", rating: 4.7, reviewCount: 320, reviews: [] })], nextPageToken: "" }) }));
+      await t.step("sign up", () => signup(t));
+      await t.step("Beranda opens Cari bisnis", async () => {
+        await page.getByRole("region", { name: "Cari calon klien" }).getByRole("button", { name: "Cari bisnis" }).click();
+        await page.getByRole("dialog", { name: "Cari bisnis" }).waitFor();
+      });
+      const sheet = page.getByRole("dialog", { name: "Cari bisnis" });
+      await t.step("a search shows each business with its weak spots", async () => {
+        await sheet.locator("#lf-q").fill("coffee shop Jakarta Selatan");
+        await sheet.getByRole("button", { name: "Cari", exact: true }).click();
+        const one = sheet.getByRole("article", { name: "Kopi Uji Satu" });
+        for (const w of ["Belum punya website", "Rating 4 dari 12 ulasan", "Ulasan masih sedikit (12)", "Keluhan soal lama nunggu"]) await one.getByText(w).waitFor();
+        await sheet.getByText("2 bisnis · 1 dipilih").waitFor();
+      });
+      await t.step("the opening message names them and their weak spot", async () => {
+        await sheet.getByRole("article", { name: "Kopi Uji Satu" }).getByRole("button", { name: "Salin pesan" }).click();
+        const text = await page.evaluate(() => navigator.clipboard.readText());
+        if (!text.includes("Kopi Uji Satu") || !text.includes("belum ada website")) throw new Error(`message: ${text}`);
+      });
+      await t.step("save as leads, once", async () => {
+        await sheet.getByRole("checkbox", { name: "Pilih Kopi Uji Dua" }).check();
+        await sheet.getByRole("button", { name: "Simpan 2 jadi lead" }).click();
+        await sheet.getByText("2 bisnis masuk Leads.").waitFor();
+        await sheet.getByRole("button", { name: "Cari", exact: true }).click();
+        await sheet.getByText(/Kopi Uji Satu|udah ada di Leads/).first().waitFor();
+        await sheet.getByRole("article", { name: "Kopi Uji Satu" }).getByText(/udah ada di Leads/).waitFor();
+        await sheet.getByText("2 bisnis · 0 dipilih").waitFor();
+      });
+      await t.step("the Excel template downloads with its columns", async () => {
+        const [dl] = await Promise.all([page.waitForEvent("download"), sheet.getByRole("button", { name: "Download template Excel" }).click()]);
+        if (dl.suggestedFilename() !== "SalesPal-template-leads.xlsx") throw new Error(dl.suggestedFilename());
+        const XLSX = (await import("xlsx")).default;
+        const wb = XLSX.readFile(await dl.path());
+        const head = XLSX.utils.sheet_to_json(wb.Sheets.Leads, { header: 1 })[0];
+        for (const c of ["Nama Bisnis", "No. HP", "Website", "Rating", "Link Google Maps", "Titik Lemah"]) if (!head.includes(c)) throw new Error(`template lacks ${c}`);
+        await dl.saveAs(new URL("./out/template.xlsx", import.meta.url).pathname);
+      });
+      await t.step("the filled template imports itself", async () => {
+        await sheet.getByRole("button", { name: "Import Excel" }).click();
+        await page.locator('input[type="file"][accept*=".xlsx"]').setInputFiles(new URL("./out/template.xlsx", import.meta.url).pathname);
+        await page.getByRole("button", { name: "Import 1 lead" }).click();
+        await page.getByRole("button", { name: "Selesai" }).click();
+        await go(page, "Jualan", "Leads");
+        await page.locator(".lead-row", { hasText: "Kopi Contoh" }).first().waitFor();
+        await page.locator(".lead-row", { hasText: "Kopi Uji Satu" }).first().waitFor();
+      });
+    },
+  },
+  {
     // The landing (TasteSkill v2): the hero is a quote you can fill in, and every way in leads to the login.
     name: "landing: fill the quote, then sign in",
     async run(t) {

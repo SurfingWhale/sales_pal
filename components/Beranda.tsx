@@ -80,9 +80,9 @@ const css = `
 }
 `;
 
-export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onImport, onAdd, onAllLeads, onSetTarget, hunting, report, learn, children }: {
+export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onImport, onFind, onAdd, onAllLeads, onSetTarget, hunting, report, learn, children }: {
   now: string; todo: Todo[]; numbers: Numbers; mapLeads: MapLead[];
-  onOpenLead: (id: string) => void; onImport: () => void; onAdd: () => void; onAllLeads: () => void; onSetTarget: () => void;
+  onOpenLead: (id: string) => void; onImport: () => void; onFind?: () => void; onAdd: () => void; onAllLeads: () => void; onSetTarget: () => void;
   hunting?: HuntingStrip; report?: React.ReactNode; learn?: React.ReactNode;
   children?: React.ReactNode;
 }) {
@@ -136,6 +136,18 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
           <button onClick={onAdd} className="sp-pill" style={{ border: 0, background: "#005eb0", color: "#fff" }}><Icon name="plus" stroke={1.8} />Tambah lead</button>
         </div>
       </div>
+
+      {onFind && (
+        // Cari bisnis (PRD-012): new prospects from Google Maps or an Excel list.
+        <section aria-label="Cari calon klien" className="sp-find" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 14, padding: 16, borderRadius: 20, background: "var(--app-card)", border: "1px solid var(--app-border)", marginBottom: 24 }}>
+          <span aria-hidden="true" style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", background: "#005eb0", color: "#fff" }}><Icon name="search" size={20} stroke={1.8} /></span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "block", fontSize: 15, fontWeight: 700 }}>Cari calon klien</span>
+            <span style={{ display: "block", fontSize: 13, color: "var(--app-muted)" }}>Bisnis dari Google Maps, titik lemahnya, dan pesan pembuka. Atau import daftar Excel.</span>
+          </span>
+          <button onClick={onFind} className="sp-pill" style={{ border: 0, background: "#005eb0", color: "#fff", flexShrink: 0 }}>Cari bisnis</button>
+        </section>
+      )}
 
       {hunting && (
         <section aria-label="Hunting hari ini" style={{ marginTop: 20, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: "12px 16px" }}>
