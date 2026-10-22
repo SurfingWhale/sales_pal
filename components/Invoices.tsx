@@ -228,6 +228,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
                     <div style={{ fontSize: 12, color: "var(--app-muted)", fontFamily: "monospace" }}>{inv.number} · {longDate(inv.date)}</div>
                     <div style={{ fontSize: 15, fontWeight: 700, fontFamily: font, marginTop: 2 }}>{inv.leadName}</div>
                     {inv.project && <div style={{ fontSize: 12, color: "var(--app-sub)", marginTop: 2 }}>{inv.project}</div>}
+                    {inv.term && <div style={{ fontSize: 12, color: "var(--app-sub)", marginTop: 2 }}>Termin {inv.term.label} {inv.term.percent}%</div>}
                     {space.kind === "guild" && inv.ownerName && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>Sales: {inv.ownerName}</div>}
                     <div className="sp-dates">
                       <div>

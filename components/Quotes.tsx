@@ -87,7 +87,7 @@ export default function Quotes({ quotes, invoices, leads, services, business, st
     const old = base ? undefined : quotes.find(q => q.id === d.id);
     const id = base ? `q_${Date.now()}` : d.id || `q_${Date.now()}`;
     const root = (base?.number || "").replace(/-r\d+$/, "");
-    const rev = base ? quotes.filter(q => q.number === root || q.number.startsWith(`${root}-r`)).length + 1 : 0;
+    const rev = base ? quotes.filter(q => q.number.startsWith(`${root}-r`)).length + 1 : 0;
     const sched = d.schedule?.length ? d.schedule.map(t => ({ label: t.label.trim() || "Termin", percent: t.percent || 0, ...(t.when?.trim() ? { when: t.when.trim() } : {}) })) : undefined;
     const doc: Omit<Quote, "id"> = {
       number: base ? `${root}-r${rev}` : d.number || nextNumber("Q", quotes.map(q => q.number)),

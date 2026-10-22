@@ -620,6 +620,8 @@ export const flows = [
         await page.getByRole("button", { name: "Revisi", exact: true }).click();
         await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
         await page.getByText(/^Revisi dari /).waitFor();
+        await page.getByText(/-r1 ·/).waitFor();
+        await page.getByRole("button", { name: "Tandai terkirim" }).click();
         await page.getByRole("button", { name: "✓ Disetujui" }).click();
         await page.getByText(/^Digantikan .* \(yang berlaku\)/).waitFor();
         await page.getByRole("button", { name: "Buat invoice Pelunasan 50% →" }).waitFor();
