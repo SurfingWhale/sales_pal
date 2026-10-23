@@ -482,19 +482,20 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       </div>
 
       {/* Today in one line; the full numbers are under Performa. */}
-      <div style={{ display: "flex", gap: 8, alignItems: "stretch", marginBottom: 12 }}>
+      {/* Two numbers split by a hairline (docs/standards/design.md §2), not two boxes. */}
+      <div className="sp-strip two" style={{ marginBottom: "var(--sp-4)" }}>
         <button onClick={changeGoal} disabled={!canEdit} aria-label={`Hari ini ${sentToday} dari ${goal} DM. ${canEdit ? "Ubah target harian" : "Target harian diatur Leader atau Officer"}`}
-          style={{ ...card, flex: "1 1 0", minWidth: 0, padding: "8px 12px", textAlign: "left", cursor: canEdit ? "pointer" : "default", color: "inherit", fontFamily: font }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-            <span className="tabnum" style={{ fontSize: 18, fontWeight: 700, color: progress >= 1 ? "var(--ok)" : "var(--brand-text)" }}>{sentToday}<span style={{ fontSize: 13, color: "var(--app-muted)", fontWeight: 600 }}>/{goal}</span></span>
-            <span style={{ fontSize: 12, fontWeight: 700 }}>DM hari ini</span>
-            <span aria-hidden="true" style={{ marginLeft: "auto", fontSize: 12, color: "var(--app-muted)" }}>{progress >= 1 ? "🎯" : canEdit ? "✎" : ""}</span>
-          </div>
-          <div style={{ height: 4, background: "var(--app-inner)", borderRadius: 2, marginTop: 6, overflow: "hidden" }}>
-            <div style={{ width: `${progress * 100}%`, height: "100%", background: progress >= 1 ? "var(--ok)" : "#005eb0" }} />
-          </div>
+          style={{ minWidth: 0, minHeight: 44, paddingBlock: "var(--sp-2)", border: 0, borderRadius: 0, textAlign: "left", cursor: canEdit ? "pointer" : "default", color: "inherit", fontFamily: font }}>
+          <span style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+            <span className="tabnum" style={{ fontSize: "var(--fs-section)", fontWeight: 700, color: progress >= 1 ? "var(--ok)" : "var(--brand-text)" }}>{sentToday}<span style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)", fontWeight: 600 }}>/{goal}</span></span>
+            <span style={{ fontSize: "var(--fs-meta)", fontWeight: 600 }}>DM hari ini</span>
+            <span aria-hidden="true" style={{ marginLeft: "auto", display: "inline-flex", color: progress >= 1 ? "var(--ok)" : "var(--app-muted)" }}>{progress >= 1 ? <Icon name="target" size={16} /> : canEdit ? <Icon name="pencil" size={16} /> : null}</span>
+          </span>
+          <span aria-hidden="true" style={{ display: "block", height: 4, background: "var(--app-inner)", borderRadius: 2, marginTop: 6, overflow: "hidden" }}>
+            <span style={{ display: "block", width: `${progress * 100}%`, height: "100%", background: progress >= 1 ? "var(--ok)" : "var(--heat-3)" }} />
+          </span>
         </button>
-        <div className="tabnum" style={{ ...card, flex: "1 1 0", minWidth: 0, padding: "8px 12px", fontSize: 12, color: "var(--app-sub)", display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 }}>
+        <div className="tabnum" style={{ minWidth: 0, paddingBlock: "var(--sp-2)", fontSize: "var(--fs-meta)", color: "var(--app-sub)", display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 }}>
           <span>Dibales 7 hr <b style={{ color: "var(--app-text)" }}>{week.length ? pct(weekReplied / week.length) : "—"}</b></span>
           <span>Tertarik 7 hr <b style={{ color: "var(--app-text)" }}>{weekInterested}</b></span>
         </div>
@@ -653,11 +654,11 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       </div>
 
       <div id="hpane-log" role="tabpanel" aria-labelledby="hp-log" hidden={pane !== "log"}>
-      <div style={{ ...card, padding: 20, marginBottom: 12 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>Percakapan</div>
-        <div style={{ fontSize: 12, color: "var(--app-muted)", margin: "2px 0 12px" }}>Tiap orang kayak chat: pesan terakhir, kapan, dan perlu apa. Tap buat buka dan kirim lanjutan.</div>
+      <section aria-labelledby="conv-h" style={{ marginBottom: "var(--sp-5)" }}>
+        <h3 id="conv-h" className="sp-sec-h">Percakapan</h3>
+        <div style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)", margin: "0 0 var(--sp-3)" }}>Tiap orang kayak chat: pesan terakhir, kapan, dan perlu apa. Tap buat buka dan kirim lanjutan.</div>
         <Conversations prospects={prospects} strategy={strategy} onOpen={p => setThreadId(p.id)} />
-      </div>
+      </section>
       {/* The old per-message log, folded: every send is in its conversation now. */}
       <details style={{ ...card, padding: "4px 20px", marginBottom: 20 }}>
         <summary style={{ cursor: "pointer", minHeight: 44, display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700 }}>Log kiriman ({sorted.length})</summary>

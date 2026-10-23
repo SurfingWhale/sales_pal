@@ -20,8 +20,7 @@ function Funnel({ id, title, rows }: { id: string; title: string; rows: { label:
   const top = Math.max(1, rows[0]?.n || 0);
   return (
     <section aria-labelledby={id} className="sp-sec">
-      <h3 id={id}>{title}</h3>
-      <div style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)", marginBottom: "var(--sp-3)" }}>Persen = lanjut dari tahap sebelumnya; di bawah 10 ditulis &quot;X dari Y&quot;.</div>
+      <h3 id={id} style={{ marginBottom: "var(--sp-3)" }}>{title}</h3>
       <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {rows.map((r, i) => (
           <li key={r.label} style={{ display: "grid", gridTemplateColumns: "minmax(96px, 130px) 1fr minmax(72px, auto)", alignItems: "center", gap: "var(--sp-3)", fontSize: "var(--fs-body)", padding: "var(--sp-2) 0", borderTop: i ? "1px solid var(--app-border)" : 0 }}>
@@ -64,8 +63,8 @@ export default function BerandaReport({ now, numbers, paid, receivable, leadsByS
   ];
 
   const strip: { k: string; v: string; money?: boolean; sub: string }[] = [
-    { k: "Uang masuk", v: jt(paid), money: true, sub: "pembayaran bulan ini" },
-    { k: "Belum tertagih", v: jt(receivable), money: true, sub: "invoice belum lunas" },
+    { k: "Uang masuk", v: jt(paid), money: true, sub: "bulan ini" },
+    { k: "Belum tertagih", v: jt(receivable), money: true, sub: "sisa invoice" },
     { k: "DM terkirim", v: String(week.length), sub: "7 hari" },
     { k: "Dibales", v: rate(weekReplied, week.length), sub: "dari DM 7 hari" },
     { k: "Tertarik", v: String(weekInterested), sub: "7 hari" },
@@ -91,7 +90,7 @@ export default function BerandaReport({ now, numbers, paid, receivable, leadsByS
         </button>
       </div>
 
-      <section aria-label="Bulan ini" className="sp-strip" style={{ marginTop: "var(--sp-4)" }}>
+      <section aria-label="Bulan ini" className="sp-strip three" style={{ marginTop: "var(--sp-4)" }}>
         {strip.map(x => (
           <div key={x.k}>
             <div style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)" }}>{x.k}</div>
@@ -111,6 +110,7 @@ export default function BerandaReport({ now, numbers, paid, receivable, leadsByS
         ]} />
         <Funnel id="rep-pipe" title="Pipeline lead, sekarang" rows={STAGES.map(s => ({ label: s, n: leadsByStatus[s] || 0 }))} />
       </div>
+      <p style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--fs-meta)", color: "var(--app-muted)" }}>Persen = lanjut dari tahap sebelumnya; di bawah 10 ditulis &quot;X dari Y&quot;.</p>
 
       <section aria-labelledby="rep-links-h" className="sp-sec">
         <h3 id="rep-links-h" style={{ marginBottom: "var(--sp-2)" }}>Report lengkap</h3>

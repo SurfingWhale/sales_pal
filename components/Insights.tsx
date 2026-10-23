@@ -86,8 +86,8 @@ export default function Insights() {
   return (
     <div style={{ background: "var(--app-bg)", minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif", color: "var(--app-text)" }}>
       <div style={{ borderBottom: "1px solid var(--app-border)", padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--app-nav)", position: "sticky", top: 0, zIndex: 10, backdropFilter: "blur(12px)" }}>
-        <div style={{ fontSize: 20, fontWeight: 400, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "2px" }}>SALES<span style={{ color: "#005eb0" }}>PAL</span> · INSIGHTS</div>
-        <Link href="/dashboard" style={{ fontSize: 12, color: "#005eb0", textDecoration: "none", fontWeight: 700 }}>← Dashboard</Link>
+        <div style={{ fontSize: 20, fontWeight: 400, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "2px" }}>SALES<span style={{ color: "var(--brand-text)" }}>PAL</span> · INSIGHTS</div>
+        <Link href="/dashboard" style={{ fontSize: 12, color: "var(--brand-text)", textDecoration: "none", fontWeight: 700 }}>← Dashboard</Link>
       </div>
 
       <div style={{ padding: 20, maxWidth: 1100, margin: "0 auto" }}>
@@ -170,7 +170,7 @@ export default function Insights() {
                       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.key}</div>
                       <div style={{ display: "flex", gap: 14 }}>
                         <div><div style={{ fontSize: 18, fontWeight: 700, color: p.resp >= 25 ? "#00a862" : p.resp >= 10 ? "#f59e0b" : "#ff4444" }}>{p.resp}%</div><div style={{ fontSize: 12, color: "var(--app-muted)" }}>Response</div></div>
-                        <div><div style={{ fontSize: 18, fontWeight: 700, color: "#005eb0" }}>{p.win}%</div><div style={{ fontSize: 12, color: "var(--app-muted)" }}>Tertarik</div></div>
+                        <div><div style={{ fontSize: 18, fontWeight: 700, color: "var(--brand-text)" }}>{p.win}%</div><div style={{ fontSize: 12, color: "var(--app-muted)" }}>Tertarik</div></div>
                         <div><div style={{ fontSize: 18, fontWeight: 700 }}>{p.sent}</div><div style={{ fontSize: 12, color: "var(--app-muted)" }}>Kirim</div></div>
                       </div>
                       {p.sent >= 5 && p.resp < 10 && <div style={{ fontSize: 12, color: "#ff8888", marginTop: 8 }}>⚠️ Response rendah — revisi pesan ini.</div>}

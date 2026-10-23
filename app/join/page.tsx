@@ -67,19 +67,19 @@ export default function JoinPage() {
         ) : already ? (
           <>
             <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>Kamu udah ada di guild ini</div>
-            <a href="/dashboard?guild" onClick={() => { try { localStorage.setItem("sp-guild", g); } catch { /* */ } }} style={{ color: "#005eb0", fontWeight: 700 }}>Buka guild →</a>
+            <a href="/dashboard?guild" onClick={() => { try { localStorage.setItem("sp-guild", g); } catch { /* */ } }} style={{ color: "var(--brand-text)", fontWeight: 700 }}>Buka guild →</a>
           </>
         ) : !inv || expired ? (
           <>
             <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>Undangan ga berlaku</div>
             <div style={{ fontSize: 13, color: "var(--app-muted)", marginBottom: 16 }}>Link-nya salah, udah dicabut, atau lewat {expired ? "masa berlakunya" : "7 hari"}. Minta link baru ke Leader atau Officer guild-nya.</div>
-            <a href="/dashboard" style={{ color: "#005eb0", fontWeight: 700 }}>Ke SalesPal →</a>
+            <a href="/dashboard" style={{ color: "var(--brand-text)", fontWeight: 700 }}>Ke SalesPal →</a>
           </>
         ) : (
           <>
             <div style={{ fontSize: 13, color: "var(--app-muted)" }}>Kamu diundang ke guild</div>
             <div style={{ fontSize: 22, fontWeight: 800, margin: "4px 0 12px" }}>{inv.guildName}</div>
-            <div style={{ display: "inline-block", background: "#005eb01a", color: "#005eb0", borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 700, marginBottom: 10 }}>sebagai {inv.roleTitle || DEFAULT_TITLES[inv.role]}</div>
+            <div style={{ display: "inline-block", background: "#005eb01a", color: "var(--brand-text)", borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 700, marginBottom: 10 }}>sebagai {inv.roleTitle || DEFAULT_TITLES[inv.role]}</div>
             <div style={{ fontSize: 12.5, color: "var(--app-muted)", marginBottom: 20 }}>{ROLE_HINT[inv.role]}</div>
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 16 }}>Login sebagai <b>{user.email}</b></div>
             <div role="alert" style={{ fontSize: 13, color: "#dc2626", marginBottom: error ? 12 : 0 }}>{error}</div>

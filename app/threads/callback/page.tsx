@@ -56,7 +56,7 @@ export default function ThreadsCallback() {
       <div role="status" style={{ maxWidth: 380, textAlign: "center" }}>
         <div style={{ fontSize: 32, marginBottom: 12 }}>{bad ? "⚠️" : "📡"}</div>
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>{msg}</div>
-        {bad && <a href="/dashboard?hunt" style={{ color: "#005eb0", fontWeight: 700, fontSize: 14 }}>← Kembali ke Hunting</a>}
+        {bad && <a href="/dashboard?hunt" style={{ color: "var(--brand-text)", fontWeight: 700, fontSize: 14 }}>← Kembali ke Hunting</a>}
       </div>
     </div>
   );

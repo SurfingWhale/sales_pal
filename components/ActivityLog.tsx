@@ -96,7 +96,7 @@ export default function ActivityLog({ hunts, sessions, quotes, invoices, outreac
       <div style={heading}>{title}</div>
       <div style={{ ...subheading, marginBottom: 16 }}>Semua yang kamu kerjain, per hari: DM, balasan, penawaran, pembayaran.</div>
 
-      <section aria-label={`Heat map aktivitas ${WEEKS} minggu`} className="sp-sec" style={{ marginTop: 0, paddingTop: "var(--sp-4)" }}>
+      <section aria-label={`Heat map aktivitas ${WEEKS} minggu`} className="sp-sec" style={{ marginTop: 0, paddingTop: "var(--sp-4)", marginBottom: "var(--sp-6)" }}>
         <div role="group" aria-label="Jenis kerjaan" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
           <button aria-pressed={!kinds.length} onClick={() => { setKinds([]); setPages(1); }}
             style={{ ...chip, minHeight: 36, fontWeight: !kinds.length ? 700 : 500, color: !kinds.length ? "var(--app-text)" : "var(--app-muted)", borderColor: !kinds.length ? "var(--app-line-strong)" : "var(--app-border)" }}>

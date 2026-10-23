@@ -975,6 +975,13 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   /* An odd count: the last number takes the whole row instead of leaving a grey hole. */
   .sp-strip > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
+/* Six numbers on a phone: three columns, two rows, not three rows of two. */
+@media (max-width: 640px) {
+  .sp-strip.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sp-strip.three > * { padding-inline: var(--sp-3) var(--sp-2); }
+  .sp-strip.three > :nth-child(3n+1) { padding-inline-start: 0; }
+  .sp-strip.three > :last-child { grid-column: auto; }
+}
 /* Two columns everywhere (a strip in a side column). */
 .sp-strip.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .sp-strip.two > :nth-child(odd) { padding-inline-start: 0; }
