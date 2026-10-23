@@ -933,7 +933,8 @@ export const flows = [
           const t0 = Date.now();
           await go(page, place, tab);
           if (place === "Hunting") await pane(page, "Journey");
-          await page.getByText(want).first().waitFor({ timeout: 15000 });
+          // Kirim's table names the same people; look in the pane that's showing.
+          await (place === "Hunting" ? page.locator("#hpane-journey") : page).getByText(want).first().waitFor({ timeout: 15000 });
           const ms = Date.now() - t0;
           if (ms > 8000) throw new Error(`took ${ms} ms to show`);
         });
@@ -1087,7 +1088,15 @@ export const flows = [
       await check("Catat outreach", async () => { await go(page, "Tim", "Outreach"); await page.getByRole("button", { name: "+ Catat outreach" }).first().click(); }, { last: "Simpan" });
       await check("Catat penolakan", async () => { await go(page, "Tim", "Rejection Log"); await page.getByRole("button", { name: "+ Catat penolakan" }).first().click(); }, { last: "Simpan" });
       await check("Bikin guild", async () => { await go(page, "Tim", "Guild"); await page.getByRole("button", { name: "+ Bikin guild" }).click(); }, { last: "Bikin guild" });
-      await check("Template baru", async () => { await go(page, "Hunting"); await page.getByRole("button", { name: "+ Template" }).click(); }, { last: "Batal" });
+      await check("Template baru", async () => {
+        await go(page, "Hunting");
+        // Messages live on a person's page: open one from the search box.
+        const back = page.getByRole("button", { name: "Kembali ke daftar" });
+        if (await back.isVisible()) await back.click();
+        const box = page.getByRole("searchbox", { name: "Cari atau tempel target" });
+        await box.fill("@dialogflow"); await box.press("Enter");
+        await page.getByRole("button", { name: "+ Template" }).click();
+      }, { last: "Batal" });
       await check("Quick Pitch", async () => { await go(page, "Jualan", "Leads"); await page.getByRole("button", { name: /Quick Pitch/ }).click(); });
     },
   },

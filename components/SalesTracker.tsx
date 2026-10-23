@@ -809,6 +809,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         .sp-subhint { max-width: 1200px; margin: 0 auto; padding: 8px 32px 0; font-size: 13px; color: var(--app-muted); position: relative; z-index: 1; }
         .sp-iconbtn { width: 44px; height: 44px; border: 0; border-radius: 999px; color: var(--app-ink-2); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; flex-shrink: 0; font-family: inherit; }
         .sp-iconbtn:not(.glass) { background: transparent; }
+        .sp-brand-tile { position: relative; flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(150deg, #3a8fdc 0%, #005eb0 55%, #004a8c 100%); box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.25), 0 1px 2px rgba(0,40,90,0.25); }
+        .sp-brand-tile::after { content: ""; position: absolute; inset: 0; background: #fff; -webkit-mask: url(/logo-mark.png) center / 66% no-repeat; mask: url(/logo-mark.png) center / 66% no-repeat; }
         .sp-space { display: flex; align-items: center; height: 44px; border-radius: 999px; color: var(--app-ink-2); font-size: 13px; font-weight: 500; padding: 0 12px 0 16px; gap: 6px; }
         .sp-space select { appearance: none; -webkit-appearance: none; background: transparent; border: none; color: inherit; font: inherit; max-width: 150px; text-overflow: ellipsis; cursor: pointer; outline: none; }
         .sp-subnav { display: flex; gap: 8px; max-width: 1200px; margin: 0 auto; padding: 8px 32px 0; overflow-x: auto; scrollbar-width: none; }
@@ -900,8 +902,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 96, background: "linear-gradient(to bottom, var(--bar-tint) 0%, var(--bar-tint) 40%, transparent 100%)", pointerEvents: "none" }} />
         <div className={`sp-top-in${spaces.length > 0 ? " has-space" : ""}`}>
           <button onClick={() => setActiveTab("Dashboard")} aria-label="SalesPal, ke Beranda" style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 44, color: "var(--app-text)", background: "none", border: "none", padding: 0, cursor: "pointer", flexShrink: 0 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-mark.png" alt="" width={18} height={18} style={{ width: 18, height: 18, objectFit: "contain" }} />
+            {/* The app icon, as on the home screen: the paw in white on the brand blue. */}
+            <span className="sp-brand-tile" aria-hidden="true" />
             <span className="num sp-brand-word" style={{ fontSize: 19, letterSpacing: "0.06em", paddingTop: 3 }}>SALESPAL</span>
           </button>
           {/* Navigation: a pill in the header on wide screens, a floating bar on phones */}
