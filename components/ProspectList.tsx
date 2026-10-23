@@ -8,11 +8,11 @@ import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import type { Hunt } from "@/lib/hunting";
 import { objections } from "@/lib/salespal-data";
 import {
-  Prospect, ProspectEvent, Result, Strategy, View, archivePatch, dncPatch, dropReady, followUpDue, fromHunts, inQueue, lastLine, notePatch, replyPatch,
+  Prospect, ProspectEvent, Result, Strategy, View, archivePatch, dncPatch, dropReady, followUpDue, fromHunts, inQueue, JOURNEY_STEPS, journeyStep, lastLine, notePatch, replyPatch,
   restorePatch, resultPatch, silentDays, statusColor, statusLabel, view,
 } from "@/lib/prospects";
 import { Counter, bump, clean, ctx, loadClosed, removeProspect, saveProspect, syncHunt } from "@/lib/prospectStore";
-import { badge, btnPrimary, btnMuted, card, chip, font, inputStyle, label, ink } from "@/components/ui";
+import { btnPrimary, btnMuted, card, chip, font, inputStyle, label, ink } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmSheet";
 import ConvertSheet from "@/components/ConvertSheet";
 import Icon from "@/components/Icon";
@@ -35,18 +35,10 @@ function when(at: number): string {
   return `${ymd === today() ? "hari ini" : longDate(ymd)} ${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-// Where a person is on the way from a found post to their details.
-const STEPS = ["Baru", "Intro", "Follow-up", "Dibales", "Data"] as const;
-function stepOf(p: Prospect, v: View): number {
-  if (p.result === "data" || p.segment === "ETB") return 4;
-  if (v.status === "terhubung") return 3;
-  if (v.status === "belum" || v.status === "tidak") return 2;
-  if (v.status === "intro") return 1;
-  return 0;
-}
+const STEPS = JOURNEY_STEPS;
 function Steps({ p, v }: { p: Prospect; v: View }) {
   if (v.status === "dnc") return null;
-  const at = stepOf(p, v), c = statusColor(p, v);
+  const at = journeyStep(p, v), c = statusColor(p, v);
   return (
     <ol className="sp-psteps" aria-label={`Tahap ${STEPS[at]}, ${at + 1} dari ${STEPS.length}`} style={{ "--k": c } as React.CSSProperties}>
       {STEPS.map((x, i) => <li key={x} className={i < at ? "done" : i === at ? "now" : undefined} aria-hidden="true"><span>{x}</span></li>)}
@@ -305,11 +297,10 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                 <span className="sp-pini" aria-hidden="true" style={{ background: `color-mix(in srgb, ${statusColor(p, v)} 14%, var(--app-card))`, color: ink(statusColor(p, v)) }}>{(p.name || p.handle).replace(/^@/, "").slice(0, 2).toUpperCase()}</span>
                 <span className="sp-pbody">
                   <span className="sp-phead"><span className="sp-pname">{p.name || p.handle}</span>{last && <span className="sp-ptime tabnum">{ago(last.at)}</span>}</span>
-                  <span className="sp-psub">{[p.name ? p.handle : "", sub].filter(Boolean).join(" · ")}</span>
+                  <span className="sp-psub"><span className="sp-pbadge" style={{ color: ink(statusColor(p, v)) }}>{statusLabel(p, v)}</span>{[p.name ? p.handle : "", sub].filter(Boolean).map(x => ` · ${x}`).join("")}</span>
                   {!open && <span className="sp-plast">{last ? `${last.who === "kamu" ? "Kamu: " : last.who === "dia" ? "Dia: " : ""}${last.text.replace(/\s+/g, " ")}` : "Belum ada pesan"}</span>}
                   <Steps p={p} v={v} />
                 </span>
-                <span className="sp-pbadge" style={badge(statusColor(p, v))}>{statusLabel(p, v)}</span>
               </button>
               {profileOf(p) && <a className="sp-pprofile" href={profileOf(p)} target="_blank" rel="noreferrer" aria-label={`Buka profil ${who} di ${p.platform}`} title={`Buka profil di ${p.platform}`}><Icon name="arrowUpRight" size={18} /></a>}
             </div>

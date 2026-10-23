@@ -911,6 +911,19 @@ export const flows = [
         await page.keyboard.press("Escape");
         await map.getByRole("button", { name: "Potensi" }).click().catch(() => {});
       });
+      await t.step("a prospect's card on Beranda shows its journey and opens the chat so far", async () => {
+        await go(page, "Beranda");
+        const chatBtn = page.locator(".sp-todo").getByRole("button", { name: /^Chat terakhir dengan / }).first();
+        await chatBtn.waitFor({ state: "attached", timeout: 15000 });
+        await chatBtn.scrollIntoViewIfNeeded();
+        await chatBtn.click();
+        const sheet = page.getByRole("dialog").filter({ has: page.getByRole("list", { name: "Chat terakhir" }) });
+        await sheet.getByRole("list", { name: "Chat terakhir" }).getByRole("listitem").first().waitFor();
+        await sheet.getByRole("list", { name: /^Tahap sekarang: / }).waitFor();
+        await t.audit("Beranda → a prospect's chat (big account)");
+        await sheet.getByRole("button", { name: "Tutup" }).click();
+        await sheet.waitFor({ state: "detached" });
+      });
       await t.step("Perlu ditindak is a bounded queue: ten cards, the rest in a sheet that scrolls itself", async () => {
         await go(page, "Beranda");
         const queue = page.locator(".sp-todo");

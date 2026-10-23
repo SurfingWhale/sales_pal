@@ -1054,7 +1054,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .sp-ptime { flex-shrink: 0; font-size: var(--fs-meta); color: var(--app-muted); }
 .sp-psub { font-size: var(--fs-meta); color: var(--app-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-plast { font-size: var(--fs-meta); color: var(--app-sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sp-pbadge { flex-shrink: 0; align-self: flex-start; margin-top: 2px; }
+.sp-pbadge { font-weight: 600; }
 .sp-pprofile { flex-shrink: 0; width: 44px; height: 44px; margin-top: 6px; display: flex; align-items: center; justify-content: center; border-radius: 10px; color: var(--app-ink-2); }
 @media (hover: hover) and (pointer: fine) { .sp-pcard-main:hover, .sp-pprofile:hover { background: var(--app-inner); } }
 /* The journey line: steps passed filled in the status colour, the current one ringed. */
@@ -1065,7 +1065,10 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .sp-psteps li.done::before, .sp-psteps li.done::after { background: color-mix(in srgb, var(--k) 80%, var(--app-text)); }
 .sp-psteps li.now::before { background: var(--app-card); box-shadow: 0 0 0 2px color-mix(in srgb, var(--k) 80%, var(--app-text)); }
 .sp-psteps li.now { color: var(--app-text); font-weight: 600; }
-.sp-psteps li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 2px; }
+/* Only the current step is named; the rest are dots on the line. */
+.sp-psteps li span { white-space: nowrap; visibility: hidden; }
+.sp-psteps li.now span { visibility: visible; }
+.sp-psteps li:last-child.now span { align-self: flex-end; }
 /* A person's page: back to the list, then their name as the page title. */
 .sp-kback-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: -8px 0 4px; }
 .sp-kback, .sp-knext { height: 44px; padding: 0 4px; border: 0; background: none; display: inline-flex; align-items: center; gap: 2px; color: var(--brand-text); font: 600 var(--fs-body) 'Plus Jakarta Sans', sans-serif; cursor: pointer; }
