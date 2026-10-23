@@ -216,96 +216,37 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   }
   async function restore(p: Prospect) {
     setBusy(true);
-    try { await saveProspect(space, p, restorePatch(p, ctx())); setClosed(null); setMsg(`${p.handle} dibalikin ke journey.`); }
+    try { await saveProspect(space, p, restorePatch(p, ctx())); setClosed(null); setOpenId(null); setMsg(`${p.handle} dibalikin ke journey.`); }
     catch { setMsg("Gagal nyimpen. Cek koneksi lalu coba lagi."); }
     setBusy(false);
   }
   const dropping = filter === "Siap dibuang" ? inFilter("Siap dibuang").map(r => r.p) : [];
 
-  return (
-    <div id="journey-prospek" className={embedded ? "sp-plist" : undefined} style={embedded ? undefined : { ...card, padding: 20, marginBottom: 20 }}>
-      {askSheet}
-      {!embedded && <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>Journey prospek</div>
-        <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{prospects.length} orang aktif</div>
-      </div>
-      <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>
-        Satu orang satu journey. Belum dibales {strategy.gaps[0]} hari = Belum respon; {strategy.maxAttempts}× tanpa jawaban = Tidak terhubung, diparkir {strategy.parkDays} hari.
-      </div>
-      </>}
-
-      {unlinked.length > 0 && (
-        <div role="status" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)", marginBottom: 12, fontSize: 12 }}>
-          <span>{unlinked.length} DM lama belum punya journey.</span>
-          <button onClick={backfill} disabled={busy} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 12 }}>Gabungin jadi journey</button>
-        </div>
-      )}
-      <div role="status" style={{ fontSize: 12, color: "var(--app-sub)", marginBottom: msg ? 10 : 0 }}>{msg}</div>
-
-      {query === undefined && <input type="search" value={search} onChange={e => { setSearch(e.target.value); setLimit(PAGE); }} aria-label="Cari prospek pakai ID atau @username"
-        placeholder="Cari ID, @username, atau nama" style={{ ...inputStyle, fontSize: 16, marginBottom: 10 }} />}
-      {needle && <div role="status" style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>{shown.length} ketemu buat “{(query ?? search).trim()}” di semua journey.</div>}
-
-      {!needle && !embedded && <div role="group" aria-label="Saring prospek" className="sp-chiprow sp-pfilters" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6, marginBottom: 6 }}>
-        {FILTERS.map(f => {
-          const n = count(f);
-          return (
-            <button key={f} onClick={() => { setFilter(f); setLimit(PAGE); }} aria-pressed={filter === f}
-              style={{ ...chip, flexShrink: 0, minHeight: 36, fontWeight: 700, ...(filter === f ? { background: "#005eb0", color: "#fff", border: "1px solid #005eb0" } : {}) }}>
-              {f}{n ? <span> {n}</span> : null}
-            </button>
-          );
-        })}
-      </div>}
-
-      {filter === "Siap dibuang" && dropping.length > 0 && !needle && (
-        <div role="note" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)", margin: "4px 0 10px", fontSize: 13 }}>
-          <span style={{ flex: "1 1 240px" }}>{dropping.length} orang diem {strategy.dropDays}+ hari sejak pesan terakhir. Dibuang = masuk Arsip, riwayat tetap ada, bisa dibalikin.</span>
-          <button onClick={() => ask(`Buang ${dropping.length} prospek?`, "Mereka pindah ke Arsip dan ga muncul di antrian. Bisa dibalikin dari saringan Arsip.", () => drop(dropping), "Buang", "Membuang…")} disabled={busy}
-            style={{ ...chip, minHeight: 40, fontWeight: 700, color: "color-mix(in srgb, #dc2626 55%, var(--app-text))", border: "1px solid #dc262640" }}>🗑 Buang semua ({dropping.length})</button>
-        </div>
-      )}
-      {ready && shown.length === 0 && !needle && (
-        <div style={{ fontSize: 12, color: "var(--app-muted)", padding: "14px 0" }}>
-          {filter === "Antrian" ? "Antrian kosong. Share post Threads ke SalesPal atau tempel link-nya buat nambah prospek."
-            : filter === "DNC" ? (closed ? "Belum ada yang minta ga dihubungi." : "Memuat…")
-            : filter === "Arsip" ? (closed ? "Arsip kosong." : "Memuat…")
-            : filter === "Siap dibuang" ? `Ga ada yang diem ${strategy.dropDays}+ hari. Bagus.`
-            : "Belum ada prospek di sini."}
-        </div>
-      )}
-
-      {shown.slice(0, limit).map(({ p, v }) => {
-        const open = openId === p.id;
-        const who = p.name ? `${p.name} (${p.handle})` : p.handle;
-        const post = [...(p.history || [])].reverse().find(e => e.kind === "post");
-        const ed = editing?.id === p.id ? editing : null;
-        const last = lastLine(p);
-        const sub = [
-          p.platform, p.segment,
-          v.status === "intro" || v.status === "belum" ? `percobaan ${p.attempts}/${strategy.maxAttempts}` : "",
-          (silentDays(p, on) ?? 0) >= 2 && !p.archivedAt ? `diem ${silentDays(p, on)} hari` : "",
-          p.archivedAt ? `dibuang ${longDate(p.archivedAt)}` : "",
-          v.due && v.status !== "dnc" ? (v.due <= on ? (v.due < on ? `telat sejak ${longDate(v.due)}` : "hari ini") : `${v.parkedUntil ? "parkir s.d." : "follow-up"} ${longDate(v.due)}`) : "",
-        ].filter(Boolean).join(" · ");
-        return (
-          <div key={p.id} className="sp-pcard">
-            {/* One card per person: who and where, how far along, the last thing said. */}
-            <div className="sp-pcard-top">
-              <button className="sp-pcard-main" onClick={() => { setOpenId(open ? null : p.id); setEditing(null); }} aria-expanded={open} aria-label={`Journey ${who}`}>
-                <span className="sp-pini" aria-hidden="true" style={{ background: `color-mix(in srgb, ${statusColor(p, v)} 14%, var(--app-card))`, color: ink(statusColor(p, v)) }}>{(p.name || p.handle).replace(/^@/, "").slice(0, 2).toUpperCase()}</span>
-                <span className="sp-pbody">
-                  <span className="sp-phead"><span className="sp-pname">{p.name || p.handle}</span>{last && <span className="sp-ptime tabnum">{ago(last.at)}</span>}</span>
-                  <span className="sp-psub"><span className="sp-pbadge" style={{ color: ink(statusColor(p, v)) }}>{statusLabel(p, v)}</span>{[p.name ? p.handle : "", sub].filter(Boolean).map(x => ` · ${x}`).join("")}</span>
-                  {!open && <span className="sp-plast">{last ? `${last.who === "kamu" ? "Kamu: " : last.who === "dia" ? "Dia: " : ""}${last.text.replace(/\s+/g, " ")}` : "Belum ada pesan"}</span>}
+  // The open card is its own page, drawn outside the filtered list: marking a
+  // reply moves the person to another view, and their page stays open.
+  const contact = (() => {
+    if (!openId) return null;
+    const r = [...rows, ...(closed || []).map(p => ({ p, v: view(p, on, strategy) }))].find(x => x.p.id === openId);
+    if (!r) return null;
+    const { p, v } = r;
+    const who = p.name ? `${p.name} (${p.handle})` : p.handle;
+    const post = [...(p.history || [])].reverse().find(e => e.kind === "post");
+    const ed = editing?.id === p.id ? editing : null;
+    return (
+              // A card opens as the person's own page (owner, 23 Okt: "bukan berbentuk
+              // pop up card baru"): who they are on top, the chat, then the moves.
+              <div className="modal-overlay" onClick={() => { setOpenId(null); setEditing(null); }}>
+              <div role="dialog" aria-modal="true" aria-label={`Kontak ${who}`} data-own-layout className="sp-pcontact" onClick={e => e.stopPropagation()}>
+                <div className="sp-pcontact-bar">
+                  <button className="sp-pcontact-back" onClick={() => { setOpenId(null); setEditing(null); }} aria-label="Tutup kontak"><Icon name="chevronLeft" size={18} stroke={2} />Prospek</button>
+                  {profileOf(p) && <a className="sp-pcontact-profile" href={profileOf(p)} target="_blank" rel="noreferrer">Profil {p.platform}<Icon name="arrowUpRight" size={16} /></a>}
+                </div>
+                <div className="sp-pcontact-id">
+                  <span className="sp-pini sp-pini-l" aria-hidden="true" style={{ background: `color-mix(in srgb, ${statusColor(p, v)} 14%, var(--app-card))`, color: ink(statusColor(p, v)) }}>{(p.name || p.handle).replace(/^@/, "").slice(0, 2).toUpperCase()}</span>
+                  <h2>{p.name || p.handle}</h2>
+                  <p className="sp-psub"><span className="sp-pbadge" style={{ color: ink(statusColor(p, v)) }}>{statusLabel(p, v)}</span>{[p.name ? p.handle : "", p.platform].filter(Boolean).map(x => ` · ${x}`).join("")}</p>
                   <Steps p={p} v={v} />
-                </span>
-              </button>
-              {profileOf(p) && <a className="sp-pprofile" href={profileOf(p)} target="_blank" rel="noreferrer" aria-label={`Buka profil ${who} di ${p.platform}`} title={`Buka profil di ${p.platform}`}><Icon name="arrowUpRight" size={18} /></a>}
-            </div>
-
-            {open && (
+                </div>
               <div role="region" aria-label={`Riwayat ${who}`} style={{ marginTop: 10 }}>
                 <Summary p={p} on={on} />
                 {p.context && (p.context.need || p.context.when || p.context.where) && (
@@ -313,7 +254,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                     {[p.context.need && `Butuh ${p.context.need}`, p.context.when, p.context.where, p.context.budget].filter(Boolean).join(" · ")}
                   </div>
                 )}
-                <div style={{ maxHeight: 360, overflowY: "auto", padding: "4px 2px" }}>
+                <div style={{ padding: "4px 2px" }}>
                   {(p.history || []).length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Belum ada riwayat.</div>}
                   {(p.history || []).map((e, i) => <Bubble key={`${e.at}_${i}`} e={e} />)}
                 </div>
@@ -323,7 +264,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
                     <span style={{ fontSize: 12, color: "var(--app-sub)" }}>Dibuang {longDate(p.archivedAt)}{p.archiveReason ? ` · ${p.archiveReason}` : ""}.</span>
                     <button onClick={() => restore(p)} disabled={busy} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)" }}>↩ Balikin</button>
-                    {onOpen && <button onClick={() => onOpen(p)} style={{ ...chip, minHeight: 36 }}>💬 Percakapan</button>}
+                    {onOpen && <button onClick={() => { setOpenId(null); onOpen(p); }} style={{ ...chip, minHeight: 36 }}>💬 Percakapan</button>}
                   </div>
                 ) : v.status === "dnc" ? (
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
@@ -333,9 +274,9 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                 ) : (
                   <>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-                      {onOpen && <button onClick={() => onOpen(p)} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Percakapan</button>}
+                      {onOpen && <button onClick={() => { setOpenId(null); onOpen(p); }} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Percakapan</button>}
                       {dropReady(p, on, strategy) && <button onClick={() => ask(`Buang ${who}?`, "Pindah ke Arsip, riwayat tetap ada, bisa dibalikin.", () => drop([p]), "Buang", "Membuang…")} style={{ ...chip, minHeight: 36 }}>🗑 Buang</button>}
-                      <button onClick={() => { const ids = shown.map(r => r.p.id); onCompose(p, ids.slice(ids.indexOf(p.id) + 1), filter); }} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>{v.status === "baru" ? "✉ Kirim intro" : v.status === "belum" ? "↻ Follow-up" : "✉ Kirim pesan"}</button>
+                      <button onClick={() => { const ids = shown.map(r => r.p.id); setOpenId(null); onCompose(p, ids.slice(ids.indexOf(p.id) + 1), filter); }} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>{v.status === "baru" ? "✉ Kirim intro" : v.status === "belum" ? "↻ Follow-up" : "✉ Kirim pesan"}</button>
                       <button onClick={() => setEditing({ id: p.id, kind: "reply", text: "", date: "" })} aria-pressed={ed?.kind === "reply"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Dibales</button>
                       {(post?.url || p.url) && <a href={post?.url || p.url} target="_blank" rel="noreferrer" className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>{post?.url ? "Buka post ↗" : "Buka profil ↗"}</a>}
                       <button onClick={() => setEditing({ id: p.id, kind: "note", text: "", date: "" })} style={{ ...chip, minHeight: 36 }}>📝 Catatan</button>
@@ -394,10 +335,96 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                   </div>
                 )}
               </div>
-            )}
+              </div>
+              </div>
+    );
+  })();
+
+  return (
+    <div id="journey-prospek" className={embedded ? "sp-plist" : undefined} style={embedded ? undefined : { ...card, padding: 20, marginBottom: 20 }}>
+      {askSheet}
+      {!embedded && <>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>Journey prospek</div>
+        <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{prospects.length} orang aktif</div>
+      </div>
+      <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>
+        Satu orang satu journey. Belum dibales {strategy.gaps[0]} hari = Belum respon; {strategy.maxAttempts}× tanpa jawaban = Tidak terhubung, diparkir {strategy.parkDays} hari.
+      </div>
+      </>}
+
+      {unlinked.length > 0 && (
+        <div role="status" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)", marginBottom: 12, fontSize: 12 }}>
+          <span>{unlinked.length} DM lama belum punya journey.</span>
+          <button onClick={backfill} disabled={busy} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 12 }}>Gabungin jadi journey</button>
+        </div>
+      )}
+      <div role="status" style={{ fontSize: 12, color: "var(--app-sub)", marginBottom: msg ? 10 : 0 }}>{msg}</div>
+
+      {query === undefined && <input type="search" value={search} onChange={e => { setSearch(e.target.value); setLimit(PAGE); }} aria-label="Cari prospek pakai ID atau @username"
+        placeholder="Cari ID, @username, atau nama" style={{ ...inputStyle, fontSize: 16, marginBottom: 10 }} />}
+      {needle && <div role="status" style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>{shown.length} ketemu buat “{(query ?? search).trim()}” di semua journey.</div>}
+
+      {!needle && !embedded && <div role="group" aria-label="Saring prospek" className="sp-chiprow sp-pfilters" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6, marginBottom: 6 }}>
+        {FILTERS.map(f => {
+          const n = count(f);
+          return (
+            <button key={f} onClick={() => { setFilter(f); setLimit(PAGE); }} aria-pressed={filter === f}
+              style={{ ...chip, flexShrink: 0, minHeight: 36, fontWeight: 700, ...(filter === f ? { background: "#005eb0", color: "#fff", border: "1px solid #005eb0" } : {}) }}>
+              {f}{n ? <span> {n}</span> : null}
+            </button>
+          );
+        })}
+      </div>}
+
+      {filter === "Siap dibuang" && dropping.length > 0 && !needle && (
+        <div role="note" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)", margin: "4px 0 10px", fontSize: 13 }}>
+          <span style={{ flex: "1 1 240px" }}>{dropping.length} orang diem {strategy.dropDays}+ hari sejak pesan terakhir. Dibuang = masuk Arsip, riwayat tetap ada, bisa dibalikin.</span>
+          <button onClick={() => ask(`Buang ${dropping.length} prospek?`, "Mereka pindah ke Arsip dan ga muncul di antrian. Bisa dibalikin dari saringan Arsip.", () => drop(dropping), "Buang", "Membuang…")} disabled={busy}
+            style={{ ...chip, minHeight: 40, fontWeight: 700, color: "color-mix(in srgb, #dc2626 55%, var(--app-text))", border: "1px solid #dc262640" }}>🗑 Buang semua ({dropping.length})</button>
+        </div>
+      )}
+      {ready && shown.length === 0 && !needle && (
+        <div style={{ fontSize: 12, color: "var(--app-muted)", padding: "14px 0" }}>
+          {filter === "Antrian" ? "Antrian kosong. Share post Threads ke SalesPal atau tempel link-nya buat nambah prospek."
+            : filter === "DNC" ? (closed ? "Belum ada yang minta ga dihubungi." : "Memuat…")
+            : filter === "Arsip" ? (closed ? "Arsip kosong." : "Memuat…")
+            : filter === "Siap dibuang" ? `Ga ada yang diem ${strategy.dropDays}+ hari. Bagus.`
+            : "Belum ada prospek di sini."}
+        </div>
+      )}
+
+      {shown.slice(0, limit).map(({ p, v }) => {
+        const open = openId === p.id;
+        const who = p.name ? `${p.name} (${p.handle})` : p.handle;
+        const last = lastLine(p);
+        const sub = [
+          p.platform, p.segment,
+          v.status === "intro" || v.status === "belum" ? `percobaan ${p.attempts}/${strategy.maxAttempts}` : "",
+          (silentDays(p, on) ?? 0) >= 2 && !p.archivedAt ? `diem ${silentDays(p, on)} hari` : "",
+          p.archivedAt ? `dibuang ${longDate(p.archivedAt)}` : "",
+          v.due && v.status !== "dnc" ? (v.due <= on ? (v.due < on ? `telat sejak ${longDate(v.due)}` : "hari ini") : `${v.parkedUntil ? "parkir s.d." : "follow-up"} ${longDate(v.due)}`) : "",
+        ].filter(Boolean).join(" · ");
+        return (
+          <div key={p.id} className="sp-pcard">
+            {/* One card per person: who and where, how far along, the last thing said. */}
+            <div className="sp-pcard-top">
+              <button className="sp-pcard-main" onClick={() => { setOpenId(open ? null : p.id); setEditing(null); }} aria-expanded={open} aria-haspopup="dialog" aria-label={`Journey ${who}`}>
+                <span className="sp-pini" aria-hidden="true" style={{ background: `color-mix(in srgb, ${statusColor(p, v)} 14%, var(--app-card))`, color: ink(statusColor(p, v)) }}>{(p.name || p.handle).replace(/^@/, "").slice(0, 2).toUpperCase()}</span>
+                <span className="sp-pbody">
+                  <span className="sp-phead"><span className="sp-pname">{p.name || p.handle}</span>{last && <span className="sp-ptime tabnum">{ago(last.at)}</span>}</span>
+                  <span className="sp-psub"><span className="sp-pbadge" style={{ color: ink(statusColor(p, v)) }}>{statusLabel(p, v)}</span>{[p.name ? p.handle : "", sub].filter(Boolean).map(x => ` · ${x}`).join("")}</span>
+                  {!open && <span className="sp-plast">{last ? `${last.who === "kamu" ? "Kamu: " : last.who === "dia" ? "Dia: " : ""}${last.text.replace(/\s+/g, " ")}` : "Belum ada pesan"}</span>}
+                  <Steps p={p} v={v} />
+                </span>
+              </button>
+              {profileOf(p) && <a className="sp-pprofile" href={profileOf(p)} target="_blank" rel="noreferrer" aria-label={`Buka profil ${who} di ${p.platform}`} title={`Buka profil di ${p.platform}`}><Icon name="arrowUpRight" size={18} /></a>}
+            </div>
+
           </div>
         );
       })}
+      {contact}
       {shown.length > limit && <button onClick={() => setLimit(limit + PAGE)} style={{ ...chip, width: "100%", marginTop: 8, minHeight: 40 }}>Tampilkan {Math.min(PAGE, shown.length - limit)} lagi</button>}
 
       {converting && (
