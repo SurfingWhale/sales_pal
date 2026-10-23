@@ -13,7 +13,7 @@ import { useConfirm } from "@/components/ConfirmSheet";
 // stage that fits this person picked, and every template filled in with what
 // their post said (or the workspace's defaults when it didn't say).
 
-export default function TemplateBoard({ templates, scores, data, stage, blocked, copiedId, copyFail, onPick, canEdit, sampleName, send = { how: "wa", label: "Kirim WA" }, extra, newRequest = 0, manage }: {
+export default function TemplateBoard({ templates, scores, data, stage, blocked, copiedId, copyFail, onPick, canEdit, sampleName, send = { how: "wa", label: "Kirim WA" }, extra, newRequest = 0, manage, startNew, onEditDone, editorOnly }: {
   templates: PitchTemplate[]; scores: TemplateScore[]; data: FillData; stage: Stage; blocked: boolean;
   copiedId: string | null; copyFail: string | null; onPick: (t: PitchTemplate, how: "copy" | "wa" | "open") => void;
   // The second button: WhatsApp, or copy and open the DM / post (Hunting decides by platform).
@@ -22,10 +22,14 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
   extra?: ReactNode;                         // the header's tool (Hunting: its + menu)
   newRequest?: number;                       // bumped from outside: open a new template
   manage?: boolean;                          // editing the deck only: no send buttons
+  startNew?: boolean;                        // open on a new template (Hunting's + menu, from the list)
+  onEditDone?: () => void;                   // the editor closed, saved or not
+  editorOnly?: boolean;                      // just the editor, no deck around it
 }) {
   const [ask, askSheet] = useConfirm();
   const space = useSpace();
-  const [editing, setEditing] = useState<PitchTemplate | null>(null);
+  const [editing, setEditingState] = useState<PitchTemplate | null>(startNew ? { id: "", title: "", body: "", stage } : null);
+  const setEditing = (t: PitchTemplate | null) => { setEditingState(t); if (!t) onEditDone?.(); };
   // Long messages show four lines and "Lihat selengkapnya" (QA 15 Okt).
   const [full, setFull] = useState<Set<string>>(new Set());
   const board = useRef<HTMLDivElement>(null);
@@ -35,9 +39,13 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
   const [picked, setPicked] = useState<Stage | null>(null);
   useEffect(() => setPicked(null), [stage, sampleName]);
   const shown = picked || stage;
-  // "Template pesan baru" from Hunting's + menu opens the editor here, on the stage in view.
+  // "Template pesan baru" from Hunting's + menu opens the editor here, on the
+  // stage in view: only a new request, never one already answered.
+  const answered = useRef(newRequest);
   useEffect(() => {
-    if (newRequest && canEdit) setEditing({ id: "", title: "", body: "", stage: picked || stage });
+    if (newRequest === answered.current) return;
+    answered.current = newRequest;
+    if (newRequest && canEdit) setEditingState({ id: "", title: "", body: "", stage: picked || stage });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newRequest]);
   // Keep the picked chip in view, inside the chip row only.
@@ -81,6 +89,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
   return (
     <>
       {askSheet}
+      {!editorOnly && <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
         <div style={{ fontSize: 13, fontWeight: 700 }}>Pilih pesan</div>
         <div className="sp-tpl-tools" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -160,6 +169,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
           <button onClick={() => addStarter(s.id)} style={{ ...chip, minHeight: 34, marginTop: 10, color: "var(--brand-text)" }}>+ Pakai contoh personal</button>
         )}
       </section>
+      </>}
 
       {editing && (
         <div className="modal-overlay" onClick={() => setEditing(null)}>

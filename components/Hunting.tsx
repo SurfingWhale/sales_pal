@@ -89,7 +89,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   const [addMenu, setAddMenu] = useState(false);
   // Messages and scripts live behind the + menu too (owner, 23 Okt).
   const [tplNew, setTplNew] = useState(0);
-  const [tplManage, setTplManage] = useState(false);
+  const [tplManage, setTplManage] = useState<false | "list" | "new">(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const [queued, setQueued] = useState<{ label: string; ids: string[] } | null>(null);
   const [editDefaults, setEditDefaults] = useState(false);
@@ -566,15 +566,20 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
             </ul>
             <h3 className="sp-kadd-sec">Pesan & script</h3>
             <ul>
-              {canEdit && <li><button onClick={() => { setAddMenu(false); if (!open) setTplManage(true); setTplNew(n => n + 1); }}><Icon name="plus" size={20} />Template pesan baru</button></li>}
-              <li><button onClick={() => { setAddMenu(false); setTplManage(true); }}><Icon name="doc" size={20} />Kelola template pesan</button></li>
+              {canEdit && <li><button onClick={() => { setAddMenu(false); if (open) setTplNew(n => n + 1); else setTplManage("new"); }}><Icon name="plus" size={20} />Template pesan baru</button></li>}
+              <li><button onClick={() => { setAddMenu(false); setTplManage("list"); }}><Icon name="doc" size={20} />Kelola template pesan</button></li>
               <li><button onClick={() => { setAddMenu(false); setEditDefaults(true); }}><Icon name="sliders" size={20} />Default kalau kosong</button></li>
               {onOpenScripts && <li><button onClick={() => { setAddMenu(false); onOpenScripts(); }}><Icon name="book" size={20} />Script Library</button></li>}
             </ul>
           </section>
         </div>
       )}
-      {tplManage && (
+      {tplManage === "new" && (
+        // Just the editor: the deck behind it closes with it.
+        <TemplateBoard templates={templates} scores={scores} data={fillData} stage={stageFor(undefined, undefined)} editorOnly startNew onEditDone={() => setTplManage(false)}
+          blocked={false} copiedId={copiedId} copyFail={copyFail} onPick={() => undefined} canEdit={canEdit} send={sendOut} sampleName="" />
+      )}
+      {tplManage === "list" && (
         // The message deck on its own, to add and change templates without a target.
         <div className="modal-overlay" onClick={() => setTplManage(false)}>
           <div role="dialog" aria-modal="true" aria-labelledby="tpl-manage-h" onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 560 }}>
@@ -583,8 +588,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
               <button className="sp-x" onClick={() => setTplManage(false)} aria-label="Tutup"><span><Icon name="close" size={13} stroke={2.4} /></span></button>
             </div>
             <TemplateBoard templates={templates} scores={scores} data={fillData} stage={stageFor(undefined, undefined)} manage
-              blocked={false} copiedId={copiedId} copyFail={copyFail} onPick={() => undefined} canEdit={canEdit} send={sendOut} sampleName=""
-              newRequest={open ? 0 : tplNew} />
+              blocked={false} copiedId={copiedId} copyFail={copyFail} onPick={() => undefined} canEdit={canEdit} send={sendOut} sampleName="" />
           </div>
         </div>
       )}
