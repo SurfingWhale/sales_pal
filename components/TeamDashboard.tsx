@@ -14,7 +14,10 @@ import { rupiah, today as todayStr, useSpaceCollection } from "@/lib/billing";
 import { useSpace } from "@/lib/space";
 import { isManager, isSeller, type Member, type Role } from "@/lib/guild";
 import { activities } from "@/lib/activity";
-import { PERIODS, PeriodId, Range, Stats, change, daysSince, ownerOf, pct, perDay, rangeOf, rateOf, stats } from "@/lib/dashboard";
+import { PERIODS, PeriodId, Range, change, dashboardDoc, daysSince, ownerOf, pct, perDay, rangeOf, rateChange, rateOf, stats } from "@/lib/dashboard";
+import { reportName } from "@/lib/reportPdf";
+import ReportShell from "@/components/ReportShell";
+import ReportPaper from "@/components/ReportPaper";
 import type { Outreach, Rejection } from "@/components/TeamLogs";
 import ActivityLog from "@/components/ActivityLog";
 import { Avatar } from "@/components/GuildHub";
@@ -64,6 +67,7 @@ export default function TeamDashboard({ hunts, quotes, invoices, outreach, rejec
 
   const [period, setPeriod] = useState<PeriodId>("month");
   const [who, setWho] = useState<string | null>(null);
+  const [paper, setPaper] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const now = todayStr();
   const { cur, prev } = rangeOf(period, now);
@@ -131,13 +135,16 @@ export default function TeamDashboard({ hunts, quotes, invoices, outreach, rejec
         )}
       </div>
 
-      <div role="radiogroup" aria-label="Periode" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+      <div role="radiogroup" aria-label="Periode" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         {PERIODS.map(x => (
           <button key={x.id} role="radio" aria-checked={period === x.id} onClick={() => setPeriod(x.id)}
             style={{ ...chip, minHeight: 36, fontSize: 13, fontWeight: period === x.id ? 700 : 500, color: period === x.id ? "var(--app-text)" : "var(--app-muted)", borderColor: period === x.id ? "var(--app-line-strong)" : "var(--app-border)" }}>
             {x.label}
           </button>
         ))}
+      </div>
+        <button onClick={() => setPaper(true)} style={{ ...chip, minHeight: 36, fontSize: 13, fontWeight: 700, color: "var(--brand-text)", marginLeft: "auto" }}>PDF laporan</button>
       </div>
 
       <section aria-label="Angka utama" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(max(150px, calc((100% - 30px) / 4)), 1fr))", gap: 10, marginBottom: 12 }}>
@@ -227,6 +234,21 @@ export default function TeamDashboard({ hunts, quotes, invoices, outreach, rejec
         </div>
       )}
 
+      {paper && (() => {
+        const periodLabel = PERIODS.find(x => x.id === period)!.label;
+        const name = person ? person.name : manager ? space.name : space.me.name;
+        const doc = dashboardDoc({
+          title: name, team: manager && !who, period: periodLabel, cur, prev, s, p, trend,
+          rows: rows.map(r => ({ name: r.x.name, s: r.s })), quiet: quiet.map(r => ({ name: r.x.name, lastAt: r.s.lastAt })),
+        });
+        const stamp = period === "month" || period === "lastMonth" ? cur.from.slice(0, 7) : `${cur.from}_${cur.to}`;
+        return (
+          <ReportShell title={`Laporan ${name} · ${periodLabel}`} fileName={reportName(`Dashboard ${name}`, stamp)} doc={doc} onClose={() => setPaper(false)}>
+            <ReportPaper doc={doc} />
+          </ReportShell>
+        );
+      })()}
+
       <div ref={logRef} style={{ scrollMarginTop: 120 }}>
         {(who || !manager) && (
           <ActivityLog key={who || me} owner={who || me} title={person && who !== me ? `Log aktivitas ${person.name}` : "Log aktivitas kamu"}
@@ -235,12 +257,6 @@ export default function TeamDashboard({ hunts, quotes, invoices, outreach, rejec
       </div>
     </div>
   );
-}
-
-// A rate against one that didn't exist (nothing sent before) is new, not "+100 poin".
-function rateChange(cur: number | null, prev: number | null): ReturnType<typeof change> {
-  if (prev === null) return { text: cur === null ? "sama" : "baru", dir: 0 };
-  return change(cur ?? 0, prev, "rate");
 }
 
 function Cell({ l, v }: { l: string; v: string | number }) {
