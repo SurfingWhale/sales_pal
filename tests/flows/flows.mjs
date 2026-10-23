@@ -620,13 +620,18 @@ export const flows = [
         for (const want of ["Bakso Flow", "Studio Flow", "Rp 1.500.000", "saat booking", "H-1 acara", "1x revisi minor"]) if (!body.includes(want)) throw new Error(`SPK text is missing "${want}"`);
         const downloads = [];
         page.on("download", d => downloads.push(d));
-        await sheet.getByRole("button", { name: "Bagikan PDF (2)" }).click();
+        await sheet.getByText("Lampirkan PDF (2)").waitFor();
+        await sheet.getByRole("button", { name: "Bagikan PDF" }).click();
         for (let i = 0; i < 100 && downloads.length < 2; i++) await page.waitForTimeout(100);
-        // Handing the files over isn't sending them: the seller confirms first.
-        const ask = page.getByRole("dialog", { name: "Udah kekirim ke Bakso Flow?" });
-        await ask.getByRole("button", { name: "Udah, tandai terkirim" }).click();
-        await ask.waitFor({ state: "detached" });
         if (downloads.length !== 2) throw new Error(`expected 2 PDFs (quote + SPK), got ${downloads.length}`);
+        // Sending through your own WhatsApp is the send: logged at once, with Batal.
+        await sheet.getByText(/Penawaran Q-\S+ tercatat terkirim/).waitFor();
+        await sheet.getByRole("button", { name: "Batal", exact: true }).click();
+        await sheet.getByText("Dibatalin, belum tercatat terkirim.").waitFor();
+        await sheet.getByRole("button", { name: "Bagikan PDF" }).click();
+        await sheet.getByText(/Penawaran Q-\S+ tercatat terkirim/).waitFor();
+        await sheet.getByRole("button", { name: "Selesai" }).click();
+        await sheet.waitFor({ state: "detached" });
         const spk = downloads.find(d => d.suggestedFilename().startsWith("SPK-"));
         if (!spk) throw new Error(`files: ${downloads.map(d => d.suggestedFilename()).join(", ")}`);
         const { readFileSync } = await import("node:fs");
@@ -666,6 +671,25 @@ export const flows = [
         await page.getByRole("button", { name: "Buat invoice Pelunasan 50% →" }).waitFor();
         await go(page, "Jualan", "Invoice");
         await expectText(page, "DP 50%");
+        await page.getByRole("button", { name: "Terbitkan" }).waitFor();
+      });
+      await t.step("Tagih via WA: words and PDF through your WhatsApp; sending issues it, Batal takes it back", async () => {
+        const downloads = [];
+        const grab = d => downloads.push(d);
+        page.on("download", grab);
+        await page.getByRole("button", { name: "Tagih via WA" }).first().click();
+        const sheet = page.getByRole("dialog", { name: /^Tagih INV-/ });
+        await sheet.locator("#wa-text").waitFor();
+        if (!(await sheet.locator("#wa-text").inputValue()).includes("INVOICE")) throw new Error("the bill's words are missing");
+        await sheet.getByText("Lampirkan PDF (1)").waitFor();
+        await sheet.getByRole("button", { name: "Bagikan PDF" }).click();
+        await sheet.getByText(/diterbitkan dan tercatat terkirim/).waitFor();
+        if (!downloads.some(d => d.suggestedFilename().startsWith("INV-"))) throw new Error(`files: ${downloads.map(d => d.suggestedFilename()).join(", ")}`);
+        await sheet.getByRole("button", { name: "Batal", exact: true }).click();
+        await sheet.getByText("Dibatalin, belum tercatat terkirim.").waitFor();
+        await sheet.getByRole("button", { name: "Tutup" }).last().click();
+        await sheet.waitFor({ state: "detached" });
+        page.off("download", grab);
         await page.getByRole("button", { name: "Terbitkan" }).waitFor();
       });
       await t.step("money in issues the draft and settles the DP term", async () => {
