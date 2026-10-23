@@ -1,6 +1,6 @@
 # PRD-017 — Pricelist pusat dan penawaran berkomponen
 
-- **Status:** fase 1 dibangun 23 Okt (§7). Fase 2–4 rencana.
+- **Status:** fase 1–2 dibangun 23 Okt (§7). Fase 3–4 rencana.
 - **Terkait:** PRD-011 (bisnis dan dokumen), PRD-005 (funnel), PRD-016 (outreach yang membawa link pricelist), `creative-hub/standards/pricelist.md` (v0, draf standar lintas situs), `creative-hub/standards/leads.md`.
 
 ## 1. Masalah
@@ -137,7 +137,21 @@ Situs tidak menyimpan salinan sendiri, jadi tidak pernah ada dua versi yang sali
      - Catatan: di guild, **anggota bisa melihat biaya modal** di katalog, sama seperti paket. Kalau mau disembunyikan dari anggota, itu keputusan owner untuk fase berikutnya.
    - **Tes:** flow `komponen` (Chromium HP & desktop, iPhone 12 & Safari WebKit), audit HIG 0 temuan.
    - Paket yang disusun dari komponen (§3) belum termasuk; sekarang paket cuma punya satu angka biaya modal.
-2. Editor halaman penuh + ringkasan menempel + template penawaran.
+2. ✅ **Dibangun 23 Okt:** editor halaman penuh + ringkasan menempel + template penawaran.
+   - **Layar ≥ 1024px:** editor penawaran/invoice jadi halaman penuh.
+     - Kiri: bagian-bagian form.
+     - Kanan: ringkasan yang tetap terlihat (subtotal, diskon, pajak, total, modal & margin internal, termin) + Batal / Simpan.
+     - Item berupa tabel: item · qty · harga satuan · modal/satuan · jumlah (+ margin), dengan rincian dan vendor di bawah barisnya. **Enter** di harga baris terakhir = item baru.
+   - **HP:** tetap kartu + footer seperti sebelumnya.
+   - **Simpan selalu bisa ditekan:** kalau ada yang kurang (nama klien, item, jadwal bayar ≠ 100%), editor membawa ke kolomnya dan menulis apa yang kurang di situ.
+   - **Template penawaran:**
+     - Bagian **Template → Simpan sebagai template** menyimpan item (dengan modalnya), deliverables, di luar scope, estimasi waktu, catatan, jadwal bayar, pajak, dan masa berlaku. Data klien tidak ikut.
+     - **+ Penawaran → Mulai dari template** mengisi semua itu; klien dan acara tetap.
+     - Paket menampilkan daftar template (bisa dihapus).
+     - Yang bisa menyimpan template: yang boleh mengubah katalog (pribadi, atau Leader/Officer di guild).
+   - **Data:** koleksi `quoteTemplates`, katalog bersama seperti `components`. Rules + 4 tes (160 lulus).
+   - **Tes:** flow `komponen` menyimpan template, mulai penawaran dari template, dan Simpan tanpa klien → fokus ke kolom klien (Chromium HP & desktop, iPhone 12, Safari). `sell` + `guild` lulus di HP & desktop. Audit HIG 0 temuan.
+   - Belum: pratinjau PDF di kolom kanan, geser urutan item.
 3. Dua harga + ikon sync (§3a) + bagian publik paket + endpoint baca & tulis (kunci per situs, `version`, riwayat) + standar di creative-hub naik ke v1 + pasang di Visufavor (baca + admin bisa ubah).
 4. UNTMD Sports (tab Harga CMS baca/tulis ke SalesPal, harga lama dipindahkan), lalu BeUntamed (opsional).
 
