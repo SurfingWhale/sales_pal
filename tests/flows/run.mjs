@@ -87,7 +87,11 @@ async function audit(page, touch) {
         if (!shown(e) || e.disabled) continue;
         if (e.matches("a") && e.closest("p, li") && !e.matches("[role=button]")) continue; // a link inside a sentence
         if (e.matches(".sp-heat")) continue; // heat map days: a dense grid by design (globals.css); the day list under it is the full-size way in
-        const r = e.getBoundingClientRect();
+        // Its size at rest: a block rising into view on scroll (sp-rise in
+        // SalesTracker, a scroll-linked animation that never "finishes") is
+        // still scaled to .98 near the screen's edge.
+        const b = e.getBoundingClientRect();
+        const r = { width: e.offsetWidth ?? b.width, height: e.offsetHeight ?? b.height };
         if (r.width <= 2 || r.height <= 2) continue; // visually hidden (e.g. a file input behind its label)
         if (parseFloat(getComputedStyle(e).opacity) < 0.99) continue; // fading in or out, or an invisible overlay on its visible label
         if (Math.min(r.width, r.height) < 43.5 && !(e.matches("input[type=checkbox], input[type=radio]") && e.closest("label"))) small.push(`${name(e)} ${Math.round(r.width)}×${Math.round(r.height)}`);
