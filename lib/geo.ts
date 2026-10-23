@@ -20,6 +20,17 @@ export const validGeo = (g: unknown): g is LeadGeo =>
 // Directions in Google Maps, from wherever the phone is.
 export const routeUrl = (g: { lat: number; lng: number }) => `https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lng}`;
 
+// Straight-line distance in km (haversine): enough to say what is near.
+export function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const r = Math.PI / 180;
+  const h = Math.sin(((b.lat - a.lat) * r) / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(((b.lng - a.lng) * r) / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
+
+// "350 m", "2,3 km", "18 km".
+export const distanceText = (km: number) =>
+  km < 1 ? `${Math.max(10, Math.round(km * 100) * 10)} m` : `${km.toLocaleString("id-ID", { maximumFractionDigits: km < 10 ? 1 : 0 })} km`;
+
 // ---------------------------------------------------------------- pasted places
 
 // What a pasted text says about a place: a Google Maps, Apple Maps or

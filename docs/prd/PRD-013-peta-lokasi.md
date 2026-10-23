@@ -38,6 +38,13 @@ Halamannya satu scroll vertikal yang pendek dan ada ujungnya. Tiap bagian punya 
 - Tap pin → kartu: karakter/inisial 56px, kategori · status, nama, alamat; baris **tipe** (nama tipe + gaya komunikasinya, atau ajakan impor chat WA kalau belum ketahuan); skor + bar + nilai; **Buka lead**, **Rute** (Google Maps), **Chat** kalau ada nomor.
 - Gambar karakter diambil dari `animalSrc()` di `components/AnimalArt.tsx`, satu sumber dengan bagian app lain (PRD-010 karakter tinggal ganti di situ).
 - Lead tanpa titik: chip "N belum ada lokasi · Atur" → buka lead pertama yang belum.
+- **Lokasi saya** (tombol bulat kanan bawah, ikon target), dibuat 23 Okt karena owner bolak-balik zoom nyari posisinya sendiri di antara pin:
+  - Tap → izin lokasi browser → titik biru berdenyut di posisi HP. Titiknya ikut gerak (`watchPosition`), tapi kamera ga ikut narik; kamera cuma pindah kalau tombolnya ditap.
+  - Pindah ke **kamu + 6 lead terdekat** (jarak garis lurus, haversine `distanceKm` di `lib/geo.ts`).
+  - Kalau izin lokasi **udah pernah dikasih**, peta langsung mulai dari situ waktu dibuka. Kalau belum, ga pernah nanya sendiri; cuma lewat tombol.
+  - Kartu lead nambah jarak: "Pusat kebugaran · Cold · 2,3 km dari kamu".
+  - Izin ditolak / GPS lemah → pesan singkat di sebelah tombol, hilang sendiri.
+- Peta ngikutin semua pin **sampai kamu geser/zoom sendiri** (gerakan tangan, `originalEvent`) atau tap Lokasi saya; habis itu update data (lead diedit, lead baru masuk) ga pernah narik petanya lagi. Dulu tiap update peta loncat balik ke semua pin dan zoom yang lagi dipakai hilang. "Fit sekali" doang juga ga cukup: data dari cache datang duluan sebagian, jadi petanya ke-fit ke separuh pin.
 - Library-nya baru dimuat waktu Peta 3D dibuka (dynamic import), jadi Beranda tetap ringan. Tanpa WebGL: pesan jelas, Potensi tetap jalan.
 - Kredit © OpenStreetMap · OpenFreeMap selalu tampil (wajib dari lisensi).
 
