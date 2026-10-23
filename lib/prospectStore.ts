@@ -208,7 +208,7 @@ export function syncHunt(space: Space, p: Prospect): void {
   const id = lastHuntId(p);
   const status = huntStatusFor(p);
   if (!id || !status) return;
-  updateDoc(spaceDoc(space, "hunts", id), clean({ status, ...(status === "Ditolak" && p.remark ? { note: p.remark } : {}) })).catch(() => undefined);
+  updateDoc(spaceDoc(space, "hunts", id), clean({ status, ...(status === "Ditolak" && p.remark ? { note: p.remark } : {}), ...(p.leadId ? { leadId: p.leadId } : {}) })).catch(() => undefined);
 }
 
 export interface Send {
