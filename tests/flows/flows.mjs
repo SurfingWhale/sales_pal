@@ -1115,12 +1115,11 @@ export const flows = [
       await check("Bikin guild", async () => { await go(page, "Tim", "Guild"); await page.getByRole("button", { name: "+ Bikin guild" }).click(); }, { last: "Bikin guild" });
       await check("Template baru", async () => {
         await go(page, "Hunting");
-        // Messages live on a person's page: open one from the search box.
+        // Messages and scripts live behind the + menu.
         const back = page.getByRole("button", { name: "Kembali ke daftar" });
         if (await back.isVisible()) await back.click();
-        const box = page.getByRole("searchbox", { name: "Cari prospek pakai ID atau @username" });
-        await box.fill("@dialogflow"); await box.press("Enter");
-        await page.getByRole("button", { name: "+ Template" }).click();
+        await page.getByRole("button", { name: "Menu tambah: target, template, script" }).click();
+        await page.getByRole("dialog", { name: "Tambah" }).getByRole("button", { name: "Template pesan baru" }).click();
       }, { last: "Batal" });
       await check("Quick Pitch", async () => { await go(page, "Jualan", "Leads"); await page.getByRole("button", { name: /Quick Pitch/ }).click(); });
     },
@@ -1228,7 +1227,8 @@ export const flows = [
         await page.getByRole("button", { name: "+ Pakai contoh personal" }).click();
         const panel = page.getByRole("tabpanel", { name: /Tahap 1: Intro/ });
         await panel.getByText(/Halo dmflow! Aku biasa pegang/).waitFor();
-        await page.getByRole("button", { name: "Default kalau kosong" }).click();
+        await page.getByRole("button", { name: "Template & script" }).click();
+        await page.getByRole("dialog", { name: "Tambah" }).getByRole("button", { name: "Default kalau kosong" }).click();
         const sheet = page.getByRole("dialog", { name: "Default kalau kosong" });
         await sheet.locator("#def-kebutuhan").fill("dokumentasi acara");
         await sheet.getByRole("button", { name: "Simpan default" }).click();
@@ -1278,10 +1278,11 @@ export const flows = [
         await box.press("Enter");
         await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@barucari");
         await page.getByRole("button", { name: "Kembali ke daftar" }).click();
-        await page.getByRole("button", { name: "Cara lain nambah target" }).click();
-        const menu = page.getByRole("dialog", { name: "Tambah target" });
+        await page.getByRole("button", { name: "Menu tambah: target, template, script" }).click();
+        const menu = page.getByRole("dialog", { name: "Tambah" });
         await menu.getByRole("button", { name: /Tempel link dari clipboard/ }).waitFor();
-        await t.audit("Kirim → Tambah target menu");
+        await menu.getByRole("button", { name: "Kelola template pesan" }).waitFor();
+        await t.audit("Prospek → + menu");
         await menu.getByRole("button", { name: "Tutup" }).click();
         await menu.waitFor({ state: "detached" });
       });
@@ -1293,9 +1294,10 @@ export const flows = [
     async run(t) {
       const { page, base } = t;
       const row = (who) => page.getByRole("button", { name: `Journey ${who}`, exact: true });
-      const pick = async (f) => { await pane(page, "Journey"); await page.getByRole("group", { name: "Saring prospek" }).getByRole("button", { name: new RegExp(`^${f}`) }).click(); };
+      // The list's view, picked from its title as in Notion.
+      const pick = async (f) => { await pane(page, "Journey"); await page.getByLabel("Tampilan").selectOption(f); };
       let email = "";
-      await t.step("sign up and open Hunting", async () => { await mockUnfurl(page); email = await signup(t); await go(page, "Hunting"); await pane(page, "Journey"); await page.getByRole("group", { name: "Saring prospek" }).waitFor(); });
+      await t.step("sign up and open Hunting", async () => { await mockUnfurl(page); email = await signup(t); await go(page, "Hunting"); await pane(page, "Journey"); await page.getByLabel("Tampilan").waitFor(); });
       await t.step("a post shared from Threads opens as a prospect with its words", async () => {
         // /share redirects to /dashboard, which then rewrites its own URL; waitForURL
         // reads that rewrite as an aborted navigation, so wait on the page instead.
@@ -1333,7 +1335,8 @@ export const flows = [
       });
       await t.step("a new template shows its stage, the words it can use, and a preview", async () => {
         await page.getByRole("tablist", { name: "Tahap pesan" }).getByRole("tab", { name: /^1\. Intro, .*cocok sekarang/ }).click();
-        await page.getByRole("button", { name: "+ Template" }).click();
+        await page.getByRole("button", { name: "Template & script" }).click();
+        await page.getByRole("dialog", { name: "Tambah" }).getByRole("button", { name: "Template pesan baru" }).click();
         const dlg = page.getByRole("dialog", { name: "Template baru" });
         await dlg.getByRole("radio", { name: "1. Intro", checked: true }).waitFor();
         await page.locator("#tpl-body").fill("Halo {nama}! Butuh ");

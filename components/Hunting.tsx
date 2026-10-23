@@ -12,7 +12,7 @@ import {
   fill, waLinkFor, huntAction, huntColor, huntIcon, isStale, parseProfile, pct, platformSource, responded, scoreTemplates, verdict,
 } from "@/lib/hunting";
 import ThreadsRadar from "@/components/ThreadsRadar";
-import ProspectList, { ProspectFilter } from "@/components/ProspectList";
+import ProspectList, { FILTERS as PROSPECT_FILTERS, ProspectFilter } from "@/components/ProspectList";
 import ProspectThread, { type SendHow, type SendOut } from "@/components/ProspectThread";
 import Campaigns from "@/components/Campaigns";
 import HunterStats from "@/components/HunterStats";
@@ -87,6 +87,9 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [addMenu, setAddMenu] = useState(false);
+  // Messages and scripts live behind the + menu too (owner, 23 Okt).
+  const [tplNew, setTplNew] = useState(0);
+  const [tplManage, setTplManage] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const [queued, setQueued] = useState<{ label: string; ids: string[] } | null>(null);
   const [editDefaults, setEditDefaults] = useState(false);
@@ -551,16 +554,38 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       })()}
       <div id="hpane-kirim" role="tabpanel" aria-labelledby="hp-kirim" hidden={pane !== "kirim"}>
       {addMenu && (
-        // The "+ ▾" menu: other ways in, as a short sheet (like Notion's template list).
+        // The + menu, like Notion's: who to add, and the messages and scripts to send them.
         <div className="modal-overlay sp-sheet-overlay" onClick={() => setAddMenu(false)} style={{ alignItems: "flex-end", background: "var(--scrim)" }}>
-          <section role="dialog" aria-modal="true" aria-label="Tambah target" className="sp-sheet sp-kadd" onClick={e => e.stopPropagation()}>
-            <div className="sp-kadd-head"><h2>Tambah target</h2><button className="sp-x" onClick={() => setAddMenu(false)} aria-label="Tutup"><span><Icon name="close" size={13} stroke={2.4} /></span></button></div>
+          <section role="dialog" aria-modal="true" aria-label="Tambah" className="sp-sheet sp-kadd" onClick={e => e.stopPropagation()}>
+            <div className="sp-kadd-head"><h2>Tambah</h2><button className="sp-x" onClick={() => setAddMenu(false)} aria-label="Tutup"><span><Icon name="close" size={13} stroke={2.4} /></span></button></div>
+            <h3 className="sp-kadd-sec">Target</h3>
             <ul>
-              <li><button onClick={() => { setAddMenu(false); requestAnimationFrame(() => searchRef.current?.focus()); }}><Icon name="search" size={20} />Ketik @akun atau tempel link</button></li>
+              <li><button onClick={() => { setAddMenu(false); setOpen(false); requestAnimationFrame(() => searchRef.current?.focus()); }}><Icon name="search" size={20} />Ketik @akun atau tempel link</button></li>
               <li><button onClick={() => { setAddMenu(false); pasteLink(); }}><Icon name="clipboard" size={20} />Tempel link dari clipboard</button></li>
-              <li><button onClick={() => { setAddMenu(false); setTimeout(() => document.getElementById("radar-threads")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}><Icon name="target" size={20} />Dari Radar Threads</button></li>
+              <li><button onClick={() => { setAddMenu(false); setOpen(false); setTimeout(() => document.getElementById("radar-threads")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}><Icon name="target" size={20} />Dari Radar Threads</button></li>
+            </ul>
+            <h3 className="sp-kadd-sec">Pesan & script</h3>
+            <ul>
+              {canEdit && <li><button onClick={() => { setAddMenu(false); if (!open) setTplManage(true); setTplNew(n => n + 1); }}><Icon name="plus" size={20} />Template pesan baru</button></li>}
+              <li><button onClick={() => { setAddMenu(false); setTplManage(true); }}><Icon name="doc" size={20} />Kelola template pesan</button></li>
+              <li><button onClick={() => { setAddMenu(false); setEditDefaults(true); }}><Icon name="sliders" size={20} />Default kalau kosong</button></li>
+              {onOpenScripts && <li><button onClick={() => { setAddMenu(false); onOpenScripts(); }}><Icon name="book" size={20} />Script Library</button></li>}
             </ul>
           </section>
+        </div>
+      )}
+      {tplManage && (
+        // The message deck on its own, to add and change templates without a target.
+        <div className="modal-overlay" onClick={() => setTplManage(false)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="tpl-manage-h" onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 560 }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+              <h2 id="tpl-manage-h" style={{ margin: 0, fontSize: "var(--fs-section)", fontWeight: 700 }}>Template pesan</h2>
+              <button className="sp-x" onClick={() => setTplManage(false)} aria-label="Tutup"><span><Icon name="close" size={13} stroke={2.4} /></span></button>
+            </div>
+            <TemplateBoard templates={templates} scores={scores} data={fillData} stage={stageFor(undefined, undefined)} manage
+              blocked={false} copiedId={copiedId} copyFail={copyFail} onPick={() => undefined} canEdit={canEdit} send={sendOut} sampleName=""
+              newRequest={open ? 0 : tplNew} />
+          </div>
         </div>
       )}
       {open ? (
@@ -627,7 +652,8 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         <TemplateBoard templates={templates} scores={scores} data={fillData} stage={stageFor(cur, cur ? view(cur, now, strategy) : undefined)}
           blocked={isBlocked} copiedId={copiedId} copyFail={copyFail} onPick={pick} canEdit={canEdit} send={sendOut}
           sampleName={target.trim() ? (cur?.name || target.trim()) : ""}
-          extra={<button onClick={() => setEditDefaults(true)} aria-label="Default kalau kosong" style={{ ...chip, display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="sliders" size={15} />Default kosong</button>} />
+          newRequest={open ? tplNew : 0}
+          extra={<button onClick={() => setAddMenu(true)} aria-haspopup="dialog" style={{ ...chip, display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="plus" size={15} stroke={2} />Template & script</button>} />
 
         {/* Mounted before its text, so screen readers announce "Tercatat". */}
         <div role="status">
@@ -648,12 +674,18 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       <section aria-label="Daftar prospek" className="sp-ktable">
         {/* A database header, as in Notion: the list's name, then its tools. */}
         <div className="sp-ktool">
-          <h2 className="sp-ktitle-h">Prospek <span className="tabnum">{prospects.length}</span></h2>
+          {/* The view, as in Notion: one list, picked from the title. */}
+          <label className="sp-kview">
+            <span className="vh">Tampilan</span>
+            <select value={prospectFilter} onChange={e => setProspectFilter(e.target.value as ProspectFilter)}>
+              {PROSPECT_FILTERS.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+            <Icon name="chevronDown" size={16} stroke={2} />
+          </label>
           <div className="sp-ktools">
-            <button className="sp-icon44" onClick={() => setEditDefaults(true)} aria-label="Default kalau kosong" title="Default kalau kosong"><Icon name="sliders" size={20} /></button>
             <div className="sp-split">
               <button onClick={() => searchRef.current?.focus()} aria-label="Target baru"><Icon name="plus" size={18} stroke={2} /></button>
-              <button onClick={() => setAddMenu(true)} aria-label="Cara lain nambah target" aria-haspopup="dialog"><Icon name="chevronDown" size={16} stroke={2} /></button>
+              <button onClick={() => setAddMenu(true)} aria-label="Menu tambah: target, template, script" aria-haspopup="dialog"><Icon name="chevronDown" size={16} stroke={2} /></button>
             </div>
           </div>
         </div>

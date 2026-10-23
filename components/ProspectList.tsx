@@ -247,7 +247,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
         placeholder="Cari ID, @username, atau nama" style={{ ...inputStyle, fontSize: 16, marginBottom: 10 }} />}
       {needle && <div role="status" style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>{shown.length} ketemu buat “{(query ?? search).trim()}” di semua journey.</div>}
 
-      {!needle && <div role="group" aria-label="Saring prospek" className="sp-chiprow sp-pfilters" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6, marginBottom: 6 }}>
+      {!needle && !embedded && <div role="group" aria-label="Saring prospek" className="sp-chiprow sp-pfilters" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6, marginBottom: 6 }}>
         {FILTERS.map(f => {
           const n = count(f);
           return (

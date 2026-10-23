@@ -13,13 +13,15 @@ import { useConfirm } from "@/components/ConfirmSheet";
 // stage that fits this person picked, and every template filled in with what
 // their post said (or the workspace's defaults when it didn't say).
 
-export default function TemplateBoard({ templates, scores, data, stage, blocked, copiedId, copyFail, onPick, canEdit, sampleName, send = { how: "wa", label: "Kirim WA" }, extra }: {
+export default function TemplateBoard({ templates, scores, data, stage, blocked, copiedId, copyFail, onPick, canEdit, sampleName, send = { how: "wa", label: "Kirim WA" }, extra, newRequest = 0, manage }: {
   templates: PitchTemplate[]; scores: TemplateScore[]; data: FillData; stage: Stage; blocked: boolean;
   copiedId: string | null; copyFail: string | null; onPick: (t: PitchTemplate, how: "copy" | "wa" | "open") => void;
   // The second button: WhatsApp, or copy and open the DM / post (Hunting decides by platform).
   send?: { how: "wa" | "open"; label: string };
   canEdit: boolean; sampleName: string;
-  extra?: ReactNode;                         // more header buttons (Hunting: "Default kosong")
+  extra?: ReactNode;                         // the header's tool (Hunting: its + menu)
+  newRequest?: number;                       // bumped from outside: open a new template
+  manage?: boolean;                          // editing the deck only: no send buttons
 }) {
   const [ask, askSheet] = useConfirm();
   const space = useSpace();
@@ -33,6 +35,11 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
   const [picked, setPicked] = useState<Stage | null>(null);
   useEffect(() => setPicked(null), [stage, sampleName]);
   const shown = picked || stage;
+  // "Template pesan baru" from Hunting's + menu opens the editor here, on the stage in view.
+  useEffect(() => {
+    if (newRequest && canEdit) setEditing({ id: "", title: "", body: "", stage: picked || stage });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newRequest]);
   // Keep the picked chip in view, inside the chip row only.
   useEffect(() => {
     const b = board.current;
@@ -78,7 +85,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
         <div style={{ fontSize: 13, fontWeight: 700 }}>Pilih pesan</div>
         <div className="sp-tpl-tools" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {extra}
-          {canEdit && <button onClick={() => setEditing({ id: "", title: "", body: "", stage: s.id })} style={chip}>+ Template</button>}
+          {canEdit && !extra && <button onClick={() => setEditing({ id: "", title: "", body: "", stage: s.id })} style={chip}>+ Template</button>}
         </div>
       </div>
       {/* One stage at a time (QA 15 Okt: "mesti scroll panjang"): the stages are
@@ -137,13 +144,13 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
                   </button>
                 )}
                 {missing.length > 0 && sampleName && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>Kosong buat orang ini: {missing.map(k => `{${k}}`).join(", ")}, bagiannya dilewati.</div>}
-                <div className="sp-tpl-acts" style={{ display: "flex", gap: 8 }}>
+                {!manage && <div className="sp-tpl-acts" style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => onPick(t, "copy")} disabled={blocked} style={{ ...chip, flex: 1, minHeight: 40, fontSize: 12, fontWeight: 700, color: copiedId === t.id ? "var(--ok)" : "var(--app-text)", border: `1px solid ${copiedId === t.id ? "var(--ok)" : "var(--app-border)"}` }}>
                     {copiedId === t.id ? "✓ Tersalin" : "Copy"}
                   </button>
                   <button onClick={() => onPick(t, send.how)} disabled={blocked}
                     style={{ ...(send.how === "wa" ? btnWA : { ...btnWA, background: "#005eb0", color: "#fff" }), flex: 1, minHeight: 40, padding: "8px", fontSize: 12 }}>{send.label}</button>
-                </div>
+                </div>}
                 {copyFail === t.id && <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginTop: 8 }}>Gagal menyalin. Pilih teks di atas, lalu salin manual.</div>}
               </div>
             );
