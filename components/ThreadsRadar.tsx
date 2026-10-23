@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import { deleteDoc, deleteField, doc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -105,7 +106,7 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
   if (!APP_ID) {
     return (
       <div style={{ ...card, padding: 16, marginBottom: 20, display: "flex", gap: 12, alignItems: "flex-start" }}>
-        <div aria-hidden="true" style={{ fontSize: 20, lineHeight: 1 }}>📡</div>
+        <span aria-hidden="true" style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "color-mix(in srgb, #005eb0 10%, transparent)", color: "var(--brand-text)" }}><Icon name="target" size={18} /></span>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <span style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>Radar Threads</span>
@@ -129,7 +130,7 @@ export default function ThreadsRadar({ uid, hunts, onTarget }: { uid: string; hu
     <div style={{ ...card, padding: 20, marginBottom: 20 }}>
       {askSheet}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>📡 Radar Threads</div>
+        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>Radar Threads</div>
         {conn && (
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={scan} disabled={loading} style={{ ...chip, minHeight: 36, fontWeight: 700, background: "#005eb0", color: "#fff", border: "1px solid #005eb0", opacity: loading ? 0.6 : 1 }}>

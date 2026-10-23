@@ -877,6 +877,28 @@ export const flows = [
         await card.getByRole("button", { name: "Tutup kartu lead" }).click();
         await map.getByRole("button", { name: "Potensi" }).click();
       });
+      await t.step("a lead opened from Beranda: its delete sheet sits inside the screen", async () => {
+        // The map's folder papers once shared the bottom sheets' class name and,
+        // with Beranda behind the lead, dragged every sheet half off the screen (23 Okt).
+        await stubMap(page);
+        await go(page, "Beranda");
+        const map = page.locator(isWide(page) ? ".sp-only-desk" : "section.sp-only-phone").filter({ has: page.getByRole("group", { name: "Mode peta" }) }).first();
+        await map.getByRole("button", { name: "Peta 3D" }).click();
+        await map.locator(".sp-pin").first().waitFor({ timeout: 15000 });
+        await map.locator(".sp-pin").first().click();
+        await map.getByRole("region", { name: /^Lead / }).getByRole("button", { name: "Buka lead" }).click();
+        await page.getByRole("button", { name: "Menu lead" }).first().click();
+        await page.getByRole("menuitem", { name: /Hapus lead/ }).click();
+        const sheet = page.getByRole("dialog", { name: "Hapus lead?" });
+        await sheet.waitFor();
+        await page.waitForTimeout(300);
+        const box = await sheet.boundingBox(), vw = page.viewportSize().width;
+        if (!box || box.x < 0 || box.x + box.width > vw + 1) throw new Error(`sheet at x=${box?.x}, width ${box?.width}, screen ${vw}`);
+        await sheet.getByRole("button", { name: "Batal" }).click();
+        await sheet.waitFor({ state: "detached" });
+        await page.keyboard.press("Escape");
+        await map.getByRole("button", { name: "Potensi" }).click().catch(() => {});
+      });
       await t.step("Perlu ditindak is a bounded queue: ten cards, the rest in a sheet that scrolls itself", async () => {
         await go(page, "Beranda");
         const queue = page.locator(".sp-todo");
@@ -911,7 +933,8 @@ export const flows = [
           const t0 = Date.now();
           await go(page, place, tab);
           if (place === "Hunting") await pane(page, "Journey");
-          await page.getByText(want).first().waitFor({ timeout: 15000 });
+          // Kirim's table names the same people; look in the pane that's showing.
+          await (place === "Hunting" ? page.locator("#hpane-journey") : page).getByText(want).first().waitFor({ timeout: 15000 });
           const ms = Date.now() - t0;
           if (ms > 8000) throw new Error(`took ${ms} ms to show`);
         });
@@ -1065,7 +1088,15 @@ export const flows = [
       await check("Catat outreach", async () => { await go(page, "Tim", "Outreach"); await page.getByRole("button", { name: "+ Catat outreach" }).first().click(); }, { last: "Simpan" });
       await check("Catat penolakan", async () => { await go(page, "Tim", "Rejection Log"); await page.getByRole("button", { name: "+ Catat penolakan" }).first().click(); }, { last: "Simpan" });
       await check("Bikin guild", async () => { await go(page, "Tim", "Guild"); await page.getByRole("button", { name: "+ Bikin guild" }).click(); }, { last: "Bikin guild" });
-      await check("Template baru", async () => { await go(page, "Hunting"); await page.getByRole("button", { name: "+ Template" }).click(); }, { last: "Batal" });
+      await check("Template baru", async () => {
+        await go(page, "Hunting");
+        // Messages live on a person's page: open one from the search box.
+        const back = page.getByRole("button", { name: "Kembali ke daftar" });
+        if (await back.isVisible()) await back.click();
+        const box = page.getByRole("searchbox", { name: "Cari atau tempel target" });
+        await box.fill("@dialogflow"); await box.press("Enter");
+        await page.getByRole("button", { name: "+ Template" }).click();
+      }, { last: "Batal" });
       await check("Quick Pitch", async () => { await go(page, "Jualan", "Leads"); await page.getByRole("button", { name: /Quick Pitch/ }).click(); });
     },
   },
@@ -1073,20 +1104,26 @@ export const flows = [
     name: "hunting: paste a link, log DMs, statuses, lead, goal",
     async run(t) {
       const { page } = t;
-      await t.step("sign up and open Hunting", async () => { await mockUnfurl(page); await signup(t); await go(page, "Hunting"); await expectText(page, "Cold DM — Tawarin Jasa"); });
+      await t.step("sign up and open Hunting: Kirim is a table with a search box", async () => {
+        await mockUnfurl(page); await signup(t); await go(page, "Hunting");
+        await page.getByRole("region", { name: "Daftar kirim" }).getByRole("searchbox", { name: "Cari atau tempel target" }).waitFor();
+        await page.getByRole("button", { name: "Target baru" }).waitFor();
+      });
       await t.step("Radar shows as coming soon", () => expectText(page, "Segera hadir"));
       await t.step("paste a Threads link fills target and platform", async () => {
         const link = "https://www.threads.com/@kopiflow/post/abc";
         if (isWide(page)) {
           // Desktop: ⌘V straight into the field, no clipboard prompt and no button.
           if (await page.getByRole("button", { name: /Tempel link profil/ }).isVisible()) throw new Error("the touch-only paste button shows on desktop");
-          await page.locator("#hunt-target").evaluate((el, text) => { const dt = new DataTransfer(); dt.setData("text", text); el.focus(); el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true })); }, link);
+          await page.locator("#hunt-search").evaluate((el, text) => { const dt = new DataTransfer(); dt.setData("text", text); el.focus(); el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true })); }, link);
         } else {
           await page.evaluate((l) => navigator.clipboard.writeText(l), link);
           await page.getByRole("button", { name: /Tempel link/ }).click();
         }
         await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@kopiflow", null, { timeout: 5000 });
         await page.getByRole("radio", { name: "Threads", checked: true }).waitFor();
+        // Their page opens over the table, with a way back.
+        await page.getByRole("button", { name: "Kembali ke daftar" }).waitFor();
       });
       await t.step("nothing floats over the Kirim WA button", async () => {
         const hit = await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find(x => /^(Kirim WA|Copy & )/.test(x.textContent.trim())); b.scrollIntoView({ block: "center" }); const r = b.getBoundingClientRect(); const top = document.elementFromPoint(r.right - 8, r.top + r.height / 2); return b.contains(top) ? "" : (top?.getAttribute("aria-label") || top?.textContent || "?").slice(0, 40); });
@@ -1204,6 +1241,24 @@ export const flows = [
           const small = await page.evaluate(() => [...document.querySelectorAll(".sp-hunt button")].filter(b => b.offsetParent && b.getBoundingClientRect().height < 43.5).map(b => (b.getAttribute("aria-label") || b.textContent).trim().slice(0, 30)));
           if (small.length) throw new Error(`under 44px: ${small.slice(0, 5).join(", ")}`);
         }
+      });
+      await t.step("Kirim search: a known name filters the table, a new @name + Enter opens its page; + ▾ lists the other ways in", async () => {
+        await pane(page, "Kirim");
+        const back = page.getByRole("button", { name: "Kembali ke daftar" });
+        if (await back.isVisible()) await back.click();
+        const box = page.getByRole("searchbox", { name: "Cari atau tempel target" });
+        await box.fill("kopi");
+        await page.getByRole("list", { name: "Hasil cari" }).getByRole("button", { name: /kopiflow/i }).first().waitFor();
+        await box.fill("@barucari");
+        await box.press("Enter");
+        await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@barucari");
+        await page.getByRole("button", { name: "Kembali ke daftar" }).click();
+        await page.getByRole("button", { name: "Cara lain nambah target" }).click();
+        const menu = page.getByRole("dialog", { name: "Tambah target" });
+        await menu.getByRole("button", { name: /Tempel link dari clipboard/ }).waitFor();
+        await t.audit("Kirim → Tambah target menu");
+        await menu.getByRole("button", { name: "Tutup" }).click();
+        await menu.waitFor({ state: "detached" });
       });
       await t.step("the new lead is in Leads", async () => { await go(page, "Jualan", "Leads"); await expectText(page, "@kopiflow"); });
     },
@@ -1344,9 +1399,11 @@ export const flows = [
             history: [{ at: Date.now() - 20 * 864e5, kind: "sent", channel: "dm", text: "Halo kak, aku Studio Contoh" }], closed: false, createdAt: Date.now() - 25 * 864e5, updatedAt: Date.now() - 20 * 864e5 }],
         ]);
         await pane(page, "Kirim");
-        await page.getByRole("button", { name: "Ambil target dari antrian" }).click();
-        const q = page.getByRole("dialog", { name: "Ambil dari antrian" });
-        await q.getByRole("region", { name: "Baru, belum disapa" }).getByRole("button", { name: /^@kopibaru/ }).click();
+        // Back from whoever's page is open, to the table of who's next.
+        const back = page.getByRole("button", { name: "Kembali ke daftar" });
+        if (await back.isVisible()) await back.click();
+        const list = page.getByRole("region", { name: "Daftar kirim" });
+        await list.getByRole("region", { name: "Baru, belum disapa" }).getByRole("button", { name: /^@kopibaru/ }).click();
         await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@kopibaru", null, { timeout: 10000 });
         await page.getByText(/^Dari antrian/).waitFor();
         await page.getByRole("button", { name: "Berhenti ambil dari antrian" }).click();
@@ -1940,7 +1997,8 @@ export const flows = [
         await page.getByLabel("Lihat dashboard siapa").selectOption("");
         await page.getByRole("button", { name: "PDF laporan" }).click();
         await expectText(page, "LAPORAN SALES TIM");
-        await page.locator(".print-root").getByText("PER SALES").waitFor();
+        // The report's per-seller section; its heading shows in more than one paper.
+        await page.locator(".print-root").getByText("PER SALES", { exact: true }).first().waitFor();
         await page.locator(".print-root").getByText(memberName).first().waitFor();
         const [dl] = await Promise.all([page.waitForEvent("download"), modal(page).getByRole("button", { name: "Simpan / kirim PDF" }).click()]);
         if (!/^Report_Dashboard_Tim_Uji_\d{4}-\d{2}-\d{2}_\d{4}-\d{2}-\d{2}\.pdf$/.test(dl.suggestedFilename())) throw new Error(`file ${dl.suggestedFilename()}`);

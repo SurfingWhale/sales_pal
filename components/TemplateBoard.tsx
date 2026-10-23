@@ -5,6 +5,7 @@ import { deleteDoc, setDoc } from "firebase/firestore";
 import { spaceDoc, useSpace } from "@/lib/space";
 import { PitchTemplate, TemplateScore, pct } from "@/lib/hunting";
 import { FillData, SAMPLE, STAGES, STARTERS, Stage, VARIABLES, fillTemplate, missingIn, stageOf } from "@/lib/templates";
+import Icon from "@/components/Icon";
 import { btnMuted, btnPrimary, btnWA, chip, font, inputStyle, label, modalBox } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmSheet";
 
@@ -75,7 +76,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
       {askSheet}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
         <div style={{ fontSize: 13, fontWeight: 700 }}>Pilih pesan</div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <div className="sp-tpl-tools" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {extra}
           {canEdit && <button onClick={() => setEditing({ id: "", title: "", body: "", stage: s.id })} style={chip}>+ Template</button>}
         </div>
@@ -83,7 +84,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
       {/* One stage at a time (QA 15 Okt: "mesti scroll panjang"): the stages are
           chips, the one that fits this person picked and marked; its messages
           stack below, so the board is never wider than the phone. */}
-      <div ref={board} role="tablist" aria-label="Tahap pesan" style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", paddingBottom: 4, marginBottom: 6 }}>
+      <div ref={board} role="tablist" aria-label="Tahap pesan" className="sp-tpl-stages" style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", paddingBottom: 4, marginBottom: 6 }}>
         {STAGES.map((x, i) => {
           const n = templates.filter(t => stageOf(t) === x.id).length;
           const sel = x.id === s.id, fit = x.id === stage;
@@ -123,7 +124,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
               <div key={t.id} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", filter: blocked ? "grayscale(1)" : undefined }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
                   <div style={{ fontSize: 13, fontWeight: 700 }}>{t.title}</div>
-                  {canEdit && <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} title="Edit template" className="sp-icon-btn" style={{ ...chip, flexShrink: 0, minWidth: 32, minHeight: 32, padding: "2px 8px", margin: "-6px -6px 0 0" }}>✎</button>}
+                  {canEdit && <button onClick={() => setEditing(t)} aria-label={`Edit ${t.title}`} title="Edit template" className="sp-icon-btn" style={{ ...chip, flexShrink: 0, minWidth: 32, minHeight: 32, padding: "2px 8px", margin: "-6px -6px 0 0", display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Icon name="pencil" size={15} /></button>}
                 </div>
                 {sc && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>{sc.sent} terkirim · dibales {pct(sc.responseRate)} · tertarik {pct(sc.winRate)}</div>}
                 <div id={`tpl-text-${t.id}`} style={{ fontSize: 14, color: "var(--app-sub)", lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: long ? 4 : 10,
@@ -136,7 +137,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
                   </button>
                 )}
                 {missing.length > 0 && sampleName && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>Kosong buat orang ini: {missing.map(k => `{${k}}`).join(", ")}, bagiannya dilewati.</div>}
-                <div style={{ display: "flex", gap: 8 }}>
+                <div className="sp-tpl-acts" style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => onPick(t, "copy")} disabled={blocked} style={{ ...chip, flex: 1, minHeight: 40, fontSize: 12, fontWeight: 700, color: copiedId === t.id ? "var(--ok)" : "var(--app-text)", border: `1px solid ${copiedId === t.id ? "var(--ok)" : "var(--app-border)"}` }}>
                     {copiedId === t.id ? "✓ Tersalin" : "Copy"}
                   </button>

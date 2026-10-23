@@ -78,13 +78,6 @@ const css = `
 .sp-b-date { margin: 0 0 10px; font-size: 14px; color: var(--app-muted); text-transform: capitalize; }
 .sp-b-h1 { margin: 0; font-size: 34px; line-height: 1.15; font-weight: 600; letter-spacing: -0.025em; max-width: 620px; }
 
-/* Segmented control: a 36px track and 32px thumb, inside a 44px tap row. */
-.sp-seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; max-width: 440px; margin-bottom: clamp(16px, 3vw, 28px); padding: 0 2px; }
-.sp-seg::before { content: ""; position: absolute; inset: 4px 0; border-radius: 9px; background: color-mix(in srgb, var(--app-text) 7%, transparent); }
-.sp-seg-btn { position: relative; height: 44px; padding: 6px 0; border: 0; background: none; cursor: pointer; color: var(--app-ink-2); font: 500 13px 'Plus Jakarta Sans', sans-serif; }
-.sp-seg-btn > span { display: flex; align-items: center; justify-content: center; height: 32px; border-radius: 7px; white-space: nowrap; transition: background-color .18s ease; }
-.sp-seg-btn[aria-selected="true"] { color: var(--app-text); font-weight: 600; }
-.sp-seg-btn[aria-selected="true"] > span { background: var(--thumb); box-shadow: 0 1px 2px rgba(15,30,60,0.10), 0 2px 6px rgba(15,30,60,0.06); }
 
 .sp-card { background: var(--app-card); border: 1px solid var(--app-border); border-radius: 16px; }
 .sp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 16px; border-radius: 12px; font: 600 14px 'Plus Jakarta Sans', sans-serif; cursor: pointer; text-decoration: none; white-space: nowrap; border: 0; }
