@@ -205,6 +205,10 @@ await t("officer cannot change who may use the paid tools", assertFails(setDoc(d
 await t("member cannot change who may use the paid tools", assertFails(setDoc(doc(M, "guilds", G, "settings", "tools"), { places: ["member"] })));
 await t("member reads who may use the paid tools", assertSucceeds(getDoc(doc(M, "guilds", G, "settings", "tools"))));
 await t("viewer cannot read the packages", assertFails(getDocs(collection(V, "guilds", G, "services"))));
+await t("member reads the team's components", assertSucceeds(getDocs(collection(M, "guilds", G, "components"))));
+await t("member cannot change the components", assertFails(setDoc(doc(M, "guilds", G, "components", "k1"), { name: "x", cost: 1 })));
+await t("officer sets a component with its cost", assertSucceeds(setDoc(doc(O, "guilds", G, "components", "k1"), { name: "Sewa studio", kind: "Tempat/studio", unit: "jam", cost: 150000, price: 250000 })));
+await t("viewer cannot read the components", assertFails(getDocs(collection(V, "guilds", G, "components"))));
 await t("no one writes an unknown guild collection", assertFails(setDoc(doc(L, "guilds", G, "secrets", "x"), { ownerUid: "lead" })));
 await t("member adds a client and logs a chat under it", assertSucceeds(setDoc(doc(M, "guilds", G, "clients", "c1"), { name: "Toko", ownerUid: "memb", ownerName: "memb" })
   .then(() => setDoc(doc(M, "guilds", G, "clients", "c1", "deals", "cd1"), deal("memb")))));

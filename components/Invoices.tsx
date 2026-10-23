@@ -4,7 +4,7 @@ import Icon from "@/components/Icon";
 import { useState } from "react";
 import { deleteDoc, deleteField, setDoc, updateDoc } from "firebase/firestore";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
-import {
+import { Component,
   Business, Invoice, InvoiceState, Service, addDays, issuerOf, balance, nextNumber, daysBetween, dpAmount, invoiceColor, invoiceState, invoiceText,
   isIssued, longDate, owed, paid, rupiah, rupiahShort, today, total,
 } from "@/lib/billing";
@@ -17,7 +17,7 @@ import { badge, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, lab
 
 const FILTERS = ["All", "Draft", "Belum bayar", "DP masuk", "Telat", "Lunas", "Dibatalkan"] as const;
 
-export default function Invoices({ invoices, business, leads, services }: { invoices: Invoice[]; business: Business; leads: LeadRef[]; services: Service[] }) {
+export default function Invoices({ invoices, business, leads, services, components }: { invoices: Invoice[]; business: Business; leads: LeadRef[]; services: Service[]; components: Component[] }) {
   const space = useSpace();
   const [editing, setEditing] = useState<DocDraft | null>(null);
   const [paying, setPaying] = useState<{ inv: Invoice; amount: string; date: string; note: string } | null>(null);
@@ -341,7 +341,7 @@ export default function Invoices({ invoices, business, leads, services }: { invo
         </div>
       )}
 
-      {editing && <DocEditor kind="invoice" initial={editing} leads={leads} services={services} onSave={saveInvoice} onClose={() => setEditing(null)} />}
+      {editing && <DocEditor kind="invoice" initial={editing} leads={leads} services={services} components={components} onSave={saveInvoice} onClose={() => setEditing(null)} />}
       {billing && (
         <WaSendSheet title={`Tagih ${billing.number}`} who={billing.leadName || "klien"} phone={billing.phone} text={invoiceText(billing, billing.issuer || business)}
           makeFiles={async () => [{ blob: await buildPdf({ kind: "invoice", data: billing }, billing.issuer || business), name: pdfName({ kind: "invoice", data: billing }) }]}

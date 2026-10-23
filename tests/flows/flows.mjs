@@ -844,6 +844,71 @@ export const flows = [
     },
   },
   {
+    // PRD-017 phase 1: what a price is built from, and what is left of it.
+    name: "komponen: cost, margin, and a manual item saved to the catalog",
+    async run(t) {
+      const { page } = t;
+      await t.step("sign up", () => signup(t));
+      await t.step("add a lead", () => addLead(page, "Studio Flow Klien"));
+      await t.step("a package with its cost shows its margin", async () => {
+        await go(page, "Jualan", "Paket");
+        await page.getByRole("button", { name: "+ Paket" }).click();
+        await modal(page).locator("#svc-name").fill("Event 4 jam Flow");
+        await modal(page).locator("#svc-price").fill("2000000");
+        await modal(page).locator("#svc-cost").fill("1200000");
+        await modal(page).getByText("Margin Rp 800.000 (40%)").waitFor();
+        await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
+        await page.locator("#svc-name").waitFor({ state: "detached" });
+        await page.getByText("margin 40%").first().waitFor();
+      });
+      await t.step("a component goes into the catalog", async () => {
+        await page.getByRole("button", { name: "+ Komponen" }).click();
+        const dlg = page.getByRole("dialog", { name: "Komponen baru" });
+        await dlg.locator("#cmp-name").fill("Sewa studio Flow");
+        await dlg.locator("#cmp-kind").selectOption("Tempat/studio");
+        await dlg.locator("#cmp-cost").fill("150000");
+        await dlg.locator("#cmp-price").fill("250000");
+        await dlg.getByText(/^Margin Rp 100\.000 per jam \(40%\)/).waitFor();
+        await dlg.getByRole("button", { name: "Simpan", exact: true }).click();
+        await dlg.waitFor({ state: "detached" });
+        await page.getByRole("list", { name: "Daftar komponen" }).getByText("Sewa studio Flow").waitFor();
+      });
+      await t.step("a quote from the package, the component and a manual vendor item shows its margin", async () => {
+        await go(page, "Jualan", "Penawaran");
+        await page.getByRole("button", { name: "+ Penawaran" }).click();
+        const sel = modal(page).locator("select").first();
+        await sel.selectOption(await sel.locator("option", { hasText: "Studio Flow Klien" }).getAttribute("value"));
+        await modal(page).getByLabel("Tambah dari paket").selectOption({ index: 1 });
+        await modal(page).getByLabel("Tambah dari komponen").selectOption({ index: 1 });
+        await modal(page).getByRole("button", { name: "+ item manual" }).click();
+        await modal(page).getByLabel("Nama item", { exact: true }).nth(2).fill("MUA Flow");
+        await modal(page).getByLabel("Harga", { exact: true }).nth(2).fill("500000");
+        await modal(page).getByLabel("Biaya modal per satuan, item 3").fill("350000");
+        await modal(page).getByLabel("Vendor, item 3").fill("Rina MUA Flow");
+        // Only the manual item can be kept: the other two came from the catalog.
+        await modal(page).getByRole("checkbox", { name: "Simpan ke katalog komponen" }).check();
+        // 2.000.000 + 250.000 + 500.000 = 2.750.000; cost 1.200.000 + 150.000 + 350.000 = 1.700.000.
+        await modal(page).getByRole("status", { name: "Margin, internal" }).getByText("Margin Rp 1.050.000 (38%)").waitFor();
+        await t.audit("Penawaran with internal cost and margin");
+        await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
+        await expectText(page, "Rp 2.750.000");
+      });
+      // The clipboard is readable on Chromium only (run.mjs grants it there).
+      if (!t.device) await t.step("the copied quote carries its items and no cost or vendor", async () => {
+        await page.getByRole("button", { name: "Copy teks" }).first().click();
+        const text = await page.evaluate(() => navigator.clipboard.readText());
+        if (!text.includes("MUA Flow")) throw new Error("the copied quote misses its items");
+        if (/Rina MUA|350\.000|1\.200\.000|modal|margin/i.test(text)) throw new Error("the copied quote leaks what it costs");
+      });
+      await t.step("the manual item is now a component, with its vendor", async () => {
+        await go(page, "Jualan", "Paket");
+        const list = page.getByRole("list", { name: "Daftar komponen" });
+        await list.getByText("MUA Flow", { exact: true }).waitFor();
+        await list.getByText("Vendor: Rina MUA Flow").waitFor();
+      });
+    },
+  },
+  {
     // PRD-010: a busy seller's account (200 leads, 50 invoices, 60 prospects…).
     // Every place must open, stay usable, and pass the HIG audit with real volume.
     name: "akun besar: every place with production-size data",

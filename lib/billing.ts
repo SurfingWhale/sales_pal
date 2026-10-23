@@ -16,6 +16,7 @@ export interface Service {
   price: number;
   unit: string;
   description: string;
+  cost?: number;          // internal: what one unit costs you (HPP); never printed
 }
 
 export interface LineItem {
@@ -23,7 +24,45 @@ export interface LineItem {
   qty: number;
   price: number;
   description?: string;   // what's included, printed under the name
+  // Internal (PRD-017): never printed, never sent to the client.
+  unit?: string;
+  cost?: number;          // what one unit costs you
+  vendor?: string;        // who you pay for it
+  componentId?: string;   // the catalog component it came from
+  serviceId?: string;     // the package it came from
 }
+
+// The parts a price is built from (PRD-017 §2): your own time, gear, vendors,
+// a studio, transport. Kept per space like the packages; internal only.
+export const COMPONENT_KINDS = ["Jasa sendiri", "Alat", "Vendor", "Tempat/studio", "Transport & akomodasi", "Lainnya"] as const;
+export const COMPONENT_UNITS = ["jam", "hari", "orang", "pcs", "paket", "km", "sesi"] as const;
+
+export interface Component {
+  id: string;
+  name: string;
+  kind: string;
+  unit: string;
+  cost: number;           // what one unit costs you
+  price: number;          // what you charge for one unit by default
+  vendor?: string;
+  notes?: string;
+}
+
+// What the items cost you, and what is left of the price after that (before
+// tax, which is not yours). Null when no item carries a cost yet.
+export function costOf(items: LineItem[]): number | null {
+  return items.some(i => typeof i.cost === "number") ? items.reduce((a, i) => a + (i.qty || 0) * (i.cost || 0), 0) : null;
+}
+
+export function marginOf(d: { items: LineItem[]; discount: number }): { amount: number; percent: number | null } | null {
+  const cost = costOf(d.items);
+  if (cost === null) return null;
+  const net = Math.max(0, subtotal(d.items) - (d.discount || 0));
+  return { amount: net - cost, percent: net ? Math.round(((net - cost) / net) * 100) : null };
+}
+
+// Below this a margin is flagged (PRD-017 §3; the owner can change it later).
+export const MARGIN_TARGET = 30;
 
 // Digantikan: a revision of it was accepted, so its terms are no longer the
 // effective ones (PRD-011 §4); it stays readable.

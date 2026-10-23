@@ -4,18 +4,20 @@ import Icon from "@/components/Icon";
 import { useState } from "react";
 import { setDoc, deleteDoc } from "firebase/firestore";
 import { canEditCatalog, spaceDoc, useSpace } from "@/lib/space";
-import { Business, Service, rupiah } from "@/lib/billing";
+import { Business, Component, MARGIN_TARGET, Service, rupiah } from "@/lib/billing";
 import BusinessEditor from "@/components/BusinessEditor";
+import ComponentCatalog, { marginColor, marginPct } from "@/components/ComponentCatalog";
 import ConfirmSheet from "@/components/ConfirmSheet";
 import { btnGhost, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
 const CATEGORIES = ["F&B", "Photography", "Sports", "Video", "Design", "Other"];
 const UNITS = ["per project", "per sesi", "per foto", "per menu", "per bulan", "per jam"];
 
-type Draft = Omit<Service, "price"> & { price: string };
-const BLANK: Draft = { id: "", name: "", category: "F&B", price: "", unit: "per project", description: "" };
+type Draft = Omit<Service, "price" | "cost"> & { price: string; cost: string };
+const BLANK: Draft = { id: "", name: "", category: "F&B", price: "", cost: "", unit: "per project", description: "" };
+const num = (v: string) => parseInt(v.replace(/\D/g, ""), 10) || 0;
 
-export default function Services({ services, business }: { services: Service[]; business: Business }) {
+export default function Services({ services, components, business }: { services: Service[]; components: Component[]; business: Business }) {
   const space = useSpace();
   // In a guild the catalog is the team's: Leader and Officer keep it.
   const canEdit = canEditCatalog(space);
@@ -38,9 +40,11 @@ export default function Services({ services, business }: { services: Service[]; 
       await setDoc(spaceDoc(space, "services", id), {
         name: editing.name.trim(),
         category: editing.category,
-        price: parseInt(editing.price.replace(/\D/g, ""), 10) || 0,
+        price: num(editing.price),
         unit: editing.unit,
         description: editing.description.trim(),
+        // Internal: what one unit costs you. Left out until it is known.
+        ...(editing.cost.trim() ? { cost: num(editing.cost) } : {}),
       });
       setEditing(null);
     } catch { setErr("Gagal nyimpen. Cek koneksi lalu coba lagi."); }
@@ -99,7 +103,7 @@ export default function Services({ services, business }: { services: Service[]; 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 12, color: "var(--app-muted)", letterSpacing: "1px", fontWeight: 600 }}>{s.category.toUpperCase()}</span>
                 {canEdit && <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={() => edit({ ...s, price: String(s.price) })} aria-label={`Edit ${s.name}`} style={{ ...chip, color: "var(--app-text)", display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="pencil" size={14} />Edit</button>
+                  <button onClick={() => edit({ ...s, price: String(s.price), cost: typeof s.cost === "number" ? String(s.cost) : "" })} aria-label={`Edit ${s.name}`} style={{ ...chip, color: "var(--app-text)", display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="pencil" size={14} />Edit</button>
                   <button onClick={() => setDeleting(s)} aria-label={`Hapus ${s.name}`} title="Hapus" style={{ ...chip, minWidth: 44, borderColor: "#ff444440", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Icon name="trash" size={16} /></button>
                 </div>}
               </div>
@@ -108,6 +112,11 @@ export default function Services({ services, business }: { services: Service[]; 
                 <span style={{ fontSize: 18, fontWeight: 700, color: "var(--ok)" }}>{rupiah(s.price)}</span>
                 <span style={{ fontSize: 12, color: "var(--app-muted)" }}> {s.unit}</span>
               </div>
+              {typeof s.cost === "number" && (
+                <div className="tabnum" style={{ fontSize: 12, color: "var(--app-muted)" }}>
+                  Modal {rupiah(s.cost)} · <b style={{ color: marginColor(marginPct(s.cost, s.price)) }}>margin {marginPct(s.cost, s.price) ?? 0}%</b>
+                </div>
+              )}
               {s.description && <div style={{ fontSize: 12, color: "var(--app-sub)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{s.description}</div>}
             </div>
           ))}
@@ -133,6 +142,15 @@ export default function Services({ services, business }: { services: Service[]; 
                   {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
               </div>
+              <div>
+                <label htmlFor="svc-cost" style={label}>Biaya modal (Rp)</label>
+                <input id="svc-cost" inputMode="numeric" value={editing.cost} onChange={e => setEditing({ ...editing, cost: e.target.value })} style={inputStyle} placeholder="mis. 900000" aria-describedby="svc-cost-hint" />
+              </div>
+              <div id="svc-cost-hint" role="status" className="tabnum" style={{ alignSelf: "end", fontSize: 12, lineHeight: 1.4, paddingBottom: 10, color: editing.cost.trim() ? marginColor(marginPct(num(editing.cost), num(editing.price))) : "var(--app-muted)" }}>
+                {editing.cost.trim() && num(editing.price)
+                  ? `Margin ${rupiah(num(editing.price) - num(editing.cost))} (${marginPct(num(editing.cost), num(editing.price))}%)${(marginPct(num(editing.cost), num(editing.price)) ?? 0) < MARGIN_TARGET ? ` · di bawah ${MARGIN_TARGET}%` : ""}`
+                  : "Internal, ga dicetak. Kosongin kalau belum tahu."}
+              </div>
               <div style={{ gridColumn: "1/-1" }}>
                 <label htmlFor="svc-cat" style={label}>Kategori</label>
                 <select id="svc-cat" value={editing.category} onChange={e => setEditing({ ...editing, category: e.target.value })} style={inputStyle}>
@@ -152,6 +170,8 @@ export default function Services({ services, business }: { services: Service[]; 
           </div>
         </div>
       )}
+
+      <ComponentCatalog components={components} space={space} canEdit={canEdit} />
 
       {profile && <BusinessEditor business={profile} onClose={() => setProfile(null)} />}
 
