@@ -1015,48 +1015,67 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .sp-seg-btn:is([aria-selected="true"], [aria-checked="true"]) > span { background: var(--thumb); box-shadow: 0 1px 2px rgba(15,30,60,0.10), 0 2px 6px rgba(15,30,60,0.06); }
 @media (prefers-reduced-motion: reduce) { .sp-seg-btn > span { transition: none; } }
 
-/* ---- Hunting: Kirim and the queue sheet ---- */
-.sp-target { display: flex; gap: 8px; flex-wrap: wrap; }
-.sp-target-acts { display: flex; gap: 8px; }
-.sp-target-acts > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-/* The queue: a sheet with its own header and ✕, then one list per group,
-   rows split by hairlines (docs/standards/design.md §2). */
-.sp-queue { display: flex; flex-direction: column; overflow: hidden !important; }
-.sp-queue-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: flex-start; gap: 8px; padding: 16px 8px 12px 20px; background: var(--app-card); box-shadow: inset 0 -1px 0 var(--app-border); }
-.sp-queue-head h2 { margin: 0; font-size: var(--fs-section); font-weight: 700; }
-.sp-queue-head p { margin: 4px 0 0; font-size: var(--fs-meta); color: var(--app-muted); }
+/* ---- Hunting · Kirim: a table of who's next, like a Notion database, and
+   each person's page. Rows are split by hairlines (design.md §2). ---- */
+.sp-ktool { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
+.sp-kview { position: relative; display: inline-flex; align-items: center; min-width: 0; color: var(--app-text); }
+.sp-kview select { appearance: none; -webkit-appearance: none; min-width: 0; max-width: 100%; height: 44px; padding: 0 26px 0 0; border: 0; background: transparent; color: inherit; font: 700 var(--fs-title)/1.2 'Plus Jakarta Sans', sans-serif; text-overflow: ellipsis; cursor: pointer; }
+.sp-kview svg { position: absolute; right: 2px; pointer-events: none; color: var(--app-muted); }
+.sp-ktools { margin-left: auto; display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.sp-icon44 { width: 44px; height: 44px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--app-ink-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+/* The blue split button: + adds, ▾ opens the other ways in. Drawn 32px in 44px taps. */
+.sp-split { display: inline-flex; }
+.sp-split > button { height: 44px; min-width: 40px; padding: 0 10px; border: 0 solid transparent; border-block-width: 6px; background: #005eb0; background-clip: padding-box; color: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.sp-split > button:first-child { border-radius: 10px 0 0 10px; padding-inline: 12px; }
+.sp-split > button:last-child { border-radius: 0 10px 10px 0; box-shadow: inset 1px 0 0 rgba(255,255,255,0.3); min-width: 36px; padding-inline: 8px; }
+.sp-ksearch { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 4px 0 12px; border-radius: var(--r-m, 12px); background: var(--app-inner); color: var(--app-muted); }
+.sp-ksearch:focus-within { box-shadow: 0 0 0 2px #005eb0; }
+.sp-ksearch input { flex: 1; min-width: 0; height: 44px; border: 0; background: transparent; color: var(--app-text); font: 400 16px 'Plus Jakarta Sans', sans-serif; outline: none; }
+.sp-kpaste { flex-shrink: 0; height: 44px; padding: 0 10px; border: 0; border-block: 6px solid transparent; background: var(--app-card); background-clip: padding-box; border-radius: 12px; color: var(--app-text); font: 600 13px 'Plus Jakarta Sans', sans-serif; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.sp-kmsg { font-size: var(--fs-meta); color: var(--warn-text); padding: 4px 0 0; }
+.sp-kmsg:empty { display: none; }
+.sp-kcols { display: flex; justify-content: space-between; margin-top: 12px; padding: 6px 4px; font-size: var(--fs-meta); color: var(--app-muted); border-bottom: 1px solid var(--app-border); }
+.sp-kgroup { padding-top: 16px; }
+.sp-kgh { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; padding: 0 4px 4px; }
+.sp-kgh h3 { margin: 0; flex-shrink: 0; font-size: var(--fs-body); font-weight: 700; }
+.sp-kgh h3 span { color: var(--app-muted); font-weight: 500; }
+.sp-kgh > span { flex: 1 1 160px; font-size: var(--fs-meta); color: var(--app-muted); text-align: end; }
+.sp-klist { list-style: none; margin: 0; padding: 0; }
+.sp-krow { width: 100%; min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 6px 4px; border: 0; border-bottom: 1px solid var(--app-border); background: none; color: var(--app-text); text-align: start; font-family: inherit; cursor: pointer; }
+.sp-kini { flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--fs-micro); font-weight: 700; background: var(--app-inner); color: var(--app-ink-2); }
+.sp-knew .sp-kini { background: color-mix(in srgb, #005eb0 12%, transparent); color: var(--brand-text); }
+.sp-knm { flex: 1; min-width: 0; font-size: var(--fs-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-ksub { display: block; font-size: var(--fs-meta); font-weight: 400; color: var(--app-muted); overflow: hidden; text-overflow: ellipsis; }
+.sp-kage { flex-shrink: 0; font-size: var(--fs-meta); color: var(--app-muted); }
+/* Like Notion's BUKA: a quiet label that says what a tap does. */
+.sp-kpill { flex-shrink: 0; padding: 4px 9px; border: 1px solid var(--app-line-strong); border-radius: 8px; background: var(--app-card); color: var(--app-ink-2); font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.sp-kmore { min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--brand-text); font: 600 var(--fs-meta) 'Plus Jakarta Sans', sans-serif; cursor: pointer; }
+.sp-kempty { margin: 0; padding: 12px 4px; font-size: var(--fs-meta); color: var(--app-muted); }
+@media (hover: hover) and (pointer: fine) { .sp-krow:hover { background: var(--app-inner); } .sp-icon44:hover { background: var(--app-inner); } }
+/* A person's page: back to the list, then their name as the page title. */
+.sp-kback-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: -8px 0 4px; }
+.sp-kback, .sp-knext { height: 44px; padding: 0 4px; border: 0; background: none; display: inline-flex; align-items: center; gap: 2px; color: var(--brand-text); font: 600 var(--fs-body) 'Plus Jakarta Sans', sans-serif; cursor: pointer; }
+.sp-knext { margin-left: auto; }
+.sp-kqueue { margin: 0 0 4px; font-size: var(--fs-meta); color: var(--app-muted); }
+.sp-kqueue button { min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--brand-text); font: 600 var(--fs-meta) 'Plus Jakarta Sans', sans-serif; cursor: pointer; }
+.sp-kqueue b { color: var(--app-text); }
+.sp-ktitle { width: 100%; min-height: 48px; padding: 4px 0; border: 0; border-bottom: 1px solid var(--app-border); border-radius: 0; background: transparent; color: var(--app-text); font: 700 var(--fs-title)/1.2 'Plus Jakarta Sans', sans-serif; outline: none; }
+.sp-ktitle:focus { border-bottom-color: #005eb0; }
+/* The + ▾ menu: a short list in a bottom sheet. */
+.sp-kadd { width: 100%; max-width: 480px; padding: 8px 0 12px; border-radius: 20px; background: var(--app-card); color: var(--app-text); }
+.sp-kadd-head { display: flex; align-items: center; padding: 4px 8px 4px 20px; }
+.sp-kadd-head h2 { margin: 0; font-size: var(--fs-section); font-weight: 700; }
+.sp-kadd ul { list-style: none; margin: 4px 12px 0; padding: 0; border-radius: 12px; background: var(--app-inner); overflow: hidden; }
+.sp-kadd li + li { box-shadow: inset 0 1px 0 var(--app-border); }
+.sp-kadd li button { width: 100%; min-height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 16px; border: 0; background: none; color: var(--app-text); font: 500 var(--fs-body) 'Plus Jakarta Sans', sans-serif; text-align: start; cursor: pointer; }
+.sp-kadd li button svg { color: var(--app-ink-2); }
 .sp-x { flex-shrink: 0; width: 44px; height: 44px; margin-left: auto; padding: 0; border: 0; background: transparent; color: var(--app-ink-2); cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .sp-x > span { width: 30px; height: 30px; border-radius: 50%; background: var(--glass-btn); display: flex; align-items: center; justify-content: center; }
-.sp-queue-body { overflow-y: auto; overscroll-behavior: contain; padding: 4px 0 16px; }
-.sp-queue-group { padding: 12px 0 4px; }
-.sp-queue-group + .sp-queue-group { box-shadow: inset 0 1px 0 var(--app-border); }
-.sp-queue-gh { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; padding: 0 20px 4px; }
-.sp-queue-gh h3 { flex-shrink: 0; }
-.sp-queue-gh h3 { margin: 0; font-size: var(--fs-body); font-weight: 700; }
-.sp-queue-gh h3 span { color: var(--app-muted); font-weight: 500; }
-.sp-queue-gh > span { flex: 1 1 160px; font-size: var(--fs-meta); color: var(--app-muted); text-align: end; }
-.sp-queue ul { list-style: none; margin: 0; padding: 0; }
-.sp-queue li button { width: 100%; min-height: 52px; display: flex; align-items: center; gap: 12px; padding: 4px 16px 4px 20px; border: 0; background: none; color: var(--app-text); text-align: start; font-family: inherit; cursor: pointer; }
-.sp-queue li + li button { box-shadow: inset 52px 1px 0 -51px var(--app-border); }
-.sp-queue .ini { flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--fs-micro); font-weight: 700; background: var(--app-inner); color: var(--app-ink-2); }
-.sp-queue .nm { flex: 1; min-width: 0; font-size: var(--fs-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sp-queue .age { flex-shrink: 0; font-size: var(--fs-meta); color: var(--app-muted); }
-.sp-queue li button > svg { flex-shrink: 0; color: var(--app-muted); }
-.sp-queue .more { min-height: 44px; margin: 0 20px; padding: 0; border: 0; background: none; color: var(--brand-text); font: 600 var(--fs-meta) 'Plus Jakarta Sans', sans-serif; cursor: pointer; }
-.sp-queue .empty { margin: 0; padding: 4px 20px 8px; font-size: var(--fs-meta); color: var(--app-muted); }
-@media (hover: hover) and (pointer: fine) { .sp-queue li button:hover { background: var(--app-inner); } }
 @media (max-width: 640px) {
-  .sp-queue { height: 100dvh; }
-  .sp-queue-head { padding-top: calc(env(safe-area-inset-top, 0px) + 12px); }
-  .sp-queue-body { flex: 1; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); }
-  /* Kirim on a phone: the field gets the whole row, its two helpers share the next. */
-  .sp-target > :first-child { flex-basis: 100% !important; }
-  .sp-target-acts { width: 100%; }
-  .sp-target-acts > button { flex: 1; }
   /* The hunt is the page, not a box on it. */
   .sp-hunt-send { background: transparent !important; border: 0 !important; padding: 0 !important; border-radius: 0 !important; }
   .sp-hunt-panes { background: color-mix(in srgb, var(--app-text) 7%, var(--app-bg)) !important; border: 0 !important; border-radius: 10px !important; }
-  :is(.sp-hunt .sp-page-head, .sp-hunt .sp-target-acts, .sp-hunt .sp-tpl-tools, .sp-hunt .sp-tpl-stages, .sp-hunt .sp-via, .sp-hunt .sp-tpl-acts) button {
+  :is(.sp-hunt .sp-page-head, .sp-hunt .sp-tpl-tools, .sp-hunt .sp-tpl-stages, .sp-hunt .sp-via, .sp-hunt .sp-tpl-acts) button {
     height: 44px !important; min-height: 44px !important; padding: 0 12px !important;
     border: 0 solid transparent !important; border-block-width: 6px !important; background-clip: padding-box !important;
     border-radius: 14px !important; font-size: 13px !important; line-height: 1 !important;

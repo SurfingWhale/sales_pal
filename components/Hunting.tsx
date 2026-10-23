@@ -82,8 +82,14 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   const [pane, setPane] = useState<Pane>("kirim");
   // The cycle (owner, 23 Okt): one person's conversation, and who's next from a queue.
   const [threadId, setThreadId] = useState<string | null>(null);
-  const [picking, setPicking] = useState(false);
+  // Kirim is a table of who's next (like a Notion database) and, once someone
+  // is picked, their page: the message for them (owner, 23 Okt).
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [kview, setKview] = useState<"all" | QueueGroup>("all");
   const [queueAll, setQueueAll] = useState<string[]>([]);
+  const [addMenu, setAddMenu] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [queued, setQueued] = useState<{ group: QueueGroup; ids: string[] } | null>(null);
   const [editDefaults, setEditDefaults] = useState(false);
   const allQuotes = useSpaceCollection<Quote>(space, "quotes");
@@ -97,6 +103,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     if (post) { openPost(post); return true; }
     const p = parseProfile(text);
     if (!p) return false;
+    setOpen(true);
     setTarget(p.target);
     if (p.platform) setPlatform(p.platform);
     setUrl(p.url || "");
@@ -108,6 +115,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   // A Threads post shared or pasted: who wrote it and what, then their journey
   // (a new prospect, or the post added to the one they have).
   async function openPost(link: string) {
+    setOpen(true);
     const guess = link.match(/threads\.(?:com|net)\/(@[A-Za-z0-9._]+)\/post\//)?.[1];
     if (guess) { setTarget(guess); setPlatform("Threads"); setUrl(profileUrl(guess.slice(1))); }
     setPasteMsg("Membuka post…");
@@ -163,6 +171,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   // To the message, from wherever the person was picked; the pane shows first.
   function toTarget(focus = true) {
     setPane("kirim");
+    setOpen(true);
     requestAnimationFrame(() => {
       targetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       if (focus) targetRef.current?.focus({ preventScroll: true });
@@ -326,7 +335,6 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   function takeFrom(group: QueueGroup, p: Prospect) {
     const ids = queueGroup(prospects, group, now, strategy).map(x => x.id);
     setQueued({ group, ids: ids.slice(ids.indexOf(p.id) + 1) });
-    setPicking(false);
     compose(p);
   }
   function takeNext() {
@@ -337,6 +345,26 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     setQueued({ group: queued.group, ids: queued.ids.slice(queued.ids.indexOf(next.id) + 1) });
     setUndo(null);
     compose(next);
+  }
+
+  // Back from a person's page to the table.
+  function backToList() {
+    setOpen(false); setQueued(null); setUndo(null);
+    setTarget(""); setUrl(""); setSource({ kind: "manual" }); setChannel("dm"); setPasteMsg("");
+  }
+
+  // The search box is the way in: a match opens its page, anything else
+  // (a link, an @name) becomes a new target.
+  function commitSearch(text = q) {
+    const v = text.trim();
+    if (!v) return;
+    setQ(""); setQueued(null);
+    if (/https?:\/\//.test(v) && apply(v)) return;
+    const key = v.replace(/^@/, "").toLowerCase();
+    const hit = prospects.find(p => p.handle.replace(/^@/, "").toLowerCase() === key);
+    if (hit) { compose(hit); return; }
+    setTarget(v); setUrl(""); setSource({ kind: "manual" }); setChannel("dm"); setPasteMsg("");
+    setOpen(true);
   }
 
   function clearTarget() {
@@ -529,60 +557,33 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         return <ProspectThread key={p.id} p={p} strategy={strategy} templates={templates} fill={dataFor(p.handle, p, business.name, defaults)}
           sendOut={sendFor(p)} sessionId={live?.id} onSend={sendTo} onClose={() => setThreadId(null)} />;
       })()}
-      {picking && (
-        <div className="modal-overlay" onClick={() => setPicking(false)}>
-          <div role="dialog" aria-modal="true" aria-labelledby="queue-h" data-own-layout className="sp-queue" onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 520, padding: 0 }}>
-            <div className="sp-queue-head">
-              <div style={{ minWidth: 0 }}>
-                <h2 id="queue-h">Ambil dari antrian</h2>
-                <p>Pilih orangnya. Abis kirim, Berikutnya bawa orang selanjutnya dari grup yang sama.</p>
-              </div>
-              <button className="sp-x" onClick={() => setPicking(false)} aria-label="Tutup"><span><Icon name="close" size={13} stroke={2.4} /></span></button>
-            </div>
-            <div className="sp-queue-body">
-              {QUEUE_GROUPS.map(g => {
-                const ps = queueGroup(prospects, g.id, now, strategy);
-                const all = queueAll.includes(g.id);
-                return (
-                  <section key={g.id} aria-label={g.label} className="sp-queue-group">
-                    <div className="sp-queue-gh">
-                      <h3>{g.label} <span className="tabnum">{ps.length}</span></h3>
-                      <span>{g.id === "drop" ? `diem ${strategy.dropDays}+ hari` : g.hint}</span>
-                    </div>
-                    {ps.length === 0 ? <p className="empty">Kosong.</p> : (
-                      <ul>
-                        {ps.slice(0, all ? ps.length : 5).map(p => {
-                          const q = silentDays(p, now);
-                          const who = p.name || p.handle;
-                          return (
-                            <li key={p.id}>
-                              <button onClick={() => g.id === "drop" ? (setPicking(false), setThreadId(p.id)) : takeFrom(g.id, p)}>
-                                <span className="ini" aria-hidden="true">{who.replace(/^@/, "").slice(0, 2).toUpperCase()}</span>
-                                <span className="nm">{who}</span>
-                                {q !== null && q >= 2 && <span className="age tabnum">{q} hr</span>}
-                                <Icon name="chevronRight" size={16} />
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                    {ps.length > 5 && (
-                      <button className="more" aria-expanded={all} onClick={() => setQueueAll(all ? queueAll.filter(x => x !== g.id) : [...queueAll, g.id])}>
-                        {all ? "Ringkas" : `Lihat semua ${ps.length}`}
-                      </button>
-                    )}
-                  </section>
-                );
-              })}
-            </div>
-          </div>
+      <div id="hpane-kirim" role="tabpanel" aria-labelledby="hp-kirim" hidden={pane !== "kirim"}>
+      {addMenu && (
+        // The "+ ▾" menu: other ways in, as a short sheet (like Notion's template list).
+        <div className="modal-overlay sp-sheet-overlay" onClick={() => setAddMenu(false)} style={{ alignItems: "flex-end", background: "var(--scrim)" }}>
+          <section role="dialog" aria-modal="true" aria-label="Tambah target" className="sp-sheet sp-kadd" onClick={e => e.stopPropagation()}>
+            <div className="sp-kadd-head"><h2>Tambah target</h2><button className="sp-x" onClick={() => setAddMenu(false)} aria-label="Tutup"><span><Icon name="close" size={13} stroke={2.4} /></span></button></div>
+            <ul>
+              <li><button onClick={() => { setAddMenu(false); requestAnimationFrame(() => searchRef.current?.focus()); }}><Icon name="search" size={20} />Ketik @akun atau tempel link</button></li>
+              <li><button onClick={() => { setAddMenu(false); pasteLink(); }}><Icon name="clipboard" size={20} />Tempel link dari clipboard</button></li>
+              <li><button onClick={() => { setAddMenu(false); setTimeout(() => document.getElementById("radar-threads")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}><Icon name="target" size={20} />Dari Radar Threads</button></li>
+            </ul>
+          </section>
         </div>
       )}
-      <div id="hpane-kirim" role="tabpanel" aria-labelledby="hp-kirim" hidden={pane !== "kirim"}>
-      {/* The hunt itself: who, where, which message */}
+      {open ? (
       <div className="sp-hunt-send" style={{ ...card, padding: 20, marginBottom: 20 }}>
-        <label htmlFor="hunt-target" style={label}>Target</label>
+        <div className="sp-kback-row">
+          <button className="sp-kback" onClick={backToList} aria-label="Kembali ke daftar"><Icon name="chevronLeft" size={18} stroke={2} />Daftar</button>
+          {queued && queued.ids.length > 0 && <button className="sp-knext" onClick={takeNext}>Berikutnya<Icon name="chevronRight" size={16} stroke={2} /></button>}
+        </div>
+        {queued && (
+          <p className="sp-kqueue">
+            Dari antrian <b>{QUEUE_GROUPS.find(g => g.id === queued.group)!.label}</b> · {queued.ids.length} lagi ·{" "}
+            <button onClick={() => setQueued(null)} aria-label="Berhenti ambil dari antrian">Selesai</button>
+          </p>
+        )}
+        <label htmlFor="hunt-target" className="vh">Target</label>
         <div className="sp-target" style={{ marginBottom: pasteMsg || url ? 6 : 12 }}>
           <div style={{ position: "relative", flex: "1 1 240px", minWidth: 0 }}>
             <input id="hunt-target" ref={targetRef} value={target}
@@ -593,24 +594,12 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
                 // Typed by hand: the last person's link and post don't belong to this name.
                 setTarget(v); setUrl(""); setSource({ kind: "manual" }); setChannel("dm");
               }}
-              placeholder="Tempel link post/profil di sini, atau @akun" autoComplete="off" style={{ ...inputStyle, fontSize: 16, paddingRight: target ? 44 : undefined, minHeight: 44 }} />
+              placeholder="@akun atau link" autoComplete="off" className="sp-ktitle" style={{ paddingRight: target ? 44 : undefined }} />
             {target && <button onClick={clearTarget} aria-label="Target lain (kosongin)" title="Target lain"
               style={{ position: "absolute", right: 2, top: "50%", transform: "translateY(-50%)", width: 40, height: 40, border: "none", background: "none", color: "var(--app-muted)", fontSize: 18, cursor: "pointer" }}>×</button>}
           </div>
-          {/* Phones can't paste into a field as easily; a mouse and keyboard can (⌘V), with no extra prompt. */}
-          <div className="sp-target-acts">
-            <button onClick={() => setPicking(true)} aria-label="Ambil target dari antrian" style={{ ...chip, flexShrink: 0, minHeight: 44, padding: "0 12px", fontSize: 13, fontWeight: 700, color: "var(--brand-text)" }}><Icon name="list" size={16} />Antrian</button>
-            <button onClick={pasteLink} className="touch-only" aria-label="Tempel link profil dari clipboard" style={{ ...chip, flexShrink: 0, minHeight: 44, padding: "0 12px", fontSize: 13, fontWeight: 700, color: "var(--app-text)" }}><Icon name="clipboard" size={16} />Tempel link</button>
-          </div>
         </div>
         {url && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}><Icon name="link" size={14} style={{ flexShrink: 0 }} /><span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{url}</span></div>}
-        {queued && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>
-            <span>Dari antrian <b style={{ color: "var(--app-text)" }}>{QUEUE_GROUPS.find(g => g.id === queued.group)!.label}</b> · {queued.ids.length} lagi</span>
-            {queued.ids.length > 0 && <button onClick={takeNext} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)" }}>Berikutnya →</button>}
-            <button onClick={() => setQueued(null)} aria-label="Berhenti ambil dari antrian" style={{ ...chip, minHeight: 36 }}>Selesai</button>
-          </div>
-        )}
         <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginBottom: pasteMsg ? 12 : 0 }}>{pasteMsg}</div>
         <div role="radiogroup" aria-label="Platform" className="sp-seg" style={{ marginBottom: 16 }}>
           {PLATFORMS.map(p => (
@@ -662,9 +651,97 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
           )}
         </div>
       </div>
+      ) : (
+        <>
+      <section aria-label="Daftar kirim" className="sp-ktable">
+        {/* A database header, as in Notion: the view, then its tools on the right. */}
+        <div className="sp-ktool">
+          <label className="sp-kview">
+            <span className="vh">Tampilan</span>
+            <select value={kview} onChange={e => setKview(e.target.value as "all" | QueueGroup)}>
+              <option value="all">Semua antrian</option>
+              {QUEUE_GROUPS.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+            </select>
+            <Icon name="chevronDown" size={16} stroke={2} />
+          </label>
+          <div className="sp-ktools">
+            <button className="sp-icon44" onClick={() => setEditDefaults(true)} aria-label="Default kalau kosong" title="Default kalau kosong"><Icon name="sliders" size={20} /></button>
+            <div className="sp-split">
+              <button onClick={() => searchRef.current?.focus()} aria-label="Target baru"><Icon name="plus" size={18} stroke={2} /></button>
+              <button onClick={() => setAddMenu(true)} aria-label="Cara lain nambah target" aria-haspopup="dialog"><Icon name="chevronDown" size={16} stroke={2} /></button>
+            </div>
+          </div>
+        </div>
+        <div className="sp-ksearch">
+          <Icon name="search" size={18} />
+          <label htmlFor="hunt-search" className="vh">Cari atau tempel target</label>
+          <input id="hunt-search" ref={searchRef} type="search" value={q} enterKeyHint="go" autoComplete="off"
+            placeholder="Cari nama, @akun, atau tempel link"
+            onPaste={e => { const v = e.clipboardData.getData("text"); if (/https?:\/\//.test(v)) { e.preventDefault(); commitSearch(v); } }}
+            onChange={e => { const v = e.target.value; if (/https?:\/\//.test(v)) { commitSearch(v); return; } setQ(v); }}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); commitSearch(); } }} />
+          {/* Phones can't paste into a field as easily; a mouse and keyboard can (⌘V). */}
+          <button onClick={pasteLink} className="touch-only sp-kpaste" aria-label="Tempel link profil dari clipboard"><Icon name="clipboard" size={16} />Tempel</button>
+        </div>
+        <div role="status" className="sp-kmsg">{pasteMsg}</div>
 
-        <ThreadsRadar uid={space.me.uid} hunts={hunts} onTarget={targetFromRadar} />
-
+        <div className="sp-kcols" aria-hidden="true"><span>Nama</span><span>Diem</span></div>
+        {(() => {
+          const row = (p: Prospect, onPick: () => void, label = "Kirim") => {
+            const who = p.name || p.handle, d = silentDays(p, now);
+            return (
+              <li key={p.id}>
+                <button className="sp-krow" onClick={onPick}>
+                  <span className="sp-kini" aria-hidden="true">{who.replace(/^@/, "").slice(0, 2).toUpperCase()}</span>
+                  <span className="sp-knm">{who}{p.name && <span className="sp-ksub">{p.handle} · {p.platform}</span>}</span>
+                  {d !== null && d >= 1 && <span className="sp-kage tabnum">{d} hr</span>}
+                  <span className="sp-kpill" aria-hidden="true">{label}</span>
+                </button>
+              </li>
+            );
+          };
+          const term = q.trim().replace(/^@/, "").toLowerCase();
+          if (term) {
+            const found = prospects.filter(p => `${p.handle} ${p.name || ""}`.toLowerCase().includes(term)).slice(0, 20);
+            const exact = found.some(p => p.handle.replace(/^@/, "").toLowerCase() === term);
+            return (
+              <ul className="sp-klist" aria-label="Hasil cari">
+                {found.map(p => row(p, () => { setQ(""); setQueued(null); compose(p); }))}
+                {!exact && (
+                  <li><button className="sp-krow sp-knew" onClick={() => commitSearch()}>
+                    <span className="sp-kini" aria-hidden="true"><Icon name="plus" size={16} stroke={2} /></span>
+                    <span className="sp-knm">Kirim ke “{q.trim()}”<span className="sp-ksub">Target baru, belum ada di journey</span></span>
+                  </button></li>
+                )}
+              </ul>
+            );
+          }
+          const groups = QUEUE_GROUPS.filter(g => kview === "all" || g.id === kview);
+          const shownGroups = groups.map(g => ({ g, ps: queueGroup(prospects, g.id, now, strategy) })).filter(x => kview !== "all" || x.ps.length > 0);
+          if (!shownGroups.length) return <p className="sp-kempty">Antrian kosong. Cari atau tempel link di atas buat mulai, atau simpan post dari Threads.</p>;
+          return shownGroups.map(({ g, ps }) => {
+            const all = queueAll.includes(g.id);
+            return (
+              <section key={g.id} aria-label={g.label} className="sp-kgroup">
+                <div className="sp-kgh"><h3>{g.label} <span className="tabnum">{ps.length}</span></h3><span>{g.id === "drop" ? `diem ${strategy.dropDays}+ hari` : g.hint}</span></div>
+                {ps.length === 0 ? <p className="sp-kempty">Kosong.</p> : (
+                  <ul className="sp-klist">
+                    {ps.slice(0, all ? ps.length : 5).map(p => g.id === "drop" ? row(p, () => setThreadId(p.id), "Buka") : row(p, () => takeFrom(g.id, p)))}
+                  </ul>
+                )}
+                {ps.length > 5 && (
+                  <button className="sp-kmore" aria-expanded={all} onClick={() => setQueueAll(all ? queueAll.filter(x => x !== g.id) : [...queueAll, g.id])}>
+                    {all ? "Ringkas" : `Lihat semua ${ps.length}`}
+                  </button>
+                )}
+              </section>
+            );
+          });
+        })()}
+      </section>
+          <div id="radar-threads"><ThreadsRadar uid={space.me.uid} hunts={hunts} onTarget={targetFromRadar} /></div>
+        </>
+      )}
       </div>
 
       <div id="hpane-journey" role="tabpanel" aria-labelledby="hp-journey" hidden={pane !== "journey"}>
