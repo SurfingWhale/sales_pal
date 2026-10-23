@@ -143,7 +143,7 @@ const css = `
 .sp-row-title { display: block; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-row-sub { display: block; margin-top: 2px; font-size: 13px; color: var(--app-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-row-sub .is-late { color: var(--hot); font-weight: 600; }
-.sp-chat-flow { padding: 12px 20px 4px; }
+.sp-flow.sp-chat-flow { padding: 12px 20px 4px; flex-shrink: 0; }
 .sp-chat { list-style: none; margin: 0; padding: 8px 16px 12px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; overscroll-behavior: contain; }
 .sp-chat li { max-width: 85%; padding: 8px 12px; border-radius: 14px; font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
 .sp-chat li.them { align-self: flex-start; background: var(--app-inner); border-bottom-left-radius: 4px; }
