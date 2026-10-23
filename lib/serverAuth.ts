@@ -18,8 +18,8 @@ const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "demo-salespal"
 // Flow tests run the app against the emulators; point the Admin SDK there too.
 // Only when the build was made for the emulators, so production never can.
 if (process.env.NEXT_PUBLIC_FIREBASE_EMULATORS) {
-  process.env.FIREBASE_AUTH_EMULATOR_HOST ||= "127.0.0.1:9099";
-  process.env.FIRESTORE_EMULATOR_HOST ||= "127.0.0.1:8089";
+  process.env.FIREBASE_AUTH_EMULATOR_HOST ||= `127.0.0.1:${process.env.NEXT_PUBLIC_EMU_AUTH_PORT || 9099}`;
+  process.env.FIRESTORE_EMULATOR_HOST ||= `127.0.0.1:${process.env.NEXT_PUBLIC_EMU_FS_PORT || 8089}`;
 }
 
 function serviceAccount(): Record<string, string> | null {

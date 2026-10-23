@@ -5,6 +5,10 @@
 
 import { readFileSync } from "node:fs";
 
+// Emulator hosts, moved by FLOW_PORT_OFFSET (run.mjs sets these before any flow runs).
+const AUTH = () => process.env.FLOW_AUTH_HOST || "127.0.0.1:9099";
+const FS = () => process.env.FLOW_FS_HOST || "127.0.0.1:8089";
+
 const OWNER_EMAIL = readFileSync(new URL("../../firestore.rules", import.meta.url), "utf8").match(/email in \['([^']+)'\]/)?.[1];
 
 // ---------- helpers ----------
@@ -31,7 +35,7 @@ const fv = (v) =>
   : { mapValue: { fields: Object.fromEntries(Object.entries(v).filter(([, x]) => x !== undefined).map(([k, x]) => [k, fv(x)])) } };
 
 export async function uidOf(project, email) {
-  const r = await fetch(`http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/${project}/accounts:query`, {
+  const r = await fetch(`http://${AUTH()}/identitytoolkit.googleapis.com/v1/projects/${project}/accounts:query`, {
     method: "POST", headers: { Authorization: "Bearer owner", "Content-Type": "application/json" }, body: "{}",
   });
   const j = await r.json();
@@ -42,7 +46,7 @@ export async function seedDocs(project, docs) {
   const root = `projects/${project}/databases/(default)/documents`;
   for (let i = 0; i < docs.length; i += 400) {
     const writes = docs.slice(i, i + 400).map(([path, data]) => ({ update: { name: `${root}/${path}`, fields: fv(data).mapValue.fields } }));
-    const r = await fetch(`http://127.0.0.1:8089/v1/${root}:commit`, {
+    const r = await fetch(`http://${FS()}/v1/${root}:commit`, {
       method: "POST", headers: { Authorization: "Bearer owner", "Content-Type": "application/json" }, body: JSON.stringify({ writes }),
     });
     if (!r.ok) throw new Error(`seed failed: ${r.status} ${(await r.text()).slice(0, 200)}`);
@@ -208,7 +212,7 @@ async function sendInbound(project, lead) {
   const DB = `projects/${project}/databases/(default)/documents`;
   const v = (x) => typeof x === "number" ? { integerValue: String(x) } : typeof x === "string" ? { stringValue: x } : { mapValue: { fields: Object.fromEntries(Object.entries(x).map(([k, y]) => [k, v(y)])) } };
   const id = Math.random().toString(36).slice(2, 14);
-  const res = await fetch(`http://127.0.0.1:8089/v1/${DB}:commit`, {
+  const res = await fetch(`http://${FS()}/v1/${DB}:commit`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ writes: [{ update: { name: `${DB}/inbound_leads/${id}`, fields: Object.fromEntries(Object.entries(lead).map(([k, x]) => [k, v(x)])) }, updateTransforms: [{ fieldPath: "createdAt", setToServerValue: "REQUEST_TIME" }], currentDocument: { exists: false } }] }),
   });
@@ -216,7 +220,7 @@ async function sendInbound(project, lead) {
 }
 
 async function ownerLogin(t) {
-  const A = "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1";
+  const A = `http://${AUTH()}/identitytoolkit.googleapis.com/v1`;
   let r = await (await fetch(`${A}/accounts:signUp?key=fake`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: OWNER_EMAIL, password: "rahasia123" }) })).json();
   if (r.error?.message === "EMAIL_EXISTS") r = await (await fetch(`${A}/accounts:signInWithPassword?key=fake`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: OWNER_EMAIL, password: "rahasia123" }) })).json();
   await fetch(`${A}/accounts:update?key=fake`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer owner" }, body: JSON.stringify({ localId: r.localId, emailVerified: true }) });
@@ -1573,7 +1577,7 @@ export const flows = [
     name: "access: invite-only, and who may spend the Google key",
     async run(t) {
       const { page, base, project } = t;
-      const A = "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1";
+      const A = `http://${AUTH()}/identitytoolkit.googleapis.com/v1`;
       const tokenOf = async (email) => (await (await fetch(`${A}/accounts:signInWithPassword?key=fake`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password: "rahasia123", returnSecureToken: true }) })).json()).idToken;
       // The search with no words: past the guard it stops at the missing key (503)
       // or the empty query (400), so no test ever spends a real Google call.
@@ -1983,7 +1987,7 @@ export const flows = [
         if (cron.status !== 401) throw new Error(`cron answered ${cron.status} to a stranger`);
       });
       await t.step("a signed-in caller gets past the gate", async () => {
-        const A = "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1";
+        const A = `http://${AUTH()}/identitytoolkit.googleapis.com/v1`;
         const { idToken } = await (await fetch(`${A}/accounts:signUp?key=fake`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: `api${Date.now()}@contoh.id`, password: "rahasia123", returnSecureToken: true }) })).json();
         const scan = await post("/api/scan", idToken);
         if (scan.status === 401) throw new Error("scan refused a signed-in user");
