@@ -1997,8 +1997,8 @@ export const flows = [
         await page.getByLabel("Lihat dashboard siapa").selectOption("");
         await page.getByRole("button", { name: "PDF laporan" }).click();
         await expectText(page, "LAPORAN SALES TIM");
-        // Exact: the PDF's own "Per sales" table title matches a loose search too.
-        await page.locator(".print-root").getByText("PER SALES", { exact: true }).waitFor();
+        // The report's per-seller section; its heading shows in more than one paper.
+        await page.locator(".print-root").getByText("PER SALES", { exact: true }).first().waitFor();
         await page.locator(".print-root").getByText(memberName).first().waitFor();
         const [dl] = await Promise.all([page.waitForEvent("download"), modal(page).getByRole("button", { name: "Simpan / kirim PDF" }).click()]);
         if (!/^Report_Dashboard_Tim_Uji_\d{4}-\d{2}-\d{2}_\d{4}-\d{2}-\d{2}\.pdf$/.test(dl.suggestedFilename())) throw new Error(`file ${dl.suggestedFilename()}`);
