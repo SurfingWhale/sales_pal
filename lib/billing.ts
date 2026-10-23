@@ -64,6 +64,22 @@ export function marginOf(d: { items: LineItem[]; discount: number }): { amount: 
 // Below this a margin is flagged (PRD-017 §3; the owner can change it later).
 export const MARGIN_TARGET = 30;
 
+// A quote kept to start the next one from (PRD-017 §4): the items with their
+// internal cost, what the client gets, the payment schedule. Never the client.
+export interface QuoteTemplate {
+  id: string;
+  name: string;
+  items: LineItem[];
+  deliverables?: string;
+  exclusions?: string;
+  timeline?: string;
+  notes?: string;
+  schedule?: Term[];
+  taxPercent?: number;
+  validDays?: number;
+  createdAt: number;
+}
+
 // Digantikan: a revision of it was accepted, so its terms are no longer the
 // effective ones (PRD-011 §4); it stays readable.
 export const QUOTE_STATUS = ["Draft", "Terkirim", "Disetujui", "Ditolak", "Digantikan"] as const;

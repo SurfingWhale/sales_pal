@@ -52,7 +52,7 @@ import { useHuntSession, useProspects, useStrategy } from "@/lib/prospectStore";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { parseVCards } from "@/lib/vcard";
 import { authFetch } from "@/lib/authFetch";
-import { Component, Invoice, Quote, Service, addDays, balance, daysBetween, invoiceState, owed, longDate, rupiah, today, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
+import { Component, Invoice, Quote, QuoteTemplate, Service, addDays, balance, daysBetween, invoiceState, owed, longDate, rupiah, today, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
 import { useConfirm } from "@/components/ConfirmSheet";
 import { LeadGeo, validGeo } from "@/lib/geo";
 
@@ -324,6 +324,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const showOwner = seesEveryone(space);
   const services = useSpaceCollection<Service>(space, "services");
   const components = useSpaceCollection<Component>(space, "components");
+  const quoteTemplates = useSpaceCollection<QuoteTemplate>(space, "quoteTemplates");
   const quotes = useSpaceCollection<Quote>(space, "quotes");
   const invoices = useSpaceCollection<Invoice>(space, "invoices");
   const business = useBusiness(space);
@@ -1163,13 +1164,13 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
         {(activeTab === "Penawaran" || activeTab === "Invoice") && <OccupancyCalendar quotes={quotes} invoices={invoices} />}
         {activeTab === "Penawaran" && (
-          <Quotes quotes={quotes} invoices={invoices} services={services} components={components} business={business}
+          <Quotes quotes={quotes} invoices={invoices} services={services} components={components} templates={quoteTemplates} business={business}
             leads={leads.map(l => ({ id: l.id, name: l.name, contact: l.contact, phone: l.phone }))}
             startFor={quoteFor} onStarted={clearQuoteFor} onInvoiceCreated={gotoInvoices} />
         )}
         {activeTab === "Invoice" && <Invoices invoices={invoices} business={business} services={services} components={components}
           leads={leads.map(l => ({ id: l.id, name: l.name, contact: l.contact, phone: l.phone }))} />}
-        {activeTab === "Paket" && <Services services={services} components={components} business={business} />}
+        {activeTab === "Paket" && <Services services={services} components={components} templates={quoteTemplates} business={business} />}
 
         {activeTab === "Dashboard tim" && <TeamDashboard hunts={hunts} quotes={quotes} invoices={invoices} outreach={outreach} rejections={rejections}
           onGo={tab => { setActiveTab(tab); window.scrollTo({ top: 0 }); }} />}

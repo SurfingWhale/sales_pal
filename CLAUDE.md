@@ -8,14 +8,14 @@ then here.
 
 - **`firestore.rules` is deployed as a whole and replaces what is live.** Every
   collection the app reads or writes must stay covered. Today that is
-  `users/{uid}/{leads,outreach,rejections,pitchTemplates,hunts,prospects,huntSessions,campaigns,costs,radarSeen,services,components,quotes,invoices,settings,moved}`
+  `users/{uid}/{leads,outreach,rejections,pitchTemplates,hunts,prospects,huntSessions,campaigns,costs,radarSeen,services,components,quoteTemplates,quotes,invoices,settings,moved}`
   (prospects/huntSessions/campaigns/costs: Hunting journeys, PRD-009; moved: rows brought into a guild, PRD-007 §2.7;
-  components: what a price is built from, with its cost, PRD-017),
+  components: what a price is built from, with its cost; quoteTemplates: quotes to start from, PRD-017),
   `users/{uid}/clients/{c}/{deals,posts,reports}` (Report Klien, PRD-005)
   `users/{uid}/guilds`, `guilds/{g}` with `{members,invites,deals,targets,reports,activities}`
   plus the guild workspace (PRD-007 §2.5, `lib/space.ts`): owned
   `{leads,outreach,rejections,hunts,prospects,huntSessions,quotes,invoices,clients/{c}/{deals,posts,reports}}`
-  and the shared catalogs `{services,components,pitchTemplates,settings,campaigns,costs}`
+  and the shared catalogs `{services,components,quoteTemplates,pitchTemplates,settings,campaigns,costs}`
   (Guild, PRD-007 — role rules live in firestore.rules and are tested per role)
   plus `inbound_leads`, and the server-only `connections` (token vault),
   `usage` (quotas), `pushSubs` (Web Push subscriptions), and `config`,
