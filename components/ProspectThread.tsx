@@ -5,16 +5,17 @@
 // replies and each change, then the next message — picked by stage, filled
 // from what they wrote, sent through WhatsApp / Instagram by you, and logged.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { PitchTemplate } from "@/lib/hunting";
 import { today } from "@/lib/billing";
 import { useSpace } from "@/lib/space";
 import {
-  Prospect, ProspectEvent, Strategy, dncPatch, notePatch, replyPatch, resultPatch, silentDays, statusLabel, view,
+  Prospect, ProspectEvent, Strategy, archivePatch, dncPatch, dropReady, notePatch, replyPatch, resultPatch, silentDays, statusLabel, view,
 } from "@/lib/prospects";
 import { saveProspect, syncHunt } from "@/lib/prospectStore";
 import { FillData, STAGES, Stage, fillTemplate, stageFor, stageOf } from "@/lib/templates";
 import { btnMuted, btnPrimary, chip, font, inputStyle, modalBox } from "@/components/ui";
+import ConvertSheet from "@/components/ConvertSheet";
 
 export type SendHow = "copy" | "wa" | "open";
 export interface SendOut { how: "wa" | "open"; label: string; url?: string }
@@ -27,8 +28,8 @@ const dayOf = (ms: number) => {
   return same(d, now) ? "Hari ini" : same(d, y) ? "Kemarin" : d.toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
 };
 
-export default function ProspectThread({ p, strategy, templates, fill, sendOut, onSend, onClose }: {
-  p: Prospect; strategy: Strategy; templates: PitchTemplate[]; fill: FillData; sendOut: SendOut;
+export default function ProspectThread({ p, strategy, templates, fill, sendOut, sessionId, onSend, onClose }: {
+  p: Prospect; strategy: Strategy; templates: PitchTemplate[]; fill: FillData; sendOut: SendOut; sessionId?: string;
   onSend: (p: Prospect, t: PitchTemplate | null, text: string, how: SendHow) => Promise<(() => Promise<void>) | null>;
   onClose: () => void;
 }) {
@@ -43,17 +44,23 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
   const [answerText, setAnswerText] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [note, setNote] = useState("");
   const [undo, setUndo] = useState<(() => Promise<void>) | null>(null);
+  const [askDnc, setAskDnc] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const logRef = useRef<HTMLDivElement>(null);
   const forStage = useMemo(() => templates.filter(t => stageOf(t) === stage), [templates, stage]);
   const dnc = v.status === "dnc";
 
   function choose(t: PitchTemplate) { setTpl(t); setText(fillTemplate(t.body, fill)); }
 
   async function send(how: SendHow) {
-    if (!text.trim() || dnc) return;
-    setMsg("");
+    if (!text.trim() || dnc || busy) return;
+    setMsg(""); setBusy(true);
     const back = await onSend(p, tpl, text, how);
-    if (back) { setUndo(() => back); setTimeout(() => setUndo(u => (u === back ? null : u)), 10000); }
+    setBusy(false);
+    // Logged once: the box empties, so a second tap can't log it twice.
+    if (back) { setText(""); setTpl(null); setUndo(() => back); setTimeout(() => setUndo(u => (u === back ? null : u)), 10000); }
     else setMsg("Pesan tersalin, tapi gagal dicatat. Cek koneksi lalu coba lagi.");
   }
 
@@ -68,8 +75,10 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
   }
   const ctx = () => ({ on: today(), at: Date.now() });
 
-  // History grouped by day, oldest first, like a chat.
+  // History grouped by day, oldest first, like a chat; it opens at the newest.
   const events = (p.history || []).slice().sort((a, b) => a.at - b.at);
+  useEffect(() => { const el = logRef.current; if (el) el.scrollTop = el.scrollHeight; }, [events.length]);
+  const drop = dropReady(p, on, strategy);
   const who = p.name ? `${p.name} (${p.handle})` : p.handle;
 
   return (
@@ -83,7 +92,7 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
           </div>
         </header>
 
-        <div role="log" aria-label={`Percakapan dengan ${who}`} style={{ flex: 1, overflowY: "auto", padding: "12px 18px", display: "flex", flexDirection: "column", gap: 8, background: "var(--app-bg)" }}>
+        <div ref={logRef} role="log" aria-label={`Percakapan dengan ${who}`} style={{ flex: 1, overflowY: "auto", padding: "12px 18px", display: "flex", flexDirection: "column", gap: 8, background: "var(--app-bg)" }}>
           {!events.length && <div style={{ fontSize: 13, color: "var(--app-muted)", textAlign: "center", padding: 20 }}>Belum ada apa-apa. Pesan pertama kamu muncul di sini.</div>}
           {events.map((e, i) => {
             const newDay = i === 0 || dayOf(events[i - 1].at) !== dayOf(e.at);
@@ -104,6 +113,7 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
             </div>
           )}
           {msg && <div role="alert" style={{ fontSize: 13, color: "var(--hot)", marginBottom: 8 }}>{msg}</div>}
+          {note && <div role="status" style={{ fontSize: 13, color: "var(--ok)", fontWeight: 600, marginBottom: 8 }}>✓ {note}</div>}
 
           {dnc ? <div style={{ fontSize: 13, color: "var(--app-muted)" }}>Orang ini minta ga dihubungi lagi.</div> : <>
             <div role="group" aria-label="Hasil terakhir" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, marginBottom: 8 }}>
@@ -111,8 +121,21 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
               <button onClick={() => act(resultPatch(p, "tertarik", {}, ctx(), strategy))} disabled={busy} style={{ ...chip, flexShrink: 0, minHeight: 36 }}>✅ Tertarik</button>
               <button onClick={() => act(resultPatch(p, "tolak", {}, ctx(), strategy))} disabled={busy} style={{ ...chip, flexShrink: 0, minHeight: 36 }}>❌ Nolak</button>
               <button onClick={() => setAnswer(answer === "note" ? null : "note")} aria-pressed={answer === "note"} style={{ ...chip, flexShrink: 0, minHeight: 36 }}>📝 Catatan</button>
-              <button onClick={() => act(dncPatch(p, "Minta ga dihubungi lagi", ctx()))} disabled={busy} style={{ ...chip, flexShrink: 0, minHeight: 36 }}>🚫 Jangan hubungi</button>
+              {!p.convertedAt && <button onClick={() => setConverting(true)} disabled={busy} style={{ ...chip, flexShrink: 0, minHeight: 36, fontWeight: 700, background: "#00a862", color: "#1c2128", border: "none" }}>Kasih data →</button>}
+              {drop && <button onClick={async () => { await act(archivePatch(p, `${quiet} hari ga respon`, ctx())); onClose(); }} disabled={busy} style={{ ...chip, flexShrink: 0, minHeight: 36 }}>🗑 Buang</button>}
+              <button onClick={() => setAskDnc(true)} disabled={busy} aria-expanded={askDnc} style={{ ...chip, flexShrink: 0, minHeight: 36 }}>🚫 Jangan hubungi</button>
             </div>
+            {askDnc && (
+              // Asks first: it wipes what was said and can't be taken back.
+              <div role="group" aria-label="Jangan hubungi lagi?" style={{ padding: "10px 12px", borderRadius: 10, background: "var(--app-inner)", marginBottom: 10 }}>
+                <div style={{ fontSize: 13, marginBottom: 8 }}>Hapus isi percakapan dan jangan hubungi {p.handle} lagi? Ga bisa dibalikin.</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setAskDnc(false)} style={{ ...btnMuted, minHeight: 44, flex: 1 }}>Batal</button>
+                  <button onClick={async () => { setAskDnc(false); await act(dncPatch(p, "Minta ga dihubungi lagi", ctx())); }} disabled={busy}
+                    style={{ ...btnPrimary, minHeight: 44, flex: 1, background: "#c62828" }}>Ya, jangan hubungi</button>
+                </div>
+              </div>
+            )}
             {answer && (
               <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                 <label htmlFor="th-answer" className="vh">{answer === "reply" ? "Balasan dia" : "Catatan"}</label>
@@ -142,12 +165,17 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
               style={{ ...inputStyle, fontSize: 16, width: "100%", boxSizing: "border-box", resize: "vertical", lineHeight: 1.45 }} />
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <button onClick={onClose} style={{ ...btnMuted, minHeight: 44 }}>Tutup</button>
-              <button onClick={() => send("copy")} disabled={!text.trim()} style={{ ...btnMuted, minHeight: 44 }}>Copy</button>
-              <button onClick={() => send(sendOut.how)} disabled={!text.trim()} style={{ ...btnPrimary, minHeight: 44, flex: 1, opacity: text.trim() ? 1 : 0.6 }}>{sendOut.label}</button>
+              <button onClick={() => send("copy")} disabled={!text.trim() || busy} style={{ ...btnMuted, minHeight: 44 }}>Copy</button>
+              <button onClick={() => send(sendOut.how)} disabled={!text.trim() || busy} style={{ ...btnPrimary, minHeight: 44, flex: 1, opacity: text.trim() ? 1 : 0.6 }}>{sendOut.label}</button>
             </div>
           </>}
         </footer>
       </div>
+      {converting && (
+        // Its backdrop tap closes only itself, not the conversation under it.
+        <div style={{ display: "contents" }} onClick={e => e.stopPropagation()}><ConvertSheet p={p} sessionId={sessionId} onClose={() => setConverting(false)}
+          onDone={m => { setConverting(false); setMsg(""); setUndo(null); setNote(m); }} /></div>
+      )}
     </div>
   );
 }

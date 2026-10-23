@@ -190,21 +190,36 @@ export const QUEUE_GROUPS: { id: QueueGroup; label: string; hint: string }[] = [
   { id: "drop", label: "Siap dibuang", hint: "diem lewat batas hari" },
 ];
 
+// One meaning per word on every screen (flow audit, 23 Okt):
+// - follow-up today = sent before (or answered), its next date has come, not ready to drop;
+// - the queue = never greeted + follow-ups today. Beranda, the session bar,
+//   Perlu ditindak and Journey's "Antrian" all count this; the Percakapan badge
+//   counts the follow-ups alone.
+export function followUpDue(p: Prospect, on: string, s: Strategy = STRATEGY): boolean {
+  return p.contact !== "baru" && isDue(p, on, s) && !dropReady(p, on, s);
+}
+
+export function inQueue(p: Prospect, on: string, s: Strategy = STRATEGY): boolean {
+  return !p.closed && isDue(p, on, s) && !dropReady(p, on, s);
+}
+
+// The groups don't overlap: each person sits in one.
 export function queueGroup(ps: Prospect[], g: QueueGroup, on: string, s: Strategy = STRATEGY): Prospect[] {
   const live = ps.filter(p => !p.closed && p.contact !== "dnc");
   const quiet = (p: Prospect) => silentDays(p, on) ?? 0;
   switch (g) {
-    case "due": return live.filter(p => isDue(p, on, s) && !dropReady(p, on, s)).sort((a, b) => (view(a, on, s).due || "").localeCompare(view(b, on, s).due || ""));
+    case "due": return live.filter(p => followUpDue(p, on, s)).sort((a, b) => (view(a, on, s).due || "").localeCompare(view(b, on, s).due || ""));
     case "baru": return live.filter(p => p.contact === "baru").sort((a, b) => b.createdAt - a.createdAt);
-    case "belum": return live.filter(p => { const v = view(p, on, s).status; return (v === "belum" || v === "intro" || v === "tidak") && !dropReady(p, on, s); }).sort((a, b) => quiet(b) - quiet(a));
-    case "lanjut": return live.filter(p => p.contact === "terhubung" && p.result !== "tolak" && p.result !== "data").sort((a, b) => b.updatedAt - a.updatedAt);
+    // Waiting on an answer, not due yet: not the ones parked after three tries, nor the ones sent today.
+    case "belum": return live.filter(p => { const v = view(p, on, s).status; return (v === "belum" || v === "intro") && !isDue(p, on, s) && !dropReady(p, on, s) && p.lastSentAt !== on; }).sort((a, b) => quiet(b) - quiet(a));
+    case "lanjut": return live.filter(p => p.contact === "terhubung" && p.result !== "tolak" && p.result !== "data" && !isDue(p, on, s) && !dropReady(p, on, s)).sort((a, b) => b.updatedAt - a.updatedAt);
     case "drop": return live.filter(p => dropReady(p, on, s)).sort((a, b) => quiet(b) - quiet(a));
   }
 }
 
 // What needs a move today, oldest first.
 export function queue(ps: Prospect[], on: string, s: Strategy = STRATEGY): Prospect[] {
-  return ps.filter(p => isDue(p, on, s)).sort((a, b) => (view(a, on, s).due || "").localeCompare(view(b, on, s).due || ""));
+  return ps.filter(p => inQueue(p, on, s)).sort((a, b) => (view(a, on, s).due || "").localeCompare(view(b, on, s).due || ""));
 }
 
 export const RESULT_LABEL: Record<Result, string> = {
@@ -280,6 +295,13 @@ export function sentPatch(
   e: { text: string; channel: Channel; template?: string; campaignId?: string; campaign?: string; huntId?: string; url?: string },
   ctx: Ctx, s: Strategy = STRATEGY,
 ): Partial<Prospect> {
+  const event: ProspectEvent = { at: ctx.at, kind: "sent", ...e };
+  // Someone who already answered stays answered: the next message to them is
+  // the conversation going on, not a new intro (flow audit, 23 Okt). Only a
+  // "no" that has waited out its parking starts a new round.
+  if (p.contact === "terhubung" && p.result !== "tolak") {
+    return { firstSentAt: p.firstSentAt || ctx.on, lastSentAt: ctx.on, nextAt: null, updatedAt: ctx.at, history: withEvent(p.history, event) };
+  }
   const v = view(p, ctx.on, s);
   const fresh = p.contact !== "intro" || v.reopened;
   return {
@@ -290,7 +312,7 @@ export function sentPatch(
     nextAt: null,
     parkedUntil: null,
     updatedAt: ctx.at,
-    history: withEvent(p.history, { at: ctx.at, kind: "sent", ...e }),
+    history: withEvent(p.history, event),
   };
 }
 
@@ -360,7 +382,12 @@ export function dncPatch(p: Prospect, reason: string, ctx: Ctx): Partial<Prospec
     nextAt: null,
     parkedUntil: null,
     source: { kind: p.source?.kind || "manual" },
-    history: [{ at: ctx.at, kind: "status", text: "Minta ga dihubungi lagi. Riwayat percakapan dihapus." }],
+    // The words go; when something was sent or answered stays, without them,
+    // so a seller's DM and reply counts don't drop (flow audit, 23 Okt).
+    history: [
+      ...(p.history || []).filter(e => e.kind === "sent" || e.kind === "reply").map(e => ({ at: e.at, kind: e.kind })),
+      { at: ctx.at, kind: "status", text: "Minta ga dihubungi lagi. Isi percakapan dihapus." },
+    ],
     updatedAt: ctx.at,
   };
 }

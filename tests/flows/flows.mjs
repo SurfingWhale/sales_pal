@@ -1309,6 +1309,14 @@ export const flows = [
         await th.getByRole("button", { name: "Copy", exact: true }).click();
         await th.getByText("Tercatat terkirim.").waitFor();
         await chat.getByText("Halo kak, ini pricelist paket katalog ya").waitFor();
+        // Logged once: the box empties, and someone who answered stays answered.
+        if (await th.locator("#th-text").inputValue()) throw new Error("the message stayed in the box after it was logged");
+        if (await th.locator("header").getByText(/Intro terkirim/).count()) throw new Error("a follow-up to someone who answered turned them back into an intro");
+        // Jangan hubungi asks first, and Batal leaves them be.
+        await th.getByRole("button", { name: "🚫 Jangan hubungi" }).click();
+        const ask = th.getByRole("group", { name: "Jangan hubungi lagi?" });
+        await ask.getByRole("button", { name: "Batal" }).click();
+        await ask.waitFor({ state: "detached" });
         await th.getByRole("button", { name: "Tutup", exact: true }).last().click();
         await th.waitFor({ state: "detached" });
       });

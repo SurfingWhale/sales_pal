@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 import { today } from "@/lib/billing";
-import { Prospect, Strategy, dropReady, isDue, lastLine, silentDays } from "@/lib/prospects";
+import { Prospect, Strategy, dropReady, followUpDue, lastLine, silentDays } from "@/lib/prospects";
 import { chip, inputStyle } from "@/components/ui";
 
 const FILTERS = ["Semua", "Follow-up hari ini", "Dibales", "Diem 7+ hari", "Siap dibuang"] as const;
@@ -33,7 +33,7 @@ export default function Conversations({ prospects, strategy, onOpen }: {
     const quiet = silentDays(p, on);
     switch (x) {
       case "Semua": return true;
-      case "Follow-up hari ini": return isDue(p, on, strategy) && !dropReady(p, on, strategy);
+      case "Follow-up hari ini": return followUpDue(p, on, strategy);
       case "Dibales": return p.contact === "terhubung";
       case "Diem 7+ hari": return quiet !== null && quiet >= 7 && !dropReady(p, on, strategy);
       case "Siap dibuang": return dropReady(p, on, strategy);
@@ -64,7 +64,7 @@ export default function Conversations({ prospects, strategy, onOpen }: {
       <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {rows.slice(0, limit).map(({ p, last }) => {
           const quiet = silentDays(p, on);
-          const due = isDue(p, on, strategy);
+          const due = followUpDue(p, on, strategy);
           const drop = dropReady(p, on, strategy);
           const who = p.name ? `${p.name} (${p.handle})` : p.handle;
           return (

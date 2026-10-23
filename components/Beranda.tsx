@@ -390,7 +390,7 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
 
       <section aria-labelledby="todo-h" className="sp-todo-sec">
         <div className="sp-todo-head">
-          <h2 id="todo-h" style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em" }}>Perlu ditindak <span style={{ color: "var(--app-muted)", fontWeight: 500 }}>{todo.length}</span></h2>
+          <h2 id="todo-h" style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em" }}>Perlu ditindak <span className="tabnum" style={{ color: "var(--app-muted)", fontWeight: 500 }}>{due}{todo.length > due ? ` hari ini · ${todo.length - due} nanti` : ""}</span></h2>
           {todo.length > 1 && <button onClick={() => setSheet(true)} className="sp-todo-more" aria-haspopup="dialog">Lihat semua<Icon name="chevronRight" size={14} stroke={1.8} /></button>}
         </div>
         {todo.length === 0 ? (

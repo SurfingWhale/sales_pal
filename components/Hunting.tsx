@@ -407,7 +407,13 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     setNoting(null);
   }
 
+  // The lead a DM row already has, its own or its person's (Kasih data).
+  const leadOf = (h: Hunt) => h.leadId || (h.prospectId ? prospects.find(x => x.id === h.prospectId)?.leadId : undefined);
+
   async function makeLead(h: Hunt) {
+    // One person, one lead (flow audit, 23 Okt): link the one Kasih data made.
+    const existing = leadOf(h);
+    if (existing) { await updateDoc(spaceDoc(space, "hunts", h.id), { leadId: existing }); return; }
     const leadId = `lead_${Date.now()}`;
     const note = [`Dari Hunting (${h.platform}) · template "${h.templateTitle}"`, h.note].filter(Boolean).join(" — ");
     await setDoc(spaceDoc(space, "leads", leadId), stamp(space, {
@@ -520,7 +526,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         const p = prospects.find(x => x.id === threadId);
         if (!p) return null;
         return <ProspectThread key={p.id} p={p} strategy={strategy} templates={templates} fill={dataFor(p.handle, p, business.name, defaults)}
-          sendOut={sendFor(p)} onSend={sendTo} onClose={() => setThreadId(null)} />;
+          sendOut={sendFor(p)} sessionId={live?.id} onSend={sendTo} onClose={() => setThreadId(null)} />;
       })()}
       {picking && (
         <div className="modal-overlay" onClick={() => setPicking(false)}>
@@ -716,8 +722,8 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8, alignItems: "center" }}>
                 {isStale(h, now) && <button onClick={() => followUp(h)} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", border: "1px solid #ff990060" }}>↻ Follow-up</button>}
-                {h.status === "Tertarik" && !h.leadId && <button onClick={() => makeLead(h)} style={{ ...chip, minHeight: 36, background: "#00a862", color: "#1c2128", border: "none", fontWeight: 700 }}>Jadiin Lead →</button>}
-                {h.leadId && <span style={{ fontSize: 12, color: "var(--ok)", fontWeight: 700 }}>✓ Sudah jadi lead</span>}
+                {h.status === "Tertarik" && !leadOf(h) && <button onClick={() => makeLead(h)} style={{ ...chip, minHeight: 36, background: "#00a862", color: "#1c2128", border: "none", fontWeight: 700 }}>Jadiin Lead →</button>}
+                {leadOf(h) && <span style={{ fontSize: 12, color: "var(--ok)", fontWeight: 700 }}>✓ Sudah jadi lead</span>}
                 {h.url && <a href={h.url} target="_blank" rel="noreferrer" className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Profil ↗</a>}
                 {h.status !== "Terkirim" && (
                   <button onClick={() => setReplyFor(replyFor?.id === h.id ? null : { id: h.id, topic: defaultTopic(h.status, h.note), tone: "santai" })}

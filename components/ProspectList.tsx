@@ -1,19 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { setDoc, writeBatch } from "firebase/firestore";
+import { writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { addDays, daysBetween, longDate, today } from "@/lib/billing";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
-import { Hunt, platformSource } from "@/lib/hunting";
+import type { Hunt } from "@/lib/hunting";
 import { objections } from "@/lib/salespal-data";
 import {
-  Prospect, ProspectEvent, Result, Strategy, archivePatch, convertPatch, dncPatch, dropReady, fromHunts, isDue, notePatch, replyPatch,
+  Prospect, ProspectEvent, Result, Strategy, archivePatch, dncPatch, dropReady, fromHunts, inQueue, notePatch, replyPatch,
   restorePatch, resultPatch, silentDays, statusColor, statusLabel, view,
 } from "@/lib/prospects";
 import { Counter, bump, clean, ctx, loadClosed, removeProspect, saveProspect, syncHunt } from "@/lib/prospectStore";
-import { badge, btnPrimary, btnMuted, card, chip, font, inputStyle, label, modalBox, ink } from "@/components/ui";
+import { badge, btnPrimary, btnMuted, card, chip, font, inputStyle, label, ink } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmSheet";
+import ConvertSheet from "@/components/ConvertSheet";
 
 // Every person hunted, one journey each (docs/prd/PRD-009 §6): where they
 // stand, what was said both ways, and the one-tap answer that moves them on.
@@ -79,7 +80,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   const space = useSpace();
   const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
-  const [converting, setConverting] = useState<{ p: Prospect; business: string; phone: string; email: string; note: string } | null>(null);
+  const [converting, setConverting] = useState<Prospect | null>(null);
   const [closed, setClosed] = useState<Prospect[] | null>(null);
   const [limit, setLimit] = useState(PAGE);
   const [busy, setBusy] = useState(false);
@@ -94,7 +95,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   const rows = prospects.map(p => ({ p, v: view(p, on, strategy) }));
   const inFilter = (f: ProspectFilter) => rows.filter(({ p, v }) => {
     switch (f) {
-      case "Antrian": return isDue(p, on, strategy);
+      case "Antrian": return inQueue(p, on, strategy);
       case "Baru": return v.status === "baru";
       case "Nunggu": return v.status === "intro" || v.status === "belum";
       case "Terhubung": return v.status === "terhubung" && p.result !== "data" && !v.parkedUntil;
@@ -137,31 +138,6 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
     await act(p, dncPatch(p, reason, ctx(sessionId)), firstAnswer(p));
     setClosed(null);
     setOpenId(null);
-  }
-
-  async function convert() {
-    if (!converting) return;
-    const { p, business, phone, email, note } = converting;
-    setBusy(true);
-    try {
-      const leadId = `lead_${Date.now()}`;
-      const post = (p.history || []).find(e => e.kind === "post")?.text;
-      const notes = [`Dari Hunting (${p.platform}) · ${p.handle}`, post ? `Post: "${post.slice(0, 160)}"` : "", note.trim()].filter(Boolean).join(" — ");
-      await setDoc(spaceDoc(space, "leads", leadId), clean(stamp(space, {
-        name: business.trim() || p.name || p.handle, contact: p.name || p.handle, source: platformSource[p.platform], status: "Hot", score: 85,
-        email: email.trim(), phone: phone.trim(), category: "F&B", notes, lastContact: on, value: 0,
-      }, p)));
-      const summary = ["Kasih data", business.trim(), phone.trim(), email.trim()].filter(Boolean).join(" · ");
-      await saveProspect(space, p, convertPatch(p, leadId, summary, ctx(sessionId)));
-      syncHunt(space, { ...p, result: "data", contact: "terhubung" } as Prospect);
-      [...firstAnswer(p), "converted" as Counter].forEach(c => bump(space, sessionId, c));
-      setConverting(null);
-      setMsg(`${p.name || p.handle} masuk Leads sebagai Hot, sekarang ETB.`);
-    } catch {
-      setMsg("Gagal nyimpen lead. Coba lagi.");
-    } finally {
-      setBusy(false);
-    }
   }
 
   async function backfill() {
@@ -334,7 +310,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                       <button disabled={busy} onClick={() => mark(p, "pikir")} aria-pressed={p.result === "pikir"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>🤔 Pikir-pikir</button>
                       <button disabled={busy} onClick={() => setEditing({ id: p.id, kind: "nanti", text: "", date: addDays(on, 7) })} aria-pressed={p.result === "nanti"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>⏳ Hubungi nanti</button>
                       <button disabled={busy} onClick={() => setEditing({ id: p.id, kind: "tolak", text: p.result === "tolak" ? p.remark || "" : "", date: "" })} aria-pressed={p.result === "tolak"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>❌ Tidak tertarik</button>
-                      <button disabled={busy} onClick={() => setConverting({ p, business: p.name || "", phone: p.platform === "WA" ? p.handle : "", email: "", note: "" })} style={{ ...chip, minHeight: 36, fontWeight: 700, background: "#00a862", color: "#1c2128", border: "none" }}>Kasih data →</button>
+                      <button disabled={busy} onClick={() => setConverting(p)} style={{ ...chip, minHeight: 36, fontWeight: 700, background: "#00a862", color: "#1c2128", border: "none" }}>Kasih data →</button>
                       <button disabled={busy} onClick={() => setEditing({ id: p.id, kind: "dnc", text: "", date: "" })} style={{ ...chip, minHeight: 36, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🚫 Menolak dihubungi</button>
                     </div>
                   </>
@@ -388,25 +364,8 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
       {shown.length > limit && <button onClick={() => setLimit(limit + PAGE)} style={{ ...chip, width: "100%", marginTop: 8, minHeight: 40 }}>Tampilkan {Math.min(PAGE, shown.length - limit)} lagi</button>}
 
       {converting && (
-        <div className="modal-overlay" onClick={() => setConverting(null)}>
-          <div role="dialog" aria-modal="true" aria-labelledby="convert-title" onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 440 }}>
-            <div id="convert-title" style={{ fontSize: 16, fontWeight: 700, fontFamily: font, marginBottom: 4 }}>Kasih data: {converting.p.name || converting.p.handle}</div>
-            <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 16 }}>Jadi Lead Hot di Leads, prospek pindah ke ETB.</div>
-            <label htmlFor="cv-business" style={label}>Nama bisnis</label>
-            <input id="cv-business" value={converting.business} onChange={e => setConverting({ ...converting, business: e.target.value })} style={{ ...inputStyle, fontSize: 16, marginBottom: 12 }} />
-            <label htmlFor="cv-phone" style={label}>WhatsApp</label>
-            <input id="cv-phone" inputMode="tel" value={converting.phone} onChange={e => setConverting({ ...converting, phone: e.target.value })} placeholder="08…" style={{ ...inputStyle, fontSize: 16, marginBottom: 12 }} />
-            <label htmlFor="cv-email" style={label}>Email</label>
-            <input id="cv-email" type="email" value={converting.email} onChange={e => setConverting({ ...converting, email: e.target.value })} style={{ ...inputStyle, fontSize: 16, marginBottom: 12 }} />
-            <label htmlFor="cv-note" style={label}>Catatan</label>
-            <input id="cv-note" value={converting.note} onChange={e => setConverting({ ...converting, note: e.target.value })} placeholder="mis. butuh foto 20 menu, minggu depan" style={{ ...inputStyle, fontSize: 16, marginBottom: 16 }} />
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setConverting(null)} style={{ ...btnMuted, flex: 1, minHeight: 44 }}>Batal</button>
-              <button onClick={convert} disabled={busy || !(converting.phone.trim() || converting.email.trim())} style={{ ...btnPrimary, flex: 1, minHeight: 44, opacity: converting.phone.trim() || converting.email.trim() ? 1 : 0.5 }}>{busy ? "Menyimpan…" : "Simpan jadi Lead"}</button>
-            </div>
-            {!(converting.phone.trim() || converting.email.trim()) && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 8 }}>Isi WhatsApp atau email — itu yang bikin dia dihitung konversi.</div>}
-          </div>
-        </div>
+        <ConvertSheet p={converting} sessionId={sessionId} onClose={() => setConverting(null)}
+          onDone={m => { setConverting(null); setMsg(m); }} />
       )}
     </div>
   );
