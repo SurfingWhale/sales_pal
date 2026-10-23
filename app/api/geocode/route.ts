@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireUser, takeQuota } from "@/lib/serverAuth";
+import { Caller, requireUser, takeQuota } from "@/lib/serverAuth";
+import { giveBackMonthly, mayUse, takeMonthly } from "@/lib/access";
 import { GeoHit, PlaceText, isShortMapsLink, readPlace } from "@/lib/geo";
 
 export const runtime = "nodejs";
@@ -7,8 +8,9 @@ export const dynamic = "force-dynamic";
 
 // A lead's address, or a pasted map link, to a point on the map (PRD-013).
 // Words go to Google Places (New) when GOOGLE_PLACES_API_KEY is set: the same
-// key as Cari bisnis, and the best at business names. Without it, or when
-// Google says no, they go to OpenStreetMap's free geocoders, Photon then
+// key as Cari bisnis, and the best at business names. Only for those allowed to
+// spend the key (lib/access.ts, PRD-015) and within the month's free calls.
+// Otherwise, or when Google says no, they go to OpenStreetMap's free geocoders, Photon then
 // Nominatim: good for streets and areas, thinner on small businesses. A short
 // share link (maps.app.goo.gl/…) is opened here, since a browser cannot read
 // its redirect, and the point is read from where it leads.
@@ -21,7 +23,8 @@ const UA = "SalesPal/1.0 (+https://github.com/Untamed98x/sales_pal)";
 // Indonesia, so a free search for "Jl. Sudirman" stays in the country.
 const ID_BOX = "94.7,-11.2,141.1,6.3";
 
-async function google(q: string, key: string): Promise<GeoHit[]> {
+// null: Google could not answer (not the same as finding nothing).
+async function google(q: string, key: string): Promise<GeoHit[] | null> {
   try {
     const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
       method: "POST",
@@ -30,11 +33,11 @@ async function google(q: string, key: string): Promise<GeoHit[]> {
       signal: AbortSignal.timeout(8000),
     });
     const json = await res.json().catch(() => ({})) as { places?: { displayName?: { text?: string }; formattedAddress?: string; location?: { latitude?: number; longitude?: number } }[]; error?: { message?: string } };
-    if (!res.ok) { console.error("geocode: Google said no:", json.error?.message || res.statusText); return []; }
+    if (!res.ok) { console.error("geocode: Google said no:", json.error?.message || res.statusText); return null; }
     return (json.places || [])
       .filter(p => typeof p.location?.latitude === "number" && typeof p.location?.longitude === "number")
       .map(p => ({ lat: p.location!.latitude!, lng: p.location!.longitude!, label: p.displayName?.text || "", address: p.formattedAddress || "" }));
-  } catch { return []; }
+  } catch { return null; }
 }
 
 async function photon(q: string): Promise<GeoHit[]> {
@@ -68,11 +71,12 @@ async function nominatim(q: string): Promise<GeoHit[]> {
   } catch { return []; }
 }
 
-async function find(q: string): Promise<{ hits: GeoHit[]; source: Source }> {
+async function find(q: string, caller: Caller): Promise<{ hits: GeoHit[]; source: Source }> {
   const key = process.env.GOOGLE_PLACES_API_KEY;
-  if (key) {
+  if (key && (await mayUse(caller, "geocode")).ok && (await takeMonthly("geocode")).ok) {
     const hits = await google(q, key);
-    if (hits.length) return { hits, source: "google" };
+    if (!hits) await giveBackMonthly("geocode");
+    else if (hits.length) return { hits, source: "google" };
   }
   const hits = await photon(q);
   return { hits: hits.length ? hits : await nominatim(q), source: "osm" };
@@ -122,7 +126,7 @@ export async function POST(req: Request) {
     if (!words) return NextResponse.json({ error: "Link-nya ga bisa dibuka. Di Google Maps: buka tempatnya → Bagikan → Salin link, lalu tempel lagi di sini." }, { status: 422 });
   }
 
-  const { hits, source } = await find((words || q).slice(0, 160));
+  const { hits, source } = await find((words || q).slice(0, 160), caller);
   const seen = new Set<string>();
   const unique = hits.filter(h => { const k = `${h.lat.toFixed(4)},${h.lng.toFixed(4)}`; return !seen.has(k) && !!seen.add(k); });
   return NextResponse.json({ hits: unique.slice(0, 5), source });
