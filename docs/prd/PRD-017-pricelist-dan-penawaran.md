@@ -35,7 +35,27 @@ Biaya modal, vendor, dan catatan **tidak pernah dicetak** di PDF dan tidak perna
 - Paket berisi komponen beserta jumlahnya, mis. "Event 4 jam" = fotografer × 4 jam + editor × 1 + transport × 1.
 - **Harga paket** bisa manual, atau otomatis = jumlah harga jual komponennya.
 - **Margin** tampil langsung: harga paket − total biaya modal, dalam Rp dan %. Ada peringatan kalau di bawah target (bawaan 30%, bisa diubah).
-- **Bagian publik** (yang boleh tampil di situs): nama publik, harga "mulai dari", yang didapat klien, di luar scope, urutan, foto (opsional), dan **situs mana** (Visufavor · BeUntamed · UNTMD Sports) dengan pilihan tampil/sembunyi per situs.
+- **Bagian publik** (yang boleh tampil di situs): nama publik, yang didapat klien, di luar scope, urutan, foto (opsional), dan **situs mana** (Visufavor · BeUntamed · UNTMD Sports) dengan pilihan tampil/sembunyi per situs.
+
+### 3a. Dua harga, dengan ikon sync
+
+> "Buat situs mungkin bisa 'mulai dari'. Jadi ada dua komponen nih: satu di website, satu lagi list harga. Terus ada icon sync, jadi gw bisa sync, atau gw biarin harga product di SalesPal sekian, dan harga juga bisa di-call ke penawaran sampai invoicing." (owner, 23 Okt)
+
+Tiap paket punya dua harga:
+
+| Harga | Dipakai di | Siapa yang ubah |
+|---|---|---|
+| **Harga SalesPal** (list harga) | penawaran → invoice | SalesPal |
+| **Harga situs**, "mulai dari", satu per situs | tampilan di situs itu | SalesPal atau admin situs itu (dual control, §6) |
+
+- **Ikon sync** per situs, di samping harga situs:
+  - 🔗 **Terikat:** harga situs selalu sama dengan harga SalesPal. Diubah di mana pun, keduanya ikut berubah.
+  - **Lepas:** harga situs berdiri sendiri. Contoh: situs "mulai dari Rp 1,5 jt", sementara di SalesPal Rp 1,75 jt karena sudah termasuk transport. Ikonnya menunjukkan **"beda Rp 250rb"**. Tap ikonnya untuk memilih:
+    - **Pakai harga SalesPal di situs** (sekali);
+    - **Pakai harga situs di SalesPal** (sekali);
+    - **Ikat terus.**
+- **Daftar Paket** menampilkan semuanya dalam satu tabel: Paket · Harga SalesPal · Visufavor · UNTMD · BeUntamed. Tiap sel harga situs punya ikon sync-nya, jadi harga yang tidak sama kelihatan sekilas.
+- Paket baru: harga situs bawaannya **terikat**.
 - Data: `services` yang ada diperluas (komponen, bagian publik); `components` koleksi baru. **Keduanya ditambahkan ke `firestore.rules`**, dengan aturan yang sama seperti `services` (katalog bersama di guild) plus tesnya.
 
 ## 4. Penawaran berkomponen
@@ -50,6 +70,10 @@ Biaya modal, vendor, dan catatan **tidak pernah dicetak** di PDF dan tidak perna
   - Simpan penawaran jadi template ("Wedding full day", "Event 4 jam", "Foto menu 10 item"). Isinya item, yang didapat klien, di luar scope, termin, dan berlaku sampai.
   - Mulai dari **Penawaran baru → dari template**.
 - PDF ke klien tetap seperti sekarang: urutan sama, bagian yang kosong tidak dicetak, tanpa biaya modal, vendor, atau margin.
+- **Harga ikut sampai invoice:**
+  - Penawaran "dari paket" memakai **harga SalesPal**, bukan harga situs, beserta komponen dan biaya modalnya.
+  - Invoice dibuat dari penawaran yang disetujui (sudah ada: DP / termin / pelunasan) dan membawa item serta harga yang sama.
+  - Harga paket yang diubah belakangan **tidak** mengubah penawaran atau invoice yang sudah dibuat. Mereka menyimpan salinan saat dibuat (snapshot, PRD-011).
 
 ## 5. Editor yang tidak sempit
 
@@ -77,7 +101,8 @@ Situs tidak menyimpan salinan sendiri, jadi tidak pernah ada dua versi yang sali
   - Admin situs (sudah login dengan standar auth situsnya) → route **server** situs itu → `PUT /api/pricelist/{id}?site=…` di SalesPal.
   - Route itu memakai kunci rahasia per situs (`PRICELIST_KEY_<SITE>`), yang disimpan di env server situs dan SalesPal dan tidak pernah sampai ke browser.
   - Membuat paket baru dari situs boleh (`POST`). Menghapus cuma menyembunyikan dari situs itu; yang bisa menghapus permanen hanya SalesPal.
-- **Yang bisa diubah dari situs:** bagian publik paket **untuk situs itu**, yaitu nama publik, harga "mulai dari", yang didapat, di luar scope, urutan, dan tampil/sembunyi.
+- **Yang bisa diubah dari situs:** bagian publik paket **untuk situs itu**, yaitu nama publik, harga situs ("mulai dari"), yang didapat, di luar scope, urutan, dan tampil/sembunyi.
+  - Kalau harga situs itu **terikat** (§3a), mengubahnya dari situs ikut mengubah harga SalesPal, dan harga situs lain yang terikat. Kalau **lepas**, hanya harga situs itu yang berubah.
   - Komponen, biaya modal, vendor, dan catatan hanya bisa diubah di SalesPal.
   - Paket baru dari situs masuk SalesPal tanpa komponen dan ditandai **"belum ada biaya modal"** sampai dilengkapi.
 - **Bentrok:**
@@ -102,16 +127,17 @@ Situs tidak menyimpan salinan sendiri, jadi tidak pernah ada dua versi yang sali
 
 1. Komponen + biaya modal + margin di penawaran; item manual bisa disimpan ke katalog.
 2. Editor halaman penuh + ringkasan menempel + template penawaran.
-3. Bagian publik paket + endpoint baca & tulis (kunci per situs, `version`, riwayat) + standar di creative-hub naik ke v1 + pasang di Visufavor (baca + admin bisa ubah).
+3. Dua harga + ikon sync (§3a) + bagian publik paket + endpoint baca & tulis (kunci per situs, `version`, riwayat) + standar di creative-hub naik ke v1 + pasang di Visufavor (baca + admin bisa ubah).
 4. UNTMD Sports (tab Harga CMS baca/tulis ke SalesPal, harga lama dipindahkan), lalu BeUntamed (opsional).
 
 **Tes:**
-- flow `sell` diperluas: komponen, margin, item manual disimpan ke katalog, template, PDF tanpa biaya modal;
+- flow `sell` diperluas: komponen, margin, item manual disimpan ke katalog, template, PDF tanpa biaya modal, harga SalesPal terbawa dari paket → penawaran → invoice;
+- flow pricelist: ubah harga terikat → situs ikut berubah; lepas → "beda Rp X"; tap sync → sama lagi;
 - tes rules untuk `components`;
 - tes endpoint: paket yang tidak dipublikasikan dan field internal tidak pernah keluar.
 
 ## 8. Keputusan owner
 - ✅ **Dual control** (23 Okt): harga bisa diubah dari SalesPal dan dari admin tiap situs; datanya tetap satu di SalesPal (§6).
-1. Situs menampilkan "mulai dari" atau harga penuh per paket?
-2. BeUntamed menampilkan harga atau tidak?
-3. Target margin minimum (bawaan 30%).
+- ✅ **Situs menampilkan "mulai dari"** (23 Okt). Harga situs terpisah dari harga SalesPal, dengan ikon sync (terikat / lepas) per situs (§3a). Harga SalesPal yang dipakai sampai penawaran dan invoice.
+1. BeUntamed menampilkan harga atau tidak?
+2. Target margin minimum (bawaan 30%).
