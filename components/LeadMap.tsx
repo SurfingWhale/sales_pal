@@ -37,10 +37,10 @@ const css = `
 .sp-folder:active { transform: scale(0.97); }
 .sp-flap { transform-origin: 50% 100%; transform: rotateX(0deg); transition: transform .5s cubic-bezier(.2,0,0,1); }
 .sp-folder:focus-visible .sp-flap { transform: rotateX(-28deg); }
-.sp-sheet { position: absolute; top: 17%; left: 50%; width: 44%; aspect-ratio: 4/5; border-radius: 8px; overflow: hidden; background: var(--sheet); box-shadow: 0 0 0 1px rgba(0,0,0,0.06), 0 3px 8px rgba(0,0,0,0.09); transform-origin: 50% 100%; transition: transform .5s cubic-bezier(.2,0,0,1); }
-.sp-sheet.s1 { transform: translateX(calc(-50% - 11%)) rotate(-4deg); transition-delay: 30ms; }
-.sp-sheet.s2 { transform: translateX(-50%); }
-.sp-sheet.s3 { transform: translateX(calc(-50% + 11%)) rotate(4deg); transition-delay: 30ms; }
+.sp-fsheet { position: absolute; top: 17%; left: 50%; width: 44%; aspect-ratio: 4/5; border-radius: 8px; overflow: hidden; background: var(--sheet); box-shadow: 0 0 0 1px rgba(0,0,0,0.06), 0 3px 8px rgba(0,0,0,0.09); transform-origin: 50% 100%; transition: transform .5s cubic-bezier(.2,0,0,1); }
+.sp-fsheet.s1 { transform: translateX(calc(-50% - 11%)) rotate(-4deg); transition-delay: 30ms; }
+.sp-fsheet.s2 { transform: translateX(-50%); }
+.sp-fsheet.s3 { transform: translateX(calc(-50% + 11%)) rotate(4deg); transition-delay: 30ms; }
 .sp-folder:focus-visible .s1 { transform: translateX(-100%) translateY(-30%) rotate(-9deg); }
 .sp-folder:focus-visible .s2 { transform: translateX(-50%) translateY(-30%); }
 .sp-folder:focus-visible .s3 { transform: translateX(0%) translateY(-30%) rotate(9deg); }
@@ -52,7 +52,7 @@ const css = `
   .sp-folder:hover .s3 { transform: translateX(0%) translateY(-30%) rotate(9deg); }
   .sp-folder:hover .arrow { transform: translate(1px, -1px); color: var(--app-text); }
 }
-@media (prefers-reduced-motion: reduce) { .sp-flap, .sp-sheet, .sp-folder, .sp-folder .arrow { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .sp-flap, .sp-fsheet, .sp-folder, .sp-folder .arrow { transition: none; } }
 .sp-only-phone { display: none; }
 /* Two views of the same leads: by potential, or where they are. */
 .sp-mapmode { display: flex; align-items: center; height: 44px; padding: 0 3px; border-radius: 999px; }
@@ -263,7 +263,7 @@ export default function LeadMap({ leads, onOpen, onAll, onAdd, onImport }: { lea
                 </svg>
                 <span aria-hidden="true" style={{ position: "absolute", inset: 0, zIndex: 1 }}>
                   {rows.slice(0, 3).map((l, i) => (
-                    <span key={l.id} className={`sp-sheet s${i + 1}`}>
+                    <span key={l.id} className={`sp-fsheet s${i + 1}`}>
                       <span style={{ display: "block", height: "40%", background: BAND[q] }} />
                       <span style={{ display: "block", padding: "8px 9px" }}>
                         <span style={{ display: "block", fontSize: 10, fontWeight: 600, lineHeight: 1.3, color: "var(--app-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.name}</span>

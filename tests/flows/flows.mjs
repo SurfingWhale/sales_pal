@@ -877,6 +877,28 @@ export const flows = [
         await card.getByRole("button", { name: "Tutup kartu lead" }).click();
         await map.getByRole("button", { name: "Potensi" }).click();
       });
+      await t.step("a lead opened from Beranda: its delete sheet sits inside the screen", async () => {
+        // The map's folder papers once shared the bottom sheets' class name and,
+        // with Beranda behind the lead, dragged every sheet half off the screen (23 Okt).
+        await stubMap(page);
+        await go(page, "Beranda");
+        const map = page.locator(isWide(page) ? ".sp-only-desk" : "section.sp-only-phone").filter({ has: page.getByRole("group", { name: "Mode peta" }) }).first();
+        await map.getByRole("button", { name: "Peta 3D" }).click();
+        await map.locator(".sp-pin").first().waitFor({ timeout: 15000 });
+        await map.locator(".sp-pin").first().click();
+        await map.getByRole("region", { name: /^Lead / }).getByRole("button", { name: "Buka lead" }).click();
+        await page.getByRole("button", { name: "Menu lead" }).first().click();
+        await page.getByRole("menuitem", { name: /Hapus lead/ }).click();
+        const sheet = page.getByRole("dialog", { name: "Hapus lead?" });
+        await sheet.waitFor();
+        await page.waitForTimeout(300);
+        const box = await sheet.boundingBox(), vw = page.viewportSize().width;
+        if (!box || box.x < 0 || box.x + box.width > vw + 1) throw new Error(`sheet at x=${box?.x}, width ${box?.width}, screen ${vw}`);
+        await sheet.getByRole("button", { name: "Batal" }).click();
+        await sheet.waitFor({ state: "detached" });
+        await page.keyboard.press("Escape");
+        await map.getByRole("button", { name: "Potensi" }).click().catch(() => {});
+      });
       await t.step("Perlu ditindak is a bounded queue: ten cards, the rest in a sheet that scrolls itself", async () => {
         await go(page, "Beranda");
         const queue = page.locator(".sp-todo");
@@ -1346,6 +1368,7 @@ export const flows = [
         await pane(page, "Kirim");
         await page.getByRole("button", { name: "Ambil target dari antrian" }).click();
         const q = page.getByRole("dialog", { name: "Ambil dari antrian" });
+        await q.getByRole("button", { name: "Tutup" }).waitFor();
         await q.getByRole("region", { name: "Baru, belum disapa" }).getByRole("button", { name: /^@kopibaru/ }).click();
         await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@kopibaru", null, { timeout: 10000 });
         await page.getByText(/^Dari antrian/).waitFor();

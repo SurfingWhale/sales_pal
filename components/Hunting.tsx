@@ -83,6 +83,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   // The cycle (owner, 23 Okt): one person's conversation, and who's next from a queue.
   const [threadId, setThreadId] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  const [queueAll, setQueueAll] = useState<string[]>([]);
   const [queued, setQueued] = useState<{ group: QueueGroup; ids: string[] } | null>(null);
   const [editDefaults, setEditDefaults] = useState(false);
   const allQuotes = useSpaceCollection<Quote>(space, "quotes");
@@ -471,7 +472,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   return (
     <div className="sp-hunt">
       {askSheet}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+      <div className="sp-page-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
         <div style={{ minWidth: 0, flex: "1 1 240px" }}>
           <div style={heading}>Hunting Mode</div>
           <div style={subheading}>Kirim DM, catat hasilnya sekali tap, dan lihat pesan mana yang beneran dibales.</div>
@@ -530,46 +531,60 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       })()}
       {picking && (
         <div className="modal-overlay" onClick={() => setPicking(false)}>
-          <div role="dialog" aria-modal="true" aria-labelledby="queue-h" onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 520 }}>
-            <div id="queue-h" style={{ fontSize: 17, fontWeight: 700, fontFamily: font }}>Ambil dari antrian</div>
-            <p style={{ fontSize: 13, color: "var(--app-muted)", margin: "4px 0 12px" }}>Pilih orangnya; abis kirim, tombol Berikutnya bawa orang selanjutnya dari grup yang sama.</p>
-            {QUEUE_GROUPS.map(g => {
-              const ps = queueGroup(prospects, g.id, now, strategy);
-              return (
-                <section key={g.id} aria-label={g.label} style={{ borderTop: "1px solid var(--app-border)", padding: "10px 0" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>{g.label} <span className="tabnum" style={{ color: "var(--app-muted)", fontWeight: 500 }}>{ps.length}</span></div>
-                    <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{g.id === "drop" ? `diem ${strategy.dropDays}+ hari` : g.hint}</div>
-                  </div>
-                  {ps.length > 0 && (
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                      {ps.slice(0, 8).map(p => {
-                        const q = silentDays(p, now);
-                        return (
-                          <button key={p.id} onClick={() => g.id === "drop" ? (setPicking(false), setThreadId(p.id)) : takeFrom(g.id, p)}
-                            style={{ ...chip, minHeight: 40, fontWeight: 600, color: "var(--app-text)" }}>
-                            {p.name || p.handle}{q !== null && q >= 2 ? <span style={{ color: "var(--app-muted)", fontWeight: 400 }}> · {q} hr</span> : null}
-                          </button>
-                        );
-                      })}
-                      {ps.length > 8 && <span style={{ fontSize: 12, color: "var(--app-muted)", alignSelf: "center" }}>+{ps.length - 8} lagi</span>}
+          <div role="dialog" aria-modal="true" aria-labelledby="queue-h" data-own-layout className="sp-queue" onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 520, padding: 0 }}>
+            <div className="sp-queue-head">
+              <div style={{ minWidth: 0 }}>
+                <h2 id="queue-h">Ambil dari antrian</h2>
+                <p>Pilih orangnya. Abis kirim, Berikutnya bawa orang selanjutnya dari grup yang sama.</p>
+              </div>
+              <button className="sp-x" onClick={() => setPicking(false)} aria-label="Tutup"><span><Icon name="close" size={13} stroke={2.4} /></span></button>
+            </div>
+            <div className="sp-queue-body">
+              {QUEUE_GROUPS.map(g => {
+                const ps = queueGroup(prospects, g.id, now, strategy);
+                const all = queueAll.includes(g.id);
+                return (
+                  <section key={g.id} aria-label={g.label} className="sp-queue-group">
+                    <div className="sp-queue-gh">
+                      <h3>{g.label} <span className="tabnum">{ps.length}</span></h3>
+                      <span>{g.id === "drop" ? `diem ${strategy.dropDays}+ hari` : g.hint}</span>
                     </div>
-                  )}
-                </section>
-              );
-            })}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
-              <button onClick={() => setPicking(false)} style={{ ...btnMuted, minHeight: 44 }}>Tutup</button>
+                    {ps.length === 0 ? <p className="empty">Kosong.</p> : (
+                      <ul>
+                        {ps.slice(0, all ? ps.length : 5).map(p => {
+                          const q = silentDays(p, now);
+                          const who = p.name || p.handle;
+                          return (
+                            <li key={p.id}>
+                              <button onClick={() => g.id === "drop" ? (setPicking(false), setThreadId(p.id)) : takeFrom(g.id, p)}>
+                                <span className="ini" aria-hidden="true">{who.replace(/^@/, "").slice(0, 2).toUpperCase()}</span>
+                                <span className="nm">{who}</span>
+                                {q !== null && q >= 2 && <span className="age tabnum">{q} hr</span>}
+                                <Icon name="chevronRight" size={16} />
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                    {ps.length > 5 && (
+                      <button className="more" aria-expanded={all} onClick={() => setQueueAll(all ? queueAll.filter(x => x !== g.id) : [...queueAll, g.id])}>
+                        {all ? "Ringkas" : `Lihat semua ${ps.length}`}
+                      </button>
+                    )}
+                  </section>
+                );
+              })}
             </div>
           </div>
         </div>
       )}
       <div id="hpane-kirim" role="tabpanel" aria-labelledby="hp-kirim" hidden={pane !== "kirim"}>
       {/* The hunt itself: who, where, which message */}
-      <div style={{ ...card, padding: 20, marginBottom: 20 }}>
+      <div className="sp-hunt-send" style={{ ...card, padding: 20, marginBottom: 20 }}>
         <label htmlFor="hunt-target" style={label}>Target</label>
-        <div style={{ display: "flex", gap: 8, marginBottom: pasteMsg || url ? 6 : 12 }}>
-          <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+        <div className="sp-target" style={{ marginBottom: pasteMsg || url ? 6 : 12 }}>
+          <div style={{ position: "relative", flex: "1 1 240px", minWidth: 0 }}>
             <input id="hunt-target" ref={targetRef} value={target}
               onPaste={e => { const v = e.clipboardData.getData("text"); if (/https?:\/\//.test(v) && apply(v)) e.preventDefault(); }}
               onChange={e => {
@@ -583,10 +598,12 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
               style={{ position: "absolute", right: 2, top: "50%", transform: "translateY(-50%)", width: 40, height: 40, border: "none", background: "none", color: "var(--app-muted)", fontSize: 18, cursor: "pointer" }}>×</button>}
           </div>
           {/* Phones can't paste into a field as easily; a mouse and keyboard can (⌘V), with no extra prompt. */}
-          <button onClick={() => setPicking(true)} aria-label="Ambil target dari antrian" style={{ ...chip, flexShrink: 0, minHeight: 44, padding: "0 12px", fontSize: 12, fontWeight: 700, color: "var(--brand-text)" }}>☰ Antrian</button>
-          <button onClick={pasteLink} className="touch-only" aria-label="Tempel link profil dari clipboard" style={{ ...chip, flexShrink: 0, minHeight: 44, padding: "0 12px", fontSize: 12, fontWeight: 700, color: "var(--app-text)" }}>📋 Tempel link</button>
+          <div className="sp-target-acts">
+            <button onClick={() => setPicking(true)} aria-label="Ambil target dari antrian" style={{ ...chip, flexShrink: 0, minHeight: 44, padding: "0 12px", fontSize: 13, fontWeight: 700, color: "var(--brand-text)" }}><Icon name="list" size={16} />Antrian</button>
+            <button onClick={pasteLink} className="touch-only" aria-label="Tempel link profil dari clipboard" style={{ ...chip, flexShrink: 0, minHeight: 44, padding: "0 12px", fontSize: 13, fontWeight: 700, color: "var(--app-text)" }}><Icon name="clipboard" size={16} />Tempel link</button>
+          </div>
         </div>
-        {url && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>🔗 {url}</div>}
+        {url && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}><Icon name="link" size={14} style={{ flexShrink: 0 }} /><span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{url}</span></div>}
         {queued && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>
             <span>Dari antrian <b style={{ color: "var(--app-text)" }}>{QUEUE_GROUPS.find(g => g.id === queued.group)!.label}</b> · {queued.ids.length} lagi</span>
@@ -595,12 +612,9 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
           </div>
         )}
         <div role="status" style={{ fontSize: 12, color: "color-mix(in srgb, #ff9900 55%, var(--app-text))", marginBottom: pasteMsg ? 12 : 0 }}>{pasteMsg}</div>
-        <div role="radiogroup" aria-label="Platform" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+        <div role="radiogroup" aria-label="Platform" className="sp-seg" style={{ marginBottom: 16 }}>
           {PLATFORMS.map(p => (
-            <button key={p} role="radio" aria-checked={platform === p} onClick={() => setPlatform(p)}
-              style={{ ...chip, minHeight: 36, padding: "8px 14px", fontSize: 12, fontWeight: 700, ...(platform === p ? { background: "#005eb0", color: "#fff", border: "1px solid #005eb0" } : {}) }}>
-              {p}
-            </button>
+            <button key={p} role="radio" aria-checked={platform === p} onClick={() => setPlatform(p)} className="sp-seg-btn"><span>{p}</span></button>
           ))}
         </div>
 
@@ -620,7 +634,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
           </div>
         )}
         {(curPost || source.kind === "post") && !isBlocked && (
-          <div role="radiogroup" aria-label="Kirim lewat" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
+          <div role="radiogroup" aria-label="Kirim lewat" className="sp-via" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
             <span style={{ fontSize: 12, color: "var(--app-muted)", marginRight: 2 }}>Kirim lewat</span>
             {([["post", "Balas di post"], ["dm", "DM"]] as [Channel, string][]).map(([k, l]) => (
               <button key={k} role="radio" aria-checked={channel === k} onClick={() => setChannel(k)}
@@ -632,7 +646,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         <TemplateBoard templates={templates} scores={scores} data={fillData} stage={stageFor(cur, cur ? view(cur, now, strategy) : undefined)}
           blocked={isBlocked} copiedId={copiedId} copyFail={copyFail} onPick={pick} canEdit={canEdit} send={sendOut}
           sampleName={target.trim() ? (cur?.name || target.trim()) : ""}
-          extra={<button onClick={() => setEditDefaults(true)} aria-label="Default kalau kosong" style={chip}>⚙ Default kosong</button>} />
+          extra={<button onClick={() => setEditDefaults(true)} aria-label="Default kalau kosong" style={{ ...chip, display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="sliders" size={15} />Default kosong</button>} />
 
         {/* Mounted before its text, so screen readers announce "Tercatat". */}
         <div role="status">

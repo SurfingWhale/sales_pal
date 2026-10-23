@@ -1003,3 +1003,65 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .sp-sec > h3, .sp-sec-h { font-size: var(--fs-section); font-weight: 600; margin: 0 0 var(--sp-1); }
 /* A faint dot grid behind a hero or an empty state (≤ 4% contrast). */
 .sp-grid-bg { background-image: radial-gradient(color-mix(in srgb, var(--app-text) 9%, transparent) 1px, transparent 1.2px); background-size: 16px 16px; }
+
+/* ---- Segmented control (Beranda modes, Hunting platform): a 36px track
+   and a 32px thumb inside a 44px tap row. Tabs mark the pick with
+   aria-selected, radios with aria-checked. ---- */
+.sp-seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; max-width: 440px; margin-bottom: clamp(16px, 3vw, 28px); padding: 0 2px; }
+.sp-seg::before { content: ""; position: absolute; inset: 4px 0; border-radius: 9px; background: color-mix(in srgb, var(--app-text) 7%, transparent); }
+.sp-seg-btn { position: relative; min-width: 0; height: 44px; padding: 6px 0; border: 0; background: none; cursor: pointer; color: var(--app-ink-2); font: 500 13px 'Plus Jakarta Sans', sans-serif; }
+.sp-seg-btn > span { display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 6px; border-radius: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: background-color .18s ease; }
+.sp-seg-btn:is([aria-selected="true"], [aria-checked="true"]) { color: var(--app-text); font-weight: 600; }
+.sp-seg-btn:is([aria-selected="true"], [aria-checked="true"]) > span { background: var(--thumb); box-shadow: 0 1px 2px rgba(15,30,60,0.10), 0 2px 6px rgba(15,30,60,0.06); }
+@media (prefers-reduced-motion: reduce) { .sp-seg-btn > span { transition: none; } }
+
+/* ---- Hunting: Kirim and the queue sheet ---- */
+.sp-target { display: flex; gap: 8px; flex-wrap: wrap; }
+.sp-target-acts { display: flex; gap: 8px; }
+.sp-target-acts > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+/* The queue: a sheet with its own header and ✕, then one list per group,
+   rows split by hairlines (docs/standards/design.md §2). */
+.sp-queue { display: flex; flex-direction: column; overflow: hidden !important; }
+.sp-queue-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: flex-start; gap: 8px; padding: 16px 8px 12px 20px; background: var(--app-card); box-shadow: inset 0 -1px 0 var(--app-border); }
+.sp-queue-head h2 { margin: 0; font-size: var(--fs-section); font-weight: 700; }
+.sp-queue-head p { margin: 4px 0 0; font-size: var(--fs-meta); color: var(--app-muted); }
+.sp-x { flex-shrink: 0; width: 44px; height: 44px; margin-left: auto; padding: 0; border: 0; background: transparent; color: var(--app-ink-2); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.sp-x > span { width: 30px; height: 30px; border-radius: 50%; background: var(--glass-btn); display: flex; align-items: center; justify-content: center; }
+.sp-queue-body { overflow-y: auto; overscroll-behavior: contain; padding: 4px 0 16px; }
+.sp-queue-group { padding: 12px 0 4px; }
+.sp-queue-group + .sp-queue-group { box-shadow: inset 0 1px 0 var(--app-border); }
+.sp-queue-gh { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; padding: 0 20px 4px; }
+.sp-queue-gh h3 { flex-shrink: 0; }
+.sp-queue-gh h3 { margin: 0; font-size: var(--fs-body); font-weight: 700; }
+.sp-queue-gh h3 span { color: var(--app-muted); font-weight: 500; }
+.sp-queue-gh > span { flex: 1 1 160px; font-size: var(--fs-meta); color: var(--app-muted); text-align: end; }
+.sp-queue ul { list-style: none; margin: 0; padding: 0; }
+.sp-queue li button { width: 100%; min-height: 52px; display: flex; align-items: center; gap: 12px; padding: 4px 16px 4px 20px; border: 0; background: none; color: var(--app-text); text-align: start; font-family: inherit; cursor: pointer; }
+.sp-queue li + li button { box-shadow: inset 52px 1px 0 -51px var(--app-border); }
+.sp-queue .ini { flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--fs-micro); font-weight: 700; background: var(--app-inner); color: var(--app-ink-2); }
+.sp-queue .nm { flex: 1; min-width: 0; font-size: var(--fs-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-queue .age { flex-shrink: 0; font-size: var(--fs-meta); color: var(--app-muted); }
+.sp-queue li button > svg { flex-shrink: 0; color: var(--app-muted); }
+.sp-queue .more { min-height: 44px; margin: 0 20px; padding: 0; border: 0; background: none; color: var(--brand-text); font: 600 var(--fs-meta) 'Plus Jakarta Sans', sans-serif; cursor: pointer; }
+.sp-queue .empty { margin: 0; padding: 4px 20px 8px; font-size: var(--fs-meta); color: var(--app-muted); }
+@media (hover: hover) and (pointer: fine) { .sp-queue li button:hover { background: var(--app-inner); } }
+@media (max-width: 640px) {
+  .sp-queue { height: 100dvh; }
+  .sp-queue-head { padding-top: calc(env(safe-area-inset-top, 0px) + 12px); }
+  .sp-queue-body { flex: 1; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); }
+  /* Kirim on a phone: the field gets the whole row, its two helpers share the next. */
+  .sp-target > :first-child { flex-basis: 100% !important; }
+  .sp-target-acts { width: 100%; }
+  .sp-target-acts > button { flex: 1; }
+  /* The hunt is the page, not a box on it. */
+  .sp-hunt-send { background: transparent !important; border: 0 !important; padding: 0 !important; border-radius: 0 !important; }
+  .sp-hunt-panes { background: color-mix(in srgb, var(--app-text) 7%, var(--app-bg)) !important; border: 0 !important; border-radius: 10px !important; }
+  :is(.sp-hunt .sp-page-head, .sp-hunt .sp-target-acts, .sp-hunt .sp-tpl-tools, .sp-hunt .sp-tpl-stages, .sp-hunt .sp-via, .sp-hunt .sp-tpl-acts) button {
+    height: 44px !important; min-height: 44px !important; padding: 0 12px !important;
+    border: 0 solid transparent !important; border-block-width: 6px !important; background-clip: padding-box !important;
+    border-radius: 14px !important; font-size: 13px !important; line-height: 1 !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 26%, transparent) !important;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .sp-hunt .sp-tpl-stages { gap: 6px !important; }
+}
