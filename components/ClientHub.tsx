@@ -117,7 +117,7 @@ export default function ClientHub() {
             {([["pipeline", "Chat & Deal"], ["konten", "Konten"], ["report", "Report"]] as const).map(([v, l]) => (
               <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)}
                 style={{ flex: 1, padding: "9px 6px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 700, fontFamily: font,
-                  background: view === v ? "var(--app-card)" : "transparent", color: view === v ? "#005eb0" : "var(--app-muted)",
+                  background: view === v ? "var(--app-card)" : "transparent", color: view === v ? "var(--brand-text)" : "var(--app-muted)",
                   boxShadow: view === v ? "0 1px 3px rgba(0,0,0,0.08)" : "none" }}>
                 {l}
               </button>

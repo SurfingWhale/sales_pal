@@ -17,8 +17,9 @@ export const btnPrimary: CSSProperties = {
   fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: font,
 };
 
+// Brand blue as a token: #005eb0 on light, a lighter blue on dark (raw #005eb0 on dark fails AA).
 export const btnGhost: CSSProperties = {
-  ...btnPrimary, background: "transparent", color: "#005eb0", border: "1px solid #005eb0",
+  ...btnPrimary, background: "transparent", color: "var(--brand-text)", border: "1px solid var(--brand-text)",
 };
 
 export const btnMuted: CSSProperties = {

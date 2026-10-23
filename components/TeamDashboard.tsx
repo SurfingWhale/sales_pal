@@ -21,7 +21,7 @@ import ReportPaper from "@/components/ReportPaper";
 import type { Outreach, Rejection } from "@/components/TeamLogs";
 import ActivityLog from "@/components/ActivityLog";
 import { Avatar } from "@/components/GuildHub";
-import { card, chip, font, heading, ink, subheading } from "@/components/ui";
+import { card, chip, heading, ink, subheading } from "@/components/ui";
 
 const GOOD = "#00a862", BAD = "#dc2626", WARN = "#b45309";
 const dayLabel = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("id-ID", { day: "numeric", month: "short" });
@@ -92,7 +92,7 @@ export default function TeamDashboard({ hunts, quotes, invoices, outreach, rejec
       <div>
         <div style={heading}>{title}</div>
         <div style={{ ...subheading, marginBottom: 16 }}>Siapa ngerjain apa, dan jadinya apa.</div>
-        <div style={{ ...card, padding: "36px 22px", textAlign: "center" }}>
+        <div className="sp-grid-bg" style={{ ...card, padding: "36px 22px", textAlign: "center" }}>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ada yang bisa dihitung</div>
           <div style={{ fontSize: 13, color: "var(--app-muted)", marginBottom: 18, maxWidth: 440, marginInline: "auto", lineHeight: 1.55 }}>
             Begitu ada DM, balasan, penawaran, atau pembayaran, angkanya muncul di sini, per orang dan per hari.
@@ -103,16 +103,23 @@ export default function TeamDashboard({ hunts, quotes, invoices, outreach, rejec
     );
   }
 
-  const tiles: [string, string, ReturnType<typeof change>, string?][] = [
-    ["Aktivitas", String(s.activities), change(s.activities, p.activities)],
-    ["Prospek baru", String(s.prospects), change(s.prospects, p.prospects)],
-    ["DM terkirim", String(s.dms), change(s.dms, p.dms)],
-    ["Dibales", pct(rateOf(s.replies, s.dms)), rateChange(rateOf(s.replies, s.dms), rateOf(p.replies, p.dms)), `${s.replies} balasan`],
-    ["Jadi ETB", String(s.etb), change(s.etb, p.etb), `${pct(rateOf(s.etb, s.dms))} dari DM`],
-    ["Penawaran dikirim", String(s.quotesSent), change(s.quotesSent, p.quotesSent)],
-    ["Closing", String(s.won), change(s.won, p.won), "penawaran diterima"],
-    ["Uang masuk", rupiah(s.paid), change(s.paid, p.paid, "money")],
+  // The one number that matters most this period (docs/standards/design.md §1):
+  // money in, else closings, else how much work was done.
+  const all: { key: string; label: string; value: string; ch: ReturnType<typeof change>; sub?: string }[] = [
+    { key: "paid", label: "Uang masuk", value: rupiah(s.paid), ch: change(s.paid, p.paid, "money") },
+    { key: "won", label: "Closing", value: String(s.won), ch: change(s.won, p.won), sub: "penawaran diterima" },
+    { key: "activities", label: "Aktivitas", value: String(s.activities), ch: change(s.activities, p.activities) },
+    { key: "prospects", label: "Prospek baru", value: String(s.prospects), ch: change(s.prospects, p.prospects) },
+    { key: "dms", label: "DM terkirim", value: String(s.dms), ch: change(s.dms, p.dms) },
+    { key: "replies", label: "Dibales", value: pct(rateOf(s.replies, s.dms)), ch: rateChange(rateOf(s.replies, s.dms), rateOf(p.replies, p.dms)), sub: `${s.replies} balasan` },
+    { key: "etb", label: "Jadi ETB", value: String(s.etb), ch: change(s.etb, p.etb), sub: `${pct(rateOf(s.etb, s.dms))} dari DM` },
+    { key: "quotes", label: "Penawaran dikirim", value: String(s.quotesSent), ch: change(s.quotesSent, p.quotesSent) },
   ];
+  const heroKey = s.paid > 0 ? "paid" : s.won > 0 ? "won" : "activities";
+  const hero = all.find(x => x.key === heroKey)!;
+  const strip = all.filter(x => x.key !== heroKey);
+  const tone = (ch: ReturnType<typeof change>) => (ch.dir > 0 ? ink(GOOD) : ch.dir < 0 ? ink(BAD) : "var(--app-muted)");
+  const arrow = (ch: ReturnType<typeof change>) => (ch.dir > 0 ? "▲ " : ch.dir < 0 ? "▼ " : "");
   const funnel: [string, number][] = [["Prospek baru", s.prospects], ["DM terkirim", s.dms], ["Dibales", s.replies], ["Jadi ETB", s.etb], ["Penawaran dikirim", s.quotesSent], ["Closing", s.won]];
   const fMax = Math.max(1, ...funnel.map(f => f[1]));
 
@@ -147,37 +154,44 @@ export default function TeamDashboard({ hunts, quotes, invoices, outreach, rejec
         <button onClick={() => setPaper(true)} style={{ ...chip, minHeight: 36, fontSize: 13, fontWeight: 700, color: "var(--brand-text)", marginLeft: "auto" }}>PDF laporan</button>
       </div>
 
-      <section aria-label="Angka utama" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(max(150px, calc((100% - 30px) / 4)), 1fr))", gap: 10, marginBottom: 12 }}>
-        {tiles.map(([label, value, ch, sub]) => (
-          <div key={label} style={{ ...card, padding: "12px 14px" }}>
-            <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{label}</div>
-            <div className="tabnum" style={{ fontSize: value.length > 9 ? 19 : 24, fontWeight: 700, fontFamily: font, lineHeight: 1.25, marginTop: 2, overflowWrap: "anywhere" }}>{value}</div>
-            <div style={{ fontSize: 12, marginTop: 4, color: ch.dir > 0 ? ink(GOOD) : ch.dir < 0 ? ink(BAD) : "var(--app-muted)" }}>
-              <span aria-hidden="true">{ch.dir > 0 ? "▲ " : ch.dir < 0 ? "▼ " : ""}</span>{ch.text}
-              <span style={{ color: "var(--app-muted)" }}> vs sebelumnya</span>
+      <section aria-label="Angka utama">
+        <p style={{ margin: "var(--sp-5) 0 var(--sp-5)", display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: "var(--sp-3)", rowGap: "var(--sp-1)" }}>
+          <span className="num" style={{ fontSize: "var(--fs-num-hero)", color: "var(--app-text)" }}>{hero.value}</span>
+          <span style={{ fontSize: "var(--fs-section)", fontWeight: 600 }}>{hero.label.toLowerCase()}</span>
+          <span style={{ flexBasis: "100%", fontSize: "var(--fs-body)", color: tone(hero.ch) }}>
+            <span aria-hidden="true">{arrow(hero.ch)}</span>{hero.ch.text}<span style={{ color: "var(--app-muted)" }}> dibanding {rangeLabel(prev)}</span>
+          </span>
+        </p>
+        <div className="sp-strip">
+          {strip.map(x => (
+            <div key={x.key}>
+              <div style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)" }}>{x.label}</div>
+              <div className="num" style={{ fontSize: "var(--fs-num)", marginTop: "var(--sp-2)", overflowWrap: "anywhere" }}>{x.value}</div>
+              <div style={{ fontSize: "var(--fs-meta)", marginTop: "var(--sp-2)", color: tone(x.ch) }}>
+                <span aria-hidden="true">{arrow(x.ch)}</span>{x.ch.text}{x.sub && <span style={{ color: "var(--app-muted)" }}> · {x.sub}</span>}
+              </div>
             </div>
-            {sub && <div style={{ fontSize: 11, color: "var(--app-muted)", marginTop: 2 }}>{sub}</div>}
-          </div>
-        ))}
+          ))}
+        </div>
       </section>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 12, marginBottom: 12 }}>
-        <section aria-labelledby="dash-trend" style={{ ...card, padding: 16 }}>
-          <h3 id="dash-trend" style={{ margin: "0 0 10px", fontSize: 15, fontWeight: 700 }}>Aktivitas per hari</h3>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", columnGap: "var(--sp-6)" }}>
+        <section aria-labelledby="dash-trend" className="sp-sec">
+          <h3 id="dash-trend" style={{ marginBottom: "var(--sp-3)" }}>Aktivitas per hari</h3>
           <TrendChart data={trend} />
         </section>
-        <section aria-labelledby="dash-funnel" style={{ ...card, padding: 16 }}>
-          <h3 id="dash-funnel" style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 700 }}>Funnel periode ini</h3>
-          <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 10 }}>Dihitung dari kejadian di periode ini, persen = dari tahap sebelumnya.</div>
-          <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+        <section aria-labelledby="dash-funnel" className="sp-sec">
+          <h3 id="dash-funnel">Funnel periode ini</h3>
+          <div style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)", marginBottom: "var(--sp-3)" }}>Kejadian di periode ini; persen dari tahap sebelumnya.</div>
+          <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {funnel.map(([label, n], i) => (
-              <li key={label} style={{ display: "grid", gridTemplateColumns: "118px 1fr auto", alignItems: "center", gap: 10, fontSize: 13 }}>
+              <li key={label} style={{ display: "grid", gridTemplateColumns: "130px 1fr 84px", alignItems: "center", gap: "var(--sp-3)", fontSize: "var(--fs-body)", padding: "var(--sp-2) 0", borderTop: i ? "1px solid var(--app-border)" : 0 }}>
                 <span>{label}</span>
-                <span style={{ height: 10, borderRadius: 4, background: "var(--app-inner)", overflow: "hidden" }}>
+                <span style={{ height: 8, borderRadius: 4, background: "var(--app-inner)", overflow: "hidden" }}>
                   <span style={{ display: "block", height: "100%", width: `${(n / fMax) * 100}%`, minWidth: n ? 4 : 0, borderRadius: 4, background: "var(--heat-3)" }} />
                 </span>
-                <span className="tabnum" style={{ minWidth: 72, textAlign: "right" }}>
-                  <b>{n}</b>{i > 0 && <span style={{ color: "var(--app-muted)" }}> · {pct(rateOf(n, funnel[i - 1][1]))}</span>}
+                <span className="tabnum" style={{ textAlign: "right" }}>
+                  <b>{n}</b>{i > 0 && <span style={{ color: "var(--app-muted)", fontSize: "var(--fs-meta)" }}> · {pct(rateOf(n, funnel[i - 1][1]))}</span>}
                 </span>
               </li>
             ))}
@@ -186,24 +200,24 @@ export default function TeamDashboard({ hunts, quotes, invoices, outreach, rejec
       </div>
 
       {manager && (
-        <section aria-labelledby="dash-people" style={{ ...card, padding: 16, marginBottom: 12 }}>
-          <h3 id="dash-people" style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 700 }}>Per sales</h3>
-          <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 10 }}>Tap satu orang buat liat dashboard, heat map, dan log-nya.</div>
-          <div className="sp-dash-row sp-dash-head" aria-hidden="true" style={{ fontSize: 11, color: "var(--app-muted)", padding: "0 10px 6px" }}>
+        <section aria-labelledby="dash-people" className="sp-sec">
+          <h3 id="dash-people">Per sales</h3>
+          <div style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)", marginBottom: "var(--sp-3)" }}>Tap satu orang buat liat dashboard, heat map, dan log-nya.</div>
+          <div className="sp-dash-row sp-dash-head" aria-hidden="true" style={{ fontSize: "var(--fs-micro)", color: "var(--app-muted)", padding: "0 var(--sp-2) var(--sp-2)", borderBottom: "1px solid var(--app-line-strong)" }}>
             <span>Sales</span><span>Aktivitas</span><span>DM</span><span>Dibales</span><span>ETB</span><span>Penawaran</span><span>Closing</span><span>Uang masuk</span><span>Terakhir aktif</span>
           </div>
-          <div style={{ display: "grid", gap: 6 }}>
+          <div>
             {rows.map(({ x, s: r }) => {
               const sel = who === x.uid;
               const late = daysSince(r.lastAt) >= 3;
               return (
                 <button key={x.uid} onClick={() => open(x.uid)} aria-pressed={sel}
                   aria-label={`${x.name}: ${r.activities} aktivitas, ${r.dms} DM, ${r.won} closing, ${rupiah(r.paid)}, terakhir aktif ${ago(r.lastAt)}`}
-                  className="sp-dash-row lift" style={{ width: "100%", textAlign: "left", padding: 10, borderRadius: 12, cursor: "pointer", fontFamily: "inherit", color: "var(--app-text)",
-                    background: sel ? "var(--brand-tint)" : "var(--app-card)", border: `1px solid ${sel ? "var(--app-line-strong)" : "var(--app-border)"}` }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  className="sp-dash-row" style={{ width: "100%", textAlign: "left", padding: "var(--sp-3) var(--sp-2)", border: 0, borderBottom: "1px solid var(--app-border)", borderRadius: 0, cursor: "pointer", fontFamily: "inherit", color: "var(--app-text)",
+                    background: sel ? "var(--brand-tint)" : "transparent", boxShadow: sel ? "inset 3px 0 0 var(--brand-text)" : "none" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", minWidth: 0 }}>
                     <Avatar role={x.role} pick={x.avatar} size={30} />
-                    <span style={{ fontWeight: 700, fontSize: 14, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.name}{x.uid === me ? " (kamu)" : ""}</span>
+                    <span style={{ fontWeight: 600, fontSize: "var(--fs-body)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.name}{x.uid === me ? " (kamu)" : ""}</span>
                   </span>
                   <Cell l="Aktivitas" v={r.activities} />
                   <Cell l="DM" v={r.dms} />
@@ -212,27 +226,44 @@ export default function TeamDashboard({ hunts, quotes, invoices, outreach, rejec
                   <Cell l="Penawaran" v={r.quotesSent} />
                   <Cell l="Closing" v={r.won} />
                   <Cell l="Uang masuk" v={rupiah(r.paid)} />
-                  <span data-l="Terakhir aktif" style={{ fontSize: 12, color: late ? ink(WARN) : "var(--app-muted)", fontWeight: late ? 700 : 400 }}>{ago(r.lastAt)}</span>
+                  <span data-l="Terakhir aktif" style={{ fontSize: "var(--fs-meta)", color: late ? ink(WARN) : "var(--app-muted)", fontWeight: late ? 600 : 400 }}>{ago(r.lastAt)}</span>
                 </button>
               );
             })}
           </div>
           {quiet.length > 0 && (
-            <div role="note" style={{ marginTop: 10, fontSize: 13, padding: "8px 10px", borderRadius: 10, background: "#b453090f", border: "1px solid #b4530940" }}>
+            <p role="note" style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--fs-meta)" }}>
               <b style={{ color: ink(WARN) }}>Perlu dicek:</b> {quiet.map(r => `${r.x.name} (${ago(r.s.lastAt)})`).join(", ")}, ga ada aktivitas 3 hari atau lebih.
-            </div>
+            </p>
           )}
         </section>
       )}
 
-      {space.kind === "guild" ? (
-        <button onClick={() => onGo("Guild")} style={{ ...chip, minHeight: 44, fontSize: 13, marginBottom: 16, color: "var(--brand-text)", fontWeight: 600 }}>Target &amp; pipeline guild ada di Report Tim →</button>
-      ) : (
-        <div style={{ ...card, padding: "12px 14px", marginBottom: 16, fontSize: 13, color: "var(--app-muted)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ flex: "1 1 220px" }}>Jualan bareng tim? Bikin guild, semua anggota kelihatan di sini per orang.</span>
-          <button onClick={() => onGo("Guild")} style={{ ...chip, minHeight: 40, fontWeight: 700, color: "var(--brand-text)" }}>Ke Guild</button>
-        </div>
-      )}
+      <div className="sp-sec" style={{ display: "flex", gap: "var(--sp-3)", alignItems: "center", flexWrap: "wrap", fontSize: "var(--fs-meta)", color: "var(--app-muted)", marginBottom: "var(--sp-5)" }}>
+        {space.kind === "guild" ? (
+          <button onClick={() => onGo("Guild")} style={{ ...chip, minHeight: 44, fontSize: "var(--fs-meta)", color: "var(--brand-text)", fontWeight: 600 }}>Target &amp; pipeline guild ada di Report Tim →</button>
+        ) : (
+          <>
+            <span style={{ flex: "1 1 220px" }}>Jualan bareng tim? Bikin guild, semua anggota kelihatan di sini per orang.</span>
+            <button onClick={() => onGo("Guild")} style={{ ...chip, minHeight: 40, fontWeight: 700, color: "var(--brand-text)" }}>Ke Guild</button>
+          </>
+        )}
+      </div>
+
+      {paper && (() => {
+        const periodLabel = PERIODS.find(x => x.id === period)!.label;
+        const name = person ? person.name : manager ? space.name : space.me.name;
+        const doc = dashboardDoc({
+          title: name, team: manager && !who, period: periodLabel, cur, prev, s, p, trend,
+          rows: rows.map(r => ({ name: r.x.name, s: r.s })), quiet: quiet.map(r => ({ name: r.x.name, lastAt: r.s.lastAt })),
+        });
+        const stamp = period === "month" || period === "lastMonth" ? cur.from.slice(0, 7) : `${cur.from}_${cur.to}`;
+        return (
+          <ReportShell title={`Laporan ${name} · ${periodLabel}`} fileName={reportName(`Dashboard ${name}`, stamp)} doc={doc} onClose={() => setPaper(false)}>
+            <ReportPaper doc={doc} />
+          </ReportShell>
+        );
+      })()}
 
       {paper && (() => {
         const periodLabel = PERIODS.find(x => x.id === period)!.label;

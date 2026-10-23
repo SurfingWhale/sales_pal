@@ -1414,7 +1414,7 @@ export const flows = [
         await page.getByRole("heading", { level: 1, name: /closing/ }).waitFor();
         await page.getByRole("region", { name: "Hunting, 30 hari" }).waitFor();
         await page.getByRole("region", { name: "Pipeline lead, sekarang" }).waitFor();
-        await page.getByRole("button", { name: /^Report Klien →/ }).click();
+        await page.getByRole("button", { name: /^Report Klien/ }).click();
         await page.locator(".sp-sub-btn.is-on", { hasText: "Report Klien" }).waitFor();
       });
       await t.step("Atur target: a sheet with Batal, a reason when empty, then saved", async () => {

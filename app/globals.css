@@ -968,3 +968,38 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   .sp-dash-row > :nth-child(8), .sp-dash-row > :nth-child(9) { grid-column: span 2; }
   .sp-dash-row [data-l]::before { content: attr(data-l); display: block; font-size: 11px; font-weight: 400; color: var(--app-muted); }
 }
+
+/* ---- Visual standard (docs/standards/design.md) ----
+   Six type sizes, a spacing scale, four radii; numbers in a strip, not boxes. */
+:root {
+  --fs-hero: 40px; --fs-title: 22px; --fs-section: 17px; --fs-body: 15px; --fs-meta: 13px; --fs-micro: 11px;
+  --fs-num-hero: 64px; --fs-num: 32px;   /* numbers in .num (Bebas Neue, condensed, so they run larger) */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
+  --r-s: 8px; --r-m: 12px; --r-l: 20px;
+}
+@media (max-width: 640px) { :root { --fs-hero: 34px; --fs-num-hero: 52px; --fs-num: 28px; } }
+/* Numbers side by side, split by hairlines: one line on a laptop, a grid on a phone. */
+.sp-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1px; background: var(--app-border); border-block: 1px solid var(--app-border); }
+.sp-strip > * { background: var(--app-bg); padding: var(--sp-4) var(--sp-4) var(--sp-4) 0; padding-inline-start: var(--sp-4); }
+.sp-strip > :first-child { padding-inline-start: 0; }
+@media (max-width: 640px) {
+  .sp-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sp-strip > :nth-child(odd) { padding-inline-start: 0; }
+  /* An odd count: the last number takes the whole row instead of leaving a grey hole. */
+  .sp-strip > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+/* Six numbers on a phone: three columns, two rows, not three rows of two. */
+@media (max-width: 640px) {
+  .sp-strip.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sp-strip.three > * { padding-inline: var(--sp-3) var(--sp-2); }
+  .sp-strip.three > :nth-child(3n+1) { padding-inline-start: 0; }
+  .sp-strip.three > :last-child { grid-column: auto; }
+}
+/* Two columns everywhere (a strip in a side column). */
+.sp-strip.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sp-strip.two > :nth-child(odd) { padding-inline-start: 0; }
+/* A section: a hairline above, its heading, then its content. No box. */
+.sp-sec { border-top: 1px solid var(--app-border); padding-top: var(--sp-5); margin-top: var(--sp-6); }
+.sp-sec > h3, .sp-sec-h { font-size: var(--fs-section); font-weight: 600; margin: 0 0 var(--sp-1); }
+/* A faint dot grid behind a hero or an empty state (≤ 4% contrast). */
+.sp-grid-bg { background-image: radial-gradient(color-mix(in srgb, var(--app-text) 9%, transparent) 1px, transparent 1.2px); background-size: 16px 16px; }

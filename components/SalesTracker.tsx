@@ -1377,7 +1377,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                     <button key={m} onClick={() => { setImportMode(m); resetParsed(); }}
                       style={{ flex: 1, minHeight: 40, padding: "9px 8px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: "inherit",
                         background: importMode === m ? "var(--app-card)" : "transparent",
-                        color: importMode === m ? "#005eb0" : "var(--app-muted)",
+                        color: importMode === m ? "var(--brand-text)" : "var(--app-muted)",
                         boxShadow: importMode === m ? "0 1px 3px rgba(0,0,0,0.08)" : "none" }}>
                       {label}
                     </button>

@@ -4,6 +4,7 @@ import { addDays, today } from "@/lib/billing";
 import type { Hunt } from "@/lib/hunting";
 import { HuntSession, Prospect, journey, rate, sessionMinutes } from "@/lib/prospects";
 import type { Numbers } from "@/components/Beranda";
+import Icon from "@/components/Icon";
 
 // Beranda, Report & closing (docs/prd/PRD-008 §6): how this month is going,
 // from the first DM to the money in, and the way to every detailed report.
@@ -13,33 +14,26 @@ const STAGES = ["Cold", "Warm", "Hot", "Closed"] as const;
 // Juta, like Beranda's numbers: "Rp 12,5 jt".
 const jt = (n: number) => (n / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: n >= 100_000_000 ? 0 : 1 });
 
-function Money({ n }: { n: number }) {
-  return (
-    <p style={{ margin: "14px 0 0", display: "flex", alignItems: "baseline", gap: 6 }}>
-      <span style={{ fontSize: 16, fontWeight: 600, color: "var(--app-muted)" }}>Rp</span>
-      <span className="num big">{jt(n)}</span>
-      <span style={{ fontSize: 16, fontWeight: 600, color: "var(--app-muted)" }}>jt</span>
-    </p>
-  );
-}
-
-function Funnel({ title, rows }: { title: string; rows: { label: string; n: number }[] }) {
+// A funnel as rows split by hairlines (docs/standards/design.md §2): label,
+// a bar against the first stage, the count and how many carried on.
+function Funnel({ id, title, rows }: { id: string; title: string; rows: { label: string; n: number }[] }) {
   const top = Math.max(1, rows[0]?.n || 0);
   return (
-    <section aria-label={title} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 20, padding: 20 }}>
-      <h3 style={{ margin: "0 0 14px", fontSize: 16, fontWeight: 600 }}>{title}</h3>
-      {rows.map((r, i) => (
-        <div key={r.label} style={{ marginTop: i ? 10 : 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13, marginBottom: 4 }}>
+    <section aria-labelledby={id} className="sp-sec">
+      <h3 id={id} style={{ marginBottom: "var(--sp-3)" }}>{title}</h3>
+      <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
+        {rows.map((r, i) => (
+          <li key={r.label} style={{ display: "grid", gridTemplateColumns: "minmax(96px, 130px) 1fr minmax(72px, auto)", alignItems: "center", gap: "var(--sp-3)", fontSize: "var(--fs-body)", padding: "var(--sp-2) 0", borderTop: i ? "1px solid var(--app-border)" : 0 }}>
             <span>{r.label}</span>
-            <span className="tabnum" style={{ fontWeight: 600 }}>{r.n}{i > 0 ? <span style={{ color: "var(--app-muted)", fontWeight: 400 }}> · {rate(r.n, rows[i - 1].n)}</span> : null}</span>
-          </div>
-          <div aria-hidden="true" style={{ height: 8, borderRadius: 999, background: "var(--app-inner)", overflow: "hidden" }}>
-            <div style={{ width: `${(r.n / top) * 100}%`, height: "100%", borderRadius: 999, background: i === rows.length - 1 ? "#00a862" : "#005eb0" }} />
-          </div>
-        </div>
-      ))}
-      <p style={{ margin: "12px 0 0", fontSize: 12, color: "var(--app-muted)" }}>Angka di samping = lanjut dari tahap sebelumnya. Di bawah 10 ditulis &quot;X dari Y&quot;.</p>
+            <span aria-hidden="true" style={{ height: 8, borderRadius: 4, background: "var(--app-inner)", overflow: "hidden" }}>
+              <span style={{ display: "block", height: "100%", width: `${(r.n / top) * 100}%`, minWidth: r.n ? 4 : 0, borderRadius: 4, background: i === rows.length - 1 ? "var(--ok)" : "var(--heat-3)" }} />
+            </span>
+            <span className="tabnum" style={{ textAlign: "right" }}>
+              <b>{r.n}</b>{i > 0 && <span style={{ color: "var(--app-muted)", fontSize: "var(--fs-meta)" }}> · {rate(r.n, rows[i - 1].n)}</span>}
+            </span>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
@@ -68,66 +62,71 @@ export default function BerandaReport({ now, numbers, paid, receivable, leadsByS
     ["Rejection Log", "Rejection Log", "Yang nolak & kapan coba lagi"],
   ];
 
+  const strip: { k: string; v: string; money?: boolean; sub: string }[] = [
+    { k: "Uang masuk", v: jt(paid), money: true, sub: "bulan ini" },
+    { k: "Belum tertagih", v: jt(receivable), money: true, sub: "sisa invoice" },
+    { k: "DM terkirim", v: String(week.length), sub: "7 hari" },
+    { k: "Dibales", v: rate(weekReplied, week.length), sub: "dari DM 7 hari" },
+    { k: "Tertarik", v: String(weekInterested), sub: "7 hari" },
+    { k: "Jam hunting", v: weekHours.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 }), sub: "7 hari" },
+  ];
+
+  // One hero (design.md §1): the month's closings against the target, in a
+  // sentence; the money and the week sit in the strip under it.
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       <h1 className="sp-b-h1">
         {monthLabel}: {numbers.closedThisMonth} closing{numbers.closingTarget ? ` dari target ${numbers.closingTarget}` : ""}.
       </h1>
-
-      <section aria-label="Bulan ini" className="sp-kpis">
-        <div className="sp-kpi">
-          <p className="lbl" style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "var(--app-muted)" }}>Closing bulan ini</p>
-          <p style={{ margin: "14px 0 0", display: "flex", alignItems: "baseline", gap: 6 }}>
-            <span className="num big">{numbers.closedThisMonth}</span>
-            {numbers.closingTarget > 0 && <span className="num" style={{ fontSize: 30, color: "var(--app-muted)" }}>/ {numbers.closingTarget}</span>}
-          </p>
-          <button onClick={onSetTarget} aria-label={numbers.closingTarget ? `Ubah target closing, sekarang ${numbers.closingTarget}` : "Atur target closing"} style={{ display: "block", width: "100%", marginTop: 0, padding: "14px 0", minHeight: 44, border: 0, background: "none", cursor: "pointer", textAlign: "left" }}>
-            {numbers.closingTarget > 0
-              ? <span style={{ display: "block", height: 4, borderRadius: 999, background: "var(--app-border)", overflow: "hidden" }}><span style={{ display: "block", width: `${pct}%`, height: "100%", borderRadius: 999, background: "#005eb0" }} /></span>
-              : <span style={{ display: "inline-flex", alignItems: "center", minHeight: 32, fontSize: 13, color: "var(--brand-text)", fontWeight: 600 }}>Atur target</span>}
-          </button>
-        </div>
-        <div className="sp-kpi">
-          <p className="lbl" style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "var(--app-muted)" }}>Uang masuk</p>
-          <Money n={paid} />
-          <p className="sub" style={{ margin: "10px 0 0", fontSize: 13, color: "var(--app-muted)" }}>pembayaran tercatat bulan ini</p>
-        </div>
-        <div className="sp-kpi">
-          <p className="lbl" style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "var(--app-muted)" }}>Belum tertagih</p>
-          <Money n={receivable} />
-          <p className="sub" style={{ margin: "10px 0 0", fontSize: 13, color: "var(--app-muted)" }}>sisa invoice yang belum lunas</p>
-        </div>
-      </section>
-
-      <div style={{ marginTop: "clamp(24px, 4vw, 40px)", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
-        <Funnel title="Hunting, 30 hari" rows={[
-          { label: "Prospek masuk", n: j.masuk }, { label: "Di-intro", n: j.intro }, { label: "Dibales", n: j.terhubung }, { label: "Kasih data (ETB)", n: j.data },
-        ]} />
-        <Funnel title="Pipeline lead, sekarang" rows={STAGES.map(s => ({ label: s, n: leadsByStatus[s] || 0 }))} />
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", marginTop: "var(--sp-2)", maxWidth: 520 }}>
+        {numbers.closingTarget > 0 && (
+          <span aria-hidden="true" style={{ flex: 1, height: 4, borderRadius: 2, background: "var(--app-border)", overflow: "hidden" }}>
+            <span style={{ display: "block", width: `${pct}%`, height: "100%", background: "var(--heat-3)" }} />
+          </span>
+        )}
+        <button onClick={onSetTarget} aria-label={numbers.closingTarget ? `Ubah target closing, sekarang ${numbers.closingTarget}` : "Atur target closing"}
+          style={{ minHeight: 44, padding: 0, border: 0, background: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "var(--fs-meta)", fontWeight: 600, color: "var(--brand-text)", whiteSpace: "nowrap" }}>
+          {numbers.closingTarget ? "Ubah target" : "Atur target"}
+        </button>
       </div>
 
-      <section aria-label="Aktivitas 7 hari" style={{ marginTop: 12, background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 20, padding: 20 }}>
-        <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 600 }}>Aktivitas 7 hari</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 12, fontSize: 13 }}>
-          {([["DM terkirim", String(week.length)], ["Dibales", rate(weekReplied, week.length)], ["Tertarik", String(weekInterested)], ["Jam hunting", weekHours.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })]] as [string, string][]).map(([k, v]) => (
-            <div key={k}>
-              <div className={/^[\d.,]+$/.test(v) ? "num tabnum" : "tabnum"} style={{ fontSize: /^[\d.,]+$/.test(v) ? 32 : 20, fontWeight: 600, lineHeight: 1.2 }}>{v}</div>
-              <div style={{ color: "var(--app-muted)", marginTop: 2 }}>{k}</div>
+      <section aria-label="Bulan ini" className="sp-strip three" style={{ marginTop: "var(--sp-4)" }}>
+        {strip.map(x => (
+          <div key={x.k}>
+            <div style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)" }}>{x.k}</div>
+            <div style={{ marginTop: "var(--sp-2)", display: "flex", alignItems: "baseline", gap: "var(--sp-1)" }}>
+              {x.money && <span style={{ fontSize: "var(--fs-meta)", fontWeight: 600, color: "var(--app-muted)" }}>Rp</span>}
+              <span className={/^[\d.,]+$/.test(x.v) ? "num" : "tabnum"} style={{ fontSize: /^[\d.,]+$/.test(x.v) ? "var(--fs-num)" : "var(--fs-section)", fontWeight: 600, lineHeight: 1.1 }}>{x.v}</span>
+              {x.money && <span style={{ fontSize: "var(--fs-meta)", fontWeight: 600, color: "var(--app-muted)" }}>jt</span>}
             </div>
-          ))}
-        </div>
+            <div style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)", marginTop: "var(--sp-1)" }}>{x.sub}</div>
+          </div>
+        ))}
       </section>
 
-      <section aria-labelledby="rep-links-h" style={{ marginTop: "clamp(24px, 4vw, 40px)" }}>
-        <h2 id="rep-links-h" style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 600 }}>Report lengkap</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", columnGap: "var(--sp-6)" }}>
+        <Funnel id="rep-hunt" title="Hunting, 30 hari" rows={[
+          { label: "Prospek masuk", n: j.masuk }, { label: "Di-intro", n: j.intro }, { label: "Dibales", n: j.terhubung }, { label: "Kasih data (ETB)", n: j.data },
+        ]} />
+        <Funnel id="rep-pipe" title="Pipeline lead, sekarang" rows={STAGES.map(s => ({ label: s, n: leadsByStatus[s] || 0 }))} />
+      </div>
+      <p style={{ margin: "var(--sp-3) 0 0", fontSize: "var(--fs-meta)", color: "var(--app-muted)" }}>Persen = lanjut dari tahap sebelumnya; di bawah 10 ditulis &quot;X dari Y&quot;.</p>
+
+      <section aria-labelledby="rep-links-h" className="sp-sec">
+        <h3 id="rep-links-h" style={{ marginBottom: "var(--sp-2)" }}>Report lengkap</h3>
+        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", columnGap: "var(--sp-6)" }}>
           {links.map(([label, tab, sub]) => (
-            <button key={label} onClick={() => onGo(tab)} className="lift" style={{ textAlign: "left", background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 16, cursor: "pointer", color: "var(--app-text)", fontFamily: "inherit" }}>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>{label} →</div>
-              <div style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 4 }}>{sub}</div>
-            </button>
+            <li key={label} style={{ borderBottom: "1px solid var(--app-border)" }}>
+              <button onClick={() => onGo(tab)} style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", width: "100%", minHeight: 56, padding: "var(--sp-3) 0", textAlign: "left", border: 0, background: "none", cursor: "pointer", color: "var(--app-text)", fontFamily: "inherit" }}>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: "var(--fs-body)", fontWeight: 600 }}>{label}</span>
+                  <span style={{ display: "block", fontSize: "var(--fs-meta)", color: "var(--app-muted)", marginTop: 2 }}>{sub}</span>
+                </span>
+                <span aria-hidden="true" style={{ color: "var(--app-muted)", display: "inline-flex" }}><Icon name="chevronRight" size={16} /></span>
+              </button>
+            </li>
           ))}
-        </div>
+        </ul>
       </section>
     </div>
   );
