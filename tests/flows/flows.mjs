@@ -890,6 +890,11 @@ export const flows = [
         // 2.000.000 + 250.000 + 500.000 = 2.750.000; cost 1.200.000 + 150.000 + 350.000 = 1.700.000.
         await modal(page).getByRole("status", { name: "Margin, internal" }).getByText("Margin Rp 1.050.000 (38%)").waitFor();
         await t.audit("Penawaran with internal cost and margin");
+        // Kept as a template for the next quote, without the client.
+        await modal(page).getByRole("button", { name: "Simpan sebagai template" }).click();
+        await modal(page).getByLabel("Nama template").fill("Event Flow Template");
+        await modal(page).getByRole("button", { name: "Simpan template" }).click();
+        await modal(page).getByText('Tersimpan jadi template "Event Flow Template".').waitFor();
         await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
         await expectText(page, "Rp 2.750.000");
       });
@@ -900,11 +905,26 @@ export const flows = [
         if (!text.includes("MUA Flow")) throw new Error("the copied quote misses its items");
         if (/Rina MUA|350\.000|1\.200\.000|modal|margin/i.test(text)) throw new Error("the copied quote leaks what it costs");
       });
+      await t.step("a new quote starts from the template; Simpan without a client says so at the field", async () => {
+        await page.getByRole("button", { name: "+ Penawaran" }).click();
+        const tpl = modal(page).getByLabel("Mulai dari template");
+        await tpl.selectOption({ index: 1 });
+        await modal(page).getByText('Template "Event Flow Template" dipakai. Klien dan acara tetap.').waitFor();
+        if ((await modal(page).getByLabel("Nama item", { exact: true }).count()) !== 3) throw new Error("the template did not bring its three items");
+        await modal(page).getByRole("status", { name: "Margin, internal" }).getByText("Margin Rp 1.050.000 (38%)").waitFor();
+        await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
+        await modal(page).getByRole("alert").getByText("Isi nama klien dulu.").waitFor();
+        if (!(await page.evaluate(() => document.activeElement?.id === "doc-client"))) throw new Error("Simpan did not take you to the missing client");
+        await modal(page).locator("#doc-client").fill("Klien Template Flow");
+        await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
+        await page.getByText("Klien Template Flow").first().waitFor();
+      });
       await t.step("the manual item is now a component, with its vendor", async () => {
         await go(page, "Jualan", "Paket");
         const list = page.getByRole("list", { name: "Daftar komponen" });
         await list.getByText("MUA Flow", { exact: true }).waitFor();
         await list.getByText("Vendor: Rina MUA Flow").waitFor();
+        await page.getByRole("list", { name: "Daftar template penawaran" }).getByText("Event Flow Template").waitFor();
       });
     },
   },

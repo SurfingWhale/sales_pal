@@ -4,10 +4,11 @@ import Icon from "@/components/Icon";
 import { useState } from "react";
 import { setDoc, deleteDoc } from "firebase/firestore";
 import { canEditCatalog, spaceDoc, useSpace } from "@/lib/space";
-import { Business, Component, MARGIN_TARGET, Service, rupiah } from "@/lib/billing";
+import { Business, Component, MARGIN_TARGET, QuoteTemplate, Service, rupiah } from "@/lib/billing";
 import BusinessEditor from "@/components/BusinessEditor";
 import ComponentCatalog, { marginColor, marginPct } from "@/components/ComponentCatalog";
 import ConfirmSheet from "@/components/ConfirmSheet";
+import QuoteTemplateList from "@/components/QuoteTemplateList";
 import { btnGhost, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, label, modalBox, subheading } from "@/components/ui";
 
 const CATEGORIES = ["F&B", "Photography", "Sports", "Video", "Design", "Other"];
@@ -17,7 +18,7 @@ type Draft = Omit<Service, "price" | "cost"> & { price: string; cost: string };
 const BLANK: Draft = { id: "", name: "", category: "F&B", price: "", cost: "", unit: "per project", description: "" };
 const num = (v: string) => parseInt(v.replace(/\D/g, ""), 10) || 0;
 
-export default function Services({ services, components, business }: { services: Service[]; components: Component[]; business: Business }) {
+export default function Services({ services, components, templates, business }: { services: Service[]; components: Component[]; templates: QuoteTemplate[]; business: Business }) {
   const space = useSpace();
   // In a guild the catalog is the team's: Leader and Officer keep it.
   const canEdit = canEditCatalog(space);
@@ -172,6 +173,7 @@ export default function Services({ services, components, business }: { services:
       )}
 
       <ComponentCatalog components={components} space={space} canEdit={canEdit} />
+      <QuoteTemplateList templates={templates} space={space} canEdit={canEdit} />
 
       {profile && <BusinessEditor business={profile} onClose={() => setProfile(null)} />}
 

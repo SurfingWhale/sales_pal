@@ -4,7 +4,7 @@ import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import { setDoc, deleteDoc, updateDoc, arrayUnion, deleteField } from "firebase/firestore";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
-import { Component,
+import { Component, QuoteTemplate,
   Business, Invoice, LineItem, QUOTE_STATUS, Quote, QuoteStatus, Service,
   addDays, issuerOf, isIssued, paid, scheduleOf, termAmounts, termsOf, daysBetween, longDate, nextNumber, quoteColor, quoteText, rupiah, rupiahShort, subtotal, today, total, waLink, waNumber,
 } from "@/lib/billing";
@@ -32,12 +32,13 @@ function blank(b: Business, lead?: LeadRef): DocDraft {
   };
 }
 
-export default function Quotes({ quotes, invoices, leads, services, components, business, startFor, onStarted, onInvoiceCreated }: {
+export default function Quotes({ quotes, invoices, leads, services, components, templates, business, startFor, onStarted, onInvoiceCreated }: {
   quotes: Quote[];
   invoices: Invoice[];
   leads: LeadRef[];
   services: Service[];
   components: Component[];
+  templates: QuoteTemplate[];
   business: Business;
   startFor: LeadRef | null;
   onStarted: () => void;
@@ -350,7 +351,7 @@ export default function Quotes({ quotes, invoices, leads, services, components, 
         </div>
       )}
 
-      {editing && <DocEditor kind="quote" initial={editing} leads={leads} services={services} components={components} onSave={save} onClose={() => { setEditing(null); setRevising(null); }} />}
+      {editing && <DocEditor kind="quote" initial={editing} leads={leads} services={services} components={components} templates={templates} onSave={save} onClose={() => { setEditing(null); setRevising(null); }} />}
 
       {printing && <PrintSheet kind="quote" data={printing} business={printing.issuer || business} frozen={!!printing.issuer} onClose={() => setPrinting(null)} />}
       {sending && <SendQuoteSheet q={sending} business={business} onSent={p => markSent(sending, p)} onClose={() => setSending(null)} />}

@@ -209,6 +209,10 @@ await t("member reads the team's components", assertSucceeds(getDocs(collection(
 await t("member cannot change the components", assertFails(setDoc(doc(M, "guilds", G, "components", "k1"), { name: "x", cost: 1 })));
 await t("officer sets a component with its cost", assertSucceeds(setDoc(doc(O, "guilds", G, "components", "k1"), { name: "Sewa studio", kind: "Tempat/studio", unit: "jam", cost: 150000, price: 250000 })));
 await t("viewer cannot read the components", assertFails(getDocs(collection(V, "guilds", G, "components"))));
+await t("member starts a quote from the team's templates", assertSucceeds(getDocs(collection(M, "guilds", G, "quoteTemplates"))));
+await t("member cannot keep a quote template", assertFails(setDoc(doc(M, "guilds", G, "quoteTemplates", "q1"), { name: "x", items: [] })));
+await t("officer keeps a quote template", assertSucceeds(setDoc(doc(O, "guilds", G, "quoteTemplates", "q1"), { name: "Event 4 jam", items: [{ name: "Foto", qty: 1, price: 2000000, cost: 1200000 }], createdAt: 1 })));
+await t("viewer cannot read the quote templates", assertFails(getDocs(collection(V, "guilds", G, "quoteTemplates"))));
 await t("no one writes an unknown guild collection", assertFails(setDoc(doc(L, "guilds", G, "secrets", "x"), { ownerUid: "lead" })));
 await t("member adds a client and logs a chat under it", assertSucceeds(setDoc(doc(M, "guilds", G, "clients", "c1"), { name: "Toko", ownerUid: "memb", ownerName: "memb" })
   .then(() => setDoc(doc(M, "guilds", G, "clients", "c1", "deals", "cd1"), deal("memb")))));
