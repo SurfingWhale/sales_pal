@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Brief, LineItem, Service, Term, rupiah, scheduleSum, subtotal, taxAmount, termAmounts, total } from "@/lib/billing";
+import { setDoc } from "firebase/firestore";
+import { Brief, COMPONENT_KINDS, COMPONENT_UNITS, Component, LineItem, MARGIN_TARGET, Service, Term, costOf, marginOf, rupiah, scheduleSum, subtotal, taxAmount, termAmounts, total } from "@/lib/billing";
+import { canEditCatalog, spaceDoc, useSpace } from "@/lib/space";
+import { marginColor } from "@/components/ComponentCatalog";
 import { btnMuted, btnPrimary, chip, font, inputStyle, label, modalBox } from "@/components/ui";
 import ConfirmSheet from "@/components/ConfirmSheet";
 
@@ -31,6 +34,10 @@ export interface DocDraft extends Brief {
 
 const num = (v: string) => parseInt(v.replace(/\D/g, ""), 10) || 0;
 
+// An item being edited: `keep` is the component kind to save a manual item as
+// ("Simpan ke katalog"); it never reaches the stored document.
+type EditItem = LineItem & { keep?: string };
+
 // Each part of the document is its own card, titled the way the PDF titles it.
 function Section({ t, hint, children }: { t: string; hint?: string; children: ReactNode }) {
   return (
@@ -42,14 +49,17 @@ function Section({ t, hint, children }: { t: string; hint?: string; children: Re
   );
 }
 
-export default function DocEditor({ kind, initial, leads, services, onSave, onClose }: {
+export default function DocEditor({ kind, initial, leads, services, components = [], onSave, onClose }: {
   kind: "quote" | "invoice";
   initial: DocDraft;
   leads: LeadRef[];
   services: Service[];
+  components?: Component[];
   onSave: (d: DocDraft) => Promise<void>;
   onClose: () => void;
 }) {
+  const space = useSpace();
+  const canKeep = canEditCatalog(space);
   const [d, setD] = useState<DocDraft>(initial);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -70,7 +80,9 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
     setAdded(-1);
   }, [added]);
   const set = (p: Partial<DocDraft>) => setD(cur => ({ ...cur, ...p }));
-  const setItem = (i: number, p: Partial<LineItem>) => set({ items: d.items.map((it, n) => (n === i ? { ...it, ...p } : it)) });
+  const setItem = (i: number, p: Partial<EditItem>) => set({ items: d.items.map((it, n) => (n === i ? { ...it, ...p } : it)) });
+  const margin = marginOf(d);
+  const cost = costOf(d.items);
   const sched = d.schedule || [];
   const sum = scheduleSum(sched);
   const missing = !d.leadName.trim() ? "Isi nama klien dulu." : d.items.length === 0 ? "Tambah minimal satu item."
@@ -84,12 +96,29 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
   }
   function addService(id: string) {
     const s = services.find(x => x.id === id);
-    if (s) { set({ items: [...d.items, { name: s.name, qty: 1, price: s.price, ...(s.description?.trim() ? { description: s.description.trim() } : {}) }] }); setAdded(d.items.length); }
+    if (s) { set({ items: [...d.items, { name: s.name, qty: 1, price: s.price, ...(s.description?.trim() ? { description: s.description.trim() } : {}), ...(typeof s.cost === "number" ? { cost: s.cost } : {}), serviceId: s.id }] }); setAdded(d.items.length); }
+  }
+  function addComponent(id: string) {
+    const c = components.find(x => x.id === id);
+    if (c) { set({ items: [...d.items, { name: c.name, qty: 1, price: c.price, unit: c.unit, cost: c.cost, componentId: c.id, ...(c.vendor ? { vendor: c.vendor } : {}) }] }); setAdded(d.items.length); }
   }
   async function save() {
     if (missing) return;
     setBusy(true); setErr("");
-    try { await onSave(d); } catch { setErr("Gagal nyimpen. Cek koneksi lalu coba lagi."); setBusy(false); }
+    try {
+      // Manual items ticked "Simpan ke katalog" become components first, so the
+      // document remembers which component each came from.
+      const items = await Promise.all((d.items as EditItem[]).map(async ({ keep, ...it }) => {
+        if (!keep || !it.name.trim() || it.componentId) return it;
+        const id = `cmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        await setDoc(spaceDoc(space, "components", id), {
+          name: it.name.trim(), kind: keep, unit: it.unit || "pcs", cost: it.cost || 0, price: it.price || 0,
+          ...(it.vendor?.trim() ? { vendor: it.vendor.trim() } : {}),
+        });
+        return { ...it, componentId: id };
+      }));
+      await onSave({ ...d, items });
+    } catch { setErr("Gagal nyimpen. Cek koneksi lalu coba lagi."); setBusy(false); }
   }
 
   const input = (id: string, l: string, v: string, on: (v: string) => void, ph = "", type = "text", col = "auto") => (
@@ -147,6 +176,12 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
                   {services.map(s => <option key={s.id} value={s.id}>{s.name} · {rupiah(s.price)}</option>)}
                 </select>
               )}
+              {components.length > 0 && (
+                <select value="" onChange={e => addComponent(e.target.value)} style={{ ...inputStyle, flex: "1 1 180px", width: "auto" }} aria-label="Tambah dari komponen">
+                  <option value="">+ dari komponen…</option>
+                  {components.slice().sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name)).map(c => <option key={c.id} value={c.id}>{c.name} · {rupiah(c.price)}/{c.unit}</option>)}
+                </select>
+              )}
               <button onClick={() => { set({ items: [...d.items, { name: "", qty: 1, price: 0 }] }); setAdded(d.items.length); }} style={{ ...chip, fontSize: 13, fontWeight: 700, color: "var(--brand-text)", padding: "10px 14px", flex: "0 0 auto" }}>+ item manual</button>
             </div>
             {d.items.length === 0 && <div style={{ fontSize: 13, color: "var(--app-muted)", padding: "4px 0" }}>Belum ada item.</div>}
@@ -163,6 +198,38 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
                   <div style={{ gridColumn: "1 / -1", fontSize: 12, color: "var(--app-muted)", marginBottom: -4 }}>Qty × harga satuan</div>
                   <input inputMode="numeric" value={it.qty || ""} onChange={e => setItem(i, { qty: num(e.target.value) })} style={{ ...inputStyle, textAlign: "center" }} aria-label="Qty" />
                   <input inputMode="numeric" value={it.price ? it.price.toLocaleString("id-ID") : ""} onChange={e => setItem(i, { price: num(e.target.value) })} style={{ ...inputStyle, textAlign: "right" }} placeholder="Harga" aria-label="Harga" />
+                  {/* Internal (PRD-017): what it costs you and who you pay. Never printed. */}
+                  <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8, marginTop: 2, padding: "8px 10px 10px", borderRadius: 10, border: "1px dashed var(--app-line-strong)" }}>
+                    <div className="tabnum" style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, color: "var(--app-muted)" }}>
+                      <span>Internal · ga dicetak</span>
+                      {typeof it.cost === "number" && it.price > 0 && (() => { const p = Math.round(((it.price - it.cost) / it.price) * 100); return <b style={{ color: marginColor(p) }}>margin {p}%</b>; })()}
+                    </div>
+                    <label style={{ display: "grid", gap: 4, minWidth: 0, fontSize: 12, color: "var(--app-muted)" }}>
+                      Modal / satuan
+                      <input inputMode="numeric" value={typeof it.cost === "number" ? it.cost.toLocaleString("id-ID") : ""} onChange={e => setItem(i, { cost: e.target.value.trim() ? num(e.target.value) : undefined })}
+                        style={{ ...inputStyle, textAlign: "right" }} placeholder="0" aria-label={`Biaya modal per satuan, item ${i + 1}`} />
+                    </label>
+                    <label style={{ display: "grid", gap: 4, minWidth: 0, fontSize: 12, color: "var(--app-muted)" }}>
+                      Vendor
+                      <input value={it.vendor || ""} onChange={e => setItem(i, { vendor: e.target.value })} style={inputStyle} placeholder="opsional" aria-label={`Vendor, item ${i + 1}`} />
+                    </label>
+                    {canKeep && !it.componentId && !it.serviceId && (
+                      <>
+                        <label style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 8, minHeight: 44, fontSize: 13, cursor: "pointer" }}>
+                          <input type="checkbox" checked={!!(it as EditItem).keep} onChange={e => setItem(i, { keep: e.target.checked ? "Vendor" : undefined })} style={{ width: 20, height: 20, accentColor: "#005eb0" }} />
+                          Simpan ke katalog komponen
+                        </label>
+                        {(it as EditItem).keep && <>
+                          <select value={(it as EditItem).keep} onChange={e => setItem(i, { keep: e.target.value })} style={inputStyle} aria-label={`Jenis komponen, item ${i + 1}`}>
+                            {COMPONENT_KINDS.map(k => <option key={k} value={k}>{k}</option>)}
+                          </select>
+                          <select value={it.unit || "pcs"} onChange={e => setItem(i, { unit: e.target.value })} style={inputStyle} aria-label={`Satuan komponen, item ${i + 1}`}>
+                            {COMPONENT_UNITS.map(u => <option key={u} value={u}>per {u}</option>)}
+                          </select>
+                        </>}
+                      </>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -227,6 +294,12 @@ export default function DocEditor({ kind, initial, leads, services, onSave, onCl
             <span style={{ fontSize: 12, color: "var(--app-muted)" }}>Subtotal {rupiah(subtotal(d.items))}{d.discount ? ` · diskon ${rupiah(d.discount)}` : ""}{d.taxPercent ? ` · pajak ${rupiah(taxAmount(d))}` : ""}</span>
             <b style={{ fontSize: 16, color: "var(--ok)" }}>{rupiah(total(d))}</b>
           </div>
+          {margin && cost !== null && (
+            <div className="tabnum" role="status" aria-label="Margin, internal" style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12, marginTop: -6, marginBottom: 10, color: "var(--app-muted)" }}>
+              <span>Internal · modal {rupiah(cost)}</span>
+              <b style={{ color: marginColor(margin.percent) }}>Margin {rupiah(margin.amount)}{margin.percent !== null ? ` (${margin.percent}%)` : ""}{margin.percent !== null && margin.percent < MARGIN_TARGET ? ` · di bawah ${MARGIN_TARGET}%` : ""}</b>
+            </div>
+          )}
           {(missing || err) && <div role="status" style={{ fontSize: 12, marginBottom: 8, color: err ? "color-mix(in srgb, #ff4444 55%, var(--app-text))" : "var(--app-muted)" }}>{err || missing}</div>}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={close} disabled={busy} style={{ ...btnMuted, flex: "0 0 auto", minHeight: 48 }}>Batal</button>
@@ -251,5 +324,14 @@ export function briefOf(d: Brief): Brief {
 }
 
 export function cleanItems(items: LineItem[]): LineItem[] {
-  return items.filter(i => i.name.trim()).map(i => ({ name: i.name.trim(), qty: i.qty || 1, price: i.price || 0, ...(i.description?.trim() ? { description: i.description.trim() } : {}) }));
+  return items.filter(i => i.name.trim()).map(i => ({
+    name: i.name.trim(), qty: i.qty || 1, price: i.price || 0,
+    ...(i.description?.trim() ? { description: i.description.trim() } : {}),
+    // Internal (PRD-017): kept on the document, never printed.
+    ...(i.unit ? { unit: i.unit } : {}),
+    ...(typeof i.cost === "number" ? { cost: i.cost } : {}),
+    ...(i.vendor?.trim() ? { vendor: i.vendor.trim() } : {}),
+    ...(i.componentId ? { componentId: i.componentId } : {}),
+    ...(i.serviceId ? { serviceId: i.serviceId } : {}),
+  }));
 }

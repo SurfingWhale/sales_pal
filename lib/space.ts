@@ -26,7 +26,7 @@ export interface Space {
 }
 
 export const OWNED = ["leads", "outreach", "rejections", "hunts", "prospects", "huntSessions", "quotes", "invoices", "clients"] as const;
-export const SHARED = ["services", "pitchTemplates", "settings", "campaigns", "costs"] as const;
+export const SHARED = ["services", "components", "pitchTemplates", "settings", "campaigns", "costs"] as const;
 export type SpaceCollection = (typeof OWNED)[number] | (typeof SHARED)[number];
 
 export const personal = (uid: string, name: string): Space => ({ kind: "me", id: uid, name: "Pribadi", me: { uid, name } });

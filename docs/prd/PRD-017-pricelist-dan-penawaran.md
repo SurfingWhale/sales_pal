@@ -1,6 +1,6 @@
 # PRD-017 — Pricelist pusat dan penawaran berkomponen
 
-- **Status:** rencana, 23 Okt. Belum dibangun.
+- **Status:** fase 1 dibangun 23 Okt (§7). Fase 2–4 rencana.
 - **Terkait:** PRD-011 (bisnis dan dokumen), PRD-005 (funnel), PRD-016 (outreach yang membawa link pricelist), `creative-hub/standards/pricelist.md` (v0, draf standar lintas situs), `creative-hub/standards/leads.md`.
 
 ## 1. Masalah
@@ -125,7 +125,18 @@ Situs tidak menyimpan salinan sendiri, jadi tidak pernah ada dua versi yang sali
 
 ## 7. Fase
 
-1. Komponen + biaya modal + margin di penawaran; item manual bisa disimpan ke katalog.
+1. ✅ **Dibangun 23 Okt:** komponen + biaya modal + margin di penawaran; item manual bisa disimpan ke katalog.
+   - **Paket → Komponen** (`components/ComponentCatalog.tsx`): nama, jenis, satuan, biaya modal, harga jual, vendor, dan catatan, dengan margin per satuan. Paket juga punya **biaya modal** opsional, jadi margin terlihat di kartu paket.
+   - **Penawaran/invoice:**
+     - item bisa ditambah dari paket, **dari komponen**, atau manual;
+     - tiap item punya kotak **Internal · ga dicetak** (modal per satuan, vendor, margin item);
+     - item manual bisa dicentang **Simpan ke katalog komponen**, lengkap dengan jenis dan satuannya;
+     - footer menampilkan **modal** dan **margin** (kuning di bawah 30%, merah kalau rugi).
+   - **Tidak bocor:** PDF, teks salinan, dan WhatsApp tetap hanya berisi nama, rincian, qty, dan harga. Item menyimpan `unit`, `cost`, `vendor`, `componentId`, `serviceId`.
+   - **Data:** `components` jadi katalog bersama (pribadi dan guild, aturan sama dengan `services`). Rules + 4 tes (156 lulus).
+     - Catatan: di guild, **anggota bisa melihat biaya modal** di katalog, sama seperti paket. Kalau mau disembunyikan dari anggota, itu keputusan owner untuk fase berikutnya.
+   - **Tes:** flow `komponen` (Chromium HP & desktop, iPhone 12 & Safari WebKit), audit HIG 0 temuan.
+   - Paket yang disusun dari komponen (§3) belum termasuk; sekarang paket cuma punya satu angka biaya modal.
 2. Editor halaman penuh + ringkasan menempel + template penawaran.
 3. Dua harga + ikon sync (§3a) + bagian publik paket + endpoint baca & tulis (kunci per situs, `version`, riwayat) + standar di creative-hub naik ke v1 + pasang di Visufavor (baca + admin bisa ubah).
 4. UNTMD Sports (tab Harga CMS baca/tulis ke SalesPal, harga lama dipindahkan), lalu BeUntamed (opsional).
