@@ -3,7 +3,12 @@ html, body {
   background: #f5f7fa;
   color: #1c2128;
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  /* No sideways scroll. clip, not hidden: hidden on both html and body makes
+     body a scroll box that never scrolls, and every position: sticky (the
+     header, Hunting's tabs, "‹ Daftar") scrolled away with the page.
+     hidden stays for Safari < 16, which has no clip. */
   overflow-x: hidden;
+  overflow-x: clip;
   min-height: 100vh;
 }
 
@@ -951,12 +956,8 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 
 /* Hunting's parts (Kirim / Journey / Log DM / Performa) stay in reach under
    the header while a pane scrolls. */
-.sp-hunt-panes { position: sticky; top: 76px; z-index: 5; }
-@media (max-width: 767px) {
-  .sp-hunt-panes { top: 66px; }
-}
-.sp-guild-tabs { position: sticky; top: 76px; z-index: 5; }
-@media (max-width: 767px) { .sp-guild-tabs { top: 66px; } }
+.sp-hunt-panes { position: sticky; top: calc(var(--sp-head, 68px) + 8px); z-index: 5; }
+.sp-guild-tabs { position: sticky; top: calc(var(--sp-head, 68px) + 8px); z-index: 5; }
 
 /* Dashboard tim (PRD-014): one row per seller, a table on a laptop, a card on a phone. */
 .sp-dash-row { display: grid; grid-template-columns: minmax(170px, 2.2fr) repeat(6, minmax(0, 1fr)) minmax(96px, 1.2fr) minmax(84px, 1fr); gap: 8px; align-items: center; }
@@ -1079,6 +1080,14 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .sp-kqueue { margin: 0 0 4px; font-size: var(--fs-meta); color: var(--app-muted); }
 .sp-kqueue button { min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--brand-text); font: 600 var(--fs-meta) 'Plus Jakarta Sans', sans-serif; cursor: pointer; }
 .sp-kqueue b { color: var(--app-text); }
+/* "‹ Daftar" stays in reach under the part tabs (header + 8px + 50px tabs)
+   while the page scrolls, and the page opens at its top (owner, 23 Okt). */
+.sp-hunt-send { scroll-margin-top: calc(var(--sp-head, 68px) + 66px); }
+.sp-kback-row { position: sticky; top: calc(var(--sp-head, 68px) + 58px); z-index: 4; background: var(--app-card); }
+@media (max-width: 640px) {
+  /* The tabs lose their border here: 48px tall. */
+  .sp-kback-row { top: calc(var(--sp-head, 52px) + 56px); background: var(--app-bg); }
+}
 .sp-ktitle { width: 100%; min-height: 48px; padding: 4px 0; border: 0; border-bottom: 1px solid var(--app-border); border-radius: 0; background: transparent; color: var(--app-text); font: 700 var(--fs-title)/1.2 'Plus Jakarta Sans', sans-serif; outline: none; }
 .sp-ktitle:focus { border-bottom-color: #005eb0; }
 /* The + ▾ menu: a short list in a bottom sheet. */

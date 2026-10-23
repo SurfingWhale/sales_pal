@@ -294,6 +294,18 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   // "Atur target": a small sheet with Batal/Simpan instead of the browser's prompt().
   const bellBtn = useRef<HTMLButtonElement>(null);
   const bellPop = useRef<HTMLDivElement>(null);
+  // What sticks under the header (Hunting's tabs, "‹ Daftar") sits at its real
+  // height: the session bar and a section's sub-tabs change it.
+  const topRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = topRef.current;
+    if (!el) return;
+    const set = () => document.documentElement.style.setProperty("--sp-head", `${Math.round(el.getBoundingClientRect().height)}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   // The bell's popover closes like any popover: Escape (focus back on the
   // bell) or a tap/click anywhere outside it.
   useEffect(() => {
@@ -905,7 +917,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       `}</style>
 
       {/* Header: glass over a soft edge blur, like the canvas */}
-      <header className="sp-top">
+      <header ref={topRef} className="sp-top">
         {/* The hunting session's bar over every tab (PRD-009 §4) */}
         {huntSession.live && (
           <HuntBar session={huntSession.live} queued={queue(prospects, now, strategy).length}

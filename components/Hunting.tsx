@@ -23,9 +23,10 @@ import DefaultsSheet from "@/components/DefaultsSheet";
 import { TOPICS, Tone, defaultTopic, fromLibrary, repliesFor } from "@/lib/replies";
 import { profileUrl } from "@/lib/threads";
 import {
-  Channel, HuntSession, Prospect, Strategy, newProspect, patchFromHunt, postPatch, prospectId, queueGroup, sessionMinutes,
+  Campaign, Channel, HuntSession, Prospect, Strategy, audience, newProspect, patchFromHunt, postPatch, prospectId, queueGroup, sessionMinutes,
   threadsPostLink, view,
 } from "@/lib/prospects";
+import { useOutcome } from "@/components/ProspectOutcome";
 import { HuntInbox, bump, createProspect, ctx, recordSend, saveProspect, unfurl, useFillDefaults, useHuntInbox } from "@/lib/prospectStore";
 import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading, ink } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmSheet";
@@ -85,6 +86,9 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   // Kirim is a table of who's next (like a Notion database) and, once someone
   // is picked, their page: the message for them (owner, 23 Okt).
   const [open, setOpen] = useState(false);
+  // Who the page was about, so the list comes back with their card open.
+  const [backTo, setBackTo] = useState<string | null>(null);
+  const [outcomeMsg, setOutcomeMsg] = useState("");
   const [q, setQ] = useState("");
   const [addMenu, setAddMenu] = useState(false);
   // Messages and scripts live behind the + menu too (owner, 23 Okt).
@@ -97,7 +101,9 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   const allInvoices = useSpaceCollection<Invoice>(space, "invoices");
   const jobs = jobsFrom(allQuotes, allInvoices);
   const targetRef = useRef<HTMLInputElement>(null);
+  const sendRef = useRef<HTMLDivElement>(null);
   const topicsRef = useRef<HTMLDivElement>(null);
+  const campaigns = useSpaceCollection<Campaign>(space, "campaigns");
 
   function apply(text: string) {
     const post = threadsPostLink(text);
@@ -168,16 +174,56 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   const defaults = defaultsWith(savedDefaults, business.tagline);
   const fillData = dataFor(target, cur, business.name, defaults);
   const curPost = cur ? [...(cur.history || [])].reverse().find(e => e.kind === "post") : undefined;
+  const outcome = useOutcome({ strategy, sessionId: live?.id, onMsg: setOutcomeMsg });
 
   // To the message, from wherever the person was picked; the pane shows first.
+  // The page's top, not the field: "‹ Daftar" has to be in view (owner, 23 Okt).
   function toTarget(focus = true) {
     setPane("kirim");
     setOpen(true);
     requestAnimationFrame(() => {
-      targetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      sendRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       if (focus) targetRef.current?.focus({ preventScroll: true });
     });
   }
+
+  // A person's page is a step, like a dialog (components/ModalA11y.tsx): the
+  // browser's Back, a swipe or Escape returns to the list instead of leaving
+  // the app. Its history entry carries spPage; a dialog opened on top copies it.
+  // One back() at a time: a second one in flight would leave the app.
+  const leaving = useRef(false);
+  const leave = () => { if (leaving.current) return; leaving.current = true; window.history.back(); };
+  useEffect(() => {
+    const done = () => { leaving.current = false; };
+    window.addEventListener("popstate", done);
+    return () => window.removeEventListener("popstate", done);
+  }, []);
+  useEffect(() => {
+    const here = () => window.history.state?.spPage === "kirim";
+    if (open && !here()) window.history.pushState({ ...(window.history.state || {}), spPage: "kirim" }, "");
+    if (!open && here()) leave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const onPop = () => { if (window.history.state?.spPage !== "kirim") backToList(); };
+    // Not from a field being typed in (a half-written note would be lost), bar the name itself.
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const typing = !!el?.closest("input, textarea, select, [contenteditable='true']") && el?.id !== "hunt-target";
+      if (e.key === "Escape" && pane === "kirim" && !e.defaultPrevented && !typing && !document.querySelector(".modal-overlay")) backToList();
+    };
+    window.addEventListener("popstate", onPop);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      document.removeEventListener("keydown", onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pane, curId]);
+  // Leaving Hunting for another tab drops the entry, so Back isn't a dead press.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => { if (window.history.state?.spPage === "kirim") leave(); }, []);
 
   // The bar's paste button and its queue land here.
   useHuntInbox((m: HuntInbox) => {
@@ -234,6 +280,12 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   }
 
   const now = today();
+  // The campaigns this person is still due (owner, 23 Okt: this month's promo
+  // for whoever has answered), sent from their page and counted in the campaign.
+  const curCampaigns = cur && !isBlocked
+    ? campaigns.filter(c => templates.some(t => t.id === c.templateId) && audience([cur], c, now, strategy).length > 0).sort((a, b) => b.createdAt - a.createdAt)
+    : [];
+  const engaged = !!cur && !isBlocked && cur.contact === "terhubung" && cur.result !== "tolak";
   const weekAgo = addDays(now, -6);
   const sorted = hunts.slice().sort((a, b) => b.createdAt - a.createdAt);
   const sentToday = hunts.filter(h => h.date === now).length;
@@ -270,14 +322,15 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     : url ? { how: "open", label: "Copy & buka profil", url }
     : { how: "wa", label: "Kirim WA" };
 
-  function pick(t: PitchTemplate, how: "copy" | "wa" | "open") {
+  function pick(t: PitchTemplate, how: "copy" | "wa" | "open", camp?: Campaign) {
     if (isBlocked) return;
     const text = fillTemplate(t.body, fillData);
+    const key = camp ? `cmp_${camp.id}` : t.id;
     if (how === "copy") {
-      copy(text, t.id, setCopiedId);
+      copy(text, key, setCopiedId);
     } else if (how === "open" && sendOut.url) {
       // Copy first, then open in the same tap (a popup opened later is blocked).
-      copy(text, t.id, setCopiedId);
+      copy(text, key, setCopiedId);
       window.open(sendOut.url, "_blank", "noopener");
     } else {
       window.open(waLinkFor(target, text), "_blank");
@@ -287,16 +340,16 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       targetRef.current?.focus();
       return;
     }
-    logSent(t, text, how);
+    logSent(t, text, how, camp);
   }
 
-  async function logSent(t: PitchTemplate, text: string, how: "copy" | "wa" | "open") {
+  async function logSent(t: PitchTemplate, text: string, how: "copy" | "wa" | "open", camp?: Campaign) {
     const who = target.trim();
     const ch: Channel = curPost || source.kind === "post" ? channel : "dm";
     try {
       const back = await recordSend(space, {
         target: who, platform, url: url || undefined, templateId: t.id, templateTitle: t.title, text, channel: ch,
-        source: cur ? undefined : source,
+        source: cur ? undefined : source, campaignId: camp?.id, campaignName: camp?.name,
       }, cur, live?.id, strategy);
       // The person stays on screen: their post and context are still the guide
       // for the next message (QA 11 Okt). "Target lain" clears it.
@@ -343,9 +396,11 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     compose(next);
   }
 
-  // Back from a person's page to the list; their page stays one tap away.
+  // Back from a person's page to the list, their card open; their page stays one tap away.
   function backToList() {
-    setOpen(false); setUndo(null);
+    setBackTo(curId || null);
+    setOpen(false); setUndo(null); setOutcomeMsg("");
+    outcome.stop();
   }
 
   // The search box is the way in: a match opens its page, anything else
@@ -536,7 +591,8 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         {PANES.map(([k, l]) => {
           const n = k === "kirim" ? queueGroup(prospects, "due", now, strategy).length : 0;
           return (
-            <button key={k} role="tab" id={`hp-${k}`} aria-selected={pane === k} aria-controls={`hpane-${k}`} onClick={() => { setPane(k); }}
+            <button key={k} role="tab" id={`hp-${k}`} aria-selected={pane === k} aria-controls={`hpane-${k}`}
+              onClick={() => { if (k === "kirim" && pane === "kirim" && open) backToList(); setPane(k); }}
               aria-label={n ? `${l}, ${n} perlu follow-up` : l}
               style={{ minHeight: 40, minWidth: 0, padding: "0 4px", borderRadius: 9, border: 0, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 background: pane === k ? "var(--app-card)" : "transparent", color: pane === k ? "var(--app-text)" : "var(--app-sub)", boxShadow: pane === k ? "0 1px 3px rgba(0,0,0,.12)" : "none" }}>
@@ -593,7 +649,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         </div>
       )}
       {open ? (
-      <div className="sp-hunt-send" style={{ ...card, padding: 20, marginBottom: 20 }}>
+      <div ref={sendRef} className="sp-hunt-send" style={{ ...card, padding: 20, marginBottom: 20 }}>
         <div className="sp-kback-row">
           <button className="sp-kback" onClick={backToList} aria-label="Kembali ke daftar"><Icon name="chevronLeft" size={18} stroke={2} />Daftar</button>
           {queued && queued.ids.length > 0 && <button className="sp-knext" onClick={takeNext}>Berikutnya<Icon name="chevronRight" size={16} stroke={2} /></button>}
@@ -643,6 +699,46 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
             <button onClick={saveTarget} disabled={savingTarget} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>{savingTarget ? "Menyimpan…" : "＋ Simpan ke journey"}</button>
           </div>
         )}
+        {/* Already answered (a no, a later, their number): mark it here, no message needed. */}
+        {cur && !isBlocked && cur.contact !== "baru" && cur.contact !== "dnc" && (
+          <section aria-labelledby="k-result-h" style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+              <h3 id="k-result-h" style={{ margin: "0 auto 0 0", fontSize: "var(--fs-meta)", fontWeight: 600, color: "var(--app-muted)" }}>Udah dijawab? Tandai tanpa kirim pesan</h3>
+              <button onClick={() => outcome.edit(cur, "reply")} aria-pressed={outcome.editing?.kind === "reply"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Dibales</button>
+              <button onClick={() => outcome.edit(cur, "note")} aria-pressed={outcome.editing?.kind === "note"} style={{ ...chip, minHeight: 36 }}>📝 Catatan</button>
+            </div>
+            {outcome.results(cur, cur.name || cur.handle)}
+            {outcome.editor(cur)}
+            <div role="status" style={{ fontSize: 12, color: "var(--app-sub)", marginTop: outcomeMsg ? 8 : 0 }}>{outcomeMsg}</div>
+          </section>
+        )}
+        {curCampaigns.length > 0 && (
+          <section aria-labelledby="k-camp-h" style={{ marginBottom: 16 }}>
+            <h3 id="k-camp-h" style={{ margin: "0 0 6px", fontSize: "var(--fs-meta)", fontWeight: 600, color: "var(--app-muted)" }}>Kampanye buat dia</h3>
+            {curCampaigns.map(c => {
+              const t = templates.find(x => x.id === c.templateId)!;
+              return (
+                <div key={c.id} style={{ padding: 12, borderRadius: 12, border: "1px solid var(--app-border)", marginBottom: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{c.name}</div>
+                  <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>{t.title}</div>
+                  <div style={{ fontSize: 13, lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word", marginBottom: 10 }}>{fillTemplate(t.body, fillData)}</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <button onClick={() => pick(t, sendOut.how, c)} style={{ ...btnPrimary, minHeight: 44, padding: "8px 16px" }}>{sendOut.label}</button>
+                    <button onClick={() => pick(t, "copy", c)} style={{ ...chip, minHeight: 44, fontWeight: 700 }}>{copiedId === `cmp_${c.id}` ? "✓ Tersalin" : "Copy"}</button>
+                  </div>
+                  {copyFail === `cmp_${c.id}` && <div role="status" style={{ fontSize: 12, color: "var(--warn-text)", marginTop: 6 }}>Gagal menyalin. Pilih teks di atas, lalu salin manual.</div>}
+                </div>
+              );
+            })}
+          </section>
+        )}
+        {engaged && curCampaigns.length === 0 && (
+          <p style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "0 0 16px", fontSize: 12, color: "var(--app-muted)" }}>
+            <span style={{ flex: "1 1 220px" }}>Ada promo bulan ini? Bikin kampanye buat grup Terhubung atau ETB, nanti muncul di sini buat dikirim ke dia.</span>
+            {canEdit && <button onClick={() => { setPane("performa"); setTimeout(() => document.getElementById("kampanye")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}
+              style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)" }}>Bikin kampanye</button>}
+          </p>
+        )}
         {(curPost || source.kind === "post") && !isBlocked && (
           <div role="radiogroup" aria-label="Kirim lewat" className="sp-via" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
             <span style={{ fontSize: 12, color: "var(--app-muted)", marginRight: 2 }}>Kirim lewat</span>
@@ -672,6 +768,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
             </div>
           )}
         </div>
+        {outcome.sheet}
       </div>
       ) : (
         <>
@@ -681,7 +778,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
           {/* The view, as in Notion: one list, picked from the title. */}
           <label className="sp-kview">
             <span className="vh">Tampilan</span>
-            <select value={prospectFilter} onChange={e => setProspectFilter(e.target.value as ProspectFilter)}>
+            <select value={prospectFilter} onChange={e => { setProspectFilter(e.target.value as ProspectFilter); setBackTo(null); }}>
               {PROSPECT_FILTERS.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
             <Icon name="chevronDown" size={16} stroke={2} />
@@ -718,7 +815,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
           </button>
         )}
         <ProspectList prospects={prospects} ready={journey.ready} hunts={hunts} strategy={strategy} sessionId={live?.id} embedded query={q}
-          filter={prospectFilter} setFilter={setProspectFilter} onOpen={p => setThreadId(p.id)}
+          filter={prospectFilter} setFilter={setProspectFilter} onOpen={p => setThreadId(p.id)} focusId={backTo}
           onCompose={(p, next, from) => { setQ(""); setQueued({ label: from, ids: next }); compose(p); }} />
       </section>
           <div id="radar-threads"><ThreadsRadar uid={space.me.uid} hunts={hunts} onTarget={targetFromRadar} /></div>

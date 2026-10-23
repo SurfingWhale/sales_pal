@@ -1359,6 +1359,8 @@ export const flows = [
     async run(t) {
       const { page, base } = t;
       const row = (who) => page.getByRole("button", { name: `Journey ${who}`, exact: true });
+      // Back from a person's page their card is open already; a tap would close it.
+      const expand = async (who) => { if ((await row(who).getAttribute("aria-expanded")) !== "true") await row(who).click(); };
       // The list's view, picked from its title as in Notion.
       const pick = async (f) => { await pane(page, "Journey"); await page.getByLabel("Tampilan").selectOption(f); };
       let email = "";
@@ -1428,7 +1430,7 @@ export const flows = [
         await row("Toko Kue (@tokokue)").locator(".sp-pbadge").getByText("Baru").waitFor();
       });
       await t.step("send it for real from the journey; the bar counts it", async () => {
-        await row("Toko Kue (@tokokue)").click();
+        await expand("Toko Kue (@tokokue)");
         await page.getByRole("button", { name: "✉ Kirim intro" }).click();
         await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@tokokue");
         await page.getByRole("button", { name: "✓ Tersalin" }).waitFor({ state: "detached" });
@@ -1446,6 +1448,41 @@ export const flows = [
         await page.locator("#journey-prospek").getByText("boleh kak, pricelist-nya berapa?").first().waitFor();
         await page.getByRole("group", { name: /Hasil untuk/ }).getByRole("button", { name: "✅ Tertarik" }).click();
         await row("Toko Kue (@tokokue)").locator(".sp-pbadge").getByText("Tertarik").waitFor();
+      });
+      await t.step("their page: the answer is marked there, Back returns to their card", async () => {
+        // A follow-up opened for someone who had answered meanwhile (owner, 23 Okt).
+        await page.getByRole("button", { name: "✉ Kirim pesan" }).click();
+        await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@tokokue");
+        const result = page.getByRole("group", { name: "Hasil untuk Toko Kue" });
+        await result.getByRole("button", { name: "🤔 Pikir-pikir" }).click();
+        await result.getByRole("button", { name: "🤔 Pikir-pikir", pressed: true }).waitFor();
+        await result.getByRole("button", { name: "✅ Tertarik" }).click();
+        await result.getByRole("button", { name: "✅ Tertarik", pressed: true }).waitFor();
+        // The browser's Back leaves their page for the list, not the app, with their card open.
+        await page.goBack();
+        await page.locator("#hunt-target").waitFor({ state: "detached" });
+        if (!page.url().includes("/dashboard")) throw new Error(`left the app: ${page.url()}`);
+        if ((await row("Toko Kue (@tokokue)").getAttribute("aria-expanded")) !== "true") throw new Error("back from their page left their card closed");
+        await row("Toko Kue (@tokokue)").locator(".sp-pbadge").getByText("Tertarik").waitFor();
+      });
+      await t.step("this month's promo: a campaign made from their page and sent from it", async () => {
+        await page.getByRole("button", { name: "✉ Kirim pesan" }).click();
+        await page.getByText(/^Ada promo bulan ini\?/).waitFor();
+        await page.getByRole("button", { name: "Bikin kampanye" }).click();
+        await page.getByRole("button", { name: "+ Kampanye" }).click();
+        await page.locator("#cmp-name").fill("Promo foto menu Oktober");
+        await page.getByRole("dialog", { name: "Kampanye baru" }).getByRole("button", { name: "Simpan kampanye" }).click();
+        // Back on Prospek, their page is still open, and the campaign is on it.
+        await page.getByRole("tablist", { name: "Bagian Hunting" }).getByRole("tab", { name: /^Prospek/ }).click();
+        const camp = page.getByRole("region", { name: "Kampanye buat dia" });
+        await camp.getByText("Promo foto menu Oktober").waitFor();
+        await camp.getByRole("button", { name: "Copy", exact: true }).click();
+        await expectText(page, "Tercatat: DM ke @tokokue");
+        await camp.waitFor({ state: "detached" });
+        // Escape is a way back too.
+        await page.locator("body").press("Escape");
+        await page.locator("#hunt-target").waitFor({ state: "detached" });
+        await page.getByRole("region", { name: /Riwayat Toko Kue/ }).getByText("Kampanye yang udah diterima: Promo foto menu Oktober").waitFor();
       });
       await t.step("Kasih data makes them ETB and a Hot lead", async () => {
         await page.getByRole("button", { name: "Kasih data →" }).click();
@@ -1499,7 +1536,7 @@ export const flows = [
         ]);
         // A card's Kirim intro opens their page; the rest of the list follows with Berikutnya.
         await pick("Baru");
-        await row("@kopibaru").click();
+        await expand("@kopibaru");
         await page.getByRole("button", { name: "✉ Kirim intro" }).first().click();
         await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@kopibaru", null, { timeout: 10000 });
         await page.getByText(/^Dari antrian/).waitFor();
@@ -1510,7 +1547,7 @@ export const flows = [
         await page.getByRole("dialog", { name: "Buang 1 prospek?" }).getByRole("button", { name: "Buang", exact: true }).click();
         await expectText(page, "1 prospek dibuang ke Arsip.");
         await pick("Arsip");
-        await row("@diamlama").click();
+        await expand("@diamlama");
         await page.getByRole("button", { name: "↩ Balikin" }).click();
         await expectText(page, "@diamlama dibalikin ke journey.");
       });
@@ -1520,7 +1557,7 @@ export const flows = [
         await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@rotikeju");
         await page.getByLabel("Prospek @rotikeju").waitFor();
         await pick("Baru");
-        await row("@rotikeju").click();
+        await expand("@rotikeju");
         await page.getByRole("button", { name: "🚫 Menolak dihubungi" }).click();
         await page.getByRole("button", { name: "Kunci" }).click();
         await row("@rotikeju").waitFor({ state: "detached" });
