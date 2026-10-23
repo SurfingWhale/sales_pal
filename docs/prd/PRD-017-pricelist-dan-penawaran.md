@@ -62,25 +62,48 @@ Biaya modal, vendor, dan catatan **tidak pernah dicetak** di PDF dan tidak perna
 - **Validasi di tempatnya:** "Isi nama klien dulu" muncul di kolom klien. Simpan tetap bisa ditekan dan langsung membawa ke kolom yang kurang, bukan abu-abu tanpa penjelasan.
 - Mengikuti `docs/standards/design.md` dan PRD-010 (target 44pt, kolom 16px, ada jalan keluar dari tiap dialog).
 
-## 6. Pricelist ke ketiga situs
+## 6. Pricelist ke ketiga situs: dual control
 
-- **SalesPal satu-satunya sumber harga.** Situs hanya membaca, tidak pernah menulis.
-- **Endpoint publik, hanya baca:** `GET /api/pricelist?site=visufavor|beuntamed|untmd-sports` → paket yang dipublikasikan ke situs itu. Bentuknya mengikuti `creative-hub/standards/pricelist.md`.
-- **Cache 5 menit di CDN.** Harga yang diubah di app tampil di situs dalam ±5 menit, **tanpa redeploy situs**.
-- **Yang boleh publikasi:** owner saja (`isOwner`, PRD-015), di **Paket → Tampil di situs**.
+> "Dual control ajah, jadi website bisa update dan gw juga bisa update lewat sales pal." (owner, 23 Okt)
+
+**Satu data, dua pintu.** Harga disimpan sekali, di SalesPal, dan bisa diubah dari dua tempat:
+- dari **SalesPal** (Paket);
+- dari **admin situs**: UNTMD `/admin` → Harga, Visufavor `admin.html`, BeUntamed kalau ada.
+
+Situs tidak menyimpan salinan sendiri, jadi tidak pernah ada dua versi yang saling menimpa diam-diam.
+
+- **Baca (publik):** `GET /api/pricelist?site=visufavor|beuntamed|untmd-sports` → paket yang tampil di situs itu. Bentuknya mengikuti `creative-hub/standards/pricelist.md`. Cache 5 menit di CDN: perubahan dari pintu mana pun tampil di situs dalam ±5 menit, **tanpa redeploy**.
+- **Tulis dari situs:**
+  - Admin situs (sudah login dengan standar auth situsnya) → route **server** situs itu → `PUT /api/pricelist/{id}?site=…` di SalesPal.
+  - Route itu memakai kunci rahasia per situs (`PRICELIST_KEY_<SITE>`), yang disimpan di env server situs dan SalesPal dan tidak pernah sampai ke browser.
+  - Membuat paket baru dari situs boleh (`POST`). Menghapus cuma menyembunyikan dari situs itu; yang bisa menghapus permanen hanya SalesPal.
+- **Yang bisa diubah dari situs:** bagian publik paket **untuk situs itu**, yaitu nama publik, harga "mulai dari", yang didapat, di luar scope, urutan, dan tampil/sembunyi.
+  - Komponen, biaya modal, vendor, dan catatan hanya bisa diubah di SalesPal.
+  - Paket baru dari situs masuk SalesPal tanpa komponen dan ditandai **"belum ada biaya modal"** sampai dilengkapi.
+- **Bentrok:**
+  - Tiap paket punya nomor `version`. Setiap perubahan, dari pintu mana pun, mengirim nomor versi yang terakhir dia lihat.
+  - Kalau sudah ada yang mengubah lebih dulu, SalesPal menolak (409) dan mengirim data terbaru.
+  - Layar yang ditolak menampilkan *"Harga ini baru diubah di {SalesPal | admin situs} jam {x}. Muat ulang?"*. Tidak ada perubahan yang hilang diam-diam.
+- **Jejak:** tiap perubahan dicatat: dari mana (SalesPal / visufavor / untmd-sports), siapa, harga lama → baru, dan kapan. Bisa dilihat di **Paket → Riwayat**.
+- **Margin tetap dijaga:** harga yang diubah dari situs langsung menghitung ulang margin di SalesPal. Kalau margin turun di bawah target, owner dapat notifikasi.
+- **Data dan rules:**
+  - Tulis dari situs hanya lewat server SalesPal (Admin SDK).
+  - Riwayat perubahan disimpan di koleksi khusus server.
+  - Yang boleh mengubah dari dalam SalesPal: owner (`isOwner`, PRD-015).
+  - Semua koleksi baru ditambahkan ke `firestore.rules` beserta tesnya.
 - **Situs menampilkan** "mulai dari Rp X" + yang didapat. Tombol tetap ke WhatsApp atau form lead (standar leads), dengan `utm_content=pricelist-{id}`, jadi lead dari pricelist terlihat sumbernya.
-- **Kalau SalesPal tidak bisa dihubungi,** situs menampilkan versi terakhir yang tersimpan, atau menyembunyikan blok harga. Tombol kontak tetap jalan.
+- **Kalau SalesPal tidak bisa dihubungi,** situs menampilkan versi terakhir yang tersimpan, atau menyembunyikan blok harga. Mengubah harga dari admin situs menampilkan pesan "SalesPal sedang tidak bisa dihubungi" (tidak menyimpan diam-diam ke salinan lokal). Tombol kontak tetap jalan.
 - **Urutan pemasangan:**
-  1. Visufavor dulu (pilot leads juga).
-  2. UNTMD Sports: tab Harga di CMS jadi baca-saja + link "Ubah di SalesPal". Keputusan owner.
-  3. BeUntamed kalau owner mau menampilkan harga. Repo-nya publik: kodenya ditulis dengan istilah BeUntamed sendiri, tanpa nama owner atau situs lain (batas privasi creative-hub).
+  1. **Visufavor** dulu (pilot leads juga). Situsnya statis, jadi ditambah satu Vercel Function untuk meneruskan perubahan dari `admin.html`.
+  2. **UNTMD Sports:** tab Harga di CMS membaca dan menulis ke SalesPal. Harga lama di CMS dipindahkan sekali ke SalesPal.
+  3. **BeUntamed** kalau owner mau menampilkan harga. Repo-nya publik: kodenya ditulis dengan istilah BeUntamed sendiri, tanpa nama owner atau situs lain (batas privasi creative-hub).
 
 ## 7. Fase
 
 1. Komponen + biaya modal + margin di penawaran; item manual bisa disimpan ke katalog.
 2. Editor halaman penuh + ringkasan menempel + template penawaran.
-3. Bagian publik paket + endpoint pricelist + standar di creative-hub naik ke v1 + pasang di Visufavor.
-4. UNTMD Sports, lalu BeUntamed (opsional).
+3. Bagian publik paket + endpoint baca & tulis (kunci per situs, `version`, riwayat) + standar di creative-hub naik ke v1 + pasang di Visufavor (baca + admin bisa ubah).
+4. UNTMD Sports (tab Harga CMS baca/tulis ke SalesPal, harga lama dipindahkan), lalu BeUntamed (opsional).
 
 **Tes:**
 - flow `sell` diperluas: komponen, margin, item manual disimpan ke katalog, template, PDF tanpa biaya modal;
@@ -88,7 +111,7 @@ Biaya modal, vendor, dan catatan **tidak pernah dicetak** di PDF dan tidak perna
 - tes endpoint: paket yang tidak dipublikasikan dan field internal tidak pernah keluar.
 
 ## 8. Keputusan owner
+- ✅ **Dual control** (23 Okt): harga bisa diubah dari SalesPal dan dari admin tiap situs; datanya tetap satu di SalesPal (§6).
 1. Situs menampilkan "mulai dari" atau harga penuh per paket?
-2. Tab Harga di CMS UNTMD: pindah ke SalesPal?
-3. BeUntamed menampilkan harga atau tidak?
-4. Target margin minimum (bawaan 30%).
+2. BeUntamed menampilkan harga atau tidak?
+3. Target margin minimum (bawaan 30%).
