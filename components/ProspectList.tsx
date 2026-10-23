@@ -8,18 +8,22 @@ import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import type { Hunt } from "@/lib/hunting";
 import { objections } from "@/lib/salespal-data";
 import {
-  Prospect, ProspectEvent, Result, Strategy, archivePatch, dncPatch, dropReady, fromHunts, inQueue, notePatch, replyPatch,
+  Prospect, ProspectEvent, Result, Strategy, View, archivePatch, dncPatch, dropReady, followUpDue, fromHunts, inQueue, JOURNEY_STEPS, journeyStep, lastLine, notePatch, replyPatch,
   restorePatch, resultPatch, silentDays, statusColor, statusLabel, view,
 } from "@/lib/prospects";
 import { Counter, bump, clean, ctx, loadClosed, removeProspect, saveProspect, syncHunt } from "@/lib/prospectStore";
-import { badge, btnPrimary, btnMuted, card, chip, font, inputStyle, label, ink } from "@/components/ui";
+import { btnPrimary, btnMuted, card, chip, font, inputStyle, label, ink } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmSheet";
 import ConvertSheet from "@/components/ConvertSheet";
+import Icon from "@/components/Icon";
+import { profileUrl } from "@/lib/threads";
 
 // Every person hunted, one journey each (docs/prd/PRD-009 §6): where they
 // stand, what was said both ways, and the one-tap answer that moves them on.
 
-export const FILTERS = ["Antrian", "Baru", "Nunggu", "Terhubung", "Siap dibuang", "Parkir", "ETB", "DNC", "Arsip"] as const;
+// One list for everyone (owner, 23 Okt: Kirim, Journey and Percakapan were the
+// same people three times): the filters of all three, in the order of a day.
+export const FILTERS = ["Antrian", "Follow-up hari ini", "Baru", "Nunggu", "Terhubung", "Diem 7+", "Siap dibuang", "Parkir", "ETB", "DNC", "Arsip"] as const;
 export type ProspectFilter = (typeof FILTERS)[number];
 const PAGE = 30;
 
@@ -30,6 +34,27 @@ function when(at: number): string {
   const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   return `${ymd === today() ? "hari ini" : longDate(ymd)} ${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}`;
 }
+
+const STEPS = JOURNEY_STEPS;
+function Steps({ p, v }: { p: Prospect; v: View }) {
+  if (v.status === "dnc") return null;
+  const at = journeyStep(p, v), c = statusColor(p, v);
+  return (
+    <ol className="sp-psteps" aria-label={`Tahap ${STEPS[at]}, ${at + 1} dari ${STEPS.length}`} style={{ "--k": c } as React.CSSProperties}>
+      {STEPS.map((x, i) => <li key={x} className={i < at ? "done" : i === at ? "now" : undefined} aria-hidden="true"><span>{x}</span></li>)}
+    </ol>
+  );
+}
+
+// Last touch, chat-list style: a time today, "Kemarin", else the date.
+const ago = (ms: number) => {
+  const d = new Date(ms), now = new Date();
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  if (d.toDateString() === y.toDateString()) return "Kemarin";
+  return d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+};
+const profileOf = (p: Prospect) => p.url || (p.platform === "Threads" ? profileUrl(p.handle.replace(/^@/, "")) : p.platform === "IG" ? `https://www.instagram.com/${p.handle.replace(/^@/, "")}/` : "");
 
 function Bubble({ e }: { e: ProspectEvent }) {
   const theirs = e.kind === "post" || e.kind === "reply";
@@ -71,10 +96,13 @@ function Summary({ p, on }: { p: Prospect; on: string }) {
   );
 }
 
-export default function ProspectList({ prospects, ready, hunts, strategy, sessionId, filter, setFilter, onCompose, onOpen }: {
+export default function ProspectList({ prospects, ready, hunts, strategy, sessionId, filter, setFilter, onCompose, onOpen, query, embedded }: {
   prospects: Prospect[]; ready: boolean; hunts: Hunt[]; strategy: Strategy; sessionId?: string;
-  filter: ProspectFilter; setFilter: (f: ProspectFilter) => void; onCompose: (p: Prospect) => void;
+  filter: ProspectFilter; setFilter: (f: ProspectFilter) => void;
+  onCompose: (p: Prospect, next: string[], from: ProspectFilter) => void;   // their page; next = who follows them in this list
   onOpen?: (p: Prospect) => void;   // the person's conversation
+  query?: string;                   // a search box the page owns
+  embedded?: boolean;               // inside Prospek: no box, title or search of its own
 }) {
   const [ask, askSheet] = useConfirm();
   const space = useSpace();
@@ -96,6 +124,8 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   const inFilter = (f: ProspectFilter) => rows.filter(({ p, v }) => {
     switch (f) {
       case "Antrian": return inQueue(p, on, strategy);
+      case "Follow-up hari ini": return followUpDue(p, on, strategy);
+      case "Diem 7+": { const q = silentDays(p, on); return q !== null && q >= 7 && !dropReady(p, on, strategy); }
       case "Baru": return v.status === "baru";
       case "Nunggu": return v.status === "intro" || v.status === "belum";
       case "Terhubung": return v.status === "terhubung" && p.result !== "data" && !v.parkedUntil;
@@ -106,13 +136,13 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
     }
   });
   // Search by ID, @username or name, across every journey, whatever the filter.
-  const needle = search.trim().toLowerCase().replace(/^@/, "");
+  const needle = (query ?? search).trim().toLowerCase().replace(/^@/, "");
   const hit = (p: Prospect) => [p.id, p.handle, p.name || ""].some(x => x.toLowerCase().replace(/^@/, "").includes(needle));
   const shown = needle
     ? [...rows, ...(closed || []).map(p => ({ p, v: view(p, on, strategy) }))].filter(({ p }) => hit(p))
     : filter === "DNC" || filter === "Arsip"
     ? (closed || []).filter(p => (filter === "Arsip") === !!p.archivedAt).map(p => ({ p, v: view(p, on, strategy) }))
-    : inFilter(filter).sort((a, b) => filter === "Antrian" ? (a.v.due || "").localeCompare(b.v.due || "") : b.p.updatedAt - a.p.updatedAt);
+    : inFilter(filter).sort((a, b) => filter === "Antrian" || filter === "Follow-up hari ini" ? (a.v.due || "").localeCompare(b.v.due || "") : (lastLine(b.p)?.at || b.p.updatedAt) - (lastLine(a.p)?.at || a.p.updatedAt));
   const unlinked = hunts.filter(h => !h.prospectId && h.target?.trim());
 
   async function act(p: Prospect, patch: Partial<Prospect>, counters: Counter[] = []) {
@@ -193,8 +223,9 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   const dropping = filter === "Siap dibuang" ? inFilter("Siap dibuang").map(r => r.p) : [];
 
   return (
-    <div id="journey-prospek" style={{ ...card, padding: 20, marginBottom: 20 }}>
+    <div id="journey-prospek" className={embedded ? "sp-plist" : undefined} style={embedded ? undefined : { ...card, padding: 20, marginBottom: 20 }}>
       {askSheet}
+      {!embedded && <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>Journey prospek</div>
         <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{prospects.length} orang aktif</div>
@@ -202,6 +233,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
       <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>
         Satu orang satu journey. Belum dibales {strategy.gaps[0]} hari = Belum respon; {strategy.maxAttempts}× tanpa jawaban = Tidak terhubung, diparkir {strategy.parkDays} hari.
       </div>
+      </>}
 
       {unlinked.length > 0 && (
         <div role="status" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)", marginBottom: 12, fontSize: 12 }}>
@@ -211,11 +243,11 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
       )}
       <div role="status" style={{ fontSize: 12, color: "var(--app-sub)", marginBottom: msg ? 10 : 0 }}>{msg}</div>
 
-      <input type="search" value={search} onChange={e => { setSearch(e.target.value); setLimit(PAGE); }} aria-label="Cari prospek pakai ID atau @username"
-        placeholder="Cari ID, @username, atau nama" style={{ ...inputStyle, fontSize: 16, marginBottom: 10 }} />
-      {needle && <div role="status" style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>{shown.length} ketemu buat “{search.trim()}” di semua journey.</div>}
+      {query === undefined && <input type="search" value={search} onChange={e => { setSearch(e.target.value); setLimit(PAGE); }} aria-label="Cari prospek pakai ID atau @username"
+        placeholder="Cari ID, @username, atau nama" style={{ ...inputStyle, fontSize: 16, marginBottom: 10 }} />}
+      {needle && <div role="status" style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>{shown.length} ketemu buat “{(query ?? search).trim()}” di semua journey.</div>}
 
-      <div role="group" aria-label="Saring prospek" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6, marginBottom: 6 }}>
+      {!needle && !embedded && <div role="group" aria-label="Saring prospek" className="sp-chiprow sp-pfilters" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6, marginBottom: 6 }}>
         {FILTERS.map(f => {
           const n = count(f);
           return (
@@ -225,7 +257,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
             </button>
           );
         })}
-      </div>
+      </div>}
 
       {filter === "Siap dibuang" && dropping.length > 0 && !needle && (
         <div role="note" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)", margin: "4px 0 10px", fontSize: 13 }}>
@@ -249,6 +281,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
         const who = p.name ? `${p.name} (${p.handle})` : p.handle;
         const post = [...(p.history || [])].reverse().find(e => e.kind === "post");
         const ed = editing?.id === p.id ? editing : null;
+        const last = lastLine(p);
         const sub = [
           p.platform, p.segment,
           v.status === "intro" || v.status === "belum" ? `percobaan ${p.attempts}/${strategy.maxAttempts}` : "",
@@ -257,16 +290,20 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
           v.due && v.status !== "dnc" ? (v.due <= on ? (v.due < on ? `telat sejak ${longDate(v.due)}` : "hari ini") : `${v.parkedUntil ? "parkir s.d." : "follow-up"} ${longDate(v.due)}`) : "",
         ].filter(Boolean).join(" · ");
         return (
-          <div key={p.id} style={{ borderTop: "1px solid var(--app-inner)", padding: "10px 0" }}>
-            <button onClick={() => { setOpenId(open ? null : p.id); setEditing(null); }} aria-expanded={open} aria-label={`Journey ${who}`}
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, width: "100%", background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", color: "inherit", fontFamily: "inherit" }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{who}</div>
-                <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{sub}</div>
-                {!open && post?.text && <div style={{ fontSize: 12, color: "var(--app-sub)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>“{post.text}”</div>}
-              </div>
-              <span style={badge(statusColor(p, v))}>{statusLabel(p, v)}</span>
-            </button>
+          <div key={p.id} className="sp-pcard">
+            {/* One card per person: who and where, how far along, the last thing said. */}
+            <div className="sp-pcard-top">
+              <button className="sp-pcard-main" onClick={() => { setOpenId(open ? null : p.id); setEditing(null); }} aria-expanded={open} aria-label={`Journey ${who}`}>
+                <span className="sp-pini" aria-hidden="true" style={{ background: `color-mix(in srgb, ${statusColor(p, v)} 14%, var(--app-card))`, color: ink(statusColor(p, v)) }}>{(p.name || p.handle).replace(/^@/, "").slice(0, 2).toUpperCase()}</span>
+                <span className="sp-pbody">
+                  <span className="sp-phead"><span className="sp-pname">{p.name || p.handle}</span>{last && <span className="sp-ptime tabnum">{ago(last.at)}</span>}</span>
+                  <span className="sp-psub"><span className="sp-pbadge" style={{ color: ink(statusColor(p, v)) }}>{statusLabel(p, v)}</span>{[p.name ? p.handle : "", sub].filter(Boolean).map(x => ` · ${x}`).join("")}</span>
+                  {!open && <span className="sp-plast">{last ? `${last.who === "kamu" ? "Kamu: " : last.who === "dia" ? "Dia: " : ""}${last.text.replace(/\s+/g, " ")}` : "Belum ada pesan"}</span>}
+                  <Steps p={p} v={v} />
+                </span>
+              </button>
+              {profileOf(p) && <a className="sp-pprofile" href={profileOf(p)} target="_blank" rel="noreferrer" aria-label={`Buka profil ${who} di ${p.platform}`} title={`Buka profil di ${p.platform}`}><Icon name="arrowUpRight" size={18} /></a>}
+            </div>
 
             {open && (
               <div role="region" aria-label={`Riwayat ${who}`} style={{ marginTop: 10 }}>
@@ -298,7 +335,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
                       {onOpen && <button onClick={() => onOpen(p)} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Percakapan</button>}
                       {dropReady(p, on, strategy) && <button onClick={() => ask(`Buang ${who}?`, "Pindah ke Arsip, riwayat tetap ada, bisa dibalikin.", () => drop([p]), "Buang", "Membuang…")} style={{ ...chip, minHeight: 36 }}>🗑 Buang</button>}
-                      <button onClick={() => onCompose(p)} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>{v.status === "baru" ? "✉ Kirim intro" : v.status === "belum" ? "↻ Follow-up" : "✉ Kirim pesan"}</button>
+                      <button onClick={() => { const ids = shown.map(r => r.p.id); onCompose(p, ids.slice(ids.indexOf(p.id) + 1), filter); }} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>{v.status === "baru" ? "✉ Kirim intro" : v.status === "belum" ? "↻ Follow-up" : "✉ Kirim pesan"}</button>
                       <button onClick={() => setEditing({ id: p.id, kind: "reply", text: "", date: "" })} aria-pressed={ed?.kind === "reply"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Dibales</button>
                       {(post?.url || p.url) && <a href={post?.url || p.url} target="_blank" rel="noreferrer" className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>{post?.url ? "Buka post ↗" : "Buka profil ↗"}</a>}
                       <button onClick={() => setEditing({ id: p.id, kind: "note", text: "", date: "" })} style={{ ...chip, minHeight: 36 }}>📝 Catatan</button>

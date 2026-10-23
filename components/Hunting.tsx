@@ -12,8 +12,7 @@ import {
   fill, waLinkFor, huntAction, huntColor, huntIcon, isStale, parseProfile, pct, platformSource, responded, scoreTemplates, verdict,
 } from "@/lib/hunting";
 import ThreadsRadar from "@/components/ThreadsRadar";
-import ProspectList, { ProspectFilter } from "@/components/ProspectList";
-import Conversations from "@/components/Conversations";
+import ProspectList, { FILTERS as PROSPECT_FILTERS, ProspectFilter } from "@/components/ProspectList";
 import ProspectThread, { type SendHow, type SendOut } from "@/components/ProspectThread";
 import Campaigns from "@/components/Campaigns";
 import HunterStats from "@/components/HunterStats";
@@ -24,8 +23,8 @@ import DefaultsSheet from "@/components/DefaultsSheet";
 import { TOPICS, Tone, defaultTopic, fromLibrary, repliesFor } from "@/lib/replies";
 import { profileUrl } from "@/lib/threads";
 import {
-  Channel, HuntSession, Prospect, QUEUE_GROUPS, QueueGroup, Strategy, newProspect, patchFromHunt, postPatch, prospectId, queueGroup, sessionMinutes,
-  silentDays, threadsPostLink, view,
+  Channel, HuntSession, Prospect, Strategy, newProspect, patchFromHunt, postPatch, prospectId, queueGroup, sessionMinutes,
+  threadsPostLink, view,
 } from "@/lib/prospects";
 import { HuntInbox, bump, createProspect, ctx, recordSend, saveProspect, unfurl, useFillDefaults, useHuntInbox } from "@/lib/prospectStore";
 import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading, ink } from "@/components/ui";
@@ -34,8 +33,9 @@ import { useConfirm } from "@/components/ConfirmSheet";
 type Filter = "Semua" | "Follow-up" | "Tertarik";
 // One part of Hunting at a time (QA 15 Okt: "tiap component mesti scroll panjang"):
 // writing the message, the people, the log, and the numbers.
-type Pane = "kirim" | "journey" | "log" | "performa";
-const PANES: [Pane, string][] = [["kirim", "Kirim"], ["journey", "Journey"], ["log", "Percakapan"], ["performa", "Performa"]];
+// Two parts (owner, 23 Okt): everyone you hunt in one list of cards, and how it's going.
+type Pane = "kirim" | "performa";
+const PANES: [Pane, string][] = [["kirim", "Prospek"], ["performa", "Performa"]];
 // An inline editor under a log row: the field on its own line, Batal beside the action.
 const inlineEditor: CSSProperties = { marginTop: 10, padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)" };
 const editorButtons: CSSProperties = { display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap", marginTop: 10 };
@@ -86,11 +86,12 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   // is picked, their page: the message for them (owner, 23 Okt).
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const [kview, setKview] = useState<"all" | QueueGroup>("all");
-  const [queueAll, setQueueAll] = useState<string[]>([]);
   const [addMenu, setAddMenu] = useState(false);
+  // Messages and scripts live behind the + menu too (owner, 23 Okt).
+  const [tplNew, setTplNew] = useState(0);
+  const [tplManage, setTplManage] = useState<false | "list" | "new">(false);
   const searchRef = useRef<HTMLInputElement>(null);
-  const [queued, setQueued] = useState<{ group: QueueGroup; ids: string[] } | null>(null);
+  const [queued, setQueued] = useState<{ label: string; ids: string[] } | null>(null);
   const [editDefaults, setEditDefaults] = useState(false);
   const allQuotes = useSpaceCollection<Quote>(space, "quotes");
   const allInvoices = useSpaceCollection<Invoice>(space, "invoices");
@@ -185,7 +186,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       toTarget(false);
     } else {
       setProspectFilter("Antrian");
-      setPane("journey");
+      setPane("kirim"); setOpen(false);
       setTimeout(() => document.getElementById("journey-prospek")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     }
   });
@@ -331,26 +332,20 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     } catch { return null; }
   }
 
-  // Take the next person from a queue group into Kirim; "Berikutnya" walks the rest.
-  function takeFrom(group: QueueGroup, p: Prospect) {
-    const ids = queueGroup(prospects, group, now, strategy).map(x => x.id);
-    setQueued({ group, ids: ids.slice(ids.indexOf(p.id) + 1) });
-    compose(p);
-  }
+  // "Berikutnya" walks the rest of the list the person was picked from.
   function takeNext() {
     if (!queued) return;
     const rest = queued.ids.map(id => prospects.find(x => x.id === id)).filter((x): x is Prospect => !!x);
     const next = rest[0];
     if (!next) { setQueued(null); return; }
-    setQueued({ group: queued.group, ids: queued.ids.slice(queued.ids.indexOf(next.id) + 1) });
+    setQueued({ label: queued.label, ids: queued.ids.slice(queued.ids.indexOf(next.id) + 1) });
     setUndo(null);
     compose(next);
   }
 
-  // Back from a person's page to the table.
+  // Back from a person's page to the list; their page stays one tap away.
   function backToList() {
-    setOpen(false); setQueued(null); setUndo(null);
-    setTarget(""); setUrl(""); setSource({ kind: "manual" }); setChannel("dm"); setPasteMsg("");
+    setOpen(false); setUndo(null);
   }
 
   // The search box is the way in: a match opens its page, anything else
@@ -537,9 +532,9 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       </div>
 
       <div role="tablist" aria-label="Bagian Hunting" className="sp-hunt-panes"
-        style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 4, padding: 4, marginBottom: 16, borderRadius: 12, background: "var(--app-inner)", border: "1px solid var(--app-border)" }}>
+        style={{ display: "grid", gridTemplateColumns: `repeat(${PANES.length}, minmax(0, 1fr))`, gap: 4, padding: 4, marginBottom: 16, borderRadius: 12, background: "var(--app-inner)", border: "1px solid var(--app-border)" }}>
         {PANES.map(([k, l]) => {
-          const n = k === "log" ? queueGroup(prospects, "due", now, strategy).length : 0;
+          const n = k === "kirim" ? queueGroup(prospects, "due", now, strategy).length : 0;
           return (
             <button key={k} role="tab" id={`hp-${k}`} aria-selected={pane === k} aria-controls={`hpane-${k}`} onClick={() => { setPane(k); }}
               aria-label={n ? `${l}, ${n} perlu follow-up` : l}
@@ -559,16 +554,42 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       })()}
       <div id="hpane-kirim" role="tabpanel" aria-labelledby="hp-kirim" hidden={pane !== "kirim"}>
       {addMenu && (
-        // The "+ ▾" menu: other ways in, as a short sheet (like Notion's template list).
+        // The + menu, like Notion's: who to add, and the messages and scripts to send them.
         <div className="modal-overlay sp-sheet-overlay" onClick={() => setAddMenu(false)} style={{ alignItems: "flex-end", background: "var(--scrim)" }}>
-          <section role="dialog" aria-modal="true" aria-label="Tambah target" className="sp-sheet sp-kadd" onClick={e => e.stopPropagation()}>
-            <div className="sp-kadd-head"><h2>Tambah target</h2><button className="sp-x" onClick={() => setAddMenu(false)} aria-label="Tutup"><span><Icon name="close" size={13} stroke={2.4} /></span></button></div>
+          <section role="dialog" aria-modal="true" aria-label="Tambah" className="sp-sheet sp-kadd" onClick={e => e.stopPropagation()}>
+            <div className="sp-kadd-head"><h2>Tambah</h2><button className="sp-x" onClick={() => setAddMenu(false)} aria-label="Tutup"><span><Icon name="close" size={13} stroke={2.4} /></span></button></div>
+            <h3 className="sp-kadd-sec">Target</h3>
             <ul>
-              <li><button onClick={() => { setAddMenu(false); requestAnimationFrame(() => searchRef.current?.focus()); }}><Icon name="search" size={20} />Ketik @akun atau tempel link</button></li>
+              <li><button onClick={() => { setAddMenu(false); setOpen(false); requestAnimationFrame(() => searchRef.current?.focus()); }}><Icon name="search" size={20} />Ketik @akun atau tempel link</button></li>
               <li><button onClick={() => { setAddMenu(false); pasteLink(); }}><Icon name="clipboard" size={20} />Tempel link dari clipboard</button></li>
-              <li><button onClick={() => { setAddMenu(false); setTimeout(() => document.getElementById("radar-threads")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}><Icon name="target" size={20} />Dari Radar Threads</button></li>
+              <li><button onClick={() => { setAddMenu(false); setOpen(false); setTimeout(() => document.getElementById("radar-threads")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}><Icon name="target" size={20} />Dari Radar Threads</button></li>
+            </ul>
+            <h3 className="sp-kadd-sec">Pesan & script</h3>
+            <ul>
+              {canEdit && <li><button onClick={() => { setAddMenu(false); if (open) setTplNew(n => n + 1); else setTplManage("new"); }}><Icon name="plus" size={20} />Template pesan baru</button></li>}
+              <li><button onClick={() => { setAddMenu(false); setTplManage("list"); }}><Icon name="doc" size={20} />Kelola template pesan</button></li>
+              <li><button onClick={() => { setAddMenu(false); setEditDefaults(true); }}><Icon name="sliders" size={20} />Default kalau kosong</button></li>
+              {onOpenScripts && <li><button onClick={() => { setAddMenu(false); onOpenScripts(); }}><Icon name="book" size={20} />Script Library</button></li>}
             </ul>
           </section>
+        </div>
+      )}
+      {tplManage === "new" && (
+        // Just the editor: the deck behind it closes with it.
+        <TemplateBoard templates={templates} scores={scores} data={fillData} stage={stageFor(undefined, undefined)} editorOnly startNew onEditDone={() => setTplManage(false)}
+          blocked={false} copiedId={copiedId} copyFail={copyFail} onPick={() => undefined} canEdit={canEdit} send={sendOut} sampleName="" />
+      )}
+      {tplManage === "list" && (
+        // The message deck on its own, to add and change templates without a target.
+        <div className="modal-overlay" onClick={() => setTplManage(false)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="tpl-manage-h" onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 560 }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+              <h2 id="tpl-manage-h" style={{ margin: 0, fontSize: "var(--fs-section)", fontWeight: 700 }}>Template pesan</h2>
+              <button className="sp-x" onClick={() => setTplManage(false)} aria-label="Tutup"><span><Icon name="close" size={13} stroke={2.4} /></span></button>
+            </div>
+            <TemplateBoard templates={templates} scores={scores} data={fillData} stage={stageFor(undefined, undefined)} manage
+              blocked={false} copiedId={copiedId} copyFail={copyFail} onPick={() => undefined} canEdit={canEdit} send={sendOut} sampleName="" />
+          </div>
         </div>
       )}
       {open ? (
@@ -579,7 +600,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         </div>
         {queued && (
           <p className="sp-kqueue">
-            Dari antrian <b>{QUEUE_GROUPS.find(g => g.id === queued.group)!.label}</b> · {queued.ids.length} lagi ·{" "}
+            Dari antrian <b>{queued.label}</b> · {queued.ids.length} lagi ·{" "}
             <button onClick={() => setQueued(null)} aria-label="Berhenti ambil dari antrian">Selesai</button>
           </p>
         )}
@@ -635,7 +656,8 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         <TemplateBoard templates={templates} scores={scores} data={fillData} stage={stageFor(cur, cur ? view(cur, now, strategy) : undefined)}
           blocked={isBlocked} copiedId={copiedId} copyFail={copyFail} onPick={pick} canEdit={canEdit} send={sendOut}
           sampleName={target.trim() ? (cur?.name || target.trim()) : ""}
-          extra={<button onClick={() => setEditDefaults(true)} aria-label="Default kalau kosong" style={{ ...chip, display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="sliders" size={15} />Default kosong</button>} />
+          newRequest={open ? tplNew : 0}
+          extra={<button onClick={() => setAddMenu(true)} aria-haspopup="dialog" style={{ ...chip, display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="plus" size={15} stroke={2} />Template & script</button>} />
 
         {/* Mounted before its text, so screen readers announce "Tercatat". */}
         <div role="status">
@@ -653,30 +675,29 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       </div>
       ) : (
         <>
-      <section aria-label="Daftar kirim" className="sp-ktable">
-        {/* A database header, as in Notion: the view, then its tools on the right. */}
+      <section aria-label="Daftar prospek" className="sp-ktable">
+        {/* A database header, as in Notion: the list's name, then its tools. */}
         <div className="sp-ktool">
+          {/* The view, as in Notion: one list, picked from the title. */}
           <label className="sp-kview">
             <span className="vh">Tampilan</span>
-            <select value={kview} onChange={e => setKview(e.target.value as "all" | QueueGroup)}>
-              <option value="all">Semua antrian</option>
-              {QUEUE_GROUPS.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+            <select value={prospectFilter} onChange={e => setProspectFilter(e.target.value as ProspectFilter)}>
+              {PROSPECT_FILTERS.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
             <Icon name="chevronDown" size={16} stroke={2} />
           </label>
           <div className="sp-ktools">
-            <button className="sp-icon44" onClick={() => setEditDefaults(true)} aria-label="Default kalau kosong" title="Default kalau kosong"><Icon name="sliders" size={20} /></button>
             <div className="sp-split">
               <button onClick={() => searchRef.current?.focus()} aria-label="Target baru"><Icon name="plus" size={18} stroke={2} /></button>
-              <button onClick={() => setAddMenu(true)} aria-label="Cara lain nambah target" aria-haspopup="dialog"><Icon name="chevronDown" size={16} stroke={2} /></button>
+              <button onClick={() => setAddMenu(true)} aria-label="Menu tambah: target, template, script" aria-haspopup="dialog"><Icon name="chevronDown" size={16} stroke={2} /></button>
             </div>
           </div>
         </div>
         <div className="sp-ksearch">
           <Icon name="search" size={18} />
-          <label htmlFor="hunt-search" className="vh">Cari atau tempel target</label>
+          <label htmlFor="hunt-search" className="vh">Cari prospek pakai ID atau @username</label>
           <input id="hunt-search" ref={searchRef} type="search" value={q} enterKeyHint="go" autoComplete="off"
-            placeholder="Cari nama, @akun, atau tempel link"
+            placeholder="Cari nama, @akun, ID, atau tempel link"
             onPaste={e => { const v = e.clipboardData.getData("text"); if (/https?:\/\//.test(v)) { e.preventDefault(); commitSearch(v); } }}
             onChange={e => { const v = e.target.value; if (/https?:\/\//.test(v)) { commitSearch(v); return; } setQ(v); }}
             onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); commitSearch(); } }} />
@@ -684,78 +705,29 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
           <button onClick={pasteLink} className="touch-only sp-kpaste" aria-label="Tempel link profil dari clipboard"><Icon name="clipboard" size={16} />Tempel</button>
         </div>
         <div role="status" className="sp-kmsg">{pasteMsg}</div>
-
-        <div className="sp-kcols" aria-hidden="true"><span>Nama</span><span>Diem</span></div>
-        {(() => {
-          const row = (p: Prospect, onPick: () => void, label = "Kirim") => {
-            const who = p.name || p.handle, d = silentDays(p, now);
-            return (
-              <li key={p.id}>
-                <button className="sp-krow" onClick={onPick}>
-                  <span className="sp-kini" aria-hidden="true">{who.replace(/^@/, "").slice(0, 2).toUpperCase()}</span>
-                  <span className="sp-knm">{who}{p.name && <span className="sp-ksub">{p.handle} · {p.platform}</span>}</span>
-                  {d !== null && d >= 1 && <span className="sp-kage tabnum">{d} hr</span>}
-                  <span className="sp-kpill" aria-hidden="true">{label}</span>
-                </button>
-              </li>
-            );
-          };
-          const term = q.trim().replace(/^@/, "").toLowerCase();
-          if (term) {
-            const found = prospects.filter(p => `${p.handle} ${p.name || ""}`.toLowerCase().includes(term)).slice(0, 20);
-            const exact = found.some(p => p.handle.replace(/^@/, "").toLowerCase() === term);
-            return (
-              <ul className="sp-klist" aria-label="Hasil cari">
-                {found.map(p => row(p, () => { setQ(""); setQueued(null); compose(p); }))}
-                {!exact && (
-                  <li><button className="sp-krow sp-knew" onClick={() => commitSearch()}>
-                    <span className="sp-kini" aria-hidden="true"><Icon name="plus" size={16} stroke={2} /></span>
-                    <span className="sp-knm">Kirim ke “{q.trim()}”<span className="sp-ksub">Target baru, belum ada di journey</span></span>
-                  </button></li>
-                )}
-              </ul>
-            );
-          }
-          const groups = QUEUE_GROUPS.filter(g => kview === "all" || g.id === kview);
-          const shownGroups = groups.map(g => ({ g, ps: queueGroup(prospects, g.id, now, strategy) })).filter(x => kview !== "all" || x.ps.length > 0);
-          if (!shownGroups.length) return <p className="sp-kempty">Antrian kosong. Cari atau tempel link di atas buat mulai, atau simpan post dari Threads.</p>;
-          return shownGroups.map(({ g, ps }) => {
-            const all = queueAll.includes(g.id);
-            return (
-              <section key={g.id} aria-label={g.label} className="sp-kgroup">
-                <div className="sp-kgh"><h3>{g.label} <span className="tabnum">{ps.length}</span></h3><span>{g.id === "drop" ? `diem ${strategy.dropDays}+ hari` : g.hint}</span></div>
-                {ps.length === 0 ? <p className="sp-kempty">Kosong.</p> : (
-                  <ul className="sp-klist">
-                    {ps.slice(0, all ? ps.length : 5).map(p => g.id === "drop" ? row(p, () => setThreadId(p.id), "Buka") : row(p, () => takeFrom(g.id, p)))}
-                  </ul>
-                )}
-                {ps.length > 5 && (
-                  <button className="sp-kmore" aria-expanded={all} onClick={() => setQueueAll(all ? queueAll.filter(x => x !== g.id) : [...queueAll, g.id])}>
-                    {all ? "Ringkas" : `Lihat semua ${ps.length}`}
-                  </button>
-                )}
-              </section>
-            );
-          });
-        })()}
+        {target.trim() && (
+          <div className="sp-kresume">
+            <button onClick={() => setOpen(true)}><Icon name="pencil" size={16} />Lanjut ke {target.trim()}</button>
+            <button className="sp-icon44" onClick={() => { clearTarget(); setQueued(null); }} aria-label={`Tutup ${target.trim()}`}><Icon name="close" size={14} stroke={2.2} /></button>
+          </div>
+        )}
+        {q.trim() && !prospects.some(p => p.handle.replace(/^@/, "").toLowerCase() === q.trim().replace(/^@/, "").toLowerCase()) && (
+          <button className="sp-krow sp-knew" onClick={() => commitSearch()}>
+            <span className="sp-kini" aria-hidden="true"><Icon name="plus" size={16} stroke={2} /></span>
+            <span className="sp-knm">Kirim ke “{q.trim()}”<span className="sp-ksub">Target baru, belum ada di journey</span></span>
+          </button>
+        )}
+        <ProspectList prospects={prospects} ready={journey.ready} hunts={hunts} strategy={strategy} sessionId={live?.id} embedded query={q}
+          filter={prospectFilter} setFilter={setProspectFilter} onOpen={p => setThreadId(p.id)}
+          onCompose={(p, next, from) => { setQ(""); setQueued({ label: from, ids: next }); compose(p); }} />
       </section>
           <div id="radar-threads"><ThreadsRadar uid={space.me.uid} hunts={hunts} onTarget={targetFromRadar} /></div>
         </>
       )}
       </div>
 
-      <div id="hpane-journey" role="tabpanel" aria-labelledby="hp-journey" hidden={pane !== "journey"}>
-        <ProspectList prospects={prospects} ready={journey.ready} hunts={hunts} strategy={strategy} sessionId={live?.id}
-          filter={prospectFilter} setFilter={setProspectFilter} onCompose={compose} onOpen={p => setThreadId(p.id)} />
-        <Campaigns prospects={prospects} templates={templates} strategy={strategy} sessionId={live?.id} defaults={defaults} />
-      </div>
-
-      <div id="hpane-log" role="tabpanel" aria-labelledby="hp-log" hidden={pane !== "log"}>
-      <section aria-labelledby="conv-h" style={{ marginBottom: "var(--sp-5)" }}>
-        <h3 id="conv-h" className="sp-sec-h">Percakapan</h3>
-        <div style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)", margin: "0 0 var(--sp-3)" }}>Tiap orang kayak chat: pesan terakhir, kapan, dan perlu apa. Tap buat buka dan kirim lanjutan.</div>
-        <Conversations prospects={prospects} strategy={strategy} onOpen={p => setThreadId(p.id)} />
-      </section>
+      <div id="hpane-performa" role="tabpanel" aria-labelledby="hp-performa" hidden={pane !== "performa"}>
+      <Campaigns prospects={prospects} templates={templates} strategy={strategy} sessionId={live?.id} defaults={defaults} />
       {/* The old per-message log, folded: every send is in its conversation now. */}
       <details style={{ ...card, padding: "4px 20px", marginBottom: 20 }}>
         <summary style={{ cursor: "pointer", minHeight: 44, display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700 }}>Log kiriman ({sorted.length})</summary>
@@ -898,9 +870,6 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       </div>
       </details>
 
-      </div>
-
-      <div id="hpane-performa" role="tabpanel" aria-labelledby="hp-performa" hidden={pane !== "performa"}>
       <OccupancyCalendar quotes={allQuotes} invoices={allInvoices} />
       {/* Which message works */}
       <div style={{ ...card, padding: 20, marginBottom: 20 }}>

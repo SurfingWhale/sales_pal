@@ -31,6 +31,8 @@ export interface Todo {
   wa?: boolean;        // the main action is the WhatsApp message
   snooze?: () => void; // "Tunda": push it to tomorrow
   open: () => void;
+  // A prospect from Hunting: how far along, the chat so far, their profile.
+  journey?: { steps: readonly string[]; at: number; color: string; chat: { who: "kamu" | "dia" | "info"; text: string; at: number }[]; profile?: string };
 }
 
 export interface Numbers {
@@ -141,6 +143,14 @@ const css = `
 .sp-row-title { display: block; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-row-sub { display: block; margin-top: 2px; font-size: 13px; color: var(--app-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-row-sub .is-late { color: var(--hot); font-weight: 600; }
+.sp-flow.sp-chat-flow { padding: 12px 20px 4px; flex-shrink: 0; }
+.sp-chat { list-style: none; margin: 0; padding: 8px 16px 12px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; overscroll-behavior: contain; }
+.sp-chat li { max-width: 85%; padding: 8px 12px; border-radius: 14px; font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+.sp-chat li.them { align-self: flex-start; background: var(--app-inner); border-bottom-left-radius: 4px; }
+.sp-chat li.me { align-self: flex-end; background: color-mix(in srgb, #005eb0 12%, var(--app-card)); border-bottom-right-radius: 4px; }
+.sp-chat-who { display: block; font-size: 11px; color: var(--app-muted); margin-bottom: 2px; }
+.sp-chat-acts { display: flex; gap: 8px; padding: 8px 16px calc(12px + env(safe-area-inset-bottom, 0px)); box-shadow: inset 0 1px 0 var(--app-border); }
+.sp-chat-acts > * { flex: 1; }
 .sp-b-map { margin-top: 24px; }
 /* The path line: done steps filled in the task's colour, the current one ringed. */
 .sp-flow { list-style: none; margin: 0; padding: 0; display: flex; position: relative; }
@@ -261,6 +271,7 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
   const [mode, setModeState] = useState<BerandaMode>(savedMode);
   const setMode = (m: BerandaMode) => { setModeState(m); try { localStorage.setItem(MODE_KEY, m); } catch { /* private mode */ } };
   const [sheet, setSheet] = useState(false);
+  const [chatOf, setChatOf] = useState<Todo | null>(null);
   const due = todo.filter(t => t.when <= now).length;
   // A queue, not a feed: the phone swipes through the first ten (the desktop
   // grid shows four), and the whole list opens in its own scrolling sheet.
@@ -410,9 +421,10 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
                     <p className="sp-task-what">{t.what}{first ? ` · ${whenText.toLowerCase()}` : ""}</p>
                   </div>
                   {(() => {
-                    const f = stepsOf(t);
+                    // A prospect shows its real journey; other tasks the path of their kind.
+                    const f = t.journey ? { steps: t.journey.steps, at: t.journey.at } : stepsOf(t);
                     return (
-                      <ol className="sp-flow" aria-label={`Tahap sekarang: ${f.steps[f.at]}, ${f.at + 1} dari ${f.steps.length}`}>
+                      <ol className="sp-flow" style={t.journey ? { "--k": t.journey.color } as React.CSSProperties : undefined} aria-label={`Tahap sekarang: ${f.steps[f.at]}, ${f.at + 1} dari ${f.steps.length}`}>
                         {f.steps.map((st, n) => <li key={st} className={n < f.at ? "done" : n === f.at ? "now" : undefined} aria-hidden="true"><span>{st}</span></li>)}
                       </ol>
                     );
@@ -423,6 +435,7 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
                       : <button onClick={t.open} className="sp-btn line">{t.action}</button>}
                     {t.snooze && <button onClick={t.snooze} className="sp-btn ghost">Tunda</button>}
                     {!t.snooze && t.wa && t.phone && <button onClick={t.open} className="sp-btn ghost">Buka</button>}
+                    {t.journey && t.journey.chat.length > 0 && <button onClick={() => setChatOf(t)} className="sp-btn ghost" aria-haspopup="dialog" aria-label={`Chat terakhir dengan ${t.title}`}>Chat</button>}
                   </div>
                 </article>
               );
@@ -433,6 +446,32 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
                 <span style={{ fontSize: 14, fontWeight: 600, color: "var(--brand-text)" }}>Lihat semua {todo.length}</span>
               </button>
             )}
+          </div>
+        )}
+        {chatOf?.journey && (
+          // The chat so far with a prospect, without leaving Beranda.
+          <div className="modal-overlay" onClick={() => setChatOf(null)} style={{ alignItems: "flex-end" }}>
+            <div role="dialog" aria-modal="true" aria-labelledby="chat-h" data-own-layout className="sp-todo-sheet" onClick={e => e.stopPropagation()}>
+              <div className="sp-todo-sheet-head">
+                <h2 id="chat-h" style={{ margin: 0, fontSize: 17, fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chatOf.title}</h2>
+                <button onClick={() => setChatOf(null)} className="sp-btn ghost" style={{ color: "var(--brand-text)", fontWeight: 600, flexShrink: 0 }}>Tutup</button>
+              </div>
+              <ol className="sp-flow sp-chat-flow" style={{ "--k": chatOf.journey.color } as React.CSSProperties} aria-label={`Tahap sekarang: ${chatOf.journey.steps[chatOf.journey.at]}`}>
+                {chatOf.journey.steps.map((st, n) => <li key={st} className={n < chatOf.journey!.at ? "done" : n === chatOf.journey!.at ? "now" : undefined} aria-hidden="true"><span>{st}</span></li>)}
+              </ol>
+              <ul className="sp-chat" aria-label="Chat terakhir">
+                {chatOf.journey.chat.map((m, i) => (
+                  <li key={i} className={m.who === "kamu" ? "me" : "them"}>
+                    <span className="sp-chat-who">{m.who === "kamu" ? "Kamu" : "Dia"} · {new Date(m.at).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}</span>
+                    {m.text}
+                  </li>
+                ))}
+              </ul>
+              <div className="sp-chat-acts">
+                {chatOf.journey.profile && <a href={chatOf.journey.profile} target="_blank" rel="noreferrer" className="sp-btn line"><Icon name="arrowUpRight" size={16} />Buka profil</a>}
+                <button onClick={() => { const t = chatOf; setChatOf(null); t.open(); }} className="sp-btn blue">{chatOf.action}</button>
+              </div>
+            </div>
           </div>
         )}
         {sheet && (

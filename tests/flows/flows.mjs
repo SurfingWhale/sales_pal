@@ -13,11 +13,23 @@ const OWNER_EMAIL = readFileSync(new URL("../../firestore.rules", import.meta.ur
 
 // ---------- helpers ----------
 // One DM in Hunting's log: the row that holds this target and its delete button.
-// Hunting shows one part at a time: Kirim, Journey, Percakapan, Performa.
-const pane = (page, name) => page.getByRole("tablist", { name: "Bagian Hunting" }).getByRole("tab", { name: new RegExp(`^${name}`) }).click();
-// The per-message log sits folded under Percakapan.
+// Hunting has two parts: Prospek (everyone, as cards; a person's page to write
+// to them) and Performa. "Kirim" means that person's page; "Journey" and
+// "Percakapan" mean the list.
+const pane = async (page, name) => {
+  const tab = /^(Kirim|Journey|Percakapan)$/.test(name) ? "Prospek" : name;
+  await page.getByRole("tablist", { name: "Bagian Hunting" }).getByRole("tab", { name: new RegExp(`^${tab}`) }).click();
+  if (name === "Kirim") {
+    const resume = page.getByRole("button", { name: /^Lanjut ke / });
+    if (await resume.isVisible()) await resume.click();
+  } else if (tab === "Prospek") {
+    const back = page.getByRole("button", { name: "Kembali ke daftar" });
+    if (await back.isVisible()) await back.click();
+  }
+};
+// The per-message log sits folded under Performa.
 const openLog = async (page) => {
-  await pane(page, "Percakapan");
+  await pane(page, "Performa");
   const log = page.locator("details").filter({ has: page.locator("summary", { hasText: /^Log kiriman/ }) });
   if (!(await log.evaluate(d => d.open))) await log.locator("summary").click();
 };
@@ -899,6 +911,19 @@ export const flows = [
         await page.keyboard.press("Escape");
         await map.getByRole("button", { name: "Potensi" }).click().catch(() => {});
       });
+      await t.step("a prospect's card on Beranda shows its journey and opens the chat so far", async () => {
+        await go(page, "Beranda");
+        const chatBtn = page.locator(".sp-todo").getByRole("button", { name: /^Chat terakhir dengan / }).first();
+        await chatBtn.waitFor({ state: "attached", timeout: 15000 });
+        await chatBtn.scrollIntoViewIfNeeded();
+        await chatBtn.click();
+        const sheet = page.getByRole("dialog").filter({ has: page.getByRole("list", { name: "Chat terakhir" }) });
+        await sheet.getByRole("list", { name: "Chat terakhir" }).getByRole("listitem").first().waitFor();
+        await sheet.getByRole("list", { name: /^Tahap sekarang: / }).waitFor();
+        await t.audit("Beranda → a prospect's chat (big account)");
+        await sheet.getByRole("button", { name: "Tutup" }).click();
+        await sheet.waitFor({ state: "detached" });
+      });
       await t.step("Perlu ditindak is a bounded queue: ten cards, the rest in a sheet that scrolls itself", async () => {
         await go(page, "Beranda");
         const queue = page.locator(".sp-todo");
@@ -934,7 +959,7 @@ export const flows = [
           await go(page, place, tab);
           if (place === "Hunting") await pane(page, "Journey");
           // Kirim's table names the same people; look in the pane that's showing.
-          await (place === "Hunting" ? page.locator("#hpane-journey") : page).getByText(want).first().waitFor({ timeout: 15000 });
+          await (place === "Hunting" ? page.locator("#journey-prospek") : page).getByText(want).first().waitFor({ timeout: 15000 });
           const ms = Date.now() - t0;
           if (ms > 8000) throw new Error(`took ${ms} ms to show`);
         });
@@ -1090,12 +1115,11 @@ export const flows = [
       await check("Bikin guild", async () => { await go(page, "Tim", "Guild"); await page.getByRole("button", { name: "+ Bikin guild" }).click(); }, { last: "Bikin guild" });
       await check("Template baru", async () => {
         await go(page, "Hunting");
-        // Messages live on a person's page: open one from the search box.
+        // Messages and scripts live behind the + menu.
         const back = page.getByRole("button", { name: "Kembali ke daftar" });
         if (await back.isVisible()) await back.click();
-        const box = page.getByRole("searchbox", { name: "Cari atau tempel target" });
-        await box.fill("@dialogflow"); await box.press("Enter");
-        await page.getByRole("button", { name: "+ Template" }).click();
+        await page.getByRole("button", { name: "Menu tambah: target, template, script" }).click();
+        await page.getByRole("dialog", { name: "Tambah" }).getByRole("button", { name: "Template pesan baru" }).click();
       }, { last: "Batal" });
       await check("Quick Pitch", async () => { await go(page, "Jualan", "Leads"); await page.getByRole("button", { name: /Quick Pitch/ }).click(); });
     },
@@ -1106,7 +1130,7 @@ export const flows = [
       const { page } = t;
       await t.step("sign up and open Hunting: Kirim is a table with a search box", async () => {
         await mockUnfurl(page); await signup(t); await go(page, "Hunting");
-        await page.getByRole("region", { name: "Daftar kirim" }).getByRole("searchbox", { name: "Cari atau tempel target" }).waitFor();
+        await page.getByRole("region", { name: "Daftar prospek" }).getByRole("searchbox", { name: "Cari prospek pakai ID atau @username" }).waitFor();
         await page.getByRole("button", { name: "Target baru" }).waitFor();
       });
       await t.step("Radar shows as coming soon", () => expectText(page, "Segera hadir"));
@@ -1203,7 +1227,8 @@ export const flows = [
         await page.getByRole("button", { name: "+ Pakai contoh personal" }).click();
         const panel = page.getByRole("tabpanel", { name: /Tahap 1: Intro/ });
         await panel.getByText(/Halo dmflow! Aku biasa pegang/).waitFor();
-        await page.getByRole("button", { name: "Default kalau kosong" }).click();
+        await page.getByRole("button", { name: "Template & script" }).click();
+        await page.getByRole("dialog", { name: "Tambah" }).getByRole("button", { name: "Default kalau kosong" }).click();
         const sheet = page.getByRole("dialog", { name: "Default kalau kosong" });
         await sheet.locator("#def-kebutuhan").fill("dokumentasi acara");
         await sheet.getByRole("button", { name: "Simpan default" }).click();
@@ -1246,17 +1271,18 @@ export const flows = [
         await pane(page, "Kirim");
         const back = page.getByRole("button", { name: "Kembali ke daftar" });
         if (await back.isVisible()) await back.click();
-        const box = page.getByRole("searchbox", { name: "Cari atau tempel target" });
+        const box = page.getByRole("searchbox", { name: "Cari prospek pakai ID atau @username" });
         await box.fill("kopi");
-        await page.getByRole("list", { name: "Hasil cari" }).getByRole("button", { name: /kopiflow/i }).first().waitFor();
+        await page.getByRole("button", { name: /^Journey .*kopiflow/i }).first().waitFor();
         await box.fill("@barucari");
         await box.press("Enter");
         await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@barucari");
         await page.getByRole("button", { name: "Kembali ke daftar" }).click();
-        await page.getByRole("button", { name: "Cara lain nambah target" }).click();
-        const menu = page.getByRole("dialog", { name: "Tambah target" });
+        await page.getByRole("button", { name: "Menu tambah: target, template, script" }).click();
+        const menu = page.getByRole("dialog", { name: "Tambah" });
         await menu.getByRole("button", { name: /Tempel link dari clipboard/ }).waitFor();
-        await t.audit("Kirim → Tambah target menu");
+        await menu.getByRole("button", { name: "Kelola template pesan" }).waitFor();
+        await t.audit("Prospek → + menu");
         await menu.getByRole("button", { name: "Tutup" }).click();
         await menu.waitFor({ state: "detached" });
       });
@@ -1268,9 +1294,10 @@ export const flows = [
     async run(t) {
       const { page, base } = t;
       const row = (who) => page.getByRole("button", { name: `Journey ${who}`, exact: true });
-      const pick = async (f) => { await pane(page, "Journey"); await page.getByRole("group", { name: "Saring prospek" }).getByRole("button", { name: new RegExp(`^${f}`) }).click(); };
+      // The list's view, picked from its title as in Notion.
+      const pick = async (f) => { await pane(page, "Journey"); await page.getByLabel("Tampilan").selectOption(f); };
       let email = "";
-      await t.step("sign up and open Hunting", async () => { await mockUnfurl(page); email = await signup(t); await go(page, "Hunting"); await pane(page, "Journey"); await expectText(page, "Journey prospek"); await pane(page, "Kirim"); });
+      await t.step("sign up and open Hunting", async () => { await mockUnfurl(page); email = await signup(t); await go(page, "Hunting"); await pane(page, "Journey"); await page.getByLabel("Tampilan").waitFor(); });
       await t.step("a post shared from Threads opens as a prospect with its words", async () => {
         // /share redirects to /dashboard, which then rewrites its own URL; waitForURL
         // reads that rewrite as an aborted navigation, so wait on the page instead.
@@ -1308,7 +1335,8 @@ export const flows = [
       });
       await t.step("a new template shows its stage, the words it can use, and a preview", async () => {
         await page.getByRole("tablist", { name: "Tahap pesan" }).getByRole("tab", { name: /^1\. Intro, .*cocok sekarang/ }).click();
-        await page.getByRole("button", { name: "+ Template" }).click();
+        await page.getByRole("button", { name: "Template & script" }).click();
+        await page.getByRole("dialog", { name: "Tambah" }).getByRole("button", { name: "Template pesan baru" }).click();
         const dlg = page.getByRole("dialog", { name: "Template baru" });
         await dlg.getByRole("radio", { name: "1. Intro", checked: true }).waitFor();
         await page.locator("#tpl-body").fill("Halo {nama}! Butuh ");
@@ -1332,7 +1360,7 @@ export const flows = [
         await openLog(page);
         await expectText(page, "Belum ada DM.");
         await pane(page, "Journey");
-        await row("Toko Kue (@tokokue)").getByText("Baru").waitFor();
+        await row("Toko Kue (@tokokue)").locator(".sp-pbadge").getByText("Baru").waitFor();
       });
       await t.step("send it for real from the journey; the bar counts it", async () => {
         await row("Toko Kue (@tokokue)").click();
@@ -1344,15 +1372,15 @@ export const flows = [
       });
       await t.step("they answer: the reply goes in the history, then Tertarik", async () => {
         await pick("Nunggu");
-        await row("Toko Kue (@tokokue)").getByText("Intro terkirim").waitFor();
+        await row("Toko Kue (@tokokue)").locator(".sp-pbadge").getByText("Intro terkirim").waitFor();
         if ((await row("Toko Kue (@tokokue)").getAttribute("aria-expanded")) !== "true") await row("Toko Kue (@tokokue)").click();
         await page.getByRole("button", { name: "💬 Dibales" }).click();
         await page.getByLabel("Tempel balasannya (opsional)").fill("boleh kak, pricelist-nya berapa?");
         await page.getByRole("button", { name: "Simpan", exact: true }).click();
         await pick("Terhubung");
-        await page.locator("#hpane-journey").getByText("boleh kak, pricelist-nya berapa?").first().waitFor();
+        await page.locator("#journey-prospek").getByText("boleh kak, pricelist-nya berapa?").first().waitFor();
         await page.getByRole("group", { name: /Hasil untuk/ }).getByRole("button", { name: "✅ Tertarik" }).click();
-        await row("Toko Kue (@tokokue)").getByText("Tertarik").waitFor();
+        await row("Toko Kue (@tokokue)").locator(".sp-pbadge").getByText("Tertarik").waitFor();
       });
       await t.step("Kasih data makes them ETB and a Hot lead", async () => {
         await page.getByRole("button", { name: "Kasih data →" }).click();
@@ -1368,8 +1396,14 @@ export const flows = [
         await huntRow(page, "@tokokue").getByText("Tertarik").first().waitFor();
       });
       await t.step("percakapan: a person reads like a chat, and the next message goes from there", async () => {
+        // One card per person: it shows how far along they are, and opens their chat.
         await pane(page, "Percakapan");
-        await page.getByRole("button", { name: "Buka percakapan Toko Kue (@tokokue)" }).click();
+        // They gave their details by now: ETB, at the last step of the line.
+        await pick("ETB");
+        const card = row("Toko Kue (@tokokue)");
+        await card.getByRole("list", { name: /^Tahap Data, 5 dari 5/ }).waitFor();
+        if ((await card.getAttribute("aria-expanded")) !== "true") await card.click();
+        await page.getByRole("button", { name: "💬 Percakapan" }).first().click();
         const th = page.getByRole("dialog", { name: "Toko Kue (@tokokue)" });
         const chat = th.getByRole("log", { name: "Percakapan dengan Toko Kue (@tokokue)" });
         await chat.getByText("ada yang open jasa foto katalog buat UMKM?").first().waitFor();
@@ -1398,12 +1432,10 @@ export const flows = [
           [`users/${uid}/prospects/Threads_diamlama`, { platform: "Threads", handle: "@diamlama", segment: "NTB", contact: "intro", attempts: 1, firstSeenAt: day(25), firstSentAt: day(20), lastSentAt: day(20), source: { kind: "manual" },
             history: [{ at: Date.now() - 20 * 864e5, kind: "sent", channel: "dm", text: "Halo kak, aku Studio Contoh" }], closed: false, createdAt: Date.now() - 25 * 864e5, updatedAt: Date.now() - 20 * 864e5 }],
         ]);
-        await pane(page, "Kirim");
-        // Back from whoever's page is open, to the table of who's next.
-        const back = page.getByRole("button", { name: "Kembali ke daftar" });
-        if (await back.isVisible()) await back.click();
-        const list = page.getByRole("region", { name: "Daftar kirim" });
-        await list.getByRole("region", { name: "Baru, belum disapa" }).getByRole("button", { name: /^@kopibaru/ }).click();
+        // A card's Kirim intro opens their page; the rest of the list follows with Berikutnya.
+        await pick("Baru");
+        await row("@kopibaru").click();
+        await page.getByRole("button", { name: "✉ Kirim intro" }).first().click();
         await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@kopibaru", null, { timeout: 10000 });
         await page.getByText(/^Dari antrian/).waitFor();
         await page.getByRole("button", { name: "Berhenti ambil dari antrian" }).click();
@@ -1431,7 +1463,7 @@ export const flows = [
         await page.getByRole("alert").getByText("minta ga dihubungi").waitFor();
         if (!(await page.getByRole("button", { name: "Copy", exact: true }).first().isDisabled())) throw new Error("Copy still works for a DNC prospect");
         await pick("DNC");
-        await row("@rotikeju").getByText("Jangan dihubungi").waitFor();
+        await row("@rotikeju").locator(".sp-pbadge").getByText("Jangan dihubungi").waitFor();
       });
       await t.step("find a journey by its ID, with its summary", async () => {
         await page.getByLabel("Cari prospek pakai ID atau @username").fill("Threads_tokokue");

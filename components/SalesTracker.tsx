@@ -46,7 +46,8 @@ import TeamDashboard from "@/components/TeamDashboard";
 import LeadSources from "@/components/LeadSources";
 import ModalA11y from "@/components/ModalA11y";
 import { Hunt, useClosingTarget, useHuntGoal } from "@/lib/hunting";
-import { queue, statusLabel, view } from "@/lib/prospects";
+import { JOURNEY_STEPS, Prospect, journeyStep, queue, statusColor as prospectColor, statusLabel, view } from "@/lib/prospects";
+import { profileUrl } from "@/lib/threads";
 import { useHuntSession, useProspects, useStrategy } from "@/lib/prospectStore";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { parseVCards } from "@/lib/vcard";
@@ -707,6 +708,17 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   // invoices late or nearly due. Upcoming reminders show three days ahead.
   const now = today();
   const soon = addDays(now, 3);
+  // A prospect's line and the chat so far, for its card on Beranda.
+  const journeyOf = (p: Prospect) => {
+    const v = view(p, now, strategy);
+    const h = p.handle.replace(/^@/, "");
+    return {
+      steps: JOURNEY_STEPS, at: journeyStep(p, v), color: prospectColor(p, v),
+      chat: (p.history || []).filter(e => e.kind === "sent" || e.kind === "reply" || e.kind === "post").slice(-6)
+        .map(e => ({ who: (e.kind === "sent" ? "kamu" : "dia") as "kamu" | "dia", text: (e.text || "").trim() || (e.kind === "reply" ? "(bales)" : "(pesan)"), at: e.at })),
+      profile: p.url || (p.platform === "Threads" ? profileUrl(h) : p.platform === "IG" ? `https://www.instagram.com/${h}/` : undefined),
+    };
+  };
   const todo = [
     ...leads.filter(l => l.nextActionDate && l.nextActionDate <= soon && l.status !== "Closed").map(l => ({
       key: `l_${l.id}`, when: l.nextActionDate as string, icon: "calendar" as IconName, title: l.name,
@@ -720,6 +732,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       what: `${statusLabel(p, view(p, now, strategy))} via ${p.platform}`, phone: "", text: "",
       kind: "Hunting", action: p.contact === "baru" ? "Kirim intro" : "Follow-up", wa: false,
       open: () => setActiveTab("Hunting"),
+      journey: journeyOf(p),
     })),
     ...hunts.filter(h => h.status === "Tertarik" && !h.leadId && !h.prospectId).map(h => ({
       key: `h_${h.id}`, when: h.date, icon: "target" as IconName, title: h.target || "Tanpa nama",

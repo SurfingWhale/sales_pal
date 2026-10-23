@@ -171,6 +171,17 @@ export function restorePatch(p: Prospect, ctx: Ctx): Partial<Prospect> {
 }
 
 // The last thing in a conversation, for a chat list.
+// Where a person is on the way from a found post to their details: one line
+// of steps, shared by the Prospek cards and Beranda.
+export const JOURNEY_STEPS = ["Baru", "Intro", "Follow-up", "Dibales", "Data"] as const;
+export function journeyStep(p: Prospect, v: View): number {
+  if (p.result === "data" || p.convertedAt) return 4;
+  if (v.status === "terhubung") return 3;
+  if (v.status === "belum" || v.status === "tidak") return 2;
+  if (v.status === "intro") return 1;
+  return 0;
+}
+
 export function lastLine(p: Prospect): { who: "kamu" | "dia" | "info"; text: string; at: number } | null {
   const e = (p.history || []).at(-1);
   if (!e) return null;
