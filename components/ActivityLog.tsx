@@ -80,12 +80,12 @@ export default function ActivityLog({ hunts, sessions, quotes, invoices, outreac
       <div>
         <div style={heading}>{title}</div>
         <div style={{ ...subheading, marginBottom: 16 }}>Semua yang kamu kerjain, per hari.</div>
-        <div style={{ ...card, padding: "36px 22px", textAlign: "center" }}>
-          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Belum ada aktivitas</div>
-          <div style={{ fontSize: 13, color: "var(--app-muted)", marginBottom: 18, maxWidth: 420, marginInline: "auto", lineHeight: 1.55 }}>
+        <div className="sp-grid-bg" style={{ ...card, padding: "36px 22px", textAlign: "center" }}>
+          <div style={{ fontSize: "var(--fs-section)", fontWeight: 600, marginBottom: 6 }}>Belum ada aktivitas</div>
+          <div style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)", marginBottom: 18, maxWidth: 420, marginInline: "auto", lineHeight: 1.55 }}>
             Simpan post, kirim DM, bikin penawaran, catat pembayaran: semuanya otomatis kecatat di sini.
           </div>
-          <button onClick={() => onGo("Hunting")} style={{ ...chip, minHeight: 44, padding: "10px 16px", fontSize: 14, fontWeight: 700, color: "var(--brand-text)" }}>Mulai hunting</button>
+          <button onClick={() => onGo("Hunting")} style={{ ...chip, minHeight: 44, padding: "10px 16px", fontSize: "var(--fs-body)", fontWeight: 700, color: "var(--brand-text)" }}>Mulai hunting</button>
         </div>
       </div>
     );
@@ -96,7 +96,7 @@ export default function ActivityLog({ hunts, sessions, quotes, invoices, outreac
       <div style={heading}>{title}</div>
       <div style={{ ...subheading, marginBottom: 16 }}>Semua yang kamu kerjain, per hari: DM, balasan, penawaran, pembayaran.</div>
 
-      <section aria-label={`Heat map aktivitas ${WEEKS} minggu`} style={{ ...card, padding: 14, marginBottom: 12 }}>
+      <section aria-label={`Heat map aktivitas ${WEEKS} minggu`} className="sp-sec" style={{ marginTop: 0, paddingTop: "var(--sp-4)" }}>
         <div role="group" aria-label="Jenis kerjaan" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
           <button aria-pressed={!kinds.length} onClick={() => { setKinds([]); setPages(1); }}
             style={{ ...chip, minHeight: 36, fontWeight: !kinds.length ? 700 : 500, color: !kinds.length ? "var(--app-text)" : "var(--app-muted)", borderColor: !kinds.length ? "var(--app-line-strong)" : "var(--app-border)" }}>
@@ -116,7 +116,7 @@ export default function ActivityLog({ hunts, sessions, quotes, invoices, outreac
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start" }}>
         <div style={{ flex: "1 1 280px", maxWidth: 520 }}>
-          <div aria-hidden="true" style={{ display: "grid", gridTemplateColumns: `24px repeat(${WEEKS}, minmax(0, 1fr))`, columnGap: 3, fontSize: 11, color: "var(--app-muted)", height: 16 }}>
+          <div aria-hidden="true" style={{ display: "grid", gridTemplateColumns: `24px repeat(${WEEKS}, minmax(0, 1fr))`, columnGap: 3, fontSize: "var(--fs-micro)", color: "var(--app-muted)", height: 16 }}>
             <span />
             {cols.map((c, i) => {
               const first = c.find(Boolean)!;
@@ -129,7 +129,7 @@ export default function ActivityLog({ hunts, sessions, quotes, invoices, outreac
           </div>
           <div role="group" aria-label="Aktivitas per hari" style={{ display: "grid", gridTemplateColumns: `24px repeat(${WEEKS}, minmax(0, 1fr))`, gridTemplateRows: "repeat(7, auto)", gridAutoFlow: "column", gap: 3 }}>
             {DOW.map((d, i) => (
-              <span key={d} aria-hidden="true" style={{ fontSize: 10, color: "var(--app-muted)", alignSelf: "center", visibility: i % 2 === 0 ? "visible" : "hidden" }}>{d}</span>
+              <span key={d} aria-hidden="true" style={{ fontSize: "var(--fs-micro)", color: "var(--app-muted)", alignSelf: "center", visibility: i % 2 === 0 ? "visible" : "hidden" }}>{d}</span>
             ))}
             {cols.flat().map((d, i) => {
               if (!d) return <span key={`x${i}`} />;
@@ -147,7 +147,7 @@ export default function ActivityLog({ hunts, sessions, quotes, invoices, outreac
               );
             })}
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 10, fontSize: 12, color: "var(--app-muted)", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 10, fontSize: "var(--fs-meta)", color: "var(--app-muted)", flexWrap: "wrap" }}>
             <span role="status" aria-live="polite" style={{ minHeight: 18 }}>
               {readout ? <><b style={{ color: "var(--app-text)" }}>{shortDay(readout)}</b>: {counts.get(readout) || 0} aktivitas</> : "Tap kotak buat liat harinya."}
             </span>
@@ -158,16 +158,16 @@ export default function ActivityLog({ hunts, sessions, quotes, invoices, outreac
             </span>
           </div>
         </div>
-        <dl aria-label="Ringkasan" style={{ flex: "1 1 240px", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, margin: 0 }}>
+        <dl aria-label="Ringkasan" className="sp-strip two" style={{ flex: "1 1 240px", margin: 0 }}>
           {([
             [String(inRange.length), `aktivitas, ${WEEKS} minggu`],
             [String(run), "hari berturut-turut"],
             [String(thisWeek), `minggu ini (lalu ${lastWeek})`],
             [busiest, "hari paling rame"],
           ] as [string, string][]).map(([v, k]) => (
-            <div key={k} style={{ background: "var(--app-inner)", borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column-reverse" }}>
-              <dt style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{k}</dt>
-              <dd className="tabnum" style={{ margin: 0, fontSize: 22, fontWeight: 700, fontFamily: font, lineHeight: 1.2 }}>{v}</dd>
+            <div key={k} style={{ display: "flex", flexDirection: "column-reverse", justifyContent: "flex-end" }}>
+              <dt style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)", marginTop: "var(--sp-1)" }}>{k}</dt>
+              <dd className={/^\d+$/.test(v) ? "num" : "tabnum"} style={{ margin: 0, fontSize: /^\d+$/.test(v) ? "var(--fs-num)" : "var(--fs-section)", fontWeight: 600, fontFamily: /^\d+$/.test(v) ? undefined : font, lineHeight: 1.15 }}>{v}</dd>
             </div>
           ))}
         </dl>
@@ -177,29 +177,29 @@ export default function ActivityLog({ hunts, sessions, quotes, invoices, outreac
       <div ref={listRef} style={{ scrollMarginTop: 120 }}>
         {day && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <span style={{ fontSize: 13, color: "var(--app-muted)" }}>Cuma hari</span>
+            <span style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)" }}>Cuma hari</span>
             <button onClick={() => setDay(null)} aria-label={`Hapus filter ${shortDay(day)}`} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--app-text)" }}>{shortDay(day)} ×</button>
           </div>
         )}
-        {!pageDays.length && <div style={{ ...card, padding: 18, fontSize: 13, color: "var(--app-muted)" }}>Ga ada aktivitas{day ? " di hari ini" : ""}{kinds.length ? " buat jenis yang dipilih" : ""}.</div>}
+        {!pageDays.length && <div style={{ padding: "var(--sp-4) 0", fontSize: "var(--fs-meta)", color: "var(--app-muted)" }}>Ga ada aktivitas{day ? " di hari ini" : ""}{kinds.length ? " buat jenis yang dipilih" : ""}.</div>}
         {pageDays.map(d => {
           const rows = listed.filter(a => a.day === d);
           return (
-            <section key={d} aria-label={dayName(d, now)} style={{ marginBottom: 14 }}>
-              <h3 style={{ display: "flex", justifyContent: "space-between", margin: "0 0 6px", fontSize: 13, fontWeight: 700, color: "var(--app-text)" }}>
+            <section key={d} aria-label={dayName(d, now)} style={{ marginBottom: "var(--sp-5)" }}>
+              <h3 style={{ display: "flex", justifyContent: "space-between", margin: 0, paddingBottom: "var(--sp-2)", borderBottom: "1px solid var(--app-line-strong)", fontSize: "var(--fs-meta)", fontWeight: 700, color: "var(--app-text)" }}>
                 <span>{dayName(d, now)}</span><span className="tabnum" style={{ color: "var(--app-muted)", fontWeight: 500 }}>{rows.length}</span>
               </h3>
-              <ul style={{ ...card, listStyle: "none", margin: 0, padding: 0, overflow: "hidden" }}>
+              <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
                 {rows.map((a, i) => (
                   <li key={a.id} style={{ borderTop: i ? "1px solid var(--app-border)" : 0 }}>
                     <button onClick={() => onGo(a.tab)} aria-label={`${a.title}. Buka ${a.tab}`}
-                      style={{ display: "grid", gridTemplateColumns: "44px 1fr auto", gap: 10, alignItems: "baseline", width: "100%", padding: "10px 14px", minHeight: 44, border: 0, background: "none", textAlign: "left", cursor: "pointer", color: "var(--app-text)", fontFamily: "inherit" }}>
-                      <span className="tabnum" style={{ fontSize: 12, color: "var(--app-muted)" }}>{a.timed ? clock(a.at) : "·"}</span>
+                      style={{ display: "grid", gridTemplateColumns: "44px 1fr auto", gap: 10, alignItems: "baseline", width: "100%", padding: "var(--sp-3) 0", minHeight: 44, border: 0, background: "none", textAlign: "left", cursor: "pointer", color: "var(--app-text)", fontFamily: "inherit" }}>
+                      <span className="tabnum" style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)" }}>{a.timed ? clock(a.at) : "·"}</span>
                       <span style={{ minWidth: 0 }}>
-                        <span style={{ display: "block", fontSize: 14, fontWeight: 600, lineHeight: 1.35, overflowWrap: "anywhere" }}>{a.title}</span>
-                        {a.detail && <span style={{ display: "block", fontSize: 12, color: "var(--app-muted)", marginTop: 2, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.detail}</span>}
+                        <span style={{ display: "block", fontSize: "var(--fs-body)", fontWeight: 600, lineHeight: 1.35, overflowWrap: "anywhere" }}>{a.title}</span>
+                        {a.detail && <span style={{ display: "block", fontSize: "var(--fs-meta)", color: "var(--app-muted)", marginTop: 2, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.detail}</span>}
                       </span>
-                      <span style={{ fontSize: 11, color: "var(--app-muted)", whiteSpace: "nowrap" }}>{kindLabel(a.kind)}</span>
+                      <span style={{ fontSize: "var(--fs-micro)", color: "var(--app-muted)", whiteSpace: "nowrap" }}>{kindLabel(a.kind)}</span>
                     </button>
                   </li>
                 ))}
@@ -208,7 +208,7 @@ export default function ActivityLog({ hunts, sessions, quotes, invoices, outreac
           );
         })}
         {days.length > pageDays.length && (
-          <button onClick={() => setPages(pages + 1)} style={{ ...chip, minHeight: 44, width: "100%", fontSize: 14, fontWeight: 600, color: "var(--brand-text)" }}>
+          <button onClick={() => setPages(pages + 1)} style={{ ...chip, minHeight: 44, width: "100%", fontSize: "var(--fs-body)", fontWeight: 600, color: "var(--brand-text)" }}>
             Lihat lebih lama ({days.length - pageDays.length} hari lagi)
           </button>
         )}

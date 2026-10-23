@@ -975,6 +975,9 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   /* An odd count: the last number takes the whole row instead of leaving a grey hole. */
   .sp-strip > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
+/* Two columns everywhere (a strip in a side column). */
+.sp-strip.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sp-strip.two > :nth-child(odd) { padding-inline-start: 0; }
 /* A section: a hairline above, its heading, then its content. No box. */
 .sp-sec { border-top: 1px solid var(--app-border); padding-top: var(--sp-5); margin-top: var(--sp-6); }
 .sp-sec > h3, .sp-sec-h { font-size: var(--fs-section); font-weight: 600; margin: 0 0 var(--sp-1); }
