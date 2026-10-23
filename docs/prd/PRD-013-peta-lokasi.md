@@ -44,7 +44,7 @@ Halamannya satu scroll vertikal yang pendek dan ada ujungnya. Tiap bagian punya 
   - Kalau izin lokasi **udah pernah dikasih**, peta langsung mulai dari situ waktu dibuka. Kalau belum, ga pernah nanya sendiri; cuma lewat tombol.
   - Kartu lead nambah jarak: "Pusat kebugaran · Cold · 2,3 km dari kamu".
   - Izin ditolak / GPS lemah → pesan singkat di sebelah tombol, hilang sendiri.
-- Peta cuma di-fit **sekali** (data pertama atau lokasi saya). Dulu tiap update data (lead diedit, lead baru masuk) peta loncat balik ke semua pin, dan zoom yang lagi dipakai hilang.
+- Peta ngikutin semua pin **sampai kamu geser/zoom sendiri** (gerakan tangan, `originalEvent`) atau tap Lokasi saya; habis itu update data (lead diedit, lead baru masuk) ga pernah narik petanya lagi. Dulu tiap update peta loncat balik ke semua pin dan zoom yang lagi dipakai hilang. "Fit sekali" doang juga ga cukup: data dari cache datang duluan sebagian, jadi petanya ke-fit ke separuh pin.
 - Library-nya baru dimuat waktu Peta 3D dibuka (dynamic import), jadi Beranda tetap ringan. Tanpa WebGL: pesan jelas, Potensi tetap jalan.
 - Kredit © OpenStreetMap · OpenFreeMap selalu tampil (wajib dari lisensi).
 

@@ -149,8 +149,9 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
   const mlRef = useRef<typeof import("maplibre-gl") | null>(null);
   const leadsRef = useRef(leads);
   leadsRef.current = leads;
-  // The view is fitted once; later data (a lead edited, a new one) never yanks it back.
-  const fitted = useRef(false);
+  // The view follows the pins until you move the map yourself (or ask for your
+  // location); after that, new data (a lead edited, a new one) never yanks it back.
+  const held = useRef(false);
   const autoTried = useRef(false);
   const meMarker = useRef<MlMarker | null>(null);
   const watch = useRef<number | null>(null);
@@ -171,6 +172,9 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
         mapRef.current = map;
         map.on("click", () => selRef.current(null));
         map.on("moveend", () => declutter(markers.current.map(m => m.getElement())));
+        // Only a person's gesture carries an originalEvent; our own fits don't.
+        const hold = (e: { originalEvent?: unknown }) => { if (e.originalEvent) held.current = true; };
+        (["dragstart", "zoomstart", "rotatestart", "pitchstart"] as const).forEach(t => map.on(t, hold));
       } catch { if (!gone) setFailed(true); }
     })();
     return () => {
@@ -205,8 +209,8 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
   function frameNear(p: { lat: number; lng: number }) {
     const map = mapRef.current, ml = mlRef.current;
     if (!map || !ml) return;
-    fitted.current = true;
-    const near = [...leadsRef.current].sort((a, b) => distanceKm(p, a.geo) - distanceKm(p, b.geo)).slice(0, 6);
+    held.current = true;
+    const near =[...leadsRef.current].sort((a, b) => distanceKm(p, a.geo) - distanceKm(p, b.geo)).slice(0, 6);
     const b = new ml.LngLatBounds([p.lng, p.lat], [p.lng, p.lat]);
     near.forEach(l => b.extend([l.geo.lng, l.geo.lat]));
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -270,8 +274,7 @@ export default function GeoMap({ leads, onOpen, tilt = true }: { leads: GeoLead[
         el.addEventListener("click", e => { e.stopPropagation(); selRef.current(l.id); });
         return new ml.Marker({ element: el, anchor: "bottom" }).setLngLat([l.geo.lng, l.geo.lat]).addTo(map);
       });
-      if (!fitted.current && leads.length) {
-        fitted.current = true;
+      if (!held.current && leads.length) {
         if (leads.length > 1) {
           const b = new ml.LngLatBounds();
           leads.forEach(l => b.extend([l.geo.lng, l.geo.lat]));
