@@ -42,6 +42,8 @@ const P: Record<string, React.ReactNode> = {
   trash: <><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13" /></>,
   pencil: <><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></>,
   link: <><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></>,
+  // A link broken in two: a site price that stands on its own.
+  unlink: <><path d="M10 14a4 4 0 0 0 5.7 0l1.3-1.3" /><path d="m19 11 .3-.3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-1.3 1.3" /><path d="m5 13-.3.3a4 4 0 0 0 5.7 5.7l1-1" /><path d="M4 4l16 16" /></>,
   sliders: <><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></>,
   // A drawn triangle: "▶" in text turns into an emoji tile on iOS.
   play: <path d="M8 5.5v13l10.5-6.5z" fill="currentColor" />,

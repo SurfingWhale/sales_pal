@@ -929,6 +929,74 @@ export const flows = [
     },
   },
   {
+    // PRD-017 §3a, §6: a "mulai dari" per site, linked to the SalesPal price or
+    // on its own; the sites read it, and a site's admin changes it with its key.
+    name: "pricelist: site prices with sync, read and written by a site",
+    async run(t) {
+      const { page, base } = t;
+      const KEY = process.env.PRICELIST_KEY_VISUFAVOR || "";
+      const api = page.context().request;
+      const read = async () => (await api.get(`${base}/api/pricelist?site=visufavor`)).json();
+      const cell = (state) => page.getByRole("button", { name: new RegExp(`^${state}, atur harga Paket Situs Flow di Visufavor`) });
+      await t.step("the owner signs in", async () => {
+        if (KEY.length < 16) throw new Error("set PRICELIST_KEY_VISUFAVOR (16+ chars) for this flow");
+        await ownerLogin(t);
+      });
+      await t.step("a package with its cost, and this space feeds the sites", async () => {
+        await go(page, "Jualan", "Paket");
+        await page.getByRole("button", { name: "+ Paket" }).click();
+        await modal(page).locator("#svc-name").fill("Paket Situs Flow");
+        await modal(page).locator("#svc-price").fill("1500000");
+        await modal(page).locator("#svc-cost").fill("900000");
+        await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
+        await page.locator("#svc-name").waitFor({ state: "detached" });
+        await page.getByRole("button", { name: "Pakai ruang kerja ini buat situs" }).click();
+        await page.getByText("✓ Situs membaca paket dari ruang kerja ini.").waitFor();
+      });
+      await t.step("on Visufavor, linked: the site reads the SalesPal price and nothing internal", async () => {
+        await page.getByRole("button", { name: "Tampilkan Paket Situs Flow di Visufavor" }).click();
+        const dlg = page.getByRole("dialog", { name: "Harga Paket Situs Flow di Visufavor" });
+        await dlg.getByRole("button", { name: "Simpan", exact: true }).click();
+        await dlg.waitFor({ state: "detached" });
+        await cell("Terikat").waitFor();
+        await t.audit("Paket → Harga di situs");
+        const j = await read();
+        if (j.packages?.length !== 1 || j.packages[0].from !== 1500000 || j.packages[0].name !== "Paket Situs Flow") throw new Error(`the site reads ${JSON.stringify(j).slice(0, 200)}`);
+        if (/900000|"cost"|vendor/.test(JSON.stringify(j))) throw new Error("the pricelist leaks what it costs");
+        if ((await (await api.get(`${base}/api/pricelist?site=untmd-sports`)).json()).packages.length !== 0) throw new Error("a site it is not shown on reads it");
+      });
+      await t.step("its own price on the site: the card says by how much", async () => {
+        await cell("Terikat").click();
+        const dlg = page.getByRole("dialog", { name: "Harga Paket Situs Flow di Visufavor" });
+        await dlg.getByRole("radio", { name: /Harga sendiri/ }).check();
+        await dlg.locator("#site-from").fill("1250000");
+        await dlg.getByRole("button", { name: "Simpan", exact: true }).click();
+        await dlg.waitFor({ state: "detached" });
+        await cell("Lepas").getByText("beda Rp 250.000").waitFor();
+        if ((await read()).packages[0].from !== 1250000) throw new Error("the site does not read its own price");
+      });
+      await t.step("the site's admin changes it through SalesPal; an old copy and a wrong key are refused", async () => {
+        const p = (await read()).packages[0];
+        const put = (body, key = KEY) => api.put(`${base}/api/pricelist/${p.id}?site=visufavor`, { headers: { Authorization: `Bearer ${key}` }, data: body });
+        let r = await put({ version: p.version, from: 1300000 });
+        if (r.status() !== 200) throw new Error(`the site's change was refused: ${r.status()} ${(await r.text()).slice(0, 120)}`);
+        r = await put({ version: p.version, from: 1350000 });
+        if (r.status() !== 409) throw new Error(`a change on an old copy was not refused: ${r.status()}`);
+        if ((await put({ version: p.version + 1, from: 1 }, "wrong-key-wrong-key-wrong")).status() !== 401) throw new Error("a wrong key was let in");
+        await cell("Lepas").getByText("beda Rp 200.000").waitFor();
+        await page.getByRole("list", { name: "Riwayat harga" }).getByText(/dari Visufavor/).first().waitFor();
+      });
+      await t.step("sync: the site's price becomes the SalesPal price", async () => {
+        await cell("Lepas").click();
+        const dlg = page.getByRole("dialog", { name: "Harga Paket Situs Flow di Visufavor" });
+        await dlg.getByRole("button", { name: "Pakai harga situs di SalesPal" }).click();
+        await dlg.waitFor({ state: "detached" });
+        await cell("Lepas").getByText("sama").waitFor();
+        await page.getByRole("list", { name: "Harga paket di situs" }).getByText("Rp 1.300.000").first().waitFor();
+      });
+    },
+  },
+  {
     // PRD-010: a busy seller's account (200 leads, 50 invoices, 60 prospects…).
     // Every place must open, stay usable, and pass the HIG audit with real volume.
     name: "akun besar: every place with production-size data",

@@ -47,6 +47,8 @@ jobs:
       NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "1"
       NEXT_PUBLIC_FIREBASE_APP_ID: "1:1:web:1"
       NEXT_TELEMETRY_DISABLED: "1"
+      # The "pricelist" flow plays a site's admin; a test value, not a secret.
+      PRICELIST_KEY_VISUFAVOR: flow-pricelist-key-not-a-secret
       DEVICE: ${{ matrix.device }}
       DESKTOP: ${{ matrix.desktop }}
       PROD: "1"

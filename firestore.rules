@@ -53,9 +53,14 @@ service cloud.firestore {
     // prospects + huntSessions: the hunter's journeys and sessions (PRD-009);
     // campaigns + costs: the team's campaigns and running costs.
     // components: what a price is built from, with its cost; quoteTemplates:
-    // quotes kept to start the next one from (PRD-017).
+    // quotes kept to start the next one from; pricelistHistory: every price
+    // change, from SalesPal or a site (PRD-017).
     function ownedData(c) { return c in ['leads', 'outreach', 'rejections', 'hunts', 'prospects', 'huntSessions', 'quotes', 'invoices', 'clients']; }
-    function catalog(c) { return c in ['services', 'components', 'quoteTemplates', 'pitchTemplates', 'settings', 'campaigns', 'costs']; }
+    function catalog(c) { return c in ['services', 'components', 'quoteTemplates', 'pricelistHistory', 'pitchTemplates', 'settings', 'campaigns', 'costs']; }
+    // What a package shows on the studio's sites (PRD-017 §6) is the owner's
+    // to change: a Leader or Officer edits the package, never its `sites`.
+    function sitesKeptOnCreate(coll) { return coll != 'services' || isOwner() || !('sites' in request.resource.data); }
+    function sitesKeptOnUpdate(coll) { return coll != 'services' || isOwner() || request.resource.data.get('sites', null) == resource.data.get('sites', null); }
     function memberShape(d) {
       return d.keys().hasOnly(['uid', 'name', 'email', 'role', 'inviteCode', 'joinedAt', 'avatar'])
         && d.role in ['leader', 'officer', 'member', 'viewer']
@@ -147,11 +152,11 @@ service cloud.firestore {
           || (catalog(coll) && seller(g));
         allow create: if (ownedData(coll) && seller(g) && request.resource.data.ownerUid is string
               && (request.resource.data.ownerUid == request.auth.uid || manager(g)))
-          || (catalog(coll) && manager(g) && notToolsUnlessLeader(g, coll, id));
+          || (catalog(coll) && manager(g) && notToolsUnlessLeader(g, coll, id) && sitesKeptOnCreate(coll));
         allow update: if (ownedData(coll) && (manager(g)
               || (seller(g) && resource.data.ownerUid == request.auth.uid
                   && request.resource.data.ownerUid == resource.data.ownerUid)))
-          || (catalog(coll) && manager(g) && notToolsUnlessLeader(g, coll, id));
+          || (catalog(coll) && manager(g) && notToolsUnlessLeader(g, coll, id) && sitesKeptOnUpdate(coll));
         allow delete: if (ownedData(coll) && (manager(g) || (seller(g) && resource.data.ownerUid == request.auth.uid)))
           || (catalog(coll) && manager(g) && notToolsUnlessLeader(g, coll, id));
       }
