@@ -213,6 +213,12 @@ await t("member starts a quote from the team's templates", assertSucceeds(getDoc
 await t("member cannot keep a quote template", assertFails(setDoc(doc(M, "guilds", G, "quoteTemplates", "q1"), { name: "x", items: [] })));
 await t("officer keeps a quote template", assertSucceeds(setDoc(doc(O, "guilds", G, "quoteTemplates", "q1"), { name: "Event 4 jam", items: [{ name: "Foto", qty: 1, price: 2000000, cost: 1200000 }], createdAt: 1 })));
 await t("viewer cannot read the quote templates", assertFails(getDocs(collection(V, "guilds", G, "quoteTemplates"))));
+await t("officer edits a package without touching its sites", assertSucceeds(setDoc(doc(O, "guilds", G, "services", "s1"), { name: "Foto Menu", price: 1750000 })));
+await t("officer cannot put a package on a site", assertFails(setDoc(doc(O, "guilds", G, "services", "s1"), { name: "Foto Menu", price: 1750000, sites: { visufavor: { shown: true, linked: true, from: 1750000 } } })));
+await t("leader cannot create a package already on a site", assertFails(setDoc(doc(L, "guilds", G, "services", "s9"), { name: "x", price: 1, sites: { visufavor: { shown: true, linked: true, from: 1 } } })));
+await t("the owner puts a package on a site from their own space", assertSucceeds(setDoc(doc(owner, "users", "owner1", "services", "p1"), { name: "Foto Menu", price: 1500000, sites: { visufavor: { shown: true, linked: false, from: 1250000 } } })));
+await t("officer logs a price change", assertSucceeds(setDoc(doc(O, "guilds", G, "pricelistHistory", "h1"), { serviceId: "s1", field: "price", from: "salespal", by: "off", old: 1500000, new: 1750000, at: 1 })));
+await t("member cannot write the price history", assertFails(setDoc(doc(M, "guilds", G, "pricelistHistory", "h2"), { serviceId: "s1", at: 1 })));
 await t("no one writes an unknown guild collection", assertFails(setDoc(doc(L, "guilds", G, "secrets", "x"), { ownerUid: "lead" })));
 await t("member adds a client and logs a chat under it", assertSucceeds(setDoc(doc(M, "guilds", G, "clients", "c1"), { name: "Toko", ownerUid: "memb", ownerName: "memb" })
   .then(() => setDoc(doc(M, "guilds", G, "clients", "c1", "deals", "cd1"), deal("memb")))));

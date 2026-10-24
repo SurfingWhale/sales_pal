@@ -2,9 +2,10 @@
 
 import Icon from "@/components/Icon";
 import { useState } from "react";
-import { setDoc, deleteDoc } from "firebase/firestore";
-import { canEditCatalog, spaceDoc, useSpace } from "@/lib/space";
-import { Business, Component, MARGIN_TARGET, QuoteTemplate, Service, rupiah } from "@/lib/billing";
+import { addDoc, deleteDoc, deleteField, increment, setDoc } from "firebase/firestore";
+import { canEditCatalog, spaceCol, spaceDoc, useSpace } from "@/lib/space";
+import { Business, Component, MARGIN_TARGET, PriceChange, QuoteTemplate, SITES, Service, rupiah } from "@/lib/billing";
+import SitePricing from "@/components/SitePricing";
 import BusinessEditor from "@/components/BusinessEditor";
 import ComponentCatalog, { marginColor, marginPct } from "@/components/ComponentCatalog";
 import ConfirmSheet from "@/components/ConfirmSheet";
@@ -18,7 +19,7 @@ type Draft = Omit<Service, "price" | "cost"> & { price: string; cost: string };
 const BLANK: Draft = { id: "", name: "", category: "F&B", price: "", cost: "", unit: "per project", description: "" };
 const num = (v: string) => parseInt(v.replace(/\D/g, ""), 10) || 0;
 
-export default function Services({ services, components, templates, business }: { services: Service[]; components: Component[]; templates: QuoteTemplate[]; business: Business }) {
+export default function Services({ services, components, templates, history, business }: { services: Service[]; components: Component[]; templates: QuoteTemplate[]; history: PriceChange[]; business: Business }) {
   const space = useSpace();
   // In a guild the catalog is the team's: Leader and Officer keep it.
   const canEdit = canEditCatalog(space);
@@ -36,17 +37,31 @@ export default function Services({ services, components, templates, business }: 
   async function save() {
     if (!editing || !editing.name.trim()) return;
     const id = editing.id || `svc_${Date.now()}`;
+    const before = services.find(x => x.id === id);
+    const price = num(editing.price);
+    const cost = editing.cost.trim() ? num(editing.cost) : undefined;
     setBusy(true); setErr("");
     try {
+      // Merged, so what the sites show of it (`sites`) stays as it is (PRD-017 §6).
       await setDoc(spaceDoc(space, "services", id), {
         name: editing.name.trim(),
         category: editing.category,
-        price: num(editing.price),
+        price,
         unit: editing.unit,
         description: editing.description.trim(),
+        excludes: (editing.excludes || "").trim() || deleteField(),
         // Internal: what one unit costs you. Left out until it is known.
-        ...(editing.cost.trim() ? { cost: num(editing.cost) } : {}),
-      });
+        cost: typeof cost === "number" ? cost : deleteField(),
+        version: increment(1), updatedAt: Date.now(), updatedFrom: "salespal",
+      }, { merge: true });
+      // A price a site follows is logged, like a change from that site.
+      if (before && before.price !== price && SITES.some(x => before.sites?.[x.id]?.shown && before.sites?.[x.id]?.linked)) {
+        const low = typeof cost === "number" && price > 0 && ((price - cost) / price) * 100 < MARGIN_TARGET;
+        await addDoc(spaceCol(space, "pricelistHistory"), {
+          serviceId: id, name: editing.name.trim(), field: "price", from: "salespal", by: space.me.name || "SalesPal",
+          old: before.price, new: price, at: Date.now(), ...(low ? { belowTarget: true } : {}),
+        });
+      }
       setEditing(null);
     } catch { setErr("Gagal nyimpen. Cek koneksi lalu coba lagi."); }
     finally { setBusy(false); }
@@ -162,6 +177,10 @@ export default function Services({ services, components, templates, business }: 
                 <label htmlFor="svc-desc" style={label}>Yang didapat klien</label>
                 <textarea id="svc-desc" value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })} style={{ ...inputStyle, resize: "vertical", height: 90 }} placeholder={"10 foto edit\n1x revisi\nFile resolusi tinggi"} />
               </div>
+              <div style={{ gridColumn: "1/-1" }}>
+                <label htmlFor="svc-excl" style={label}>Di luar scope (opsional)</label>
+                <textarea id="svc-excl" value={editing.excludes || ""} onChange={e => setEditing({ ...editing, excludes: e.target.value })} style={{ ...inputStyle, resize: "vertical", height: 72 }} placeholder={"Props & styling\nTransport luar kota"} />
+              </div>
             </div>
             {(err || !editing.name.trim()) && <div role="status" style={{ fontSize: 12, marginTop: 12, color: err ? "color-mix(in srgb, #ff4444 55%, var(--app-text))" : "var(--app-muted)" }}>{err || "Isi nama paketnya dulu."}</div>}
             <div className="sp-form-foot">
@@ -172,6 +191,7 @@ export default function Services({ services, components, templates, business }: 
         </div>
       )}
 
+      <SitePricing services={services} history={history} space={space} />
       <ComponentCatalog components={components} space={space} canEdit={canEdit} />
       <QuoteTemplateList templates={templates} space={space} canEdit={canEdit} />
 
