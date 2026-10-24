@@ -18,6 +18,9 @@ const OWNER_EMAIL = readFileSync(new URL("../../firestore.rules", import.meta.ur
 // "Percakapan" mean the list.
 const pane = async (page, name) => {
   const tab = /^(Kirim|Journey|Percakapan)$/.test(name) ? "Prospek" : name;
+  // A prospect's card opens as their own page; close it to reach the tabs.
+  const contact = page.getByRole("button", { name: "Tutup kontak" });
+  if (await contact.isVisible()) await contact.click({ timeout: 3000 }).catch(() => undefined);
   await page.getByRole("tablist", { name: "Bagian Hunting" }).getByRole("tab", { name: new RegExp(`^${tab}`) }).click();
   if (name === "Kirim") {
     const resume = page.getByRole("button", { name: /^Lanjut ke / });
@@ -1463,7 +1466,10 @@ export const flows = [
         await page.getByLabel("Tempel balasannya (opsional)").fill("boleh kak, pricelist-nya berapa?");
         await page.getByRole("button", { name: "Simpan", exact: true }).click();
         await pick("Terhubung");
-        await page.locator("#journey-prospek").getByText("boleh kak, pricelist-nya berapa?").first().waitFor();
+        // Their card says what they last said; opening it shows the whole chat.
+        await row("Toko Kue (@tokokue)").getByText(/boleh kak, pricelist-nya berapa\?/).waitFor();
+        await row("Toko Kue (@tokokue)").click();
+        await page.getByRole("region", { name: /Riwayat Toko Kue/ }).getByText("boleh kak, pricelist-nya berapa?").first().waitFor();
         await page.getByRole("group", { name: /Hasil untuk/ }).getByRole("button", { name: "✅ Tertarik" }).click();
         await row("Toko Kue (@tokokue)").locator(".sp-pbadge").getByText("Tertarik").waitFor();
       });
@@ -1555,6 +1561,7 @@ export const flows = [
         await expectText(page, "1 ketemu");
         if ((await row("Toko Kue (@tokokue)").getAttribute("aria-expanded")) !== "true") await row("Toko Kue (@tokokue)").click();
         await page.getByRole("region", { name: /Riwayat Toko Kue/ }).getByText(/ID Threads_tokokue · \d+ pesan/).waitFor();
+        await page.getByRole("button", { name: "Tutup kontak" }).click();
         await page.getByLabel("Cari prospek pakai ID atau @username").fill("");
       });
       await t.step("ending the session leaves a summary", async () => {

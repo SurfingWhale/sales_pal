@@ -1047,7 +1047,19 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .sp-plist { margin-top: 12px; }
 /* A prospect card: one person, how far along, the last thing said. Rows split
    by hairlines; the whole row opens the card, the arrow opens their profile. */
-.sp-pcard { border-bottom: 1px solid var(--app-border); }
+.sp-pcard { margin-bottom: 8px; border: 1px solid var(--app-border); border-radius: var(--r-m, 12px); background: var(--app-card); }
+.sp-pcard:has(> .sp-pcard-top > .sp-pcard-main[aria-expanded="true"]) { border-color: #005eb0; }
+.sp-pcard-main { border-radius: var(--r-m, 12px); }
+/* The person's page: a bar to go back, who they are, then the chat and the moves. */
+.sp-pcontact { width: 100%; max-width: 560px; max-height: min(88vh, calc(100dvh - 48px)); overflow-y: auto; overscroll-behavior: contain; padding: 0 20px 24px; border-radius: 20px; background: var(--app-bg); color: var(--app-text); }
+.sp-pcontact-bar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; margin: 0 -20px; padding: 6px 12px; background: color-mix(in srgb, var(--app-bg) 94%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: inset 0 -1px 0 var(--app-border); }
+.sp-pcontact-back { min-height: 44px; display: inline-flex; align-items: center; gap: 2px; padding: 0 6px; border: 0; background: none; color: var(--brand-text); font: 600 var(--fs-body) 'Plus Jakarta Sans', sans-serif; cursor: pointer; }
+.sp-pcontact-profile { margin-left: auto; min-height: 44px; display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; color: var(--brand-text); font: 600 var(--fs-meta) 'Plus Jakarta Sans', sans-serif; text-decoration: none; }
+.sp-pcontact-id { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 20px 0 12px; }
+.sp-pcontact-id h2 { margin: 6px 0 0; font-size: var(--fs-title); font-weight: 700; }
+.sp-pcontact-id .sp-psteps { width: 100%; margin-top: 10px; }
+.sp-pini-l { width: 64px; height: 64px; font-size: var(--fs-section); }
+@media (max-width: 640px) { .sp-pcontact { max-height: none; height: 100dvh; border-radius: 0; padding-top: env(safe-area-inset-top, 0px); } .sp-pcontact-bar { top: calc(-1 * env(safe-area-inset-top, 0px)); } }
 .sp-pcard-top { display: flex; align-items: flex-start; }
 .sp-pcard-main { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 12px; padding: 12px 4px; border: 0; background: none; color: var(--app-text); text-align: start; font-family: inherit; cursor: pointer; }
 .sp-pini { flex-shrink: 0; width: 36px; height: 36px; margin-top: 2px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--fs-micro); font-weight: 700; }
