@@ -44,7 +44,7 @@ export interface DigestCounts { followUps: number; quotes: number; invoices: num
 export function digest(on: string, d: { leads: LeadLike[]; quotes: QuoteLike[]; invoices: InvoiceLike[]; rejections: RejectionLike[]; deals: Deal[] }): DigestCounts {
   return {
     followUps:
-      d.leads.filter(l => l.nextActionDate && l.nextActionDate <= on && l.status !== "Closed").length
+      d.leads.filter(l => l.nextActionDate && l.nextActionDate <= on && l.status !== "Closed" && l.status !== "Lost").length
       + d.rejections.filter(r => r.followUpDate === on).length,
     quotes: d.quotes.filter(q => q.status === "Terkirim" && q.sentAt && daysFrom(q.sentAt, on) >= QUOTE_WAIT_DAYS).length,
     invoices: d.invoices.filter(i => owed(i) > 0 && i.dueDate && i.dueDate < on).length,

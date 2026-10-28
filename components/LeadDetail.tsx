@@ -9,7 +9,8 @@ import WaImport, { WaPatch } from "@/components/WaImport";
 import { Score } from "@/lib/score";
 import { LeadProfile, guessArchetype, hasProfile, objectionTypeOf, scriptsFor } from "@/lib/profile";
 import { archetypes, objections } from "@/lib/salespal-data";
-import { addDays, longDate, today, waLink } from "@/lib/billing";
+import { addDays, longDate, rupiah, today, waLink } from "@/lib/billing";
+import { CATEGORIES, SOURCES, STATUSES, STATUS_COLOR, parseRupiah, statusWord } from "@/lib/leadEdit";
 import dynamic from "next/dynamic";
 import { authFetch } from "@/lib/authFetch";
 import { GeoHit, LeadGeo, readPlace, routeUrl, validGeo } from "@/lib/geo";
@@ -21,7 +22,8 @@ const GeoPicker = dynamic(() => import("@/components/GeoMap").then(m => m.GeoPic
 //   LeadPage  — "Profil customer", full screen on phones and behind
 //               "Profil lengkap" on desktop
 // Both run the same actions: schedule the next step, mark a reply, fill the
-// profile by hand or from WhatsApp, open the right script, quote, delete.
+// profile by hand or from WhatsApp, open the right script, quote, delete,
+// edit the lead itself (status, value, contact), and log a chat.
 
 export interface DetailLead {
   id: string; name: string; contact: string; phone: string; email: string; category: string; source: string;
@@ -40,9 +42,19 @@ export interface DetailActions {
   onDelete: () => Promise<void> | void;
   onSavePhone: (phone: string) => Promise<void> | void;
   onSaveGeo: (geo: LeadGeo | null, address?: string) => Promise<void> | void;
+  onSaveLead: (patch: LeadPatch, lost?: LostNote) => Promise<void>;
+  // A tap on Chat: counts as today's contact; resolves to its undo (none when
+  // today was already counted).
+  onContacted: (what: string) => Promise<(() => Promise<void>) | void>;
 }
 
-const STATUS_COLOR: Record<string, string> = { Hot: "var(--hot)", Warm: "var(--warm)", Cold: "var(--cold)", Closed: "var(--ok)" };
+export interface LeadPatch {
+  name: string; contact: string; phone: string; email: string; status: string;
+  value: number; source: string; category: string; notes: string;
+}
+// Why a lead went Gugur, and when to try again (YYYY-MM-DD, or "").
+export interface LostNote { reason: string; retry: string }
+
 const ARCH_ICON: Record<string, IconName> = { lion: "bolt", owl: "brief", dolphin: "chat", rabbit: "shield" };
 const jt = (n: number) => (n ? `Rp ${(n / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt` : "Belum ada nilai");
 const initials = (n: string) => n.replace(/[^A-Za-z0-9À-ÿ ]/g, "").split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?";
@@ -174,6 +186,175 @@ function ProfileEditor({ profile, phone, onSave, onSavePhone, onClose }: { profi
   );
 }
 
+// Ubah data lead: who they are, where the deal stands, what it's worth. Gugur
+// asks why (it goes to the Rejection Log) and whether to try again later.
+function LeadEditor({ lead, onSave, onClose }: { lead: DetailLead; onSave: DetailActions["onSaveLead"]; onClose: () => void }) {
+  const [f, setF] = useState({
+    name: lead.name || "", contact: lead.contact || "", phone: lead.phone || "", email: lead.email || "", status: lead.status || "Cold",
+    value: lead.value ? lead.value.toLocaleString("id-ID") : "", source: lead.source || "", category: lead.category || "", notes: lead.notes || "",
+  });
+  const [why, setWhy] = useState("");
+  const [retry, setRetry] = useState(0);   // days from today; 0 = don't
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const value = parseRupiah(f.value);
+  const losing = f.status === "Lost" && lead.status !== "Lost";
+  const opts = (list: string[], cur: string) => (cur && !list.includes(cur) ? [cur, ...list] : list);
+  const label: React.CSSProperties = { display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6 };
+  const input: React.CSSProperties = { ...field, minHeight: 44 };
+  const chip = (on: boolean): React.CSSProperties => ({ minHeight: 44, padding: "0 14px", borderRadius: 999, border: `1px solid ${on ? "var(--app-text)" : "var(--app-line-strong)"}`, background: on ? "var(--app-text)" : "transparent", color: on ? "var(--app-card)" : "var(--app-ink-2)", fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" });
+  const text = (k: keyof typeof f, l: string, ph: string, type = "text") => (
+    <div>
+      <label htmlFor={`le-${k}`} style={label}>{l}</label>
+      <input id={`le-${k}`} type={type} inputMode={type === "tel" ? "tel" : undefined} autoComplete="off" value={f[k]} placeholder={ph}
+        onChange={e => setF({ ...f, [k]: e.target.value })} style={input} />
+    </div>
+  );
+
+  async function save() {
+    if (!f.name.trim()) { setErr("Isi nama bisnisnya dulu."); document.getElementById("le-name")?.focus(); return; }
+    setSaving(true); setErr("");
+    try {
+      await onSave(
+        { name: f.name.trim(), contact: f.contact.trim(), phone: f.phone.trim(), email: f.email.trim(), status: f.status, value, source: f.source, category: f.category, notes: f.notes.trim() },
+        losing ? { reason: why.trim(), retry: retry ? addDays(today(), retry) : "" } : undefined,
+      );
+      onClose();
+    } catch { setErr("Gagal menyimpan. Cek koneksi, lalu coba lagi."); setSaving(false); }
+  }
+
+  return (
+    <Sheet title="Ubah data lead" onClose={() => { if (!saving) onClose(); }}>
+      <form noValidate onSubmit={e => { e.preventDefault(); save(); }} style={{ display: "grid", gap: 14 }}>
+        <div role="group" aria-label="Status">
+          <div style={label}>Status</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {STATUSES.map(s => <button key={s} type="button" aria-pressed={f.status === s} onClick={() => setF({ ...f, status: s })} style={chip(f.status === s)}>{statusWord(s)}</button>)}
+          </div>
+        </div>
+        {losing && (
+          <div style={{ display: "grid", gap: 10, padding: 14, borderRadius: 14, background: "var(--app-inner)" }}>
+            <div>
+              <label htmlFor="le-why" style={label}>Kenapa gugur?</label>
+              <textarea id="le-why" rows={2} value={why} placeholder="mis. budget dipotong, pilih vendor lain" onChange={e => setWhy(e.target.value)} style={field} />
+            </div>
+            <div role="group" aria-label="Coba lagi">
+              <div style={label}>Coba lagi</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {([["Ga usah", 0], ["1 bulan lagi", 30], ["3 bulan lagi", 90]] as [string, number][]).map(([l, d]) => <button key={l} type="button" aria-pressed={retry === d} onClick={() => setRetry(d)} style={chip(retry === d)}>{l}</button>)}
+              </div>
+            </div>
+            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: "var(--app-muted)" }}>
+              Masuk Rejection Log{retry ? ` dan muncul lagi di Perlu Ditindak ${longDate(addDays(today(), retry))}` : ""}. Jadwal follow-up-nya dihapus.
+            </p>
+          </div>
+        )}
+        <div>
+          <label htmlFor="le-name" style={label}>Nama bisnis<span aria-hidden="true" style={{ color: "var(--hot)" }}> *</span></label>
+          <input id="le-name" required autoComplete="off" value={f.name} onChange={e => { setF({ ...f, name: e.target.value }); setErr(""); }} style={input}
+            aria-invalid={Boolean(err) && !f.name.trim()} aria-describedby={err ? "le-err" : undefined} />
+        </div>
+        <div>
+          <label htmlFor="le-value" style={label}>Nilai deal (Rp)</label>
+          <input id="le-value" autoComplete="off" value={f.value} placeholder="mis. 5jt atau 5.000.000" onChange={e => setF({ ...f, value: e.target.value })} style={input} aria-describedby="le-value-is" />
+          <p id="le-value-is" style={{ margin: "6px 0 0", fontSize: 13, color: "var(--app-muted)" }}>{value ? `= ${rupiah(value)}` : "Kosong = belum ada nilai"}</p>
+        </div>
+        {text("contact", "Nama kontak", "mis. Dina")}
+        {text("phone", "Nomor WhatsApp", "mis. 0812 3456 7890", "tel")}
+        {text("email", "Email", "nama@contoh.id", "email")}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+          {([["source", "Sumber", SOURCES], ["category", "Kategori", CATEGORIES]] as ["source" | "category", string, string[]][]).map(([k, l, list]) => (
+            <div key={k}>
+              <label htmlFor={`le-${k}`} style={label}>{l}</label>
+              <select id={`le-${k}`} value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} style={input}>
+                {!f[k] && <option value="">Pilih</option>}
+                {opts(list, f[k]).map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+        <div>
+          <label htmlFor="le-notes" style={label}>Catatan</label>
+          <textarea id="le-notes" rows={3} value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} style={field} />
+        </div>
+        {err && <p id="le-err" role="alert" style={{ margin: 0, fontSize: 13, color: "var(--hot)" }}>{err}</p>}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <button type="button" onClick={onClose} disabled={saving} style={{ ...pill(false), minHeight: 50 }}>Batal</button>
+          <button type="submit" disabled={saving} style={{ ...pill(true), minHeight: 50, opacity: saving ? 0.7 : 1 }}>{saving ? "Menyimpan…" : "Simpan"}</button>
+        </div>
+      </form>
+    </Sheet>
+  );
+}
+
+// The status, tappable: it opens Ubah data lead. The hit area is 44px tall
+// around a small badge.
+function StatusBadge({ status, onEdit, card }: { status: string; onEdit: () => void; card?: boolean }) {
+  return (
+    <button type="button" onClick={onEdit} aria-label={`Status ${statusWord(status)}. Ubah data lead`}
+      style={{ flexShrink: 0, minHeight: 44, margin: "-8px 0", padding: 0, border: 0, background: "transparent", cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center" }}>
+      <span style={{ height: 28, padding: "0 11px", borderRadius: 999, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600,
+        background: card ? "var(--app-card)" : "var(--app-inner)", border: card ? "1px solid var(--app-border)" : 0, color: STATUS_COLOR[status] || "var(--app-ink-2)" }}>
+        {statusWord(status)}<Icon name="chevronDown" size={12} stroke={2.2} />
+      </span>
+    </button>
+  );
+}
+
+// What a tap on Chat left behind: today's contact, counted at once with Batal
+// to take it back (like Hunting's Copy = kirim), and one tap for the next
+// follow-up when nothing is scheduled ahead.
+// n: each tap gets a fresh note (rendered with key={n}), not the last one's state.
+type Logged = { n: number; undo?: () => Promise<void>; err?: string };
+
+function useChatLog(actions: DetailActions) {
+  const [logged, setLogged] = useState<Logged | null>(null);
+  // The link opens WhatsApp by itself; this only writes it down.
+  const chatted = (what: string) => () => {
+    Promise.resolve(actions.onContacted(what)).then(
+      undo => setLogged({ n: Date.now(), undo: undo || undefined }),
+      () => setLogged({ n: Date.now(), err: "WhatsApp kebuka, tapi chat-nya gagal dicatat. Cek koneksi." }),
+    );
+  };
+  return { logged, chatted, clear: () => setLogged(null) };
+}
+
+function ChatNote({ lead, logged, actions, onClose }: { lead: DetailLead; logged: Logged; actions: DetailActions; onClose: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [undone, setUndone] = useState(false);
+  const [err, setErr] = useState("");
+  const on = today();
+  const ahead = !!lead.nextActionDate && lead.nextActionDate > on;
+  const say = logged.err || err || (undone ? "Dibatalin, chat ini ga dicatat." : logged.undo ? "✓ Dicatat: chat hari ini" : "✓ Kontak hari ini udah kecatat");
+
+  async function run(fn: () => Promise<void> | void, after?: () => void) {
+    setBusy(true); setErr("");
+    try { await fn(); after?.(); } catch { setErr("Gagal menyimpan. Cek koneksi, lalu coba lagi."); }
+    setBusy(false);
+  }
+
+  return (
+    <div role="group" aria-label="Catatan chat" className="frost" style={{ borderRadius: 20, padding: "6px 6px 6px 16px", boxShadow: "inset 0 0 0 1px var(--frost-ring), 0 12px 32px var(--frost-float)", display: "grid", gap: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span role="status" style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: logged.err || err ? "var(--hot)" : "var(--app-text)" }}>{say}</span>
+        {logged.undo && !undone && <button type="button" disabled={busy} onClick={() => run(logged.undo!, () => setUndone(true))} style={{ ...pill(false), minHeight: 44, padding: "0 14px", fontSize: 13 }}>Batal</button>}
+        <button type="button" onClick={onClose} aria-label="Tutup catatan chat" style={{ width: 44, height: 44, border: 0, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--app-ink-2)" }}><Icon name="close" size={13} stroke={2.4} /></button>
+      </div>
+      {!logged.err && !undone && (ahead
+        ? <p style={{ margin: "0 0 8px", fontSize: 13, color: "var(--app-muted)" }}>Follow-up berikutnya {longDate(lead.nextActionDate!)}.</p>
+        : (
+          <div role="group" aria-label="Follow-up berikutnya" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", paddingBottom: 6 }}>
+            <span style={{ fontSize: 13, color: "var(--app-muted)", marginRight: 2 }}>Follow-up kapan?</span>
+            {([["Besok", 1], ["3 hari", 3], ["1 minggu", 7]] as [string, number][]).map(([l, d]) => (
+              <button key={l} type="button" disabled={busy} onClick={() => run(() => actions.onSchedule("Follow-up", addDays(on, d)))}
+                style={{ minHeight: 44, padding: "0 14px", borderRadius: 999, border: "1px solid var(--app-line-strong)", background: "transparent", color: "var(--app-text)", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>{l}</button>
+            ))}
+          </div>
+        ))}
+    </div>
+  );
+}
+
 function Why({ score, onReplied }: { score: Score; onReplied: () => void }) {
   const [noted, setNoted] = useState(false);
   return (
@@ -202,7 +383,7 @@ function Why({ score, onReplied }: { score: Score; onReplied: () => void }) {
 
 // The ⋯ menu closes on a tap outside it and on Escape (before Escape reaches
 // the lead page). Hapus asks in a sheet with Batal next to it.
-function Menu({ lead, actions, onEdit, compact }: { lead: DetailLead; actions: DetailActions; onEdit: () => void; compact?: boolean }) {
+function Menu({ lead, actions, onEdit, onEditLead, compact }: { lead: DetailLead; actions: DetailActions; onEdit: () => void; onEditLead: () => void; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const [asking, setAsking] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -222,6 +403,7 @@ function Menu({ lead, actions, onEdit, compact }: { lead: DetailLead; actions: D
       <button ref={btn} className={compact ? undefined : "glass"} aria-label="Menu lead" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} style={{ ...(compact ? { marginTop: -4, background: "transparent", color: "var(--app-muted)" } : {}), width: 44, height: 44, border: 0, borderRadius: "50%", color: "var(--app-text)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}><MoreDots /></button>
       {open && (
         <div role="menu" className="frost" style={{ position: "absolute", right: 0, top: 50, zIndex: 20, minWidth: 210, borderRadius: 18, padding: 6, boxShadow: "inset 0 0 0 1px var(--frost-ring), 0 12px 32px var(--frost-float)" }}>
+          <button role="menuitem" className="rowhover" onClick={() => { setOpen(false); onEditLead(); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", border: 0, borderRadius: 12, background: "transparent", color: "var(--app-text)", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}><Icon name="pencil" size={17} /> Ubah data lead</button>
           <button role="menuitem" className="rowhover" onClick={() => { setOpen(false); onEdit(); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", border: 0, borderRadius: 12, background: "transparent", color: "var(--app-text)", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}><Icon name="brief" size={17} /> Ubah profil</button>
           <button role="menuitem" className="rowhover" aria-label={`Hapus lead ${lead.name}`} onClick={() => { setOpen(false); setErr(""); setAsking(true); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", border: 0, borderRadius: 12, background: "transparent", color: "var(--hot)", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}><Icon name="trash" size={17} /> Hapus lead</button>
         </div>
@@ -371,9 +553,11 @@ export function LeadPanel({ lead, score, actions, onOpenFull, shareFile }: {
 }) {
   const p = lead.profile || {};
   const [editing, setEditing] = useState(false);
+  const [editingLead, setEditingLead] = useState(false);
   const [importing, setImporting] = useState(Boolean(shareFile));
   const [scheduling, setScheduling] = useState(false);
   const late = lead.nextActionDate && lead.nextActionDate < today();
+  const { logged, chatted, clear } = useChatLog(actions);
 
   return (
     <aside aria-label="Detail lead" style={{ position: "sticky", top: 120, maxHeight: "calc(100vh - 140px)", overflowY: "auto", overscrollBehavior: "contain", background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 20, boxShadow: "var(--panel-shadow)", padding: 24 }}>
@@ -383,8 +567,8 @@ export function LeadPanel({ lead, score, actions, onOpenFull, shareFile }: {
           <h2 style={{ margin: 0, fontSize: 22, lineHeight: 1.2, fontWeight: 600, letterSpacing: "-0.02em" }}>{lead.name}</h2>
           <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--app-muted)" }}>{lead.category} · dari {lead.source || "—"} · {jt(lead.value)}</p>
         </div>
-        <span style={{ flexShrink: 0, padding: "4px 10px", borderRadius: 999, background: "var(--app-inner)", color: STATUS_COLOR[lead.status] || "var(--app-ink-2)", fontSize: 12, fontWeight: 600 }}>{lead.status}</span>
-        <Menu lead={lead} actions={actions} onEdit={() => setEditing(true)} compact />
+        <StatusBadge status={lead.status} onEdit={() => setEditingLead(true)} />
+        <Menu lead={lead} actions={actions} onEdit={() => setEditing(true)} onEditLead={() => setEditingLead(true)} compact />
       </div>
 
       <div style={{ marginTop: 24, padding: "20px 0", borderTop: "1px solid var(--app-border)", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16 }}>
@@ -447,12 +631,14 @@ export function LeadPanel({ lead, score, actions, onOpenFull, shareFile }: {
 
       <div style={{ marginTop: 24, display: "flex", gap: 8, flexWrap: "wrap" }}>
         {lead.phone
-          ? <a href={waLink(lead.phone, `Halo ${lead.contact || lead.name}, `)} target="_blank" rel="noreferrer" style={{ ...pill(true), flex: "1 1 160px" }}><Icon name="chat" />Chat WhatsApp</a>
+          ? <a href={waLink(lead.phone, `Halo ${lead.contact || lead.name}, `)} target="_blank" rel="noreferrer" onClick={chatted("Chat WhatsApp")} style={{ ...pill(true), flex: "1 1 160px" }}><Icon name="chat" />Chat WhatsApp</a>
           : <button onClick={() => setEditing(true)} style={{ ...pill(true), flex: "1 1 160px" }}>Tambah nomor</button>}
         <button onClick={actions.onQuote} style={{ ...pill(false), flex: "1 1 140px" }}>Buat penawaran</button>
       </div>
+      {logged && <div style={{ marginTop: 12 }}><ChatNote key={logged.n} lead={lead} logged={logged} actions={actions} onClose={clear} /></div>}
 
       {editing && <ProfileEditor profile={p} phone={lead.phone} onSave={actions.onSaveProfile} onSavePhone={actions.onSavePhone} onClose={() => setEditing(false)} />}
+      {editingLead && <LeadEditor lead={lead} onSave={actions.onSaveLead} onClose={() => setEditingLead(false)} />}
       {importing && <WaImport leadName={lead.contact || lead.name} profile={p} initialFile={shareFile} onSave={actions.onImport} onClose={() => setImporting(false)} />}
     </aside>
   );
@@ -465,8 +651,10 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
 }) {
   const p = lead.profile || {};
   const [editing, setEditing] = useState(false);
+  const [editingLead, setEditingLead] = useState(false);
   const [importing, setImporting] = useState(Boolean(shareFile));
   const [scheduling, setScheduling] = useState(false);
+  const { logged, chatted, clear } = useChatLog(actions);
   const [why, setWhy] = useState(false);
   const [script, setScript] = useState(false);
   const [tone, setTone] = useState<"santai" | "formal">("santai");
@@ -493,7 +681,7 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
           <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 100, background: "linear-gradient(to bottom, var(--bar-tint) 0%, var(--bar-tint) 35%, transparent 100%)", pointerEvents: "none" }} />
           <div style={{ position: "absolute", top: "calc(10px + env(safe-area-inset-top, 0px))", left: 12, right: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <button className="glass" onClick={onClose} aria-label="Kembali ke Leads" style={{ width: 44, height: 44, border: 0, borderRadius: "50%", color: "var(--app-text)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}><Icon name="chevronLeft" size={20} stroke={2} /></button>
-            <Menu lead={lead} actions={actions} onEdit={() => setEditing(true)} />
+            <Menu lead={lead} actions={actions} onEdit={() => setEditing(true)} onEditLead={() => setEditingLead(true)} />
           </div>
         </div>
 
@@ -504,12 +692,12 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
             <p style={{ margin: "5px 0 0", fontSize: 14, color: "var(--app-muted)" }}>{[lead.contact, lead.category, p.wa?.category].filter(Boolean).join(" · ")}{lead.ownerName ? ` · 👤 ${lead.ownerName}` : ""}</p>
             <div style={{ marginTop: 12, display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
               {lead.phone && <span style={{ height: 28, padding: "0 11px", borderRadius: 999, background: "var(--app-card)", border: "1px solid var(--app-border)", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--app-ink-2)" }}><Icon name="shield" size={14} stroke={1.9} style={{ color: "var(--brand-text)" }} />Nomor WhatsApp ada</span>}
-              <span style={{ height: 28, padding: "0 11px", borderRadius: 999, background: "var(--app-card)", border: "1px solid var(--app-border)", display: "inline-flex", alignItems: "center", fontSize: 12, fontWeight: 600, color: STATUS_COLOR[lead.status] || "var(--app-ink-2)" }}>{lead.status}</span>
+              <StatusBadge status={lead.status} onEdit={() => setEditingLead(true)} card />
             </div>
           </div>
 
           <nav aria-label="Aksi cepat" className="sp-quick" style={{ marginTop: 22, display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
-            {lead.phone ? <a href={waLink(lead.phone, `Halo ${name}, `)} target="_blank" rel="noreferrer" style={quick(true)}><Icon name="chat" size={22} />Chat</a> : <button onClick={() => setEditing(true)} style={quick(true)}><Icon name="chat" size={22} />Chat</button>}
+            {lead.phone ? <a href={waLink(lead.phone, `Halo ${name}, `)} target="_blank" rel="noreferrer" onClick={chatted("Chat WhatsApp")} style={quick(true)}><Icon name="chat" size={22} />Chat</a> : <button onClick={() => setEditing(true)} style={quick(true)}><Icon name="chat" size={22} />Chat</button>}
             {lead.phone ? <a href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`} style={quick(false)}><Icon name="phone" size={22} />Telepon</a> : <button onClick={() => setEditing(true)} aria-label="Telepon: belum ada nomor, tambah nomor" style={quick(false)}><Icon name="phone" size={22} />Tambah no.</button>}
             <button onClick={actions.onQuote} style={quick(false)}><Icon name="doc" size={22} />Penawaran</button>
             <button onClick={() => setScheduling(true)} style={quick(false)}><Icon name="calendar" size={22} />Jadwal</button>
@@ -632,7 +820,7 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
                       <p style={{ margin: 0, fontSize: 12, color: "var(--app-muted)" }}>{sc.tips}</p>
                       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                         <button onClick={async () => { let ok = true; try { await navigator.clipboard.writeText(scriptText); } catch { ok = false; } setCopied(ok ? "ok" : "fail"); setTimeout(() => setCopied(""), 2000); }} style={{ ...pill(false), minHeight: 44 }}>{copied === "ok" ? "✓ Tersalin" : copied === "fail" ? "Gagal copy" : "Copy"}</button>
-                        {lead.phone && <a href={waLink(lead.phone, scriptText)} target="_blank" rel="noreferrer" style={{ ...pill(true), minHeight: 44 }}>Kirim WA</a>}
+                        {lead.phone && <a href={waLink(lead.phone, scriptText)} target="_blank" rel="noreferrer" onClick={chatted(`Script ${objection?.label || archetype.name}`)} style={{ ...pill(true), minHeight: 44 }}>Kirim WA</a>}
                       </div>
                     </div>
                   ) : <p style={{ margin: "10px 0 0", fontSize: 13, color: "var(--app-muted)" }}>Isi jenis keberatannya (Ubah profil) buat dapet script yang pas.</p>
@@ -651,7 +839,7 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
                       <p style={{ margin: 0, fontSize: 14, lineHeight: 1.4 }}>“{q.text}”</p>
                       <p style={{ margin: "3px 0 0", fontSize: 12, fontWeight: q.answered ? 400 : 600, color: q.answered ? "var(--app-muted)" : "var(--hot)" }}>{dayText(q.at)} · {q.answered ? "dijawab" : "belum dijawab"}</p>
                     </div>
-                    {!q.answered && lead.phone && <a href={waLink(lead.phone, "")} target="_blank" rel="noreferrer" style={{ flexShrink: 0, height: 44, padding: "0 16px", borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", textDecoration: "none" }}>Balas</a>}
+                    {!q.answered && lead.phone && <a href={waLink(lead.phone, "")} target="_blank" rel="noreferrer" onClick={chatted(`Balas: ${q.text.slice(0, 80)}`)} style={{ flexShrink: 0, height: 44, padding: "0 16px", borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", textDecoration: "none" }}>Balas</a>}
                   </li>
                 ))}
               </ul>
@@ -660,9 +848,10 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
         </div>
 
         <div style={{ position: "sticky", bottom: 0, height: 0, zIndex: 9 }}>
+          {logged && <div style={{ position: "absolute", left: 14, right: 14, bottom: "calc(84px + env(safe-area-inset-bottom, 0px))" }}><ChatNote key={logged.n} lead={lead} logged={logged} actions={actions} onClose={clear} /></div>}
           <div className="glass" style={{ position: "absolute", left: 14, right: 14, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", padding: 6, borderRadius: 32, display: "flex", gap: 6 }}>
             {lead.phone
-              ? <a href={waLink(lead.phone, `Halo ${name}, `)} target="_blank" rel="noreferrer" style={{ flex: 1, height: 52, borderRadius: 26, background: "#005eb0", color: "#fff", fontSize: 15, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, textDecoration: "none" }}><Icon name="chat" size={19} stroke={1.8} />Chat di WhatsApp</a>
+              ? <a href={waLink(lead.phone, `Halo ${name}, `)} target="_blank" rel="noreferrer" onClick={chatted("Chat WhatsApp")} style={{ flex: 1, height: 52, borderRadius: 26, background: "#005eb0", color: "#fff", fontSize: 15, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, textDecoration: "none" }}><Icon name="chat" size={19} stroke={1.8} />Chat di WhatsApp</a>
               : <button onClick={actions.onQuote} style={{ flex: 1, height: 52, border: 0, borderRadius: 26, background: "#005eb0", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Buat penawaran</button>}
             <button onClick={() => setImporting(true)} aria-label="Tarik ulang dari WhatsApp" style={{ width: 52, height: 52, border: 0, borderRadius: "50%", background: "var(--glass-btn)", color: "var(--app-text)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><Icon name="refresh" size={20} stroke={1.8} /></button>
           </div>
@@ -671,6 +860,7 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
 
       {scheduling && <Sheet title="Langkah berikutnya" onClose={() => setScheduling(false)}><FollowUp lead={lead} actions={actions} onCancel={() => setScheduling(false)} onSaved={() => setScheduling(false)} /></Sheet>}
       {editing && <ProfileEditor profile={p} phone={lead.phone} onSave={actions.onSaveProfile} onSavePhone={actions.onSavePhone} onClose={() => setEditing(false)} />}
+      {editingLead && <LeadEditor lead={lead} onSave={actions.onSaveLead} onClose={() => setEditingLead(false)} />}
       {importing && <WaImport leadName={name} profile={p} initialFile={shareFile} onSave={actions.onImport} onClose={() => setImporting(false)} />}
     </div>,
     document.body

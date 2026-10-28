@@ -9,7 +9,8 @@ import Beranda from "@/components/Beranda";
 import BerandaReport from "@/components/BerandaReport";
 import BerandaLearn from "@/components/BerandaLearn";
 import HeatDots from "@/components/HeatDots";
-import { DetailActions, LeadPage, LeadPanel } from "@/components/LeadDetail";
+import { DetailActions, LeadPage, LeadPanel, LeadPatch, LostNote } from "@/components/LeadDetail";
+import { CATEGORIES, SOURCES, STATUS_COLOR, channelOf, firstContact, parseRupiah, statusWord } from "@/lib/leadEdit";
 import Icon, { IconName } from "@/components/Icon";
 import ProfileSheet, { MeAvatar, useMyAvatar } from "@/components/ProfileSheet";
 import LeadFinder, { Found } from "@/components/LeadFinder";
@@ -201,13 +202,9 @@ function mapsFields(r: { address: string; website: string; rating: string; revie
 
 function normStatus(v: unknown): string {
   const s = String(v ?? "").toLowerCase();
+  if (/gugur|lost/.test(s)) return "Lost";
   const hit = VALID_STATUS.find(st => s.includes(st.toLowerCase()));
   return hit || "Cold";
-}
-
-function parseValue(v: unknown): number {
-  const digits = String(v ?? "").replace(/[^0-9]/g, "");
-  return digits ? parseInt(digits, 10) : 0;
 }
 
 
@@ -525,6 +522,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       slice.forEach((r, j) => {
         const id = `imp_${Date.now()}_${i + j}`;
         const get = (k: string) => (colMap[k] ? String(r[colMap[k]] ?? "").trim() : "");
+        const status = normStatus(colMap.status ? r[colMap.status] : "");
         batch.set(spaceDoc(space, "leads", id), stamp(space, {
           name: get("name"),
           contact: get("contact"),
@@ -532,10 +530,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           phone: get("phone"),
           category: get("category") || "F&B",
           source: get("source") || "Import",
-          status: normStatus(colMap.status ? r[colMap.status] : ""),
-          value: parseValue(colMap.value ? r[colMap.value] : ""),
+          status,
+          value: parseRupiah(colMap.value ? r[colMap.value] : ""),
           notes: get("notes"),
-          lastContact: today(),
+          lastContact: firstContact(status, today()),
           ...mapsFields({ address: get("address"), website: get("website"), rating: get("rating"), reviewCount: get("reviewCount"), mapsUrl: get("mapsUrl"), weak: get("weak") }),
         }));
       });
@@ -556,7 +554,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       const worst = p.reviews.filter(r => r.rating <= 3 && r.text.trim()).sort((a, b) => a.rating - b.rating)[0];
       batch.set(spaceDoc(space, "leads", `gm_${p.id.replace(/[^A-Za-z0-9_-]/g, "")}`), stamp(space, {
         name: p.name, contact: "", email: p.email || "", phone: p.phone, category: p.category || "Lainnya",
-        source: "Google Maps", status: "Cold", value: 0, lastContact: on,
+        source: "Google Maps", status: "Cold", value: 0, lastContact: firstContact("Cold", on),
         notes: [p.weak.length ? `Titik lemah: ${p.weak.map(w => w.label).join("; ")}` : "", worst ? `Ulasan ${worst.rating}★: "${snippet(worst.text, 200)}"` : ""].filter(Boolean).join("\n"),
         ...(p.address ? { address: p.address } : {}), ...(p.website ? { website: p.website } : {}),
         ...(p.rating !== null ? { rating: p.rating } : {}), reviewCount: p.reviewCount, ...(p.mapsUrl ? { mapsUrl: p.mapsUrl } : {}), placeId: p.id,
@@ -585,8 +583,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     try {
       const id = `lead_${Date.now()}`;
       await setDoc(spaceDoc(space, "leads", id), stamp(space, {
-        ...newLead, name: newLead.name.trim(), lastContact: today(),
-        value: parseInt(newLead.value.replace(/\D/g, "")) || 5000000,
+        ...newLead, name: newLead.name.trim(), lastContact: firstContact(newLead.status, today()),
+        value: parseRupiah(newLead.value),
       }));
       setNewLead({ name: "", contact: "", source: "GMaps", status: "Cold", email: "", phone: "", category: "F&B", notes: "", value: "" });
       setShowAddLead(false);
@@ -628,6 +626,45 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       onDelete: async () => { await deleteLead(l.id); setPageOpen(false); setSelectedLead(null); },
       onSavePhone: phone => updateDoc(spaceDoc(space, "leads", l.id), { phone }),
       onSaveGeo: (geo, address) => updateDoc(spaceDoc(space, "leads", l.id), { geo: geo || deleteField(), ...(address !== undefined ? { address } : {}) }),
+      onSaveLead: (patch, lost) => saveLead(l, patch, lost),
+      onContacted: what => logContact(l, what),
+    };
+  }
+
+  // Ubah data lead. Gugur clears the reminder and writes why to the Rejection
+  // Log, under the lead's owner, in the same commit.
+  async function saveLead(l: Lead, patch: LeadPatch, lost?: LostNote) {
+    const batch = writeBatch(db);
+    batch.update(spaceDoc(space, "leads", l.id), { ...patch, ...(lost ? { nextAction: "", nextActionDate: "" } : {}) });
+    if (lost) batch.set(spaceDoc(space, "rejections", `rej_${Date.now()}`), stamp(space, {
+      leadName: patch.name, leadId: l.id, date: today(), reason: lost.reason, channel: channelOf(patch.source),
+      followUpDate: lost.retry, lesson: "",
+    }, l));
+    await batch.commit();
+  }
+
+  // A tap on Chat WhatsApp is today's contact: once a day per lead, logged in
+  // Outreach under whoever chatted (Log aktivitas, Dashboard tim). The undo
+  // puts both back.
+  const contacted = useRef(new Set<string>());
+  async function logContact(l: Lead, what: string) {
+    const on = today();
+    const key = `${l.id}_${on}`;
+    if (l.lastContact === on || contacted.current.has(key)) return;
+    contacted.current.add(key);
+    const prev = l.lastContact || "";
+    const ref = spaceDoc(space, "leads", l.id);
+    const out = spaceDoc(space, "outreach", `out_${Date.now()}`);
+    const batch = writeBatch(db);
+    batch.update(ref, { lastContact: on });
+    batch.set(out, stamp(space, { leadName: l.name, leadId: l.id, type: "WhatsApp", date: on, subject: what, status: "Sent", opens: 0, clicks: 0 }));
+    try { await batch.commit(); } catch (e) { contacted.current.delete(key); throw e; }
+    return async () => {
+      const b = writeBatch(db);
+      b.update(ref, { lastContact: prev });
+      b.delete(out);
+      await b.commit();
+      contacted.current.delete(key);
     };
   }
 
@@ -722,7 +759,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     };
   };
   const todo = [
-    ...leads.filter(l => l.nextActionDate && l.nextActionDate <= soon && l.status !== "Closed").map(l => ({
+    ...leads.filter(l => l.nextActionDate && l.nextActionDate <= soon && inPlay(l.status)).map(l => ({
       key: `l_${l.id}`, when: l.nextActionDate as string, icon: "calendar" as IconName, title: l.name,
       what: l.nextAction || "Follow-up", phone: l.phone, text: `Halo ${l.contact || l.name}, `,
       kind: "Follow-up", action: "Buka lead", wa: false,
@@ -1036,7 +1073,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                 </div>
                 <label className="vh" htmlFor="status-filter">Status</label>
                 <select id="status-filter" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...leadField, padding: "0 14px", flex: wide ? "0 0 auto" : "1 1 0", minWidth: 0 }}>
-                  {[["All", "Semua status"], ["Hot", "Hot"], ["Warm", "Warm"], ["Cold", "Cold"], ["Closed", "Closed"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  {[["All", "Semua status"], ["Hot", "Hot"], ["Warm", "Warm"], ["Cold", "Cold"], ["Closed", "Closed"], ["Lost", "Gugur"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
                 {leads.length > 0 && <>
                   <label className="vh" htmlFor="lead-sort">Urutkan</label>
@@ -1119,7 +1156,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                               <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lead.name}</span>
                               <span style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lead.category} · {lead.source}{showOwner && lead.ownerName ? ` · 👤 ${lead.ownerName}` : ""}</span>
                             </span>
-                            <span style={{ flexShrink: 0, alignSelf: "flex-start", padding: "3px 9px", borderRadius: 999, background: "var(--app-inner)", color: ({ Hot: "var(--hot)", Warm: "var(--warm)", Cold: "var(--cold)", Closed: "var(--ok)" } as Record<string, string>)[lead.status] || "var(--app-ink-2)", fontSize: 12, fontWeight: 600 }}>{lead.status}</span>
+                            <span style={{ flexShrink: 0, alignSelf: "flex-start", padding: "3px 9px", borderRadius: 999, background: "var(--app-inner)", color: STATUS_COLOR[lead.status] || "var(--app-ink-2)", fontSize: 12, fontWeight: 600 }}>{statusWord(lead.status)}</span>
                           </span>
                           <span style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
                             <HeatDots level={s.level} />
@@ -1243,16 +1280,17 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               <button type="button" onClick={closeAddLead} aria-label="Tutup" style={{ flexShrink: 0, width: 44, height: 44, margin: "-10px -10px -10px 0", borderRadius: "50%", background: "transparent", border: "none", color: "var(--app-ink-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={18} stroke={2} /></button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {([["name", "Nama bisnis", "mis. Kopi Senja", "text", "organization"], ["contact", "Nama kontak", "mis. Dina", "text", "off"], ["email", "Email", "nama@contoh.id", "email", "off"], ["phone", "No. WhatsApp", "mis. 0812 3456 7890", "tel", "off"], ["value", "Nilai deal (Rp)", "Kosong = dihitung 5 jt", "text", "off"]] as [keyof typeof newLead, string, string, string, string][]).map(([k, label, ph, type, ac]) => (
+              {([["name", "Nama bisnis", "mis. Kopi Senja", "text", "organization"], ["contact", "Nama kontak", "mis. Dina", "text", "off"], ["email", "Email", "nama@contoh.id", "email", "off"], ["phone", "No. WhatsApp", "mis. 0812 3456 7890", "tel", "off"], ["value", "Nilai deal (Rp)", "mis. 5jt atau 5.000.000", "text", "off"]] as [keyof typeof newLead, string, string, string, string][]).map(([k, label, ph, type, ac]) => (
                 <div key={k} style={{ gridColumn: k === "name" ? "1/-1" : "auto" }}>
                   <label htmlFor={`nl-${k}`} style={{ fontSize: 13, fontWeight: 600, color: "var(--app-sub)", display: "block", marginBottom: 6 }}>{label}{k === "name" && <span aria-hidden="true" style={{ color: "var(--hot)" }}> *</span>}</label>
-                  <input id={`nl-${k}`} type={type} autoComplete={ac} inputMode={k === "value" ? "numeric" : k === "phone" ? "tel" : undefined} required={k === "name"}
-                    aria-invalid={k === "name" && Boolean(addLeadErr) && !newLead.name.trim()} aria-describedby={k === "name" && addLeadErr ? "nl-err" : undefined}
+                  <input id={`nl-${k}`} type={type} autoComplete={ac} inputMode={k === "phone" ? "tel" : undefined} required={k === "name"}
+                    aria-invalid={k === "name" && Boolean(addLeadErr) && !newLead.name.trim()} aria-describedby={k === "name" && addLeadErr ? "nl-err" : k === "value" ? "nl-value-is" : undefined}
                     value={newLead[k]} onChange={e => { setNewLead({ ...newLead, [k]: e.target.value }); if (k === "name") setAddLeadErr(""); }} style={{ ...inputStyle, fontSize: 16, minHeight: 44 }} placeholder={ph} />
                   {k === "name" && addLeadErr && !newLead.name.trim() && <p id="nl-err" role="alert" style={{ margin: "6px 0 0", fontSize: 13, color: "var(--hot)" }}>{addLeadErr}</p>}
+                  {k === "value" && <p id="nl-value-is" style={{ margin: "6px 0 0", fontSize: 13, color: "var(--app-muted)" }}>{parseRupiah(newLead.value) ? `= ${rupiah(parseRupiah(newLead.value))}` : "Kosong = belum ada nilai"}</p>}
                 </div>
               ))}
-              {([["source", "Sumber", ["GMaps", "DM IG", "Threads", "Cold Email", "Referral", "WhatsApp", "LinkedIn", "Lainnya"]], ["status", "Status", ["Cold", "Warm", "Hot", "Closed"]], ["category", "Kategori", ["F&B", "Retail", "Health", "Property", "Service", "Tech", "Education"]]] as [keyof typeof newLead, string, string[]][]).map(([k, label, opts]) => (
+              {([["source", "Sumber", SOURCES], ["status", "Status", ["Cold", "Warm", "Hot", "Closed"]], ["category", "Kategori", CATEGORIES]] as [keyof typeof newLead, string, string[]][]).map(([k, label, opts]) => (
                 <div key={k} style={{ gridColumn: k === "category" ? "1/-1" : "auto" }}>
                   <label htmlFor={`nl-${k}`} style={{ fontSize: 13, fontWeight: 600, color: "var(--app-sub)", display: "block", marginBottom: 6 }}>{label}</label>
                   <select id={`nl-${k}`} value={newLead[k]} onChange={e => setNewLead({ ...newLead, [k]: e.target.value })} style={{ ...inputStyle, fontSize: 16, minHeight: 44 }}>

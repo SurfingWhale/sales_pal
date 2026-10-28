@@ -174,10 +174,11 @@ async function mockUnfurl(page) {
 }
 const expectText = async (page, text, ms = 8000) => page.getByText(text).first().waitFor({ timeout: ms });
 
-async function addLead(page, name) {
+async function addLead(page, name, { value } = {}) {
   await go(page, "Jualan", "Leads");
   await page.getByRole("button", { name: /tambah lead/i }).click();
   await modal(page).locator("input").first().fill(name);
+  if (value) await modal(page).locator("#nl-value").fill(value);
   await modal(page).getByRole("button", { name: "Simpan lead" }).click();
   // The dialog closes once the write is confirmed; the row can show up before that.
   await page.locator(".modal-overlay").waitFor({ state: "detached", timeout: 10000 });
@@ -410,14 +411,20 @@ export const flows = [
         await modal(t.page).getByRole("button", { name: "Batal" }).click();
         await t.page.locator(".modal-overlay").waitFor({ state: "detached" });
       });
-      await t.step("add a lead", () => addLead(t.page, "Kopi Flow"));
+      await t.step("add a lead worth 5jt", () => addLead(t.page, "Kopi Flow", { value: "5jt" }));
       await t.step("filter Cold shows it", async () => { await t.page.locator("#status-filter").selectOption("Cold"); await expectText(t.page, "Kopi Flow"); });
-      await t.step("open it and schedule a follow-up tomorrow", async () => {
+      await t.step("a new Cold lead isn't contacted yet: Belum dihubungi finds it", async () => {
         await t.page.locator("#status-filter").selectOption("All");
+        const views = t.page.getByRole("group", { name: "Tampilan cepat" });
+        await views.getByRole("button", { name: /^Belum dihubungi/ }).click();
+        await expectText(t.page, "Kopi Flow");
+        await views.getByRole("button", { name: /^Semua/ }).click();
+      });
+      await t.step("open it and schedule a follow-up tomorrow", async () => {
         await openLeadRow(t.page, "Kopi Flow");
-        // Skor potensi (PRD-008 §2): contacted today + Rp 5 jt = 25, sangat rendah.
+        // Skor potensi (PRD-008 §2): never contacted, Rp 5 jt = 5, sangat rendah.
         await showWhy(t.page);
-        await expectText(t.page, "Kenapa 25");
+        await expectText(t.page, "Kenapa 5");
         await t.page.getByRole("button", { name: "Mereka bales hari ini" }).click();
         await expectText(t.page, "Kenapa 55");
         await t.page.getByRole("button", { name: /^Jadwal/ }).first().click();
@@ -508,6 +515,73 @@ export const flows = [
         await t.page.getByRole("menuitem", { name: "Hapus lead Kopi Flow" }).click();
         await ask.getByRole("button", { name: "Hapus", exact: true }).click();
         await t.page.locator(".lead-row", { hasText: "Kopi Flow" }).first().waitFor({ state: "detached", timeout: 8000 });
+      });
+    },
+  },
+  {
+    name: "lead data: edit status and value, a chat counts as contact, gugur to the rejection log",
+    async run(t) {
+      const { page } = t;
+      const chat = () => page.getByRole("link", { name: /^Chat( WhatsApp| di WhatsApp)?$/ }).first();
+      const note = () => page.getByRole("group", { name: "Catatan chat" });
+      await t.step("sign up and add a Cold lead", async () => { await signup(t); await addLead(page, "Sate Flow", { value: "5jt" }); });
+      await t.step("tap the status: Hot, a number, and 7,5jt read as Rp 7.500.000", async () => {
+        await openLeadRow(page, "Sate Flow");
+        await page.getByRole("button", { name: "Status Cold. Ubah data lead" }).first().click();
+        const sheet = page.getByRole("dialog", { name: "Ubah data lead" });
+        await sheet.getByRole("button", { name: "Hot", exact: true }).click();
+        await sheet.locator("#le-phone").fill("0812 3456 7890");
+        await sheet.locator("#le-value").fill("7,5jt");
+        await sheet.getByText("= Rp 7.500.000").waitFor();
+        await sheet.getByRole("button", { name: "Simpan", exact: true }).click();
+        await sheet.waitFor({ state: "detached" });
+        await page.getByRole("button", { name: "Status Hot. Ubah data lead" }).first().waitFor();
+      });
+      await t.step("Chat opens WhatsApp and counts as today's contact", async () => {
+        await page.context().route("https://wa.me/**", r => r.fulfill({ status: 200, contentType: "text/html", body: "<title>wa</title>" }));
+        // Rp 7,5 jt = 8, a number = 10, never contacted = 0.
+        await showWhy(page);
+        await expectText(page, "Kenapa 18");
+        const [pop] = await Promise.all([page.waitForEvent("popup"), chat().click()]);
+        if (!pop.url().startsWith("https://wa.me/6281234567890")) throw new Error(`opened ${pop.url()}`);
+        await pop.close();
+        await note().getByText("✓ Dicatat: chat hari ini").waitFor();
+        await expectText(page, "Kenapa 38");
+      });
+      await t.step("Batal takes it back; chat again, Besok sets the follow-up", async () => {
+        await note().getByRole("button", { name: "Batal", exact: true }).click();
+        await note().getByText("Dibatalin, chat ini ga dicatat.").waitFor();
+        await expectText(page, "Kenapa 18");
+        const [pop] = await Promise.all([page.waitForEvent("popup"), chat().click()]);
+        await pop.close();
+        await note().getByText("✓ Dicatat: chat hari ini").waitFor();
+        await note().getByRole("group", { name: "Follow-up berikutnya" }).getByRole("button", { name: "Besok" }).click();
+        await note().getByText(/^Follow-up berikutnya /).waitFor();
+        await expectText(page, "Kenapa 58");
+      });
+      await t.step("the chat is in Outreach", async () => {
+        await closeAll(page);
+        await go(page, "Tim", "Outreach");
+        await expectText(page, "Sate Flow");
+      });
+      await t.step("Gugur asks why and when to retry, and goes to the Rejection Log", async () => {
+        await openLeadRow(page, "Sate Flow");
+        await page.getByRole("button", { name: "Status Hot. Ubah data lead" }).first().click();
+        const sheet = page.getByRole("dialog", { name: "Ubah data lead" });
+        await sheet.getByRole("button", { name: "Gugur", exact: true }).click();
+        await sheet.locator("#le-why").fill("Budget dipotong");
+        await sheet.getByRole("group", { name: "Coba lagi" }).getByRole("button", { name: "3 bulan lagi" }).click();
+        await sheet.getByRole("button", { name: "Simpan", exact: true }).click();
+        await sheet.waitFor({ state: "detached" });
+        await page.getByRole("button", { name: "Status Gugur. Ubah data lead" }).first().waitFor();
+        await expectText(page, "Belum dijadwalkan");
+        await closeAll(page);
+        await go(page, "Jualan", "Leads");
+        await page.locator("#status-filter").selectOption("Lost");
+        await expectText(page, "Sate Flow");
+        await page.locator("#status-filter").selectOption("All");
+        await go(page, "Tim", "Rejection Log");
+        await expectText(page, "Budget dipotong");
       });
     },
   },
@@ -1167,6 +1241,7 @@ export const flows = [
       const leadDlg = () => page.getByRole("dialog", { name: /^Profil Kopi Dialog/ });
       await check("Jadwal lead", async () => { await addLead(page, "Kopi Dialog"); await openLeadRow(page, "Kopi Dialog"); await fullProfile(page); await leadDlg().getByRole("button", { name: /^Jadwal/ }).first().click(); }, { last: "Simpan jadwal" });
       await check("Profil lead", () => leadDlg().getByRole("button", { name: "Isi manual" }).click(), { last: "Simpan profil" });
+      await check("Ubah data lead", () => leadDlg().getByRole("button", { name: /^Status .*Ubah data lead$/ }).first().click(), { last: "Simpan" });
       await check("Tarik dari WhatsApp", () => leadDlg().getByRole("button", { name: "Tarik dari WhatsApp" }).first().click());
       await t.step("close the lead", () => closeAll(page));
       await check("Profil", () => page.getByRole("button", { name: "Profil dan pengaturan" }).click());
