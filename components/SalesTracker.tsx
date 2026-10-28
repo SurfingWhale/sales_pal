@@ -52,7 +52,7 @@ import { useHuntSession, useProspects, useStrategy } from "@/lib/prospectStore";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { parseVCards } from "@/lib/vcard";
 import { authFetch } from "@/lib/authFetch";
-import { Component, Invoice, Quote, QuoteTemplate, Service, addDays, balance, daysBetween, invoiceState, owed, longDate, rupiah, today, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
+import { Component, Invoice, PriceChange, Quote, QuoteTemplate, Service, addDays, balance, daysBetween, invoiceState, owed, longDate, rupiah, today, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
 import { useConfirm } from "@/components/ConfirmSheet";
 import { LeadGeo, validGeo } from "@/lib/geo";
 
@@ -325,6 +325,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const services = useSpaceCollection<Service>(space, "services");
   const components = useSpaceCollection<Component>(space, "components");
   const quoteTemplates = useSpaceCollection<QuoteTemplate>(space, "quoteTemplates");
+  const priceHistory = useSpaceCollection<PriceChange>(space, "pricelistHistory");
   const quotes = useSpaceCollection<Quote>(space, "quotes");
   const invoices = useSpaceCollection<Invoice>(space, "invoices");
   const business = useBusiness(space);
@@ -1170,7 +1171,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         )}
         {activeTab === "Invoice" && <Invoices invoices={invoices} business={business} services={services} components={components}
           leads={leads.map(l => ({ id: l.id, name: l.name, contact: l.contact, phone: l.phone }))} />}
-        {activeTab === "Paket" && <Services services={services} components={components} templates={quoteTemplates} business={business} />}
+        {activeTab === "Paket" && <Services services={services} components={components} templates={quoteTemplates} history={priceHistory} business={business} />}
 
         {activeTab === "Dashboard tim" && <TeamDashboard hunts={hunts} quotes={quotes} invoices={invoices} outreach={outreach} rejections={rejections}
           onGo={tab => { setActiveTab(tab); window.scrollTo({ top: 0 }); }} />}

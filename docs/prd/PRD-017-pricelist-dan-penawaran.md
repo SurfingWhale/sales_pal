@@ -1,6 +1,6 @@
 # PRD-017 — Pricelist pusat dan penawaran berkomponen
 
-- **Status:** fase 1–2 dibangun 23 Okt (§7). Fase 3–4 rencana.
+- **Status:** fase 1–3 dibangun 23–24 Okt (§7). Fase 4 (UNTMD Sports, BeUntamed) menyusul.
 - **Terkait:** PRD-011 (bisnis dan dokumen), PRD-005 (funnel), PRD-016 (outreach yang membawa link pricelist), `creative-hub/standards/pricelist.md` (v0, draf standar lintas situs), `creative-hub/standards/leads.md`.
 
 ## 1. Masalah
@@ -152,7 +152,20 @@ Situs tidak menyimpan salinan sendiri, jadi tidak pernah ada dua versi yang sali
    - **Data:** koleksi `quoteTemplates`, katalog bersama seperti `components`. Rules + 4 tes (160 lulus).
    - **Tes:** flow `komponen` menyimpan template, mulai penawaran dari template, dan Simpan tanpa klien → fokus ke kolom klien (Chromium HP & desktop, iPhone 12, Safari). `sell` + `guild` lulus di HP & desktop. Audit HIG 0 temuan.
    - Belum: pratinjau PDF di kolom kanan, geser urutan item.
-3. Dua harga + ikon sync (§3a) + bagian publik paket + endpoint baca & tulis (kunci per situs, `version`, riwayat) + standar di creative-hub naik ke v1 + pasang di Visufavor (baca + admin bisa ubah).
+3. ✅ **SalesPal dibangun 24 Okt:** dua harga + ikon sync (§3a) + bagian publik paket + endpoint baca & tulis (kunci per situs, `version`, riwayat).
+   - **Paket → Harga di situs** (khusus owner, `components/SitePricing.tsx`):
+     - per paket ada baris tiap situs: harga yang tampil + ikon 🔗 *ikut SalesPal* / *lepas* dengan "beda Rp X", atau tombol **Tampilkan**;
+     - sheet untuk tampil/sembunyi, ikat, atau harga sendiri, plus dua sync sekali tap;
+     - **Riwayat harga**, dan peringatan kalau perubahan dari situs membuat margin < 30%;
+     - tombol **Pakai ruang kerja ini buat situs** memilih ruang kerja yang dibaca situs (`config/pricelist`).
+   - **Endpoint:**
+     - `GET /api/pricelist?site=` publik (CORS, cache CDN 5 menit), tanpa biaya modal, vendor, atau catatan;
+     - `POST /api/pricelist` dan `PUT /api/pricelist/{id}` untuk admin situs, dengan kunci `PRICELIST_KEY_<SITE>` + `version`; versi lama ditolak 409.
+     - Kode server ada di `lib/pricelistServer.ts`; tipe situs di `lib/sites.ts`.
+   - **Rules:** hanya owner yang boleh mengubah `sites` di paket; Leader/Officer tetap bisa mengedit paketnya. `pricelistHistory` jadi katalog. 6 tes, total 166 lulus.
+   - Simpan paket sekarang *merge*, jadi harga situs dan versinya tidak hilang saat paket diedit.
+   - **Tes:** flow `pricelist` (Chromium HP & desktop, iPhone 12, Safari), audit HIG 0 temuan.
+   - **Visufavor** (repo terpisah): menu membaca pricelist (fallback salinan terakhir lalu `content.json`, label "from Rp X"), dan admin punya tab **Prices** lewat `api/pricelist.js` (cek admin dengan RPC `visufavor_may_write`, lalu teruskan dengan kunci situs). Standar creative-hub naik ke v1 bersama pemasangan ini.
 4. UNTMD Sports (tab Harga CMS baca/tulis ke SalesPal, harga lama dipindahkan), lalu BeUntamed (opsional).
 
 **Tes:**

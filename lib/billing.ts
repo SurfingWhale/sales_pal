@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { collection, doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Space, SpaceCollection, spaceDoc, spaceQuery } from "@/lib/space";
+import type { SiteId, SitePrice } from "@/lib/sites";
 
 // Selling a service, after the lead: the packages on offer, the quote sent,
 // the invoice that follows it, and the money that comes in against it.
@@ -17,7 +18,17 @@ export interface Service {
   unit: string;
   description: string;
   cost?: number;          // internal: what one unit costs you (HPP); never printed
+  // The pricelist the sites read (PRD-017 §3a, §6). description doubles as
+  // "what's included" there; excludes is what isn't, one point per line.
+  excludes?: string;
+  sites?: Partial<Record<SiteId, SitePrice>>;
+  version?: number;       // goes up on every change, from SalesPal or a site's admin
+  updatedAt?: number;
+  updatedFrom?: string;   // "salespal" or a site id
 }
+
+export { SITES, isSiteId, sitePrice } from "@/lib/sites";
+export type { SiteId, SitePrice, PriceChange } from "@/lib/sites";
 
 export interface LineItem {
   name: string;
@@ -61,8 +72,7 @@ export function marginOf(d: { items: LineItem[]; discount: number }): { amount: 
   return { amount: net - cost, percent: net ? Math.round(((net - cost) / net) * 100) : null };
 }
 
-// Below this a margin is flagged (PRD-017 §3; the owner can change it later).
-export const MARGIN_TARGET = 30;
+export { MARGIN_TARGET } from "@/lib/sites";
 
 // A quote kept to start the next one from (PRD-017 §4): the items with their
 // internal cost, what the client gets, the payment schedule. Never the client.
