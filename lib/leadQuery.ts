@@ -16,6 +16,7 @@ export const VIEWS = [
   { id: "hari-ini", label: "Follow-up hari ini" },
   { id: "telat", label: "Telat" },
   { id: "dibales", label: "Baru dibales" },
+  { id: "belum", label: "Belum dihubungi" },
   { id: "lama", label: "7+ hari diam" },
   { id: "tanpa-nomor", label: "Belum ada nomor" },
 ] as const;
@@ -37,6 +38,8 @@ export function inView(l: QueryLead, v: View, on: string): boolean {
     case "hari-ini": return open(l) && l.nextActionDate === on;
     case "telat": return open(l) && !!l.nextActionDate && l.nextActionDate < on;
     case "dibales": return !!l.lastReplyAt && l.lastReplyAt >= addDays(on, -3);
+    // New and imported Cold leads start with no contact (lib/leadEdit.ts firstContact).
+    case "belum": return open(l) && !l.lastContact;
     case "lama": return open(l) && !!l.lastContact && l.lastContact <= addDays(on, -7);
     case "tanpa-nomor": return open(l) && (l.phone || "").replace(/\D/g, "").length < 8;
     default: return true;
@@ -48,13 +51,15 @@ export function inView(l: QueryLead, v: View, on: string): boolean {
 export function matches(l: QueryLead, q: string): boolean {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   if (!words.length) return true;
-  const hay = [l.name, l.contact, l.phone, (l.phone || "").replace(/\D/g, ""), l.email, l.category, l.source, l.status, l.notes,
+  const hay = [l.name, l.contact, l.phone, (l.phone || "").replace(/\D/g, ""), l.email, l.category, l.source, l.status, l.status === "Lost" ? "gugur" : "", l.notes,
     l.nextAction, l.profile?.need, l.profile?.pain, l.profile?.objection, l.profile?.brief].filter(Boolean).join(" ").toLowerCase();
   return words.every(w => hay.includes(w.replace(/^0/, "")) || hay.includes(w));
 }
 
+// Gugur leads go last whatever the order, so the list leads with who's still in play.
 export function sortLeads<T extends QueryLead>(xs: T[], s: Sort, score: (l: T) => number): T[] {
-  const by = (f: (l: T) => number | string) => [...xs].sort((a, b) => { const x = f(a), y = f(b); return x < y ? -1 : x > y ? 1 : 0; });
+  const lost = (l: T) => (l.status === "Lost" ? 1 : 0);
+  const by = (f: (l: T) => number | string) => [...xs].sort((a, b) => { const x = f(a), y = f(b); return lost(a) - lost(b) || (x < y ? -1 : x > y ? 1 : 0); });
   switch (s) {
     case "jadwal": return by(l => l.nextActionDate || "9999");
     case "nilai": return by(l => -(l.value || 0));
