@@ -1,6 +1,6 @@
 # PRD-017 — Pricelist pusat dan penawaran berkomponen
 
-- **Status:** fase 1–3 dibangun 23–24 Okt (§7). Fase 4 (UNTMD Sports, BeUntamed) menyusul.
+- **Status:** fase 1–4 dibangun 23–29 Okt (§7). BeUntamed menunggu keputusan owner.
 - **Terkait:** PRD-011 (bisnis dan dokumen), PRD-005 (funnel), PRD-016 (outreach yang membawa link pricelist), `creative-hub/standards/pricelist.md` (v0, draf standar lintas situs), `creative-hub/standards/leads.md`.
 
 ## 1. Masalah
@@ -166,7 +166,12 @@ Situs tidak menyimpan salinan sendiri, jadi tidak pernah ada dua versi yang sali
    - Simpan paket sekarang *merge*, jadi harga situs dan versinya tidak hilang saat paket diedit.
    - **Tes:** flow `pricelist` (Chromium HP & desktop, iPhone 12, Safari), audit HIG 0 temuan.
    - **Visufavor** (repo terpisah): menu membaca pricelist (fallback salinan terakhir lalu `content.json`, label "from Rp X"), dan admin punya tab **Prices** lewat `api/pricelist.js` (cek admin dengan RPC `visufavor_may_write`, lalu teruskan dengan kunci situs). Standar creative-hub naik ke v1 bersama pemasangan ini.
-4. UNTMD Sports (tab Harga CMS baca/tulis ke SalesPal, harga lama dipindahkan), lalu BeUntamed (opsional).
+4. ✅ **UNTMD Sports dibangun 29 Okt** (repo terpisah, UNTMD_SPORT #31):
+   - section Harga dan popup promo membaca pricelist, dengan label **Mulai dari**. Fallback: salinan terakhir di browser, lalu Firestore `pricing/packages`, lalu harga bawaan;
+   - tab **Harga** di CMS menyimpan paket lewat `app/api/pricelist/route.ts` (cek admin dengan `verifyAdmin`, lalu teruskan dengan `PRICELIST_KEY_UNTMD_SPORTS`). Yang dikirim hanya yang berubah, dengan `version`; kalau 409, paket dimuat ulang dan disebut diubah dari mana;
+   - tombol **Pindahin ke SalesPal** memindahkan paket lama sekali (paket yang namanya sudah ada di SalesPal dipakai ulang, jadi tidak dobel);
+   - tanda *Paling Favorit* dan add-on tetap di Firestore situs; SalesPal belum punya add-on.
+   - BeUntamed: opsional, menunggu keputusan owner.
 
 **Tes:**
 - flow `sell` diperluas: komponen, margin, item manual disimpan ke katalog, template, PDF tanpa biaya modal, harga SalesPal terbawa dari paket → penawaran → invoice;
