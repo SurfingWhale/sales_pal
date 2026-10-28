@@ -3,18 +3,17 @@
 import { useEffect, useState } from "react";
 import { writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { addDays, daysBetween, longDate, today } from "@/lib/billing";
+import { daysBetween, longDate, today } from "@/lib/billing";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import type { Hunt } from "@/lib/hunting";
-import { objections } from "@/lib/salespal-data";
 import {
-  Prospect, ProspectEvent, Result, Strategy, View, archivePatch, dncPatch, dropReady, followUpDue, fromHunts, inQueue, JOURNEY_STEPS, journeyStep, lastLine, notePatch, replyPatch,
-  restorePatch, resultPatch, silentDays, statusColor, statusLabel, view,
+  Prospect, ProspectEvent, Strategy, View, archivePatch, dropReady, followUpDue, fromHunts, inQueue, JOURNEY_STEPS, journeyStep, lastLine,
+  restorePatch, silentDays, statusColor, statusLabel, view,
 } from "@/lib/prospects";
-import { Counter, bump, clean, ctx, loadClosed, removeProspect, saveProspect, syncHunt } from "@/lib/prospectStore";
-import { btnPrimary, btnMuted, card, chip, font, inputStyle, label, ink } from "@/components/ui";
+import { clean, ctx, loadClosed, removeProspect, saveProspect } from "@/lib/prospectStore";
+import { btnPrimary, card, chip, font, inputStyle, ink } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmSheet";
-import ConvertSheet from "@/components/ConvertSheet";
+import { useOutcome } from "@/components/ProspectOutcome";
 import Icon from "@/components/Icon";
 import { profileUrl } from "@/lib/threads";
 
@@ -26,8 +25,6 @@ import { profileUrl } from "@/lib/threads";
 export const FILTERS = ["Antrian", "Follow-up hari ini", "Baru", "Nunggu", "Terhubung", "Diem 7+", "Siap dibuang", "Parkir", "ETB", "DNC", "Arsip"] as const;
 export type ProspectFilter = (typeof FILTERS)[number];
 const PAGE = 30;
-
-type Editing = { id: string; kind: "reply" | "nanti" | "tolak" | "dnc" | "note"; text: string; date: string };
 
 function when(at: number): string {
   const d = new Date(at);
@@ -96,25 +93,30 @@ function Summary({ p, on }: { p: Prospect; on: string }) {
   );
 }
 
-export default function ProspectList({ prospects, ready, hunts, strategy, sessionId, filter, setFilter, onCompose, onOpen, query, embedded }: {
+export default function ProspectList({ prospects, ready, hunts, strategy, sessionId, filter, setFilter, onCompose, onOpen, query, embedded, focusId }: {
   prospects: Prospect[]; ready: boolean; hunts: Hunt[]; strategy: Strategy; sessionId?: string;
   filter: ProspectFilter; setFilter: (f: ProspectFilter) => void;
   onCompose: (p: Prospect, next: string[], from: ProspectFilter) => void;   // their page; next = who follows them in this list
   onOpen?: (p: Prospect) => void;   // the person's conversation
   query?: string;                   // a search box the page owns
   embedded?: boolean;               // inside Prospek: no box, title or search of its own
+  focusId?: string | null;          // back from their page: their card open, in view, even if they left the filter
 }) {
   const [ask, askSheet] = useConfirm();
   const space = useSpace();
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<Editing | null>(null);
-  const [converting, setConverting] = useState<Prospect | null>(null);
+  const [openId, setOpenId] = useState<string | null>(focusId ?? null);
   const [closed, setClosed] = useState<Prospect[] | null>(null);
   const [limit, setLimit] = useState(PAGE);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [search, setSearch] = useState("");
   const on = today();
+  const o = useOutcome({ strategy, sessionId, onMsg: setMsg, onLocked: () => { setClosed(null); setOpenId(null); } });
+
+  useEffect(() => {
+    if (focusId) document.getElementById(`pc-${focusId}`)?.scrollIntoView({ block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if ((filter === "DNC" || filter === "Arsip") && closed === null) loadClosed(space).then(setClosed).catch(() => setClosed([]));
@@ -138,37 +140,16 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   // Search by ID, @username or name, across every journey, whatever the filter.
   const needle = (query ?? search).trim().toLowerCase().replace(/^@/, "");
   const hit = (p: Prospect) => [p.id, p.handle, p.name || ""].some(x => x.toLowerCase().replace(/^@/, "").includes(needle));
-  const shown = needle
+  const listed = needle
     ? [...rows, ...(closed || []).map(p => ({ p, v: view(p, on, strategy) }))].filter(({ p }) => hit(p))
     : filter === "DNC" || filter === "Arsip"
     ? (closed || []).filter(p => (filter === "Arsip") === !!p.archivedAt).map(p => ({ p, v: view(p, on, strategy) }))
     : inFilter(filter).sort((a, b) => filter === "Antrian" || filter === "Follow-up hari ini" ? (a.v.due || "").localeCompare(b.v.due || "") : (lastLine(b.p)?.at || b.p.updatedAt) - (lastLine(a.p)?.at || a.p.updatedAt));
+  // Whoever was just handled stays on top of the list they came from, even
+  // when the message moved them out of it (Diem 7+ after a follow-up).
+  const pinned = !needle && focusId && !listed.some(r => r.p.id === focusId) ? rows.find(r => r.p.id === focusId) : undefined;
+  const shown = pinned ? [pinned, ...listed] : listed;
   const unlinked = hunts.filter(h => !h.prospectId && h.target?.trim());
-
-  async function act(p: Prospect, patch: Partial<Prospect>, counters: Counter[] = []) {
-    setBusy(true);
-    try {
-      await saveProspect(space, p, patch);
-      syncHunt(space, { ...p, ...patch } as Prospect);
-      counters.forEach(c => bump(space, sessionId, c));
-      setEditing(null);
-    } catch {
-      setMsg("Gagal nyimpen. Cek koneksi lalu coba lagi.");
-    } finally {
-      setBusy(false);
-    }
-  }
-  const firstAnswer = (p: Prospect): Counter[] => (p.contact === "terhubung" ? [] : ["replies"]);
-
-  function mark(p: Prospect, r: Exclude<Result, "data">, extra: { remark?: string; nextAt?: string } = {}) {
-    return act(p, resultPatch(p, r, extra, ctx(sessionId), strategy), firstAnswer(p));
-  }
-
-  async function lockDnc(p: Prospect, reason: string) {
-    await act(p, dncPatch(p, reason, ctx(sessionId)), firstAnswer(p));
-    setClosed(null);
-    setOpenId(null);
-  }
 
   async function backfill() {
     setBusy(true);
@@ -280,7 +261,6 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
         const open = openId === p.id;
         const who = p.name ? `${p.name} (${p.handle})` : p.handle;
         const post = [...(p.history || [])].reverse().find(e => e.kind === "post");
-        const ed = editing?.id === p.id ? editing : null;
         const last = lastLine(p);
         const sub = [
           p.platform, p.segment,
@@ -290,10 +270,10 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
           v.due && v.status !== "dnc" ? (v.due <= on ? (v.due < on ? `telat sejak ${longDate(v.due)}` : "hari ini") : `${v.parkedUntil ? "parkir s.d." : "follow-up"} ${longDate(v.due)}`) : "",
         ].filter(Boolean).join(" · ");
         return (
-          <div key={p.id} className="sp-pcard">
+          <div key={p.id} id={`pc-${p.id}`} className="sp-pcard">
             {/* One card per person: who and where, how far along, the last thing said. */}
             <div className="sp-pcard-top">
-              <button className="sp-pcard-main" onClick={() => { setOpenId(open ? null : p.id); setEditing(null); }} aria-expanded={open} aria-label={`Journey ${who}`}>
+              <button className="sp-pcard-main" onClick={() => { setOpenId(open ? null : p.id); o.stop(); }} aria-expanded={open} aria-label={`Journey ${who}`}>
                 <span className="sp-pini" aria-hidden="true" style={{ background: `color-mix(in srgb, ${statusColor(p, v)} 14%, var(--app-card))`, color: ink(statusColor(p, v)) }}>{(p.name || p.handle).replace(/^@/, "").slice(0, 2).toUpperCase()}</span>
                 <span className="sp-pbody">
                   <span className="sp-phead"><span className="sp-pname">{p.name || p.handle}</span>{last && <span className="sp-ptime tabnum">{ago(last.at)}</span>}</span>
@@ -336,63 +316,17 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                       {onOpen && <button onClick={() => onOpen(p)} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Percakapan</button>}
                       {dropReady(p, on, strategy) && <button onClick={() => ask(`Buang ${who}?`, "Pindah ke Arsip, riwayat tetap ada, bisa dibalikin.", () => drop([p]), "Buang", "Membuang…")} style={{ ...chip, minHeight: 36 }}>🗑 Buang</button>}
                       <button onClick={() => { const ids = shown.map(r => r.p.id); onCompose(p, ids.slice(ids.indexOf(p.id) + 1), filter); }} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>{v.status === "baru" ? "✉ Kirim intro" : v.status === "belum" ? "↻ Follow-up" : "✉ Kirim pesan"}</button>
-                      <button onClick={() => setEditing({ id: p.id, kind: "reply", text: "", date: "" })} aria-pressed={ed?.kind === "reply"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Dibales</button>
+                      <button onClick={() => o.edit(p, "reply")} aria-pressed={o.editing?.id === p.id && o.editing.kind === "reply"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Dibales</button>
                       {(post?.url || p.url) && <a href={post?.url || p.url} target="_blank" rel="noreferrer" className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>{post?.url ? "Buka post ↗" : "Buka profil ↗"}</a>}
-                      <button onClick={() => setEditing({ id: p.id, kind: "note", text: "", date: "" })} style={{ ...chip, minHeight: 36 }}>📝 Catatan</button>
+                      <button onClick={() => o.edit(p, "note")} style={{ ...chip, minHeight: 36 }}>📝 Catatan</button>
                       <button onClick={() => ask(`Hapus journey ${who}?`, "Log DM-nya tetap ada.", () => removeProspect(space, p))} aria-label={`Hapus journey ${who}`} style={{ ...chip, minHeight: 36, marginLeft: "auto", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🗑 Hapus</button>
                     </div>
                     <div style={{ fontSize: 12, color: "var(--app-muted)", margin: "10px 0 6px" }}>Hasil (otomatis dihitung dibales)</div>
-                    <div role="group" aria-label={`Hasil untuk ${who}`} className="sp-choice-grid">
-                      <button disabled={busy} onClick={() => mark(p, "tertarik")} aria-pressed={p.result === "tertarik"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>✅ Tertarik</button>
-                      <button disabled={busy} onClick={() => mark(p, "pikir")} aria-pressed={p.result === "pikir"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>🤔 Pikir-pikir</button>
-                      <button disabled={busy} onClick={() => setEditing({ id: p.id, kind: "nanti", text: "", date: addDays(on, 7) })} aria-pressed={p.result === "nanti"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>⏳ Hubungi nanti</button>
-                      <button disabled={busy} onClick={() => setEditing({ id: p.id, kind: "tolak", text: p.result === "tolak" ? p.remark || "" : "", date: "" })} aria-pressed={p.result === "tolak"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>❌ Tidak tertarik</button>
-                      <button disabled={busy} onClick={() => setConverting(p)} style={{ ...chip, minHeight: 36, fontWeight: 700, background: "#00a862", color: "#1c2128", border: "none" }}>Kasih data →</button>
-                      <button disabled={busy} onClick={() => setEditing({ id: p.id, kind: "dnc", text: "", date: "" })} style={{ ...chip, minHeight: 36, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🚫 Menolak dihubungi</button>
-                    </div>
+                    {o.results(p, who)}
                   </>
                 )}
 
-                {ed && (
-                  <div onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setEditing(null); } }}
-                    style={{ marginTop: 10, padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)" }}>
-                    {ed.kind === "reply" && <>
-                      <label htmlFor={`reply-${p.id}`} style={label}>Tempel balasannya (opsional)</label>
-                      <textarea id={`reply-${p.id}`} autoFocus value={ed.text} onChange={e => setEditing({ ...ed, text: e.target.value })} placeholder="mis. Boleh kak, pricelist-nya berapa?" style={{ ...inputStyle, fontSize: 16, height: 72, resize: "vertical" }} />
-                    </>}
-                    {ed.kind === "note" && <>
-                      <label htmlFor={`note-${p.id}`} style={label}>Catatan</label>
-                      <input id={`note-${p.id}`} autoFocus value={ed.text} onChange={e => setEditing({ ...ed, text: e.target.value })} placeholder="mis. minta dihubungi lagi habis lebaran" style={{ ...inputStyle, fontSize: 16, minHeight: 44 }} />
-                    </>}
-                    {ed.kind === "nanti" && <>
-                      <label htmlFor={`nanti-${p.id}`} style={label}>Hubungi lagi tanggal</label>
-                      <input id={`nanti-${p.id}`} type="date" value={ed.date} min={on} onChange={e => setEditing({ ...ed, date: e.target.value })} style={{ ...inputStyle, fontSize: 16, minHeight: 44, maxWidth: 240 }} />
-                    </>}
-                    {(ed.kind === "tolak" || ed.kind === "dnc") && <>
-                      {ed.kind === "tolak" && (
-                        <div role="group" aria-label="Alasan" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                          {objections.filter(o => o.id !== "ghosting").map(o => (
-                            <button key={o.id} onClick={() => setEditing({ ...ed, text: o.label })} aria-pressed={ed.text === o.label} style={{ ...chip, minHeight: 32, ...(ed.text === o.label ? { background: "#005eb0", color: "#fff", border: "1px solid #005eb0" } : {}) }}>{o.icon} {o.label}</button>
-                          ))}
-                        </div>
-                      )}
-                      {ed.kind === "dnc" && <div style={{ fontSize: 12, color: "var(--app-sub)", marginBottom: 8 }}>Dikunci selamanya: ga muncul di antrian & kampanye. Riwayat percakapannya dihapus, yang disimpan cuma username + tanggal.</div>}
-                      <label htmlFor={`why-${p.id}`} style={label}>{ed.kind === "tolak" ? "Alasan (bebas)" : "Alasan (opsional)"}</label>
-                      <input id={`why-${p.id}`} autoFocus value={ed.text} onChange={e => setEditing({ ...ed, text: e.target.value })} style={{ ...inputStyle, fontSize: 16, minHeight: 44 }} />
-                    </>}
-                    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 10 }}>
-                      <button onClick={() => setEditing(null)} style={{ ...btnMuted, minHeight: 44, padding: "8px 16px" }}>Batal</button>
-                      <button disabled={busy} onClick={() => {
-                        const c = ctx(sessionId);
-                        if (ed.kind === "reply") return act(p, replyPatch(p, ed.text, c), firstAnswer(p));
-                        if (ed.kind === "note") return ed.text.trim() ? act(p, notePatch(p, ed.text, c)) : setEditing(null);
-                        if (ed.kind === "nanti") return mark(p, "nanti", { nextAt: ed.date || addDays(on, 7) });
-                        if (ed.kind === "tolak") return mark(p, "tolak", { remark: ed.text });
-                        return lockDnc(p, ed.text);
-                      }} style={{ ...btnPrimary, minHeight: 44, padding: "8px 16px", opacity: busy ? 0.7 : 1, ...(ed.kind === "dnc" ? { background: "#c62828" } : {}) }}>{busy ? "Menyimpan…" : ed.kind === "dnc" ? "Kunci" : "Simpan"}</button>
-                    </div>
-                  </div>
-                )}
+                {o.editor(p)}
               </div>
             )}
           </div>
@@ -400,10 +334,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
       })}
       {shown.length > limit && <button onClick={() => setLimit(limit + PAGE)} style={{ ...chip, width: "100%", marginTop: 8, minHeight: 40 }}>Tampilkan {Math.min(PAGE, shown.length - limit)} lagi</button>}
 
-      {converting && (
-        <ConvertSheet p={converting} sessionId={sessionId} onClose={() => setConverting(null)}
-          onDone={m => { setConverting(null); setMsg(m); }} />
-      )}
+      {o.sheet}
     </div>
   );
 }

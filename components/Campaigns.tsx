@@ -59,7 +59,7 @@ export default function Campaigns({ prospects, templates, strategy, sessionId, d
   }
 
   return (
-    <div style={{ ...card, padding: 20, marginBottom: 20 }}>
+    <div id="kampanye" style={{ ...card, padding: 20, marginBottom: 20, scrollMarginTop: 136 }}>
       {askSheet}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 4 }}>
         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font }}>Kampanye</div>
