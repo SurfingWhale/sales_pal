@@ -7,6 +7,7 @@ import { useSpace } from "@/lib/space";
 import { STAGES, Stage, fillTemplate, stageOf } from "@/lib/templates";
 import { rankScripts } from "@/lib/scriptPick";
 import Icon from "@/components/Icon";
+import { ink } from "@/components/ui";
 
 // The next message to a lead, from your own scripts (owner, 29 Okt: "masa gw
 // gabisa milih intro dll"): the stage that fits where they are is picked, and
@@ -80,7 +81,7 @@ export default function ChatPicker({ lead, onSend }: {
               border: `1px solid ${tpl?.id === t.id ? "#005eb0" : "var(--app-border)"}`, background: tpl?.id === t.id ? "color-mix(in srgb, #005eb0 8%, var(--app-card))" : "var(--app-card)" }}>
             <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600 }}>
               <span style={{ minWidth: 0 }}>{t.title}</span>
-              {i === 0 && score > 0 && <span style={{ flexShrink: 0, padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: "color-mix(in srgb, var(--ok) 16%, transparent)", color: "var(--ok)" }}>Paling cocok</span>}
+              {i === 0 && score > 0 && <span style={{ flexShrink: 0, padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: "color-mix(in srgb, var(--ok) 14%, transparent)", color: ink("var(--ok)") }}>Paling cocok</span>}
             </span>
             <span style={{ fontSize: 12, color: "var(--app-muted)", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{fill(t)}</span>
           </button>
