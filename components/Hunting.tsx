@@ -192,7 +192,9 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   // the app. Its history entry carries spPage; a dialog opened on top copies it.
   // One back() at a time: a second one in flight would leave the app.
   const leaving = useRef(false);
-  const leave = () => { if (leaving.current) return; leaving.current = true; window.history.back(); };
+  // Said out loud first, so ModalA11y doesn't take this step back for Back
+  // pressed on a card opened before it lands (Safari can take a while).
+  const leave = () => { if (leaving.current) return; leaving.current = true; window.dispatchEvent(new Event("sp:back")); window.history.back(); };
   useEffect(() => {
     const done = () => { leaving.current = false; };
     window.addEventListener("popstate", done);

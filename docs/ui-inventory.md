@@ -12,7 +12,8 @@ Hasil pencarian statis di kode (29 Okt 2026, `main` sampai PR #87): dialog, popo
   - memindah fokus masuk, dan balik ke pembuka saat ditutup;
   - menjaga Tab tetap di dalam dialog, dan Escape = klik scrim;
   - menambah tombol × kalau belum ada tombol Tutup/Kembali;
-  - mendorong satu entri history per dialog, jadi Back di HP menutup dialog teratas.
+  - mendorong satu entri history per dialog, jadi Back di HP menutup dialog teratas;
+  - langkah mundur yang dipicu app sendiri (`sp:back` dari `Hunting.leave()`) ditunggu, tidak dianggap Back pengguna.
 - **Penanda di CSS (`app/globals.css`):**
   - `data-own-layout` = tidak ikut padding layar penuh di HP;
   - overlay dengan `flex-end` = bottom sheet;

@@ -86,6 +86,7 @@ Definisinya di `SECTIONS` (`components/SalesTracker.tsx`):
 - Lompatan dari layar lain lewat fungsi kecil: `gotoInvoices`, `gotoHunting`, `gotoScripts`, atau `setActiveTab(...)` di dalam callback.
 - URL ikut berperan sekali saat buka: `?hunt` → Hunting, `?guild` → Guild, `?share` → pilih lead untuk file yang dibagikan. Setelah dibaca, URL dibersihkan (`history.replaceState`).
 - **Tombol Back di HP** nggak ganti tab. Back menutup dialog paling atas (`components/ModalA11y.tsx`) atau keluar dari halaman orang di Hunting (`history.state.spPage === "kirim"`).
+- Kalau app sendiri yang mundur di history (Hunting `leave()`), dia mengumumkan event `sp:back` dulu. Dengan begitu `ModalA11y` nggak salah mengira langkah itu Back dari pengguna lalu menutup dialog yang baru dibuka. Ini perbaikan PR #87, ketahuan di Safari. [cek]
 
 ---
 
