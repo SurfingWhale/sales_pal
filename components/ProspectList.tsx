@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { daysBetween, longDate, today } from "@/lib/billing";
@@ -104,7 +104,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
 }) {
   const [ask, askSheet] = useConfirm();
   const space = useSpace();
-  const [openId, setOpenId] = useState<string | null>(focusId ?? null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [closed, setClosed] = useState<Prospect[] | null>(null);
   const [limit, setLimit] = useState(PAGE);
   const [busy, setBusy] = useState(false);
@@ -113,6 +113,34 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   const on = today();
   const o = useOutcome({ strategy, sessionId, onMsg: setMsg, onLocked: () => { setClosed(null); setOpenId(null); } });
 
+  // Back from their message page: their card opens again as their page, once
+  // the step back in history has landed (a dialog opened before it would be
+  // taken for the one being closed). Not if they moved on to another view meanwhile.
+  const focusNow = useRef(focusId);
+  focusNow.current = focusId;
+  const [reopening, setReopening] = useState(!!focusId);
+  useEffect(() => {
+    if (!focusId) return;
+    let done = false;
+    const go = () => {
+      if (done) return; done = true; window.removeEventListener("popstate", go);
+      setTimeout(() => { if (focusNow.current === focusId) setOpenId(focusId); setReopening(false); }, 0);
+    };
+    // Still on their page's history entry: the step back is on its way (Safari
+    // can take well over a beat). Otherwise there is nothing to wait for.
+    if (window.history.state?.spPage !== "kirim") { go(); return () => { done = true; }; }
+    window.addEventListener("popstate", go);
+    const t = setTimeout(go, 3000);
+    return () => { done = true; window.removeEventListener("popstate", go); clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Another view picked: whoever was open stays behind.
+  const firstView = useRef(true);
+  useEffect(() => {
+    if (firstView.current) { firstView.current = false; return; }
+    setOpenId(null); o.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
   useEffect(() => {
     if (focusId) document.getElementById(`pc-${focusId}`)?.scrollIntoView({ block: "center" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -197,14 +225,95 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   }
   async function restore(p: Prospect) {
     setBusy(true);
-    try { await saveProspect(space, p, restorePatch(p, ctx())); setClosed(null); setMsg(`${p.handle} dibalikin ke journey.`); }
+    try { await saveProspect(space, p, restorePatch(p, ctx())); setClosed(null); setOpenId(null); setMsg(`${p.handle} dibalikin ke journey.`); }
     catch { setMsg("Gagal nyimpen. Cek koneksi lalu coba lagi."); }
     setBusy(false);
   }
   const dropping = filter === "Siap dibuang" ? inFilter("Siap dibuang").map(r => r.p) : [];
 
+  // Their page is a dialog, and a closing dialog steps back in history; their
+  // message page waits for that step, so it isn't taken for "back from it".
+  const afterClose = (fn: () => void) => {
+    setOpenId(null); o.stop();
+    let done = false;
+    const go = () => { if (done) return; done = true; window.removeEventListener("popstate", go); setTimeout(fn, 0); };
+    window.addEventListener("popstate", go);
+    setTimeout(go, 400);
+  };
+
+  // A card opens as the person's own page (owner, 23 Okt: "bukan berbentuk pop
+  // up card baru"), drawn outside the filtered list: a move that sends them to
+  // another view keeps their page open.
+  const contact = (() => {
+    if (!openId) return null;
+    const r = [...rows, ...(closed || []).map(p => ({ p, v: view(p, on, strategy) }))].find(x => x.p.id === openId);
+    if (!r) return null;
+    const { p, v } = r;
+    const who = p.name ? `${p.name} (${p.handle})` : p.handle;
+    const post = [...(p.history || [])].reverse().find(e => e.kind === "post");
+    const close = () => { setOpenId(null); o.stop(); };
+    return (
+      <div className="modal-overlay" onClick={close}>
+        <div role="dialog" aria-modal="true" aria-label={`Kontak ${who}`} data-own-layout className="sp-pcontact" onClick={e => e.stopPropagation()}>
+          <div className="sp-pcontact-bar">
+            <button className="sp-pcontact-back" onClick={close} aria-label="Tutup kontak"><Icon name="chevronLeft" size={18} stroke={2} />Prospek</button>
+            {profileOf(p) && <a className="sp-pcontact-profile" href={profileOf(p)} target="_blank" rel="noreferrer">Profil {p.platform}<Icon name="arrowUpRight" size={16} /></a>}
+          </div>
+          <div className="sp-pcontact-id">
+            <span className="sp-pini sp-pini-l" aria-hidden="true" style={{ background: `color-mix(in srgb, ${statusColor(p, v)} 14%, var(--app-card))`, color: ink(statusColor(p, v)) }}>{(p.name || p.handle).replace(/^@/, "").slice(0, 2).toUpperCase()}</span>
+            <h2>{p.name || p.handle}</h2>
+            <p className="sp-psub"><span className="sp-pbadge" style={{ color: ink(statusColor(p, v)) }}>{statusLabel(p, v)}</span>{[p.name ? p.handle : "", p.platform].filter(Boolean).map(x => ` · ${x}`).join("")}</p>
+            <Steps p={p} v={v} />
+          </div>
+              <div role="region" aria-label={`Riwayat ${who}`} style={{ marginTop: 10 }}>
+                <Summary p={p} on={on} />
+                {p.context && (p.context.need || p.context.when || p.context.where) && (
+                  <div style={{ fontSize: 12, color: "var(--app-sub)", marginBottom: 6 }}>
+                    {[p.context.need && `Butuh ${p.context.need}`, p.context.when, p.context.where, p.context.budget].filter(Boolean).join(" · ")}
+                  </div>
+                )}
+                <div style={{ padding: "4px 2px" }}>
+                  {(p.history || []).length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Belum ada riwayat.</div>}
+                  {(p.history || []).map((e, i) => <Bubble key={`${e.at}_${i}`} e={e} />)}
+                </div>
+                {p.result && v.status === "intro" && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Hasil terakhir: {statusLabel({ ...p, contact: "terhubung" }, { ...v, status: "terhubung" })}{p.remark ? ` — ${p.remark}` : ""}</div>}
+
+                {p.archivedAt ? (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+                    <span style={{ fontSize: 12, color: "var(--app-sub)" }}>Dibuang {longDate(p.archivedAt)}{p.archiveReason ? ` · ${p.archiveReason}` : ""}.</span>
+                    <button onClick={() => restore(p)} disabled={busy} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)" }}>↩ Balikin</button>
+                    {onOpen && <button onClick={() => { setOpenId(null); onOpen(p); }} style={{ ...chip, minHeight: 36 }}>💬 Percakapan</button>}
+                  </div>
+                ) : v.status === "dnc" ? (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+                    <span style={{ fontSize: 12, color: "var(--app-sub)" }}>Minta ga dihubungi sejak {p.dncAt ? longDate(p.dncAt) : "—"}{p.remark ? ` · ${p.remark}` : ""}.</span>
+                    <button onClick={() => ask(`Hapus ${who} dari daftar Jangan dihubungi?`, "Kalau post-nya di-share lagi, dia masuk sebagai prospek baru.", async () => { await removeProspect(space, p); setClosed(null); })} style={{ ...chip, minHeight: 36 }}>Hapus dari daftar</button>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+                      {onOpen && <button onClick={() => { setOpenId(null); onOpen(p); }} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Percakapan</button>}
+                      {dropReady(p, on, strategy) && <button onClick={() => ask(`Buang ${who}?`, "Pindah ke Arsip, riwayat tetap ada, bisa dibalikin.", () => drop([p]), "Buang", "Membuang…")} style={{ ...chip, minHeight: 36 }}>🗑 Buang</button>}
+                      <button onClick={() => { const ids = shown.map(r => r.p.id); afterClose(() => onCompose(p, ids.slice(ids.indexOf(p.id) + 1), filter)); }} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>{v.status === "baru" ? "✉ Kirim intro" : v.status === "belum" ? "↻ Follow-up" : "✉ Kirim pesan"}</button>
+                      <button onClick={() => o.edit(p, "reply")} aria-pressed={o.editing?.id === p.id && o.editing.kind === "reply"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Dibales</button>
+                      {(post?.url || p.url) && <a href={post?.url || p.url} target="_blank" rel="noreferrer" className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>{post?.url ? "Buka post ↗" : "Buka profil ↗"}</a>}
+                      <button onClick={() => o.edit(p, "note")} style={{ ...chip, minHeight: 36 }}>📝 Catatan</button>
+                      <button onClick={() => ask(`Hapus journey ${who}?`, "Log DM-nya tetap ada.", () => removeProspect(space, p))} aria-label={`Hapus journey ${who}`} style={{ ...chip, minHeight: 36, marginLeft: "auto", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🗑 Hapus</button>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--app-muted)", margin: "10px 0 6px" }}>Hasil (otomatis dihitung dibales)</div>
+                    {o.results(p, who)}
+                  </>
+                )}
+
+                {o.editor(p)}
+              </div>
+        </div>
+      </div>
+    );
+  })();
+
   return (
-    <div id="journey-prospek" className={embedded ? "sp-plist" : undefined} style={embedded ? undefined : { ...card, padding: 20, marginBottom: 20 }}>
+    <div id="journey-prospek" data-reopening={reopening || undefined} className={embedded ? "sp-plist" : undefined} style={embedded ? undefined : { ...card, padding: 20, marginBottom: 20 }}>
       {askSheet}
       {!embedded && <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
@@ -273,7 +382,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
           <div key={p.id} id={`pc-${p.id}`} className="sp-pcard">
             {/* One card per person: who and where, how far along, the last thing said. */}
             <div className="sp-pcard-top">
-              <button className="sp-pcard-main" onClick={() => { setOpenId(open ? null : p.id); o.stop(); }} aria-expanded={open} aria-label={`Journey ${who}`}>
+              <button className="sp-pcard-main" onClick={() => { setOpenId(open ? null : p.id); o.stop(); }} aria-expanded={open} aria-haspopup="dialog" aria-label={`Journey ${who}`}>
                 <span className="sp-pini" aria-hidden="true" style={{ background: `color-mix(in srgb, ${statusColor(p, v)} 14%, var(--app-card))`, color: ink(statusColor(p, v)) }}>{(p.name || p.handle).replace(/^@/, "").slice(0, 2).toUpperCase()}</span>
                 <span className="sp-pbody">
                   <span className="sp-phead"><span className="sp-pname">{p.name || p.handle}</span>{last && <span className="sp-ptime tabnum">{ago(last.at)}</span>}</span>
@@ -285,53 +394,10 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
               {profileOf(p) && <a className="sp-pprofile" href={profileOf(p)} target="_blank" rel="noreferrer" aria-label={`Buka profil ${who} di ${p.platform}`} title={`Buka profil di ${p.platform}`}><Icon name="arrowUpRight" size={18} /></a>}
             </div>
 
-            {open && (
-              <div role="region" aria-label={`Riwayat ${who}`} style={{ marginTop: 10 }}>
-                <Summary p={p} on={on} />
-                {p.context && (p.context.need || p.context.when || p.context.where) && (
-                  <div style={{ fontSize: 12, color: "var(--app-sub)", marginBottom: 6 }}>
-                    {[p.context.need && `Butuh ${p.context.need}`, p.context.when, p.context.where, p.context.budget].filter(Boolean).join(" · ")}
-                  </div>
-                )}
-                <div style={{ maxHeight: 360, overflowY: "auto", padding: "4px 2px" }}>
-                  {(p.history || []).length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Belum ada riwayat.</div>}
-                  {(p.history || []).map((e, i) => <Bubble key={`${e.at}_${i}`} e={e} />)}
-                </div>
-                {p.result && v.status === "intro" && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Hasil terakhir: {statusLabel({ ...p, contact: "terhubung" }, { ...v, status: "terhubung" })}{p.remark ? ` — ${p.remark}` : ""}</div>}
-
-                {p.archivedAt ? (
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
-                    <span style={{ fontSize: 12, color: "var(--app-sub)" }}>Dibuang {longDate(p.archivedAt)}{p.archiveReason ? ` · ${p.archiveReason}` : ""}.</span>
-                    <button onClick={() => restore(p)} disabled={busy} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)" }}>↩ Balikin</button>
-                    {onOpen && <button onClick={() => onOpen(p)} style={{ ...chip, minHeight: 36 }}>💬 Percakapan</button>}
-                  </div>
-                ) : v.status === "dnc" ? (
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
-                    <span style={{ fontSize: 12, color: "var(--app-sub)" }}>Minta ga dihubungi sejak {p.dncAt ? longDate(p.dncAt) : "—"}{p.remark ? ` · ${p.remark}` : ""}.</span>
-                    <button onClick={() => ask(`Hapus ${who} dari daftar Jangan dihubungi?`, "Kalau post-nya di-share lagi, dia masuk sebagai prospek baru.", async () => { await removeProspect(space, p); setClosed(null); })} style={{ ...chip, minHeight: 36 }}>Hapus dari daftar</button>
-                  </div>
-                ) : (
-                  <>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-                      {onOpen && <button onClick={() => onOpen(p)} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Percakapan</button>}
-                      {dropReady(p, on, strategy) && <button onClick={() => ask(`Buang ${who}?`, "Pindah ke Arsip, riwayat tetap ada, bisa dibalikin.", () => drop([p]), "Buang", "Membuang…")} style={{ ...chip, minHeight: 36 }}>🗑 Buang</button>}
-                      <button onClick={() => { const ids = shown.map(r => r.p.id); onCompose(p, ids.slice(ids.indexOf(p.id) + 1), filter); }} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>{v.status === "baru" ? "✉ Kirim intro" : v.status === "belum" ? "↻ Follow-up" : "✉ Kirim pesan"}</button>
-                      <button onClick={() => o.edit(p, "reply")} aria-pressed={o.editing?.id === p.id && o.editing.kind === "reply"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Dibales</button>
-                      {(post?.url || p.url) && <a href={post?.url || p.url} target="_blank" rel="noreferrer" className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>{post?.url ? "Buka post ↗" : "Buka profil ↗"}</a>}
-                      <button onClick={() => o.edit(p, "note")} style={{ ...chip, minHeight: 36 }}>📝 Catatan</button>
-                      <button onClick={() => ask(`Hapus journey ${who}?`, "Log DM-nya tetap ada.", () => removeProspect(space, p))} aria-label={`Hapus journey ${who}`} style={{ ...chip, minHeight: 36, marginLeft: "auto", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🗑 Hapus</button>
-                    </div>
-                    <div style={{ fontSize: 12, color: "var(--app-muted)", margin: "10px 0 6px" }}>Hasil (otomatis dihitung dibales)</div>
-                    {o.results(p, who)}
-                  </>
-                )}
-
-                {o.editor(p)}
-              </div>
-            )}
           </div>
         );
       })}
+      {contact}
       {shown.length > limit && <button onClick={() => setLimit(limit + PAGE)} style={{ ...chip, width: "100%", marginTop: 8, minHeight: 40 }}>Tampilkan {Math.min(PAGE, shown.length - limit)} lagi</button>}
 
       {o.sheet}
