@@ -570,6 +570,16 @@ export const flows = [
         await pop.close();
         await note().getByText("✓ Dicatat: chat hari ini").waitFor();
         await expectText(page, "Kenapa 38");
+        // On a phone the note floats over the page; scrolled to the end, the
+        // last Kontak row still shows above it (owner, 29 Okt: "gamuncul kontaknya").
+        const leadPage = page.getByRole("dialog", { name: /^Profil / });
+        if (await leadPage.isVisible()) {
+          await leadPage.evaluate(el => { el.scrollTop = el.scrollHeight; });
+          await page.waitForTimeout(300);
+          const last = await page.getByRole("region", { name: "Kontak" }).locator("dl > div").last().boundingBox();
+          const over = await note().boundingBox();
+          if (!last || !over || last.y + last.height > over.y) throw new Error(`the chat note covers the last Kontak row (row ends ${last && last.y + last.height}, note starts ${over && over.y})`);
+        }
       });
       await t.step("Batal takes it back; chat again, Besok sets the follow-up", async () => {
         await note().getByRole("button", { name: "Batal", exact: true }).click();

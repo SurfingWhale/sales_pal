@@ -530,6 +530,17 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
   const [importing, setImporting] = useState(Boolean(shareFile));
   const [scheduling, setScheduling] = useState(false);
   const { logged, chatted, clear } = useChatLog(actions);
+  // The chat note floats over the bottom of the page; the page makes room for
+  // it, so the last rows (Kontak) can still be scrolled into view.
+  const noteRef = useRef<HTMLDivElement>(null);
+  const [noteH, setNoteH] = useState(0);
+  useEffect(() => {
+    const el = noteRef.current;
+    if (!logged || !el) { setNoteH(0); return; }
+    const ro = new ResizeObserver(() => setNoteH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [logged]);
   const [why, setWhy] = useState(false);
   const [script, setScript] = useState(false);
   const [tone, setTone] = useState<"santai" | "formal">("santai");
@@ -560,7 +571,7 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
           </div>
         </div>
 
-        <div style={{ padding: "calc(68px + env(safe-area-inset-top, 0px)) 16px calc(150px + env(safe-area-inset-bottom, 0px))" }}>
+        <div style={{ padding: `calc(68px + env(safe-area-inset-top, 0px)) 16px calc(${150 + (noteH ? noteH + 12 : 0)}px + env(safe-area-inset-bottom, 0px))` }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
             <span aria-hidden="true" style={{ width: 92, height: 92, borderRadius: "50%", background: "linear-gradient(160deg, #6ea9e4 0%, #005eb0 100%)", color: "#fff", fontSize: 32, fontWeight: 600, letterSpacing: "-0.02em", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 10px 28px rgba(0,94,176,0.28)" }}>{initials(lead.name)}</span>
             <h1 style={{ margin: "14px 0 0", fontSize: 27, lineHeight: 1.15, fontWeight: 600, letterSpacing: "-0.02em" }}>{lead.name}</h1>
@@ -723,7 +734,7 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
         </div>
 
         <div style={{ position: "sticky", bottom: 0, height: 0, zIndex: 9 }}>
-          {logged && <div style={{ position: "absolute", left: 14, right: 14, bottom: "calc(84px + env(safe-area-inset-bottom, 0px))" }}><ChatNote key={logged.n} lead={lead} logged={logged} actions={actions} onClose={clear} /></div>}
+          {logged && <div ref={noteRef} style={{ position: "absolute", left: 14, right: 14, bottom: "calc(84px + env(safe-area-inset-bottom, 0px))" }}><ChatNote key={logged.n} lead={lead} logged={logged} actions={actions} onClose={clear} /></div>}
           <div className="glass" style={{ position: "absolute", left: 14, right: 14, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", padding: 6, borderRadius: 32, display: "flex", gap: 6 }}>
             {lead.phone
               ? <a href={waLink(lead.phone, `Halo ${name}, `)} target="_blank" rel="noreferrer" onClick={chatted("Chat WhatsApp")} style={{ flex: 1, height: 52, borderRadius: 26, background: "#005eb0", color: "#fff", fontSize: 15, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, textDecoration: "none" }}><Icon name="chat" size={19} stroke={1.8} />Chat di WhatsApp</a>
