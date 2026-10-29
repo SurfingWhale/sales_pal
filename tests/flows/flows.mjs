@@ -604,6 +604,12 @@ export const flows = [
         // last Kontak row still shows above it (owner, 29 Okt: "gamuncul kontaknya").
         const leadPage = page.getByRole("dialog", { name: /^Profil / });
         if (await leadPage.isVisible()) {
+          // The room grows once the note is measured (a beat later on WebKit): wait for it, then scroll.
+          await page.waitForFunction(() => {
+            const d = document.querySelector('[role="dialog"][aria-label^="Profil "]');
+            const pad = d && d.firstElementChild?.nextElementSibling;
+            return !!pad && parseFloat(getComputedStyle(pad).paddingBottom) > 200;
+          }, null, { timeout: 5000 });
           await leadPage.evaluate(el => { el.scrollTop = el.scrollHeight; });
           await page.waitForTimeout(300);
           const last = await page.getByRole("region", { name: "Kontak" }).locator("dl > div").last().boundingBox();
