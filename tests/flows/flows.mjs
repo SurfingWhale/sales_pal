@@ -545,7 +545,10 @@ export const flows = [
     name: "lead data: edit status and value, a chat counts as contact, gugur to the rejection log",
     async run(t) {
       const { page } = t;
-      const chat = () => page.getByRole("link", { name: /^Chat( WhatsApp| di WhatsApp)?$/ }).first();
+      const chat = () => page.getByRole("button", { name: /^Chat( WhatsApp| di WhatsApp)?$/ }).first();
+      // Chat opens your scripts first; sending from there opens WhatsApp.
+      const picker = () => page.getByRole("dialog", { name: /^Chat ke / });
+      const send = async () => { await chat().click(); return picker().getByRole("link", { name: "Kirim di WhatsApp" }); };
       const note = () => page.getByRole("group", { name: "Catatan chat" });
       await t.step("sign up and add a Cold lead", async () => { await signup(t); await addLead(page, "Sate Flow", { value: "5jt" }); });
       await t.step("tap the status: Hot, a number, and 7,5jt read as Rp 7.500.000", async () => {
@@ -565,8 +568,17 @@ export const flows = [
         // Rp 7,5 jt = 8, a number = 10, never contacted = 0.
         await showWhy(page);
         await expectText(page, "Kenapa 18");
-        const [pop] = await Promise.all([page.waitForEvent("popup"), chat().click()]);
+        await chat().click();
+        // A Hot lead: the offer stage is picked for them; their scripts can be picked by stage.
+        await picker().getByRole("radio", { name: "● Penawaran" , checked: true }).waitFor();
+        await picker().getByRole("radio", { name: "Intro" }).click();
+        await picker().getByRole("button", { name: /^Cold DM — Tawarin Jasa/ }).click();
+        if (!(await picker().locator("#cp-text").inputValue()).startsWith("Halo Sate Flow! Aku fotografer")) throw new Error("the script did not fill in their name");
+        await t.audit("Chat: pick a script");
+        const [pop] = await Promise.all([page.waitForEvent("popup"), picker().getByRole("link", { name: "Kirim di WhatsApp" }).click()]);
         if (!pop.url().startsWith("https://wa.me/6281234567890")) throw new Error(`opened ${pop.url()}`);
+        if (!decodeURIComponent(pop.url()).includes("Halo Sate Flow! Aku fotografer")) throw new Error(`WhatsApp did not get the script: ${pop.url()}`);
+        await picker().waitFor({ state: "detached" });
         await pop.close();
         await note().getByText("✓ Dicatat: chat hari ini").waitFor();
         await expectText(page, "Kenapa 38");
@@ -585,7 +597,8 @@ export const flows = [
         await note().getByRole("button", { name: "Batal", exact: true }).click();
         await note().getByText("Dibatalin, chat ini ga dicatat.").waitFor();
         await expectText(page, "Kenapa 18");
-        const [pop] = await Promise.all([page.waitForEvent("popup"), chat().click()]);
+        const link = await send();
+        const [pop] = await Promise.all([page.waitForEvent("popup"), link.click()]);
         await pop.close();
         await note().getByText("✓ Dicatat: chat hari ini").waitFor();
         await note().getByRole("group", { name: "Follow-up berikutnya" }).getByRole("button", { name: "Besok" }).click();

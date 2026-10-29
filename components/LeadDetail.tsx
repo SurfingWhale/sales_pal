@@ -14,6 +14,7 @@ import { CATEGORIES, SOURCES, STATUSES, STATUS_COLOR, parseRupiah, statusWord } 
 import { LeadGeo, routeUrl, validGeo } from "@/lib/geo";
 import Sheet from "@/components/Sheet";
 import PlaceEditor from "@/components/PlaceEditor";
+import ChatPicker from "@/components/ChatPicker";
 
 // A lead, as drawn in the SalesPal Redesign canvas (PRD-008):
 //   LeadPanel — the detail beside the list on Leads (desktop)
@@ -289,7 +290,14 @@ function useChatLog(actions: DetailActions) {
       () => setLogged({ n: Date.now(), err: "WhatsApp kebuka, tapi chat-nya gagal dicatat. Cek koneksi." }),
     );
   };
-  return { logged, chatted, clear: () => setLogged(null) };
+  // Chat opens your scripts first (ChatPicker); sending from there opens WhatsApp.
+  const [choosing, setChoosing] = useState(false);
+  const picker = (lead: DetailLead) => choosing && (
+    <Sheet title={`Chat ke ${lead.contact || lead.name}`} onClose={() => setChoosing(false)}>
+      <ChatPicker lead={lead} onSend={what => { chatted(what)(); setChoosing(false); }} />
+    </Sheet>
+  );
+  return { logged, chatted, clear: () => setLogged(null), choose: () => setChoosing(true), picker };
 }
 
 function ChatNote({ lead, logged, actions, onClose }: { lead: DetailLead; logged: Logged; actions: DetailActions; onClose: () => void }) {
@@ -432,7 +440,7 @@ export function LeadPanel({ lead, score, actions, onOpenFull, shareFile }: {
   const [importing, setImporting] = useState(Boolean(shareFile));
   const [scheduling, setScheduling] = useState(false);
   const late = lead.nextActionDate && lead.nextActionDate < today();
-  const { logged, chatted, clear } = useChatLog(actions);
+  const { logged, chatted, clear, choose, picker } = useChatLog(actions);
 
   return (
     <aside aria-label="Detail lead" style={{ position: "sticky", top: 120, maxHeight: "calc(100vh - 140px)", overflowY: "auto", overscrollBehavior: "contain", background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 20, boxShadow: "var(--panel-shadow)", padding: 24 }}>
@@ -506,11 +514,12 @@ export function LeadPanel({ lead, score, actions, onOpenFull, shareFile }: {
 
       <div style={{ marginTop: 24, display: "flex", gap: 8, flexWrap: "wrap" }}>
         {lead.phone
-          ? <a href={waLink(lead.phone, `Halo ${lead.contact || lead.name}, `)} target="_blank" rel="noreferrer" onClick={chatted("Chat WhatsApp")} style={{ ...pill(true), flex: "1 1 160px" }}><Icon name="chat" />Chat WhatsApp</a>
+          ? <button onClick={choose} style={{ ...pill(true), flex: "1 1 160px" }}><Icon name="chat" />Chat WhatsApp</button>
           : <button onClick={() => setEditing(true)} style={{ ...pill(true), flex: "1 1 160px" }}>Tambah nomor</button>}
         <button onClick={actions.onQuote} style={{ ...pill(false), flex: "1 1 140px" }}>Buat penawaran</button>
       </div>
       {logged && <div style={{ marginTop: 12 }}><ChatNote key={logged.n} lead={lead} logged={logged} actions={actions} onClose={clear} /></div>}
+      {picker(lead)}
 
       {editing && <ProfileEditor profile={p} phone={lead.phone} onSave={actions.onSaveProfile} onSavePhone={actions.onSavePhone} onClose={() => setEditing(false)} />}
       {editingLead && <LeadEditor lead={lead} onSave={actions.onSaveLead} onClose={() => setEditingLead(false)} />}
@@ -529,7 +538,7 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
   const [editingLead, setEditingLead] = useState(false);
   const [importing, setImporting] = useState(Boolean(shareFile));
   const [scheduling, setScheduling] = useState(false);
-  const { logged, chatted, clear } = useChatLog(actions);
+  const { logged, chatted, clear, choose, picker } = useChatLog(actions);
   // The chat note floats over the bottom of the page; the page makes room for
   // it, so the last rows (Kontak) can still be scrolled into view.
   const noteRef = useRef<HTMLDivElement>(null);
@@ -583,7 +592,7 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
           </div>
 
           <nav aria-label="Aksi cepat" className="sp-quick" style={{ marginTop: 22, display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
-            {lead.phone ? <a href={waLink(lead.phone, `Halo ${name}, `)} target="_blank" rel="noreferrer" onClick={chatted("Chat WhatsApp")} style={quick(true)}><Icon name="chat" size={22} />Chat</a> : <button onClick={() => setEditing(true)} style={quick(true)}><Icon name="chat" size={22} />Chat</button>}
+            {lead.phone ? <button onClick={choose} style={quick(true)}><Icon name="chat" size={22} />Chat</button> : <button onClick={() => setEditing(true)} style={quick(true)}><Icon name="chat" size={22} />Chat</button>}
             {lead.phone ? <a href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`} style={quick(false)}><Icon name="phone" size={22} />Telepon</a> : <button onClick={() => setEditing(true)} aria-label="Telepon: belum ada nomor, tambah nomor" style={quick(false)}><Icon name="phone" size={22} />Tambah no.</button>}
             <button onClick={actions.onQuote} style={quick(false)}><Icon name="doc" size={22} />Penawaran</button>
             <button onClick={() => setScheduling(true)} style={quick(false)}><Icon name="calendar" size={22} />Jadwal</button>
@@ -737,13 +746,14 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
           {logged && <div ref={noteRef} style={{ position: "absolute", left: 14, right: 14, bottom: "calc(84px + env(safe-area-inset-bottom, 0px))" }}><ChatNote key={logged.n} lead={lead} logged={logged} actions={actions} onClose={clear} /></div>}
           <div className="glass" style={{ position: "absolute", left: 14, right: 14, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", padding: 6, borderRadius: 32, display: "flex", gap: 6 }}>
             {lead.phone
-              ? <a href={waLink(lead.phone, `Halo ${name}, `)} target="_blank" rel="noreferrer" onClick={chatted("Chat WhatsApp")} style={{ flex: 1, height: 52, borderRadius: 26, background: "#005eb0", color: "#fff", fontSize: 15, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, textDecoration: "none" }}><Icon name="chat" size={19} stroke={1.8} />Chat di WhatsApp</a>
+              ? <button onClick={choose} style={{ flex: 1, height: 52, borderRadius: 26, background: "#005eb0", color: "#fff", fontSize: 15, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, border: 0, cursor: "pointer", fontFamily: "inherit" }}><Icon name="chat" size={19} stroke={1.8} />Chat di WhatsApp</button>
               : <button onClick={actions.onQuote} style={{ flex: 1, height: 52, border: 0, borderRadius: 26, background: "#005eb0", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Buat penawaran</button>}
             <button onClick={() => setImporting(true)} aria-label="Tarik ulang dari WhatsApp" style={{ width: 52, height: 52, border: 0, borderRadius: "50%", background: "var(--glass-btn)", color: "var(--app-text)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><Icon name="refresh" size={20} stroke={1.8} /></button>
           </div>
         </div>
       </div>
 
+      {picker(lead)}
       {scheduling && <Sheet title="Langkah berikutnya" onClose={() => setScheduling(false)}><FollowUp lead={lead} actions={actions} onCancel={() => setScheduling(false)} onSaved={() => setScheduling(false)} /></Sheet>}
       {editing && <ProfileEditor profile={p} phone={lead.phone} onSave={actions.onSaveProfile} onSavePhone={actions.onSavePhone} onClose={() => setEditing(false)} />}
       {editingLead && <LeadEditor lead={lead} onSave={actions.onSaveLead} onClose={() => setEditingLead(false)} />}
