@@ -7,11 +7,13 @@
 import type { jsPDF as JsPDF } from "jspdf";
 import { Business, Invoice, Quote, balance, dpAmount, longDate, paid, rupiah, scheduleOf, subtotal, taxAmount, termAmounts, total } from "@/lib/billing";
 import { fullDay } from "@/lib/when";
+import { mapsUrl, validGeo } from "@/lib/geo";
 
 export type Doc = { kind: "quote"; data: Quote } | { kind: "invoice"; data: Invoice };
 
 const INK: [number, number, number] = [20, 20, 20];
 const SOFT: [number, number, number] = [87, 96, 106];
+const LINK: [number, number, number] = [0, 82, 160];
 const RULE: [number, number, number] = [208, 215, 222];
 
 // The standard PDF fonts only know Latin-1 plus a few marks; swap the rest.
@@ -97,6 +99,8 @@ export async function buildPdf(d: Doc, b: Business): Promise<Blob> {
   }
   const facts: [string, string][] = ([
     ["Tanggal", x.eventDate ? fullDay(x.eventDate) : ""], ["Jam", x.eventTime || ""], ["Lokasi", x.venue || ""],
+    // The exact point: its coordinates read on paper, the line is a link in the PDF.
+    ["Peta", validGeo(x.venueGeo) ? `${x.venueGeo.lat.toFixed(5)}, ${x.venueGeo.lng.toFixed(5)} · buka di Google Maps` : ""],
   ] as [string, string][]).filter(([, v]) => v.trim());
   if (facts.length) {
     const rows = facts.map(([k, v]) => [k, wrap(v, R - M - 30, 9.5)] as [string, string[]]);
@@ -105,7 +109,12 @@ export async function buildPdf(d: Doc, b: Business): Promise<Blob> {
     pdf.setFillColor(246, 247, 249); pdf.roundedRect(M, y, R - M, h, 1.5, 1.5, "F");
     text("DETAIL ACARA", M + 4, y + 5, { size: 7.5, color: SOFT });
     let fy = y + 10;
-    rows.forEach(([k, ls]) => { text(k, M + 4, fy, { size: 9, color: SOFT }); ls.forEach((l, i) => text(l, M + 26, fy + i * 4.6, { size: 9.5, bold: i === 0 && k === "Tanggal" })); fy += ls.length * 4.6; });
+    rows.forEach(([k, ls]) => {
+      text(k, M + 4, fy, { size: 9, color: SOFT });
+      ls.forEach((l, i) => text(l, M + 26, fy + i * 4.6, { size: 9.5, bold: i === 0 && k === "Tanggal", ...(k === "Peta" ? { color: LINK } : {}) }));
+      if (k === "Peta" && validGeo(x.venueGeo)) pdf.link(M + 26, fy - 3.4, R - M - 30, ls.length * 4.6, { url: mapsUrl(x.venueGeo) });
+      fy += ls.length * 4.6;
+    });
     y += h + 7;
   } else if (x.project?.trim()) y += 3;
 

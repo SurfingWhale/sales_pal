@@ -5,6 +5,7 @@ import { collection, doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Space, SpaceCollection, spaceDoc, spaceQuery } from "@/lib/space";
 import type { SiteId, SitePrice } from "@/lib/sites";
+import { mapsUrl, validGeo, type LeadGeo } from "@/lib/geo";
 
 // Selling a service, after the lead: the packages on offer, the quote sent,
 // the invoice that follows it, and the money that comes in against it.
@@ -46,7 +47,7 @@ export interface LineItem {
 // The parts a price is built from (PRD-017 §2): your own time, gear, vendors,
 // a studio, transport. Kept per space like the packages; internal only.
 export const COMPONENT_KINDS = ["Jasa sendiri", "Alat", "Vendor", "Tempat/studio", "Transport & akomodasi", "Lainnya"] as const;
-export const COMPONENT_UNITS = ["jam", "hari", "orang", "pcs", "paket", "km", "sesi"] as const;
+export const COMPONENT_UNITS = ["jam", "hari", "orang", "pcs", "paket", "km", "sesi", "job"] as const;
 
 export interface Component {
   id: string;
@@ -57,7 +58,30 @@ export interface Component {
   price: number;          // what you charge for one unit by default
   vendor?: string;
   notes?: string;
+  // Gear you own: its cost per job is what it loses each time it is used,
+  // (bought − left at the end) ÷ the jobs it lasts. cost holds that result.
+  asset?: Asset;
 }
+
+export interface Asset { bought: number; salvage: number; jobs: number }
+
+// What one job takes out of a piece of gear, in whole rupiah.
+export const depreciation = (a: Asset) => (a.jobs > 0 ? Math.max(0, Math.round((a.bought - a.salvage) / a.jobs)) : 0);
+
+// What a job costs you that isn't billed as its own line (internal, never
+// printed): crew, a studio, transport, and what the gear loses per job.
+export interface CostLine {
+  name: string;
+  kind: string;            // one of COMPONENT_KINDS
+  qty: number;
+  unit?: string;
+  cost: number;            // per unit
+  vendor?: string;
+  componentId?: string;
+  asset?: boolean;         // depreciation of gear you own
+}
+
+export const productionOf = (lines: CostLine[] = []) => lines.reduce((a, l) => a + (l.qty || 0) * (l.cost || 0), 0);
 
 // What the items cost you, and what is left of the price after that (before
 // tax, which is not yours). Null when no item carries a cost yet.
@@ -65,14 +89,26 @@ export function costOf(items: LineItem[]): number | null {
   return items.some(i => typeof i.cost === "number") ? items.reduce((a, i) => a + (i.qty || 0) * (i.cost || 0), 0) : null;
 }
 
-export function marginOf(d: { items: LineItem[]; discount: number }): { amount: number; percent: number | null } | null {
-  const cost = costOf(d.items);
+// All a job costs you: the items' own cost plus the production costs. Null
+// when nothing carries a cost yet.
+export function jobCostOf(d: { items: LineItem[]; production?: CostLine[] }): number | null {
+  const items = costOf(d.items);
+  if (items === null && !d.production?.length) return null;
+  return (items || 0) + productionOf(d.production);
+}
+
+export function marginOf(d: { items: LineItem[]; discount: number; production?: CostLine[] }): { amount: number; percent: number | null } | null {
+  const cost = jobCostOf(d);
   if (cost === null) return null;
   const net = Math.max(0, subtotal(d.items) - (d.discount || 0));
   return { amount: net - cost, percent: net ? Math.round(((net - cost) / net) * 100) : null };
 }
 
 export { MARGIN_TARGET } from "@/lib/sites";
+
+// The least to ask so that, after the job's cost, `target`% of the price is
+// left (before tax), rounded up to the next thousand.
+export const priceFloor = (cost: number, target: number) => (target >= 100 ? 0 : Math.ceil(cost / (1 - target / 100) / 1000) * 1000);
 
 // A quote kept to start the next one from (PRD-017 §4): the items with their
 // internal cost, what the client gets, the payment schedule. Never the client.
@@ -87,6 +123,7 @@ export interface QuoteTemplate {
   schedule?: Term[];
   taxPercent?: number;
   validDays?: number;
+  production?: CostLine[];
   createdAt: number;
 }
 
@@ -102,6 +139,7 @@ export interface Brief {
   eventDate?: string;     // YYYY-MM-DD, also feeds the job calendar
   eventTime?: string;     // "13.30–15.00 WIB"
   venue?: string;
+  venueGeo?: LeadGeo;     // the point on the map; printed as a Google Maps link
   deliverables?: string;  // one per line
   timeline?: string;      // estimated work time: "File final 7 hari kerja setelah acara"
   exclusions?: string;    // outside the scope, one per line
@@ -144,6 +182,8 @@ export interface Quote extends Brief {
   // only when the owner marks it signed.
   spk?: Agreement;
   nda?: Agreement;
+  // Internal (never printed): what the job costs you beyond the items.
+  production?: CostLine[];
 }
 
 export interface Agreement {
@@ -390,6 +430,7 @@ function briefLines(x: Brief): string[] {
   const out = [
     x.project ? `*${x.project}*` : "",
     when ? `Acara: ${when}${x.venue ? ` · ${x.venue}` : ""}` : x.venue ? `Lokasi: ${x.venue}` : "",
+    validGeo(x.venueGeo) ? `Peta: ${mapsUrl(x.venueGeo)}` : "",
   ].filter(Boolean);
   const del = (x.deliverables || "").split("\n").map(l => l.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
   if (del.length) out.push("Deliverables:", ...del.map(l => `- ${l}`));

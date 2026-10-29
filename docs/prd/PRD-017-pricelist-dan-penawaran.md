@@ -75,6 +75,34 @@ Tiap paket punya dua harga:
   - Invoice dibuat dari penawaran yang disetujui (sudah ada: DP / termin / pelunasan) dan membawa item serta harga yang sama.
   - Harga paket yang diubah belakangan **tidak** mengubah penawaran atau invoice yang sudah dibuat. Mereka menyimpan salinan saat dibuat (snapshot, PRD-011).
 
+## 4b. Biaya produksi, penyusutan alat, dan lokasi acara
+
+Permintaan owner (29 Okt): SPK bisa mencatat biaya produksi lebih detail dan menghitung penyusutan aset, supaya harga di penawaran lebih jelas. Lokasi acara bisa ditandai di peta.
+
+Keputusan owner:
+- Biaya produksi **internal**: klien hanya melihat harga jual.
+- Penyusutan **per job**: (harga beli − nilai jual lagi) ÷ umur pakai dalam job.
+- Lokasi berupa **pin di peta + link Google Maps** di penawaran, SPK, dan invoice.
+
+**Yang dibangun:**
+- **Aset di katalog komponen.** Komponen berjenis *Alat* bisa dicentang **Alat punya sendiri: modal dari penyusutan**.
+  - Isiannya: harga beli, nilai jual lagi nanti, dan umur pakai (job).
+  - Biaya modalnya dihitung otomatis per job dan disimpan di `cost`; angka asalnya di `asset { bought, salvage, jobs }`.
+- **Biaya produksi di penawaran** (`production: CostLine[]`).
+  - Biaya yang dikeluarkan untuk job tapi tidak ditagih per baris: kru, studio, transport, penyusutan alat.
+  - Ditambah dari komponen (aset masuk sebagai *Penyusutan …*) atau manual. Tiap baris punya nama, jenis, qty, biaya per satuan, dan dibayar ke siapa.
+  - Ikut tersimpan di template penawaran.
+- **Ringkasan internal:**
+  - Total modal job = modal item + biaya produksi.
+  - Margin dihitung dari total modal itu.
+  - **Harga minimal** untuk mencapai target margin (`priceFloor`, dibulatkan ke ribuan).
+- **Lokasi acara:** di bagian Project / acara ada **Atur di peta**. Caranya sama dengan lokasi lead: cari alamat, tempel link Maps, pakai lokasi HP, atau geser pin (`components/PlaceEditor.tsx`). Titiknya disimpan di `venueGeo`, lalu:
+  - PDF penawaran dan invoice: baris **Peta** dengan koordinat, dan barisnya bisa diklik ke Google Maps;
+  - teks WhatsApp: `Peta: <link>`;
+  - SPK: `{lokasi}` ikut menyertakan link peta.
+
+**Tidak bocor:** PDF, teks salinan, dan WhatsApp tidak memuat biaya produksi, penyusutan, atau vendor. Flow `komponen` memeriksanya.
+
 ## 5. Editor yang tidak sempit
 
 - **Desktop (≥ 1024px):** halaman penuh, bukan dialog.
@@ -172,6 +200,12 @@ Situs tidak menyimpan salinan sendiri, jadi tidak pernah ada dua versi yang sali
    - tombol **Pindahin ke SalesPal** memindahkan paket lama sekali (paket yang namanya sudah ada di SalesPal dipakai ulang, jadi tidak dobel);
    - tanda *Paling Favorit* dan add-on tetap di Firestore situs; SalesPal belum punya add-on.
    - BeUntamed: opsional, menunggu keputusan owner.
+5. ✅ **Dibangun 29 Okt:** biaya produksi, penyusutan alat, harga minimal, dan titik lokasi acara (§4b).
+   - **Tes:** flow `komponen` (Chromium HP & desktop), dengan audit HIG 0 temuan. Flow ini mencakup:
+     - aset kamera Rp 25 jt / sisa Rp 5 jt / 200 job → Rp 100.000 per job;
+     - penawaran dengan penyusutan + asisten → margin 20% dan harga minimal Rp 2.286.000;
+     - titik peta tercetak di PDF dan teks WA;
+     - biaya produksi tidak ikut tersalin, dan tetap ada saat dibuka lagi.
 
 **Tes:**
 - flow `sell` diperluas: komponen, margin, item manual disimpan ke katalog, template, PDF tanpa biaya modal, harga SalesPal terbawa dari paket → penawaran → invoice;

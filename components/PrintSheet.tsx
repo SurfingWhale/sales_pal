@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Business, Invoice, Quote, balance, useBusiness, dpAmount, longDate, paid, rupiah, subtotal, total } from "@/lib/billing";
 import { canEditCatalog, useSpace } from "@/lib/space";
 import { fullDay } from "@/lib/when";
+import { mapsUrl, validGeo } from "@/lib/geo";
 import BusinessEditor from "@/components/BusinessEditor";
 import { Doc, buildPdf, pdfName, sharePdf } from "@/lib/pdfDoc";
 import { btnMuted, btnPrimary, chip } from "@/components/ui";
@@ -26,6 +27,7 @@ export default function PrintSheet(props: Props) {
   const isQuote = kind === "quote";
   const inv = !isQuote ? (props.data as Invoice) : null;
   const q = isQuote ? (props.data as Quote) : null;
+  const spot = validGeo(data.venueGeo) ? data.venueGeo : undefined;
   const space = useSpace();
   const [kop, setKop] = useState(false);
   // Kop & logo edits the live letterhead (for new documents), never this
@@ -130,12 +132,13 @@ export default function PrintSheet(props: Props) {
           </div>
 
           {data.project && <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8, lineHeight: 1.35 }}>{data.project}</div>}
-          {(data.eventDate || data.eventTime || data.venue) && (
+          {(data.eventDate || data.eventTime || data.venue || spot) && (
             <div style={{ background: "#f6f7f9", borderRadius: 6, padding: "10px 14px", marginBottom: 20, fontSize: 12, lineHeight: 1.7 }}>
               <div style={{ color: soft, fontSize: 10, letterSpacing: "1px" }}>DETAIL ACARA</div>
               {data.eventDate && <div><span style={{ color: soft, display: "inline-block", width: 64 }}>Tanggal</span><b>{fullDay(data.eventDate)}</b></div>}
               {data.eventTime && <div><span style={{ color: soft, display: "inline-block", width: 64 }}>Jam</span>{data.eventTime}</div>}
               {data.venue && <div><span style={{ color: soft, display: "inline-block", width: 64 }}>Lokasi</span>{data.venue}</div>}
+              {spot && <div><span style={{ color: soft, display: "inline-block", width: 64 }}>Peta</span><a href={mapsUrl(spot)} target="_blank" rel="noreferrer" style={{ color: "#00529f" }}>{spot.lat.toFixed(5)}, {spot.lng.toFixed(5)} · buka di Google Maps</a></div>}
             </div>
           )}
 

@@ -4,17 +4,22 @@ import { useState } from "react";
 import { deleteDoc, setDoc } from "firebase/firestore";
 import Icon from "@/components/Icon";
 import ConfirmSheet from "@/components/ConfirmSheet";
-import { COMPONENT_KINDS, COMPONENT_UNITS, Component, MARGIN_TARGET, rupiah } from "@/lib/billing";
+import { COMPONENT_KINDS, COMPONENT_UNITS, Component, MARGIN_TARGET, depreciation, rupiah } from "@/lib/billing";
 import { Space, spaceDoc } from "@/lib/space";
 import { btnMuted, btnPrimary, card, chip, font, inputStyle, label, modalBox } from "@/components/ui";
 
 // What a price is built from (PRD-017 §2): your own time, gear, vendors, a
 // studio, transport, each with what it costs you and what you charge. Internal:
 // none of it is printed or sent to a client. Quotes add items from here.
+// Gear you own can work its cost out from depreciation: what it was bought
+// for, what it would sell for at the end, and how many jobs it lasts.
 
-type Draft = { id: string; name: string; kind: string; unit: string; cost: string; price: string; vendor: string; notes: string };
-const BLANK: Draft = { id: "", name: "", kind: "Jasa sendiri", unit: "jam", cost: "", price: "", vendor: "", notes: "" };
+type Draft = { id: string; name: string; kind: string; unit: string; cost: string; price: string; vendor: string; notes: string; asset: boolean; bought: string; salvage: string; jobs: string };
+const BLANK: Draft = { id: "", name: "", kind: "Jasa sendiri", unit: "jam", cost: "", price: "", vendor: "", notes: "", asset: false, bought: "", salvage: "", jobs: "" };
 const num = (v: string) => parseInt(v.replace(/\D/g, ""), 10) || 0;
+const assetOf = (d: Draft) => ({ bought: num(d.bought), salvage: num(d.salvage), jobs: num(d.jobs) });
+// What one unit costs: typed, or for owned gear, what a job takes out of it.
+const costOfDraft = (d: Draft) => (d.asset ? depreciation(assetOf(d)) : num(d.cost));
 const money = (v: string) => (num(v) ? num(v).toLocaleString("id-ID") : "");
 
 export const marginPct = (cost: number, price: number) => (price ? Math.round(((price - cost) / price) * 100) : null);
@@ -28,13 +33,14 @@ export default function ComponentCatalog({ components, space, canEdit }: { compo
   const shown = components.slice().sort((a, b) => COMPONENT_KINDS.indexOf(a.kind as never) - COMPONENT_KINDS.indexOf(b.kind as never) || a.name.localeCompare(b.name));
 
   async function save() {
-    if (!editing || !editing.name.trim()) return;
+    if (!editing || !editing.name.trim() || (editing.asset && !num(editing.jobs))) return;
     const id = editing.id || `cmp_${Date.now()}`;
     setBusy(true); setErr("");
     try {
       await setDoc(spaceDoc(space, "components", id), {
-        name: editing.name.trim(), kind: editing.kind, unit: editing.unit,
-        cost: num(editing.cost), price: num(editing.price),
+        name: editing.name.trim(), kind: editing.kind, unit: editing.asset ? "job" : editing.unit,
+        cost: costOfDraft(editing), price: num(editing.price),
+        ...(editing.asset ? { asset: assetOf(editing) } : {}),
         ...(editing.vendor.trim() ? { vendor: editing.vendor.trim() } : {}),
         ...(editing.notes.trim() ? { notes: editing.notes.trim() } : {}),
       });
@@ -43,7 +49,9 @@ export default function ComponentCatalog({ components, space, canEdit }: { compo
     finally { setBusy(false); }
   }
 
-  const draftPct = editing ? marginPct(num(editing.cost), num(editing.price)) : null;
+  const draftPct = editing ? marginPct(costOfDraft(editing), num(editing.price)) : null;
+  const unitNow = editing?.asset ? "job" : editing?.unit;
+  const missing = !editing ? "" : !editing.name.trim() ? "Isi nama komponennya dulu." : editing.asset && !num(editing.jobs) ? "Isi umur pakainya: kira-kira dipakai berapa job." : "";
 
   return (
     <section aria-labelledby="cmp-h" style={{ marginTop: 32 }}>
@@ -70,16 +78,18 @@ export default function ComponentCatalog({ components, space, canEdit }: { compo
                     <div style={{ fontSize: 12, color: "var(--app-muted)", fontWeight: 600 }}>{c.kind} · per {c.unit}</div>
                     <div style={{ fontSize: 15, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
                     {c.vendor && <div style={{ fontSize: 12, color: "var(--app-sub)" }}>Vendor: {c.vendor}</div>}
+                    {c.asset && <div className="tabnum" style={{ fontSize: 12, color: "var(--app-sub)" }}>Aset · beli {rupiah(c.asset.bought)} · sisa {rupiah(c.asset.salvage)} · {c.asset.jobs} job</div>}
                   </div>
                   {canEdit && <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                    <button onClick={() => { setErr(""); setEditing({ id: c.id, name: c.name, kind: c.kind, unit: c.unit, cost: String(c.cost || ""), price: String(c.price || ""), vendor: c.vendor || "", notes: c.notes || "" }); }}
+                    <button onClick={() => { setErr(""); setEditing({ id: c.id, name: c.name, kind: c.kind, unit: c.unit, cost: String(c.cost || ""), price: String(c.price || ""), vendor: c.vendor || "", notes: c.notes || "",
+                      asset: !!c.asset, bought: String(c.asset?.bought || ""), salvage: String(c.asset?.salvage || ""), jobs: String(c.asset?.jobs || "") }); }}
                       aria-label={`Edit ${c.name}`} style={{ ...chip, minWidth: 44, color: "var(--app-text)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Icon name="pencil" size={14} /></button>
                     <button onClick={() => setDeleting(c)} aria-label={`Hapus ${c.name}`} style={{ ...chip, minWidth: 44, borderColor: "#ff444440", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Icon name="trash" size={16} /></button>
                   </div>}
                 </div>
                 <div className="tabnum" style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 13 }}>
                   <span>Jual <b>{rupiah(c.price)}</b></span>
-                  <span style={{ color: "var(--app-muted)" }}>Modal {rupiah(c.cost)}</span>
+                  <span style={{ color: "var(--app-muted)" }}>{c.asset ? "Penyusutan" : "Modal"} {rupiah(c.cost)}{c.asset ? "/job" : ""}</span>
                   {p !== null && <span style={{ color: marginColor(p), fontWeight: 700 }}>Margin {p}%</span>}
                 </div>
                 {c.notes && <div style={{ fontSize: 12, color: "var(--app-sub)", whiteSpace: "pre-wrap" }}>{c.notes}</div>}
@@ -100,26 +110,52 @@ export default function ComponentCatalog({ components, space, canEdit }: { compo
               </div>
               <div>
                 <label htmlFor="cmp-kind" style={label}>Jenis</label>
-                <select id="cmp-kind" value={editing.kind} onChange={e => setEditing({ ...editing, kind: e.target.value })} style={inputStyle}>
+                <select id="cmp-kind" value={editing.kind} onChange={e => setEditing({ ...editing, kind: e.target.value, ...(e.target.value === "Alat" ? {} : { asset: false }) })} style={inputStyle}>
                   {COMPONENT_KINDS.map(k => <option key={k} value={k}>{k}</option>)}
                 </select>
               </div>
               <div>
                 <label htmlFor="cmp-unit" style={label}>Satuan</label>
-                <select id="cmp-unit" value={editing.unit} onChange={e => setEditing({ ...editing, unit: e.target.value })} style={inputStyle}>
+                <select id="cmp-unit" value={unitNow} disabled={editing.asset} onChange={e => setEditing({ ...editing, unit: e.target.value })} style={inputStyle}>
                   {COMPONENT_UNITS.map(u => <option key={u} value={u}>per {u}</option>)}
                 </select>
               </div>
-              <div>
-                <label htmlFor="cmp-cost" style={label}>Biaya modal (Rp)</label>
-                <input id="cmp-cost" inputMode="numeric" value={money(editing.cost)} onChange={e => setEditing({ ...editing, cost: e.target.value })} style={inputStyle} placeholder="150.000" />
-              </div>
+              {editing.kind === "Alat" && (
+                <label style={{ gridColumn: "1/-1", display: "flex", alignItems: "center", gap: 10, minHeight: 44, fontSize: 14, cursor: "pointer" }}>
+                  <input type="checkbox" checked={editing.asset} onChange={e => setEditing({ ...editing, asset: e.target.checked })} style={{ width: 20, height: 20, accentColor: "#005eb0" }} />
+                  Alat punya sendiri: modal dari penyusutan
+                </label>
+              )}
+              {editing.asset ? (
+                <>
+                  <div>
+                    <label htmlFor="cmp-bought" style={label}>Harga beli (Rp)</label>
+                    <input id="cmp-bought" inputMode="numeric" value={money(editing.bought)} onChange={e => setEditing({ ...editing, bought: e.target.value })} style={inputStyle} placeholder="25.000.000" />
+                  </div>
+                  <div>
+                    <label htmlFor="cmp-salvage" style={label}>Nilai jual lagi nanti (Rp)</label>
+                    <input id="cmp-salvage" inputMode="numeric" value={money(editing.salvage)} onChange={e => setEditing({ ...editing, salvage: e.target.value })} style={inputStyle} placeholder="5.000.000" />
+                  </div>
+                  <div>
+                    <label htmlFor="cmp-jobs" style={label}>Umur pakai (job)</label>
+                    <input id="cmp-jobs" inputMode="numeric" value={editing.jobs ? String(num(editing.jobs)) : ""} onChange={e => setEditing({ ...editing, jobs: e.target.value })} style={inputStyle} placeholder="200" />
+                  </div>
+                  <div role="status" className="tabnum" style={{ alignSelf: "end", paddingBottom: 12, fontSize: 13 }}>
+                    {num(editing.jobs) ? <>Penyusutan <b>{rupiah(costOfDraft(editing))}</b> per job</> : <span style={{ color: "var(--app-muted)" }}>(harga beli − nilai jual) ÷ umur pakai</span>}
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <label htmlFor="cmp-cost" style={label}>Biaya modal (Rp)</label>
+                  <input id="cmp-cost" inputMode="numeric" value={money(editing.cost)} onChange={e => setEditing({ ...editing, cost: e.target.value })} style={inputStyle} placeholder="150.000" />
+                </div>
+              )}
               <div>
                 <label htmlFor="cmp-price" style={label}>Harga jual (Rp)</label>
                 <input id="cmp-price" inputMode="numeric" value={money(editing.price)} onChange={e => setEditing({ ...editing, price: e.target.value })} style={inputStyle} placeholder="250.000" />
               </div>
               <div role="status" className="tabnum" style={{ gridColumn: "1/-1", fontSize: 12, color: marginColor(draftPct) }}>
-                {draftPct === null ? "Isi harga jual buat lihat marginnya." : `Margin ${rupiah(num(editing.price) - num(editing.cost))} per ${editing.unit} (${draftPct}%)${draftPct < MARGIN_TARGET ? ` · di bawah target ${MARGIN_TARGET}%` : ""}`}
+                {draftPct === null ? (editing.asset ? "Harga jual opsional: isi kalau alat ini juga ditagih per job." : "Isi harga jual buat lihat marginnya.") : `Margin ${rupiah(num(editing.price) - costOfDraft(editing))} per ${unitNow} (${draftPct}%)${draftPct < MARGIN_TARGET ? ` · di bawah target ${MARGIN_TARGET}%` : ""}`}
               </div>
               <div style={{ gridColumn: "1/-1" }}>
                 <label htmlFor="cmp-vendor" style={label}>Vendor (opsional)</label>
@@ -130,10 +166,10 @@ export default function ComponentCatalog({ components, space, canEdit }: { compo
                 <textarea id="cmp-notes" value={editing.notes} onChange={e => setEditing({ ...editing, notes: e.target.value })} style={{ ...inputStyle, resize: "vertical", height: 72 }} placeholder="mis. Minimal sewa 3 jam" />
               </div>
             </div>
-            {(err || !editing.name.trim()) && <div role="status" style={{ fontSize: 12, marginTop: 12, color: err ? "color-mix(in srgb, #ff4444 55%, var(--app-text))" : "var(--app-muted)" }}>{err || "Isi nama komponennya dulu."}</div>}
+            {(err || missing) && <div role="status" style={{ fontSize: 12, marginTop: 12, color: err ? "color-mix(in srgb, #ff4444 55%, var(--app-text))" : "var(--app-muted)" }}>{err || missing}</div>}
             <div className="sp-form-foot">
               <button onClick={() => setEditing(null)} disabled={busy} style={btnMuted}>Batal</button>
-              <button onClick={save} disabled={!editing.name.trim() || busy} style={{ ...btnPrimary, opacity: editing.name.trim() && !busy ? 1 : 0.5 }}>{busy ? "Menyimpan…" : "Simpan"}</button>
+              <button onClick={save} disabled={!!missing || busy} style={{ ...btnPrimary, opacity: !missing && !busy ? 1 : 0.5 }}>{busy ? "Menyimpan…" : "Simpan"}</button>
             </div>
           </div>
         </div>

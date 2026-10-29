@@ -1003,6 +1003,71 @@ export const flows = [
         await list.getByText("Vendor: Rina MUA Flow").waitFor();
         await page.getByRole("list", { name: "Daftar template penawaran" }).getByText("Event Flow Template").waitFor();
       });
+      await t.step("gear you own: its cost per job comes from depreciation", async () => {
+        await page.getByRole("button", { name: "+ Komponen" }).click();
+        const dlg = page.getByRole("dialog", { name: "Komponen baru" });
+        await dlg.locator("#cmp-name").fill("Kamera Flow");
+        await dlg.locator("#cmp-kind").selectOption("Alat");
+        await dlg.getByRole("checkbox", { name: "Alat punya sendiri: modal dari penyusutan" }).check();
+        await dlg.locator("#cmp-bought").fill("25000000");
+        await dlg.locator("#cmp-salvage").fill("5000000");
+        await dlg.locator("#cmp-jobs").fill("200");
+        // (25.000.000 − 5.000.000) ÷ 200 jobs
+        await dlg.getByText("Penyusutan Rp 100.000 per job").waitFor();
+        await dlg.getByRole("button", { name: "Simpan", exact: true }).click();
+        await dlg.waitFor({ state: "detached" });
+        await page.getByRole("list", { name: "Daftar komponen" }).getByText("Penyusutan Rp 100.000/job").waitFor();
+      });
+      await t.step("a quote's production costs: crew and gear wear count in the margin, with the least to ask", async () => {
+        await go(page, "Jualan", "Penawaran");
+        await page.getByRole("button", { name: "+ Penawaran" }).click();
+        const ed = page.getByRole("dialog", { name: "Penawaran baru" });
+        await ed.locator("#doc-client").fill("Klien Produksi Flow");
+        const pkg = ed.getByLabel("Tambah dari paket");
+        await pkg.selectOption(await pkg.locator("option", { hasText: "Event 4 jam Flow" }).getAttribute("value"));
+        const cost = ed.getByLabel("Tambah biaya dari komponen");
+        await cost.selectOption(await cost.locator("option", { hasText: "Penyusutan Kamera Flow" }).getAttribute("value"));
+        await ed.getByRole("button", { name: "+ biaya manual" }).click();
+        await ed.getByLabel("Nama biaya 2").fill("Asisten Flow");
+        await ed.getByLabel("Biaya per satuan, biaya 2").fill("300000");
+        await ed.getByRole("status", { name: "Biaya produksi, internal" }).getByText("Biaya produksi Rp 400.000 · penyusutan alat Rp 100.000").waitFor();
+        // 2.000.000 − (1.200.000 + 400.000) = 400.000, 20%; 1.600.000 ÷ 0,7 → 2.286.000.
+        await ed.getByRole("status", { name: "Biaya produksi, internal" }).getByText(/harga minimal buat margin 30%: Rp 2\.286\.000/).waitFor();
+        await ed.getByRole("status", { name: "Margin, internal" }).getByText(/Margin Rp 400\.000 \(20%\)/).waitFor();
+        await t.audit("Penawaran with production costs");
+      });
+      await t.step("where the job is: a point on the map, printed as a Maps link", async () => {
+        const ed = page.getByRole("dialog", { name: "Penawaran baru" });
+        await ed.locator("#doc-venue").fill("Studio Flow, Jakarta");
+        await ed.getByRole("button", { name: "Atur di peta" }).click();
+        const sheet = page.getByRole("dialog", { name: "Titik lokasi acara" });
+        await sheet.locator("#geo-addr").fill("-6.175392, 106.827153");
+        await sheet.getByRole("button", { name: "Cari", exact: true }).click();
+        await sheet.getByRole("list", { name: "Hasil alamat" }).getByRole("button").first().click();
+        await sheet.waitFor({ state: "detached" });
+        await ed.getByText("-6.17539, 106.82715 · dicetak jadi link Maps").waitFor();
+        if ((await ed.locator("#doc-venue").inputValue()) !== "Studio Flow, Jakarta") throw new Error("the point rewrote the typed venue");
+        await t.audit("Penawaran with a point on the map");
+        await ed.getByRole("button", { name: "Simpan", exact: true }).click();
+        await ed.waitFor({ state: "detached" });
+        await page.getByText("Klien Produksi Flow").first().waitFor();
+      });
+      if (!t.device) await t.step("the copied quote carries the Maps link and none of the production costs", async () => {
+        await page.getByRole("button", { name: "Copy teks" }).first().click();
+        const text = await page.evaluate(() => navigator.clipboard.readText());
+        if (!text.includes("Peta: https://www.google.com/maps/search/?api=1&query=-6.175392,106.827153")) throw new Error(`the copied quote misses the Maps link: ${text}`);
+        if (/Asisten Flow|Penyusutan|Kamera Flow|300\.000/.test(text)) throw new Error("the copied quote leaks its production costs");
+      });
+      await t.step("the PDF shows the point; reopened, the production costs are still there", async () => {
+        await page.getByRole("button", { name: "PDF", exact: true }).first().click();
+        await page.getByRole("link", { name: /-6\.17539, 106\.82715 · buka di Google Maps/ }).waitFor();
+        await page.getByRole("button", { name: "Tutup", exact: true }).last().click();
+        await page.getByRole("button", { name: "Edit", exact: true }).first().click();
+        const ed = page.getByRole("dialog", { name: /^Edit Q-/ });
+        if ((await ed.getByLabel("Nama biaya 2").inputValue()) !== "Asisten Flow") throw new Error("the production costs were not kept");
+        await ed.getByRole("button", { name: "Batal" }).click();
+        await ed.waitFor({ state: "detached" });
+      });
     },
   },
   {
@@ -1530,7 +1595,10 @@ export const flows = [
       const expand = async (who) => {
         await page.locator("#journey-prospek:not([data-reopening])").waitFor();
         const contact = page.getByRole("dialog", { name: `Kontak ${who}` });
-        if (!(await contact.isVisible())) await row(who).click();
+        if (await contact.isVisible()) return;
+        // It can still open on its own between that look and the tap (slow WebKit):
+        // then the tap is blocked by it, which is as good.
+        await row(who).click({ timeout: 5000 }).catch(async (e) => { if (!(await contact.isVisible())) throw e; });
         await contact.waitFor();
       };
       // The list's view, picked from its title as in Notion.
