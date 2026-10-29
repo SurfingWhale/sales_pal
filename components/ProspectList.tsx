@@ -126,8 +126,11 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
       if (done) return; done = true; window.removeEventListener("popstate", go);
       setTimeout(() => { if (focusNow.current === focusId) setOpenId(focusId); setReopening(false); }, 0);
     };
+    // Still on their page's history entry: the step back is on its way (Safari
+    // can take well over a beat). Otherwise there is nothing to wait for.
+    if (window.history.state?.spPage !== "kirim") { go(); return () => { done = true; }; }
     window.addEventListener("popstate", go);
-    const t = setTimeout(go, 400);
+    const t = setTimeout(go, 3000);
     return () => { done = true; window.removeEventListener("popstate", go); clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
