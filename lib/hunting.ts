@@ -28,6 +28,7 @@ export interface PitchTemplate {
   title: string;
   body: string;
   stage?: string;        // lib/templates.ts STAGES; older ones are placed by title
+  categories?: string[]; // types of business it's for (lib/leadEdit CATEGORIES); none = any
 }
 
 export interface Hunt {

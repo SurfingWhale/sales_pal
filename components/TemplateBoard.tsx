@@ -5,6 +5,7 @@ import { deleteDoc, setDoc } from "firebase/firestore";
 import { spaceDoc, useSpace } from "@/lib/space";
 import { PitchTemplate, TemplateScore, pct } from "@/lib/hunting";
 import { FillData, SAMPLE, STAGES, STARTERS, Stage, VARIABLES, fillTemplate, missingIn, stageOf } from "@/lib/templates";
+import { CATEGORIES } from "@/lib/leadEdit";
 import Icon from "@/components/Icon";
 import { btnMuted, btnPrimary, btnWA, chip, font, inputStyle, label, modalBox } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmSheet";
@@ -60,7 +61,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
   async function save() {
     if (!editing || !editing.title.trim() || !editing.body.trim() || !canEdit) return;
     const id = editing.id || `tpl_${Date.now()}`;
-    await setDoc(spaceDoc(space, "pitchTemplates", id), { title: editing.title.trim(), body: editing.body.trim(), stage: stageOf(editing) });
+    await setDoc(spaceDoc(space, "pitchTemplates", id), { title: editing.title.trim(), body: editing.body.trim(), stage: stageOf(editing), ...(editing.categories?.length ? { categories: editing.categories } : {}) });
     setEditing(null);
   }
 
@@ -191,6 +192,22 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
             </div>
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>
               Dipakai pas: {STAGES.find(s => s.id === stageOf(editing))!.when.toLowerCase()}. {STAGES.find(s => s.id === stageOf(editing))!.tip}
+            </div>
+
+            {/* Tuning the automatic pick on a lead's Chat (lib/scriptPick): tagged
+                types win for those leads and aren't offered to other types. */}
+            <div style={label}>Buat tipe bisnis <span style={{ fontWeight: 400, color: "var(--app-muted)" }}>(opsional)</span></div>
+            <div role="group" aria-label="Buat tipe bisnis" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+              {CATEGORIES.map(c => {
+                const on = !!editing.categories?.includes(c);
+                return (
+                  <button key={c} type="button" aria-pressed={on} onClick={() => setEditing({ ...editing, categories: on ? (editing.categories || []).filter(x => x !== c) : [...(editing.categories || []), c] })}
+                    style={{ ...chip, minHeight: 34, fontWeight: on ? 700 : 500, ...(on ? { background: "#005eb0", color: "#fff", border: "1px solid #005eb0" } : {}) }}>{c}</button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 12 }}>
+              {editing.categories?.length ? `Dipilih otomatis duluan buat lead ${editing.categories.join(", ")}, dan ga ditawarin ke tipe lain.` : "Kosong = buat semua tipe bisnis. Dipilih otomatis kalau isinya nyebut kata yang cocok sama tipe lead-nya."}
             </div>
 
             <label htmlFor="tpl-body" style={label}>Isi pesan</label>
