@@ -1595,7 +1595,10 @@ export const flows = [
       const expand = async (who) => {
         await page.locator("#journey-prospek:not([data-reopening])").waitFor();
         const contact = page.getByRole("dialog", { name: `Kontak ${who}` });
-        if (!(await contact.isVisible())) await row(who).click();
+        if (await contact.isVisible()) return;
+        // It can still open on its own between that look and the tap (slow WebKit):
+        // then the tap is blocked by it, which is as good.
+        await row(who).click({ timeout: 5000 }).catch(async (e) => { if (!(await contact.isVisible())) throw e; });
         await contact.waitFor();
       };
       // The list's view, picked from its title as in Notion.
