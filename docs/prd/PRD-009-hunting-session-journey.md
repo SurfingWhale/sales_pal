@@ -355,7 +355,7 @@ Dari uji pertama: template masih satu tumpukan, ga ada panduan bikin pesan yang 
 
 ## 14. Keputusan (diambil 2026-10-10, ngikutin rekomendasi — owner: "do the task sampe fiturnya nyala")
 
-- **D1:** Copy / Kirim WA **langsung dicatat**, dengan **Batal** 5 detik. Tombol "Catat terkirim" dihapus.
+- **D1:** Copy / Kirim WA **langsung dicatat**, dengan **Batal** 5 detik. Tombol "Catat terkirim" dihapus. **Diganti 29 Okt (PRD-019 §3.5):** owner keganggu karena pesan yang belum jadi ditempel udah kecatat dan history-nya geser. Sekarang kirim baru dicatat setelah dikonfirmasi ("Udah kekirim", atau sheet waktu balik ke app).
 - **D2:** **Kasih data = ETB** (KPI hunter); lunas tetap diukur di Jualan / Report.
 - **D3:** Default 3 percobaan, follow-up H+2 lalu H+7, parkir 60 hari (Tidak terhubung) & 90 hari (Tidak tertarik); Pikir-pikir follow-up +3 hari, Hubungi nanti default +7 hari. Bisa diubah lewat `settings/hunting.strategy`.
 - **D4:** Belum dijawab owner → dua-duanya: share target Android + tombol 📋 buat semua HP.
