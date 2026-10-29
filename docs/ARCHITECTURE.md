@@ -1,6 +1,6 @@
 # SalesPal: peta codebase
 
-Panduan buat ngerti di mana sesuatu tinggal dan gimana file-filenya nyambung. Ditulis 29 Okt 2026 dari kode di `main` (setelah PR #78; PR #86 menambah biaya produksi dan titik lokasi acara).
+Panduan buat ngerti di mana sesuatu tinggal dan gimana file-filenya nyambung. Ditulis 29 Okt 2026 dari kode di `main`, sampai PR #87. Isinya sudah termasuk PR #86 (biaya produksi dan titik lokasi acara) dan PR #87 (halaman chat prospek baru + tiga perbaikan dialog).
 
 **Cara baca:**
 - **[cek]** = dilihat langsung di kode.
@@ -179,6 +179,7 @@ Pola yang sama dipakai buat data lain lewat hook `useSpaceCollection(space, "quo
 | `lib/serverAuth.ts`, `lib/access.ts` | (server) cek token login, siapa boleh pakai fitur berbayar | `firebase-admin` |
 | `components/Hunting.tsx` | Tempat Hunting: Prospek, halaman kirim, sesi | `ProspectList`, `ProspectThread`, `lib/prospectStore` |
 | `components/ProspectList.tsx` | Daftar prospek ala Notion + halaman kontak | `ProspectOutcome` (`useOutcome`) |
+| `components/ProspectThread.tsx` | Halaman chat satu prospek, gaya app chat: header ← avatar ⋯ (status & aksi), chat, satu baris tulis + pemilih template | `lib/prospects`, `lib/templates`, `ConvertSheet` |
 | `components/LeadDetail.tsx` | `LeadPanel` (desktop) dan `LeadPage` (HP) | `Sheet`, `PlaceEditor`, `WaImport` |
 | `components/Quotes.tsx`, `Invoices.tsx` | Daftar dan alur penawaran/invoice | `DocEditor`, `PrintSheet`, `WaSendSheet` |
 | `components/DocEditor.tsx` | Form penawaran/invoice | `lib/billing`, `Sheet`, `PlaceEditor`, `ConfirmSheet` |
@@ -213,10 +214,10 @@ Inventaris dari pencarian statis (29 Okt). Detail lengkap per baris ada di `docs
 - Atribut dan tombol yang disuntik `ModalA11y` saat runtime.
 - Judul dan aksi `useConfirm`/`useDiscard` dari pemanggilnya.
 
-**Temuan yang belum diperbaiki [duga, dari baca kode]:**
-1. Menutup AvatarPicker/AccessAdmin ikut menutup Profil (klik scrim naik ke overlay induk).
-2. PDF di Dashboard tim dirender dua kali (blok `ReportShell` dobel di `TeamDashboard.tsx`).
-3. `window.print()` masih ada di `PrintSheet.tsx` dan `ReportShell.tsx`, padahal dilarang di standar native.
+**Temuan inventaris, sudah diperbaiki di PR #87 [cek]:**
+1. Menutup AvatarPicker/AccessAdmin dulu ikut menutup Profil. Sekarang dibungkus `stopPropagation` di `ProfileSheet.tsx`; flow `navigation` mengecek Escape di pemilih foto.
+2. PDF di Dashboard tim dulu dirender dua kali. Blok `ReportShell` yang dobel di `TeamDashboard.tsx` sudah dihapus.
+3. `window.print()` dan tombol "Cetak" dihapus dari `PrintSheet.tsx` dan `ReportShell.tsx` (standar native K4). PDF disimpan/dibagikan sebagai file, lalu dicetak dari viewer PDF.
 
 ---
 
@@ -233,7 +234,8 @@ Inventaris dari pencarian statis (29 Okt). Detail lengkap per baris ada di `docs
   - akses undangan (PRD-015);
   - Web Push.
 - **Baru (PR #86):** biaya produksi internal, aset dengan penyusutan per job, harga minimal, dan titik lokasi acara + link Maps di PDF/WA/SPK.
-- **Catatan terbuka:** tiga temuan di §6; tampilan halaman kirim/percakapan prospek masih dirasa kurang natural (masukan owner 29 Okt).
+- **Baru (PR #87):** halaman chat prospek dibuat seperti app chat (masukan owner 29 Okt, "belom natural"), plus tiga temuan inventaris diperbaiki.
+- **Catatan terbuka:** tidak ada issue GitHub yang terbuka per 29 Okt. Keputusan owner yang masih menunggu ada di PRD masing-masing (mis. PRD-017 §8).
 - **Cara tes:** `npm run test:flows` (dan `DESKTOP=1`), lihat `CLAUDE.md`. CI `native` menjalankan 4 browser sebelum merge.
 
 ---

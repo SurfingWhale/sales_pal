@@ -11,8 +11,9 @@ import { Doc, buildPdf, pdfName, sharePdf } from "@/lib/pdfDoc";
 import { btnMuted, btnPrimary, chip } from "@/components/ui";
 
 // A quote or invoice as a sheet of paper. It is always black on white, whatever
-// the app theme, because it is what the client receives. "Cetak / PDF" prints
-// only the sheet: globals.css hides everything else under @media print.
+// the app theme, because it is what the client receives. It goes out as a real
+// PDF file (save or share); there is no browser print (docs/standards/native.md K4),
+// a printer takes the PDF.
 
 type Props =
   | { kind: "quote"; data: Quote; business: Business; frozen?: boolean; onClose: () => void }
@@ -48,16 +49,6 @@ export default function PrintSheet(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, b]);
 
-  // The browser names a printed PDF after the page title.
-  function printIt() {
-    const was = document.title;
-    document.title = pdfName(doc).replace(/\.pdf$/, "");
-    const back = () => { document.title = was; window.removeEventListener("afterprint", back); };
-    window.addEventListener("afterprint", back);
-    window.print();
-    setTimeout(back, 60_000);
-  }
-
   async function save() {
     if (!pdf) return;
     setPdfMsg("");
@@ -79,7 +70,6 @@ export default function PrintSheet(props: Props) {
           <div className="sp-print-title">{isQuote ? "Penawaran" : "Invoice"} {data.number}<span style={{ fontWeight: 400, color: "var(--app-muted)" }}> · {data.leadName}</span></div>
           <div className="sp-print-actions">
             {canEdit && <button onClick={() => setKop(true)} style={{ ...btnMuted, background: "var(--app-card)", border: "1px solid var(--app-border)" }}>Kop & logo</button>}
-            <button onClick={printIt} className="pointer-only" style={btnMuted}>Cetak</button>
             <button onClick={save} disabled={!pdf} aria-busy={!pdf} className="sp-print-main" style={{ ...btnPrimary, opacity: pdf ? 1 : 0.6 }}>{pdf ? "Simpan / kirim PDF" : "Menyiapkan PDF…"}</button>
           </div>
           <button onClick={onClose} aria-label="Tutup" title="Tutup (Esc)" style={{ ...btnMuted, minHeight: 44, padding: "0 16px" }}>Tutup</button>

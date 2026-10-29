@@ -396,6 +396,13 @@ export const flows = [
         await pick.getByRole("button", { name: "Simpan" }).click();
         await pick.waitFor({ state: "detached" });
         await t.page.getByRole("dialog", { name: "Profil & Pengaturan" }).getByRole("button", { name: /Foto profil.*Singa/ }).waitFor();
+        // Closing the picker leaves Profil open under it.
+        await t.page.getByRole("button", { name: "Ganti foto profil" }).click();
+        await pick.waitFor();
+        await t.page.keyboard.press("Escape");
+        await pick.waitFor({ state: "detached" });
+        await t.page.waitForTimeout(300);
+        if (!(await t.page.getByRole("dialog", { name: "Profil & Pengaturan" }).isVisible())) throw new Error("closing the picture picker closed Profil too");
         await t.page.keyboard.press("Escape");
         await t.page.getByRole("dialog", { name: "Profil & Pengaturan" }).waitFor({ state: "detached" });
         await t.page.getByRole("button", { name: "Profil dan pengaturan" }).locator('img[src*="animal-lion"]').waitFor();
@@ -1754,6 +1761,8 @@ export const flows = [
         const chat = th.getByRole("log", { name: "Percakapan dengan Toko Kue (@tokokue)" });
         await chat.getByText("ada yang open jasa foto katalog buat UMKM?").first().waitFor();
         await chat.getByText("boleh kak, pricelist-nya berapa?").waitFor();
+        // Like a chat app: the stage and its templates sit behind one picker over the box.
+        await th.getByRole("button", { name: /^Template/ }).click();
         await th.getByRole("radiogroup", { name: "Tahap" }).getByRole("radio", { name: /Penawaran/ }).click();
         await th.locator("#th-text").fill("Halo kak, ini pricelist paket katalog ya");
         await th.getByRole("button", { name: "Copy", exact: true }).click();
@@ -1762,7 +1771,8 @@ export const flows = [
         // Logged once: the box empties, and someone who answered stays answered.
         if (await th.locator("#th-text").inputValue()) throw new Error("the message stayed in the box after it was logged");
         if (await th.locator("header").getByText(/Intro terkirim/).count()) throw new Error("a follow-up to someone who answered turned them back into an intro");
-        // Jangan hubungi asks first, and Batal leaves them be.
+        // What happened with them sits behind ⋯ in the header; Jangan hubungi asks first, and Batal leaves them be.
+        await th.getByRole("button", { name: "Status & aksi" }).click();
         await th.getByRole("button", { name: "🚫 Jangan hubungi" }).click();
         const ask = th.getByRole("group", { name: "Jangan hubungi lagi?" });
         await ask.getByRole("button", { name: "Batal" }).click();

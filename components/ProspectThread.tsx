@@ -10,11 +10,12 @@ import type { PitchTemplate } from "@/lib/hunting";
 import { today } from "@/lib/billing";
 import { useSpace } from "@/lib/space";
 import {
-  Prospect, ProspectEvent, Strategy, archivePatch, dncPatch, dropReady, notePatch, replyPatch, resultPatch, silentDays, statusLabel, view,
+  Prospect, ProspectEvent, Strategy, archivePatch, dncPatch, dropReady, notePatch, replyPatch, resultPatch, silentDays, statusColor, statusLabel, view,
 } from "@/lib/prospects";
 import { saveProspect, syncHunt } from "@/lib/prospectStore";
 import { FillData, STAGES, Stage, fillTemplate, stageFor, stageOf } from "@/lib/templates";
-import { btnMuted, btnPrimary, chip, font, inputStyle, modalBox } from "@/components/ui";
+import { btnMuted, btnPrimary, chip, ink, inputStyle } from "@/components/ui";
+import Icon, { MoreDots } from "@/components/Icon";
 import ConvertSheet from "@/components/ConvertSheet";
 
 export type SendHow = "copy" | "wa" | "open";
@@ -81,92 +82,130 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
   const drop = dropReady(p, on, strategy);
   const who = p.name ? `${p.name} (${p.handle})` : p.handle;
 
+  const [panel, setPanel] = useState<"menu" | "pick" | null>(null);
+  const toggle = (k: "menu" | "pick") => { setPanel(cur => (cur === k ? null : k)); setAskDnc(false); };
+  const field = useRef<HTMLTextAreaElement>(null);
+  const stageLabel = STAGES.find(s => s.id === stage)?.label || "";
+  // The box grows with what's in it, up to a few lines, like a chat app's.
+  useEffect(() => { const el = field.current; if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 140)}px`; } }, [text]);
+  const initials = (p.name || p.handle).replace(/^@/, "").slice(0, 2).toUpperCase();
+  const row = (label: string, onClick: () => void, o: { strong?: boolean; danger?: boolean; pressed?: boolean; disabled?: boolean } = {}) => (
+    <button className="sp-thread-row" onClick={onClick} disabled={o.disabled} aria-pressed={o.pressed}
+      style={{ fontWeight: o.strong ? 700 : 500, color: o.danger ? "var(--hot)" : undefined }}>{label}</button>
+  );
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-labelledby="th-h" onClick={e => e.stopPropagation()}
-        style={{ ...modalBox, maxWidth: 560, padding: 0, display: "flex", flexDirection: "column", maxHeight: "min(92vh, calc(100dvh - 32px))" }}>
-        <header style={{ padding: "16px 18px 12px", borderBottom: "1px solid var(--app-border)" }}>
-          <div id="th-h" style={{ fontSize: 17, fontWeight: 700, fontFamily: font, overflowWrap: "anywhere" }}>{who}</div>
-          <div style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 2 }}>
-            {p.platform} · {statusLabel(p, v)}{quiet !== null && quiet > 0 ? ` · diem ${quiet} hari` : ""}{v.due && v.due <= on && !dnc ? " · follow-up hari ini" : ""}
+      <div role="dialog" aria-modal="true" aria-labelledby="th-h" data-own-layout="" className="sp-thread" onClick={e => e.stopPropagation()}
+        // Escape closes the open panel first, then the conversation.
+        onKeyDown={e => { if (e.key === "Escape" && panel) { e.stopPropagation(); setPanel(null); } }}>
+        <header className="sp-thread-bar">
+          <button onClick={onClose} aria-label="Tutup" className="sp-thread-icon"><Icon name="chevronLeft" size={22} stroke={2.2} /></button>
+          <span className="sp-pini" aria-hidden="true" style={{ margin: 0, background: `color-mix(in srgb, ${statusColor(p, v)} 14%, var(--app-card))`, color: ink(statusColor(p, v)) }}>{initials}</span>
+          <div className="sp-thread-who">
+            <b id="th-h">{who}</b>
+            <span>{p.platform} · {statusLabel(p, v)}{quiet !== null && quiet > 0 ? ` · diem ${quiet} hari` : ""}{v.due && v.due <= on && !dnc ? " · follow-up hari ini" : ""}</span>
           </div>
+          {!dnc && (
+            <button onClick={() => toggle("menu")} aria-label="Status & aksi" aria-haspopup="true" aria-expanded={panel === "menu"} className="sp-thread-icon"
+              style={panel === "menu" ? { background: "var(--app-inner)" } : undefined}><MoreDots size={22} /></button>
+          )}
         </header>
 
-        <div ref={logRef} role="log" aria-label={`Percakapan dengan ${who}`} style={{ flex: 1, overflowY: "auto", padding: "12px 18px", display: "flex", flexDirection: "column", gap: 8, background: "var(--app-bg)" }}>
+        <div ref={logRef} role="log" aria-label={`Percakapan dengan ${who}`} className="sp-thread-log" onClick={() => setPanel(null)}>
           {!events.length && <div style={{ fontSize: 13, color: "var(--app-muted)", textAlign: "center", padding: 20 }}>Belum ada apa-apa. Pesan pertama kamu muncul di sini.</div>}
           {events.map((e, i) => {
             const newDay = i === 0 || dayOf(events[i - 1].at) !== dayOf(e.at);
             return (
               <div key={i} style={{ display: "contents" }}>
-                {newDay && <div style={{ alignSelf: "center", fontSize: 11, color: "var(--app-muted)", padding: "4px 10px", borderRadius: 999, background: "var(--app-inner)", margin: "6px 0" }}>{dayOf(e.at)}</div>}
+                {newDay && <div style={{ alignSelf: "center", fontSize: 11, color: "var(--app-muted)", padding: "4px 10px", borderRadius: 999, background: "var(--app-card)", margin: "6px 0" }}>{dayOf(e.at)}</div>}
                 <Bubble e={e} />
               </div>
             );
           })}
         </div>
 
-        <footer style={{ padding: "12px 18px 16px", borderTop: "1px solid var(--app-border)", background: "var(--app-card)" }}>
-          {undo && (
-            <div role="status" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 10, padding: "8px 10px", borderRadius: 10, background: "var(--app-inner)" }}>
-              <span style={{ flex: 1 }}>Tercatat terkirim.</span>
-              <button onClick={async () => { const u = undo; setUndo(null); await u(); }} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>Batal</button>
-            </div>
-          )}
-          {msg && <div role="alert" style={{ fontSize: 13, color: "var(--hot)", marginBottom: 8 }}>{msg}</div>}
-          {note && <div role="status" style={{ fontSize: 13, color: "var(--ok)", fontWeight: 600, marginBottom: 8 }}>✓ {note}</div>}
-
-          {dnc ? <div style={{ fontSize: 13, color: "var(--app-muted)" }}>Orang ini minta ga dihubungi lagi.</div> : <>
-            <div role="group" aria-label="Hasil terakhir" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, marginBottom: 8 }}>
-              <button onClick={() => setAnswer(answer === "reply" ? null : "reply")} aria-pressed={answer === "reply"} style={{ ...chip, flexShrink: 0, minHeight: 36, fontWeight: 700 }}>💬 Dia bales</button>
-              <button onClick={() => act(resultPatch(p, "tertarik", {}, ctx(), strategy))} disabled={busy} style={{ ...chip, flexShrink: 0, minHeight: 36 }}>✅ Tertarik</button>
-              <button onClick={() => act(resultPatch(p, "tolak", {}, ctx(), strategy))} disabled={busy} style={{ ...chip, flexShrink: 0, minHeight: 36 }}>❌ Nolak</button>
-              <button onClick={() => setAnswer(answer === "note" ? null : "note")} aria-pressed={answer === "note"} style={{ ...chip, flexShrink: 0, minHeight: 36 }}>📝 Catatan</button>
-              {!p.convertedAt && <button onClick={() => setConverting(true)} disabled={busy} style={{ ...chip, flexShrink: 0, minHeight: 36, fontWeight: 700, background: "#00a862", color: "#1c2128", border: "none" }}>Kasih data →</button>}
-              {drop && <button onClick={async () => { await act(archivePatch(p, `${quiet} hari ga respon`, ctx())); onClose(); }} disabled={busy} style={{ ...chip, flexShrink: 0, minHeight: 36 }}>🗑 Buang</button>}
-              <button onClick={() => setAskDnc(true)} disabled={busy} aria-expanded={askDnc} style={{ ...chip, flexShrink: 0, minHeight: 36 }}>🚫 Jangan hubungi</button>
-            </div>
-            {askDnc && (
+        {/* What happened with them: answered, interested, a note, their data, drop, do-not-contact. */}
+        {panel === "menu" && !dnc && (
+          <div role="group" aria-label="Status & aksi" className="sp-thread-panel">
+            {askDnc ? (
               // Asks first: it wipes what was said and can't be taken back.
-              <div role="group" aria-label="Jangan hubungi lagi?" style={{ padding: "10px 12px", borderRadius: 10, background: "var(--app-inner)", marginBottom: 10 }}>
-                <div style={{ fontSize: 13, marginBottom: 8 }}>Hapus isi percakapan dan jangan hubungi {p.handle} lagi? Ga bisa dibalikin.</div>
+              <div role="group" aria-label="Jangan hubungi lagi?" style={{ padding: "6px 4px" }}>
+                <div style={{ fontSize: 14, marginBottom: 10 }}>Hapus isi percakapan dan jangan hubungi {p.handle} lagi? Ga bisa dibalikin.</div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => setAskDnc(false)} style={{ ...btnMuted, minHeight: 44, flex: 1 }}>Batal</button>
-                  <button onClick={async () => { setAskDnc(false); await act(dncPatch(p, "Minta ga dihubungi lagi", ctx())); }} disabled={busy}
+                  <button onClick={async () => { setAskDnc(false); setPanel(null); await act(dncPatch(p, "Minta ga dihubungi lagi", ctx())); }} disabled={busy}
                     style={{ ...btnPrimary, minHeight: 44, flex: 1, background: "#c62828" }}>Ya, jangan hubungi</button>
                 </div>
               </div>
-            )}
-            {answer && (
-              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                <label htmlFor="th-answer" className="vh">{answer === "reply" ? "Balasan dia" : "Catatan"}</label>
-                <input id="th-answer" value={answerText} onChange={e => setAnswerText(e.target.value)} placeholder={answer === "reply" ? "Tempel balasannya (boleh kosong)" : "Catatan buat diri sendiri"}
-                  style={{ ...inputStyle, fontSize: 16, flex: 1 }} />
-                <button onClick={() => act(answer === "reply" ? replyPatch(p, answerText, ctx()) : notePatch(p, answerText, ctx()))}
-                  disabled={busy || (answer === "note" && !answerText.trim())} style={{ ...btnPrimary, minHeight: 44 }}>Simpan</button>
-              </div>
-            )}
+            ) : <>
+              {row("💬 Dia bales", () => { setAnswer("reply"); setPanel(null); }, { pressed: answer === "reply" })}
+              {row("✅ Tertarik", () => { setPanel(null); act(resultPatch(p, "tertarik", {}, ctx(), strategy)); }, { disabled: busy })}
+              {row("❌ Nolak", () => { setPanel(null); act(resultPatch(p, "tolak", {}, ctx(), strategy)); }, { disabled: busy })}
+              {row("📝 Catatan", () => { setAnswer("note"); setPanel(null); }, { pressed: answer === "note" })}
+              {!p.convertedAt && row("Kasih data →", () => { setPanel(null); setConverting(true); }, { strong: true, disabled: busy })}
+              {drop && row("🗑 Buang", async () => { setPanel(null); await act(archivePatch(p, `${quiet} hari ga respon`, ctx())); onClose(); }, { disabled: busy })}
+              {row("🚫 Jangan hubungi", () => setAskDnc(true), { danger: true, disabled: busy })}
+            </>}
+          </div>
+        )}
 
-            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--app-muted)", marginBottom: 6 }}>Pesan berikutnya</div>
-            <div role="radiogroup" aria-label="Tahap" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6 }}>
+        {/* The next message: its stage, then a template for it. */}
+        {panel === "pick" && !dnc && (
+          <div className="sp-thread-panel">
+            <div role="radiogroup" aria-label="Tahap" style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
               {STAGES.map(s => (
                 <button key={s.id} role="radio" aria-checked={stage === s.id} onClick={() => { setStage(s.id); setTpl(null); }}
-                  style={{ ...chip, flexShrink: 0, minHeight: 36, fontWeight: stage === s.id ? 700 : 500, ...(stage === s.id ? { background: "#005eb0", color: "#fff", border: "1px solid #005eb0" } : {}) }}>
+                  style={{ ...chip, minHeight: 36, fontWeight: stage === s.id ? 700 : 500, ...(stage === s.id ? { background: "#005eb0", color: "#fff", border: "1px solid #005eb0" } : {}) }}>
                   {s.id === stageFor(p, v) ? "● " : ""}{s.label}
                 </button>
               ))}
             </div>
-            <div role="group" aria-label="Template" style={{ display: "flex", gap: 6, overflowX: "auto", margin: "2px 0 8px", paddingBottom: 4 }}>
+            <div role="group" aria-label="Template">
               {forStage.length ? forStage.map(t => (
-                <button key={t.id} onClick={() => choose(t)} aria-pressed={tpl?.id === t.id} style={{ ...chip, flexShrink: 0, minHeight: 36, fontWeight: tpl?.id === t.id ? 700 : 500, color: "var(--app-text)" }}>{t.title}</button>
-              )) : <span style={{ fontSize: 12, color: "var(--app-muted)" }}>Belum ada template buat tahap ini. Tulis langsung di bawah.</span>}
+                <button key={t.id} className="sp-thread-row" onClick={() => { choose(t); setPanel(null); field.current?.focus(); }} aria-pressed={tpl?.id === t.id}
+                  style={{ flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 2, padding: "8px" }}>
+                  <span style={{ fontWeight: 700 }}>{t.title}</span>
+                  <span style={{ fontSize: 12, color: "var(--app-muted)", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{fillTemplate(t.body, fill)}</span>
+                </button>
+              )) : <p style={{ margin: "4px 4px 6px", fontSize: 13, color: "var(--app-muted)" }}>Belum ada template buat tahap {stageLabel}. Tulis langsung di bawah.</p>}
             </div>
-            <label htmlFor="th-text" className="vh">Isi pesan</label>
-            <textarea id="th-text" value={text} onChange={e => setText(e.target.value)} rows={3} placeholder="Pilih template, atau tulis pesannya"
-              style={{ ...inputStyle, fontSize: 16, width: "100%", boxSizing: "border-box", resize: "vertical", lineHeight: 1.45 }} />
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button onClick={onClose} style={{ ...btnMuted, minHeight: 44 }}>Tutup</button>
-              <button onClick={() => send("copy")} disabled={!text.trim() || busy} style={{ ...btnMuted, minHeight: 44 }}>Copy</button>
-              <button onClick={() => send(sendOut.how)} disabled={!text.trim() || busy} style={{ ...btnPrimary, minHeight: 44, flex: 1, opacity: text.trim() ? 1 : 0.6 }}>{sendOut.label}</button>
+          </div>
+        )}
+
+        <footer className="sp-thread-foot">
+          {undo && (
+            <div role="status" className="sp-thread-note">
+              <span style={{ flex: 1 }}>Tercatat terkirim.</span>
+              <button onClick={async () => { const u = undo; setUndo(null); await u(); }} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>Batal</button>
+            </div>
+          )}
+          {msg && <div role="alert" className="sp-thread-note" style={{ color: "var(--hot)" }}>{msg}</div>}
+          {note && <div role="status" className="sp-thread-note" style={{ color: "var(--ok)", fontWeight: 600 }}>✓ {note}</div>}
+          {answer && !dnc && (
+            <div className="sp-thread-note">
+              <label htmlFor="th-answer" className="vh">{answer === "reply" ? "Balasan dia" : "Catatan"}</label>
+              <input id="th-answer" value={answerText} onChange={e => setAnswerText(e.target.value)} autoFocus placeholder={answer === "reply" ? "Tempel balasannya (boleh kosong)" : "Catatan buat diri sendiri"}
+                style={{ ...inputStyle, fontSize: 16, flex: 1, minWidth: 0 }} />
+              <button onClick={() => act(answer === "reply" ? replyPatch(p, answerText, ctx()) : notePatch(p, answerText, ctx()))}
+                disabled={busy || (answer === "note" && !answerText.trim())} style={{ ...btnPrimary, minHeight: 44 }}>Simpan</button>
+              <button onClick={() => { setAnswer(null); setAnswerText(""); }} aria-label="Batal" className="sp-thread-icon" style={{ color: "var(--app-muted)" }}><Icon name="close" size={16} stroke={2.2} /></button>
+            </div>
+          )}
+
+          {dnc ? <div style={{ padding: "12px 16px", fontSize: 13, color: "var(--app-muted)" }}>Orang ini minta ga dihubungi lagi.</div> : <>
+            <button onClick={() => toggle("pick")} aria-expanded={panel === "pick"} className="sp-thread-pick" style={!text.trim() ? { color: "var(--brand-text)", fontWeight: 700 } : undefined}>
+              <Icon name="doc" size={16} />
+              <span>{tpl ? tpl.title : "Template"}</span>
+              <span style={{ color: "var(--app-muted)", fontWeight: 500 }}>· {stageLabel}{forStage.length ? ` (${forStage.length})` : ""}</span>
+              <Icon name="chevronDown" size={14} style={{ marginLeft: "auto", transform: panel === "pick" ? "rotate(180deg)" : undefined }} />
+            </button>
+            <div className="sp-thread-compose">
+              <label htmlFor="th-text" className="vh">Isi pesan</label>
+              <textarea id="th-text" ref={field} value={text} onChange={e => setText(e.target.value)} rows={1} placeholder="Tulis pesan…"
+                onFocus={() => setPanel(null)} className="sp-thread-field" />
+              <button onClick={() => send("copy")} disabled={!text.trim() || busy} aria-label="Copy" title="Copy aja" className="sp-thread-icon" style={{ color: "var(--app-ink-2)" }}><Icon name="clipboard" size={20} /></button>
+              <button onClick={() => send(sendOut.how)} disabled={!text.trim() || busy} aria-label={sendOut.label} title={sendOut.label} className="sp-thread-send"><Icon name="arrowUpRight" size={20} stroke={2.2} /></button>
             </div>
           </>}
         </footer>

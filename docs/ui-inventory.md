@@ -1,6 +1,6 @@
 # Inventaris komponen interaktif
 
-Hasil pencarian statis di kode (29 Okt 2026, `main` + PR #86): dialog, popover, tooltip, toast, dan sheet. Patokannya nama komponen/state, karena nomor baris gampang bergeser.
+Hasil pencarian statis di kode (29 Okt 2026, `main` sampai PR #87): dialog, popover, tooltip, toast, dan sheet. Patokannya nama komponen/state, karena nomor baris gampang bergeser.
 
 **Seberapa lengkap:** semua `.modal-overlay` sudah di-grep (48 overlay JSX di 29 file). File inti dibaca di bagian yang relevan. File lain (TemplateBoard, Services, SitePricing, Campaigns, QuickPitch, Invoices, Quotes, BusinessEditor, WaImport, TeamLogs, dan sebagainya) baru di-grep untuk pola overlay, `role=`, `aria-*`, `title=`, toast, dan `alert/confirm/prompt`. Jadi ini **belum** bisa disebut inventaris yang 100% lengkap.
 
@@ -33,14 +33,14 @@ Singkatan kolom "Tutup":
 | Pilih lead untuk file share (`shared`) | `SalesTracker.tsx` | Effect membaca `?share` → `takeSharedFile()` (`lib/share.ts`, dari `public/sw.js`). **Tidak bisa dipicu statis.** | Pilih lead → `openLead`; "+ Lead baru" | `setDoc` leads |
 | Import leads (`showImport`) | `SalesTracker.tsx` | Beranda/Leads, LeadFinder | STD; Selesai | parse xlsx/csv/vcf, `/api/scan`, `writeBatch` leads |
 | `ProfileSheet` | `components/ProfileSheet.tsx` | Avatar di header (`setShowProfile`) | STD; × sendiri | tema, push, `/api/access`, logout |
-| `AvatarPicker`, `AccessAdmin` | `ProfileSheet.tsx`, `AccessAdmin.tsx` | Dari dalam ProfileSheet | Batal/Tutup. **Klik scrim ikut menutup Profil** (temuan 1) | `setDoc` profil; `/api/access/admin` |
+| `AvatarPicker`, `AccessAdmin` | `ProfileSheet.tsx`, `AccessAdmin.tsx` | Dari dalam ProfileSheet | Batal/Tutup; scrim/Escape/Back hanya menutup dirinya (diperbaiki di PR #87) | `setDoc` profil; `/api/access/admin` |
 | `LeadFinder` | `components/LeadFinder.tsx` | `setShowFinder(true)` | guard; Tutup | `/api/places`; `saveFound` → `writeBatch` leads |
 | `FollowUpRun` (`fuRun`) | `components/FollowUpRun.tsx` | `setFuRun(dueLeads)` | STD; Tutup | `updateDoc` leads |
 | Target DM harian (`goalDraft`) | `components/Hunting.tsx` | `changeGoal` | STD + guard | `setDoc` settings/hunting |
 | Kelola template (`tplManage`) | `Hunting.tsx` | Menu "Tambah" | × sendiri | lewat TemplateBoard |
 | Editor template (`editing`) | `components/TemplateBoard.tsx` | Edit / baru / `newRequest` | STD; Batal | `setDoc`/`deleteDoc` pitchTemplates |
 | `DefaultsSheet` | `components/DefaultsSheet.tsx` | Menu "Tambah" | STD; Batal | `saveFillDefaults` |
-| `ProspectThread` (`threadId`) | `components/ProspectThread.tsx` | `ProspectList` `onOpen` → `setThreadId` | STD; Tutup; kirim | `recordSend`, `saveProspect` |
+| `ProspectThread` (`threadId`), gaya app chat, layar penuh di HP | `components/ProspectThread.tsx` | `ProspectList` `onOpen` → `setThreadId` | STD; ← "Tutup"; kirim (bulat) / Copy. Escape menutup panel yang terbuka dulu | `recordSend`, `saveProspect` |
 | `ConvertSheet` ("Kasih data") | `components/ConvertSheet.tsx` | ProspectThread, `useOutcome().sheet` | guard; Simpan | `setDoc` leads, `saveProspect` |
 | Editor komponen | `components/ComponentCatalog.tsx` | "+ Komponen" / edit | guard; Batal. Alat milik sendiri: harga beli / sisa / umur → penyusutan | `setDoc` components |
 | Editor paket | `components/Services.tsx` | "+ Paket" / edit | guard; Batal | `setDoc` services + pricelistHistory |
@@ -66,6 +66,8 @@ Singkatan kolom "Tutup":
 | Menu "⋯" lead (`role=menu`) | `components/LeadDetail.tsx` (`Menu`) | Tombol ⋯ | Klik di luar / Escape | Ubah data, Ubah profil, Hapus |
 | `<select>` ruang kerja | `SalesTracker.tsx` | bawaan | bawaan | `chooseSpace` |
 | `<select>` Tampilan Prospek | `Hunting.tsx` | bawaan | bawaan | `setProspectFilter` |
+| Panel "Status & aksi" (⋯) | `ProspectThread.tsx` (`panel === "menu"`) | ⋯ di header (`aria-expanded`) | Pilih aksi, ketuk chat, Escape, ⋯ lagi | Dia bales, Tertarik, Nolak, Catatan, Kasih data, Buang, Jangan hubungi (tanya dulu) → `saveProspect` |
+| Panel Template | `ProspectThread.tsx` (`panel === "pick"`) | Tombol "Template · tahap" di atas kolom tulis | Pilih template (mengisi kolom), ketuk chat, Escape | – |
 
 Disclosure di tempat (bukan overlay): tombol `aria-expanded` dan `<details>` di LeadDetail, Hunting, TemplateBoard, BusinessEditor, LeadFinder, SalesReport, GuildHub, SendQuoteSheet, dan lain-lain.
 
@@ -99,7 +101,7 @@ Tidak ada komponen tooltip. Hanya atribut `title=` bawaan browser, misalnya "Pro
 | Preview chat & "Perlu ditindak" | `components/Beranda.tsx` (`chatOf`, `sheet`) | Kartu Beranda | STD; Tutup | – |
 | `LeadPage` (layar penuh) | `components/LeadDetail.tsx` | `openLead` (HP) / "Profil lengkap" | Back; "Kembali ke Leads" | `leadActions` → leads |
 | Halaman kontak prospek (`.sp-pcontact`) | `components/ProspectList.tsx` (`openId`) | Tap kartu; terbuka lagi setelah Back dari halaman kirim | STD; "Tutup kontak"; ganti tampilan | `useOutcome`, `saveProspect` |
-| `PrintSheet` / `ReportShell` (PDF) | `components/PrintSheet.tsx`, `ReportShell.tsx` | Quotes/Invoices "PDF"; TeamDashboard; GuildHub; ClientHub | Tutup | `buildPdf`, `sharePdf`. **Dobel di TeamDashboard** (temuan 2); `window.print` (temuan 3) |
+| `PrintSheet` / `ReportShell` (PDF) | `components/PrintSheet.tsx`, `ReportShell.tsx` | Quotes/Invoices "PDF"; TeamDashboard; GuildHub; ClientHub | Tutup | `buildPdf`, `sharePdf` (simpan/bagikan file; tanpa print browser) |
 | Halaman kirim Hunting (bukan overlay) | `Hunting.tsx` (`open` + `history.state.spPage`) | `compose`, `toTarget`, cari | Back / Escape → `backToList` | – |
 
 ## Yang tidak bisa dipastikan statis
@@ -109,9 +111,11 @@ Tidak ada komponen tooltip. Hanya atribut `title=` bawaan browser, misalnya "Pro
 - Judul dan aksi `useConfirm`/`useDiscard`: datang dari pemanggil.
 - Pesan `onDone` ConvertSheet dan `makeFiles` WaSendSheet: datang dari pemanggil.
 
-## Temuan (dari baca kode, belum dijalankan)
+## Temuan
 
-1. AvatarPicker/AccessAdmin dirender di dalam overlay ProfileSheet tanpa `stopPropagation` di scrim-nya. Menutupnya ikut menutup Profil.
-2. `TeamDashboard.tsx` punya dua blok `{paper && … <ReportShell>}` yang sama, jadi PDF laporan terbuka dua lapis.
-3. `window.print()` masih dipanggil di `PrintSheet.tsx` dan `ReportShell.tsx`, padahal dilarang standar native (K4). Tombolnya `pointer-only`, jadi kemungkinan tidak muncul di HP.
-4. Tidak ada lagi `alert(`, `confirm(`, atau `prompt(` di `app/`, `components/`, dan `lib/`.
+Semua sudah diperbaiki di PR #87:
+
+1. ~~AvatarPicker/AccessAdmin ikut menutup Profil~~: dibungkus `stopPropagation`; flow `navigation` mengeceknya.
+2. ~~PDF Dashboard tim terbuka dua lapis~~: blok `ReportShell` yang dobel dihapus.
+3. ~~`window.print()` di `PrintSheet.tsx` dan `ReportShell.tsx`~~: dihapus beserta tombol "Cetak" (K4).
+4. Tidak ada `alert(`, `confirm(`, `prompt(`, atau `print(` di `app/`, `components/`, dan `lib/`.
