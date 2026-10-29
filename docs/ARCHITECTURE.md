@@ -182,7 +182,8 @@ Pola yang sama dipakai buat data lain lewat hook `useSpaceCollection(space, "quo
 | `components/ProspectList.tsx` | Daftar prospek ala Notion + halaman kontak | `ProspectOutcome` (`useOutcome`) |
 | `components/ProspectThread.tsx` | Halaman chat satu prospek, gaya app chat: header ← avatar ⋯ (status & aksi), chat, satu baris tulis + pemilih template | `lib/prospects`, `lib/templates`, `ConvertSheet` |
 | `components/LeadDetail.tsx` | `LeadPanel` (desktop) dan `LeadPage` (HP) | `Sheet`, `PlaceEditor`, `ChatPicker`, `WaImport` |
-| `components/ChatPicker.tsx` | Chat ke lead lewat script kamu: pilih tahap (Intro, Follow-up, …), pilih template, edit, kirim di WhatsApp | `pitchTemplates`, `lib/templates`, `useBusiness` |
+| `components/ChatPicker.tsx` | Chat ke lead lewat script kamu: pilih tahap (Intro, Follow-up, …), script paling cocok terpilih otomatis, edit, kirim di WhatsApp | `pitchTemplates`, `lib/templates`, `lib/scriptPick`, `useBusiness` |
+| `lib/scriptPick.ts` | Memilih script yang cocok buat lead: tag "Buat tipe bisnis" di template, kata khas tipe bisnis (`CATEGORY_WORDS`), dan kebutuhan/pain point; `categoryOf` membaca tipe bisnis dari teks | `lib/leadEdit` |
 | `components/Quotes.tsx`, `Invoices.tsx` | Daftar dan alur penawaran/invoice | `DocEditor`, `PrintSheet`, `WaSendSheet` |
 | `components/DocEditor.tsx` | Form penawaran/invoice | `lib/billing`, `Sheet`, `PlaceEditor`, `ConfirmSheet` |
 | `components/Services.tsx`, `ComponentCatalog.tsx` | Paket, komponen (termasuk aset dan penyusutan), harga situs | `lib/billing`, `SitePricing` |
@@ -237,7 +238,10 @@ Inventaris dari pencarian statis (29 Okt). Detail lengkap per baris ada di `docs
   - Web Push.
 - **Baru (PR #86):** biaya produksi internal, aset dengan penyusutan per job, harga minimal, dan titik lokasi acara + link Maps di PDF/WA/SPK.
 - **Baru (PR #87):** halaman chat prospek dibuat seperti app chat (masukan owner 29 Okt, "belom natural"), plus tiga temuan inventaris diperbaiki.
-- **Baru (PR #88):** tombol Chat di halaman lead membuka script kamu dulu (`ChatPicker`). Kartu catatan chat juga nggak lagi nutupin baris Kontak.
+- **Baru (PR #88):**
+  - tombol Chat di halaman lead membuka script kamu dulu (`ChatPicker`);
+  - script yang cocok dengan tipe bisnis lead terpilih otomatis (`lib/scriptPick`), dan template bisa ditandai "Buat tipe bisnis" buat tuning;
+  - kartu catatan chat nggak lagi nutupin baris Kontak.
 - **Catatan terbuka:** tidak ada issue GitHub yang terbuka per 29 Okt. Keputusan owner yang masih menunggu ada di PRD masing-masing (mis. PRD-017 §8).
 - **Cara tes:** `npm run test:flows` (dan `DESKTOP=1`), lihat `CLAUDE.md`. CI `native` menjalankan 4 browser sebelum merge.
 

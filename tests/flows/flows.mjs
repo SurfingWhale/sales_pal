@@ -551,6 +551,20 @@ export const flows = [
       const send = async () => { await chat().click(); return picker().getByRole("link", { name: "Kirim di WhatsApp" }); };
       const note = () => page.getByRole("group", { name: "Catatan chat" });
       await t.step("sign up and add a Cold lead", async () => { await signup(t); await addLead(page, "Sate Flow", { value: "5jt" }); });
+      await t.step("a script can be tagged for a type of business", async () => {
+        await go(page, "Hunting");
+        await page.getByRole("button", { name: "Menu tambah: target, template, script" }).click();
+        await page.getByRole("dialog", { name: "Tambah" }).getByRole("button", { name: "Template pesan baru" }).click();
+        const dlg = page.getByRole("dialog", { name: "Template baru" });
+        await page.locator("#tpl-title").fill("Intro klinik Flow");
+        await dlg.getByRole("radio", { name: "1. Intro" }).click();
+        await dlg.getByRole("group", { name: "Buat tipe bisnis" }).getByRole("button", { name: "Health" }).click();
+        await dlg.getByText(/Dipilih otomatis duluan buat lead Health/).waitFor();
+        await page.locator("#tpl-body").fill("Halo {nama}, foto klinik dan dokter yang rapi bikin pasien percaya.");
+        await dlg.getByRole("button", { name: "Simpan", exact: true }).click();
+        await dlg.waitFor({ state: "detached" });
+        await go(page, "Jualan", "Leads");
+      });
       await t.step("tap the status: Hot, a number, and 7,5jt read as Rp 7.500.000", async () => {
         await openLeadRow(page, "Sate Flow");
         await page.getByRole("button", { name: "Status Cold. Ubah data lead" }).first().click();
@@ -572,6 +586,10 @@ export const flows = [
         // A Hot lead: the offer stage is picked for them; their scripts can be picked by stage.
         await picker().getByRole("radio", { name: "● Penawaran" , checked: true }).waitFor();
         await picker().getByRole("radio", { name: "Intro" }).click();
+        // An F&B lead: the script that speaks food is put in for them, and the one tagged Health isn't offered.
+        await picker().getByRole("status", { name: "Dipilih otomatis" }).getByText(/buat F&B: .*nyebut makanan/).waitFor();
+        await picker().getByRole("button", { name: /^Cold DM — Tawarin Jasa.*Paling cocok/ }).waitFor();
+        if (await picker().getByRole("button", { name: /^Intro klinik Flow/ }).count()) throw new Error("a script tagged for Health was offered to an F&B lead");
         await picker().getByRole("button", { name: /^Cold DM — Tawarin Jasa/ }).click();
         if (!(await picker().locator("#cp-text").inputValue()).startsWith("Halo Sate Flow! Aku fotografer")) throw new Error("the script did not fill in their name");
         await t.audit("Chat: pick a script");

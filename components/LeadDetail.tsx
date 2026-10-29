@@ -15,6 +15,7 @@ import { LeadGeo, routeUrl, validGeo } from "@/lib/geo";
 import Sheet from "@/components/Sheet";
 import PlaceEditor from "@/components/PlaceEditor";
 import ChatPicker from "@/components/ChatPicker";
+import { categoryOf } from "@/lib/scriptPick";
 
 // A lead, as drawn in the SalesPal Redesign canvas (PRD-008):
 //   LeadPanel — the detail beside the list on Leads (desktop)
@@ -294,7 +295,12 @@ function useChatLog(actions: DetailActions) {
   const [choosing, setChoosing] = useState(false);
   const picker = (lead: DetailLead) => choosing && (
     <Sheet title={`Chat ke ${lead.contact || lead.name}`} onClose={() => setChoosing(false)}>
-      <ChatPicker lead={lead} onSend={what => { chatted(what)(); setChoosing(false); }} />
+      <ChatPicker lead={{
+        name: lead.name, contact: lead.contact, phone: lead.phone, status: lead.status, lastContact: lead.lastContact,
+        // What WhatsApp says they are beats the list's category (often left at its default).
+        category: categoryOf(lead.profile?.wa?.category) || categoryOf(lead.category),
+        need: lead.profile?.need, pain: lead.profile?.pain,
+      }} onSend={what => { chatted(what)(); setChoosing(false); }} />
     </Sheet>
   );
   return { logged, chatted, clear: () => setLogged(null), choose: () => setChoosing(true), picker };
