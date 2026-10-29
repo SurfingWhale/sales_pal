@@ -21,6 +21,8 @@ const pane = async (page, name) => {
   // A prospect's card opens as their own page; close it to reach the tabs.
   const contact = page.getByRole("button", { name: "Tutup kontak" });
   if (await contact.isVisible()) await contact.click({ timeout: 3000 }).catch(() => undefined);
+  // Gone for real before the tabs are tapped (slow WebKit can still be drawing it).
+  await page.locator(".sp-pcontact").waitFor({ state: "detached", timeout: 5000 }).catch(() => undefined);
   await page.getByRole("tablist", { name: "Bagian Hunting" }).getByRole("tab", { name: new RegExp(`^${tab}`) }).click();
   if (name === "Kirim") {
     const resume = page.getByRole("button", { name: /^Lanjut ke / });
