@@ -9,7 +9,7 @@ import { Component, QuoteTemplate,
   addDays, issuerOf, isIssued, paid, scheduleOf, termAmounts, termsOf, daysBetween, longDate, nextNumber, quoteColor, quoteText, rupiah, rupiahShort, subtotal, today, total, waLink, waNumber,
 } from "@/lib/billing";
 import PrintSheet from "@/components/PrintSheet";
-import DocEditor, { DocDraft, LeadRef, briefOf, cleanItems } from "@/components/DocEditor";
+import DocEditor, { DocDraft, LeadRef, briefOf, cleanCosts, cleanItems } from "@/components/DocEditor";
 import ConfirmSheet from "@/components/ConfirmSheet";
 import SendQuoteSheet, { SentPatch } from "@/components/SendQuoteSheet";
 import WaSendSheet from "@/components/WaSendSheet";
@@ -129,6 +129,7 @@ export default function Quotes({ quotes, invoices, leads, services, components, 
       ...(old?.acceptedAt ? { acceptedAt: old.acceptedAt } : {}), ...(old?.supersedes ? { supersedes: old.supersedes } : {}),
       ...(base ? { supersedes: base.id } : {}),
       ...briefOf(d),
+      ...(cleanCosts(d.production).length ? { production: cleanCosts(d.production) } : {}),
     };
     await setDoc(spaceDoc(space, "quotes", id), JSON.parse(JSON.stringify(stamp(space, doc, (old || base) as { ownerUid?: string; ownerName?: string } | undefined))));
     setEditing(null); setRevising(null);

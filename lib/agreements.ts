@@ -8,6 +8,7 @@
 import type { jsPDF as JsPDF } from "jspdf";
 import { Agreement, DocTerms, Issuer, Quote, longDate, rupiah, scheduleOf, termAmounts, total } from "@/lib/billing";
 import { fullDay } from "@/lib/when";
+import { mapsUrl, validGeo } from "@/lib/geo";
 import { pngOf, safe } from "@/lib/pdfDoc";
 
 export type AgreementKind = "spk" | "nda";
@@ -63,7 +64,7 @@ export function fillAgreement(template: string, q: Quote, issuer: Issuer, t: Doc
     nomor: q.number,
     tanggal: longDate(q.date),
     tanggal_acara: q.eventDate ? fullDay(q.eventDate) : "Tanggal menyusul",
-    lokasi: q.venue?.trim() ? `, di ${q.venue.trim()}` : "",
+    lokasi: (q.venue?.trim() ? `, di ${q.venue.trim()}` : "") + (validGeo(q.venueGeo) ? ` (peta: ${mapsUrl(q.venueGeo)})` : ""),
     total: rupiah(total(q)),
     pembayaran: paymentLine(q, t),
     revisi: t.revisions?.trim() || "Sesuai kesepakatan di penawaran.",

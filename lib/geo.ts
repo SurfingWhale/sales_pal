@@ -17,6 +17,9 @@ export const validGeo = (g: unknown): g is LeadGeo =>
   !!g && typeof (g as LeadGeo).lat === "number" && typeof (g as LeadGeo).lng === "number"
   && Math.abs((g as LeadGeo).lat) <= 90 && Math.abs((g as LeadGeo).lng) <= 180;
 
+// The place itself in Google Maps, as printed on a quote, SPK or invoice.
+export const mapsUrl = (g: { lat: number; lng: number }) => `https://www.google.com/maps/search/?api=1&query=${g.lat.toFixed(6)},${g.lng.toFixed(6)}`;
+
 // Directions in Google Maps, from wherever the phone is.
 export const routeUrl = (g: { lat: number; lng: number }) => `https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lng}`;
 

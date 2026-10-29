@@ -21,7 +21,7 @@ export default function QuoteTemplateList({ templates, space, canEdit }: { templ
       <p style={{ margin: "2px 0 12px", fontSize: 12, color: "var(--app-muted)", lineHeight: 1.5 }}>Dibuat dari penawaran (Simpan sebagai template), dipakai di + Penawaran → Mulai dari template.</p>
       <ul aria-label="Daftar template penawaran" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 280px), 1fr))", gap: 10 }}>
         {templates.slice().sort((a, b) => a.name.localeCompare(b.name)).map(t => {
-          const m = marginOf({ items: t.items, discount: 0 });
+          const m = marginOf({ items: t.items, discount: 0, production: t.production });
           return (
             <li key={t.id} style={{ ...card, padding: 14, display: "flex", alignItems: "flex-start", gap: 8 }}>
               <div style={{ flex: 1, minWidth: 0 }}>

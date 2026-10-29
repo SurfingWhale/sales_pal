@@ -3,9 +3,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { setDoc } from "firebase/firestore";
 import {
-  Brief, COMPONENT_KINDS, COMPONENT_UNITS, Component, LineItem, MARGIN_TARGET, QuoteTemplate, Service, Term,
-  addDays, costOf, daysBetween, marginOf, rupiah, scheduleSum, subtotal, taxAmount, termAmounts, total,
+  Brief, COMPONENT_KINDS, COMPONENT_UNITS, Component, CostLine, LineItem, MARGIN_TARGET, QuoteTemplate, Service, Term,
+  addDays, costOf, daysBetween, jobCostOf, marginOf, priceFloor, productionOf, rupiah, scheduleSum, subtotal, taxAmount, termAmounts, total,
 } from "@/lib/billing";
+import { mapsUrl, validGeo } from "@/lib/geo";
+import Icon from "@/components/Icon";
+import Sheet from "@/components/Sheet";
+import PlaceEditor from "@/components/PlaceEditor";
 import { canEditCatalog, spaceDoc, useSpace } from "@/lib/space";
 import { marginColor } from "@/components/ComponentCatalog";
 import { btnMuted, btnPrimary, chip, font, inputStyle, label, modalBox } from "@/components/ui";
@@ -35,6 +39,7 @@ export interface DocDraft extends Brief {
   dueDate?: string;      // invoice
   taxPercent?: number;
   schedule?: Term[];     // quote: payment schedule
+  production?: CostLine[]; // quote: what the job costs you beyond the items (internal)
 }
 
 const num = (v: string) => parseInt(v.replace(/\D/g, ""), 10) || 0;
@@ -96,6 +101,7 @@ export default function DocEditor({ kind, initial, leads, services, components =
   const [tplName, setTplName] = useState<string | null>(null);
   const [tplNote, setTplNote] = useState("");
   const [applied, setApplied] = useState("");
+  const [placing, setPlacing] = useState(false);
   const itemsRef = useRef<HTMLDivElement>(null);
   const dirty = JSON.stringify(d) !== JSON.stringify(initial);
   // Escape, a tap outside, back, × and Batal all come here: a form with
@@ -112,8 +118,16 @@ export default function DocEditor({ kind, initial, leads, services, components =
   }, [added]);
   const set = (p: Partial<DocDraft>) => setD(cur => ({ ...cur, ...p }));
   const setItem = (i: number, p: Partial<EditItem>) => set({ items: d.items.map((it, n) => (n === i ? { ...it, ...p } : it)) });
+  const prod = d.production || [];
+  const setCost = (i: number, p: Partial<CostLine>) => set({ production: prod.map((l, n) => (n === i ? { ...l, ...p } : l)) });
   const margin = marginOf(d);
-  const cost = costOf(d.items);
+  const itemCost = costOf(d.items);
+  const prodCost = productionOf(prod);
+  const wear = productionOf(prod.filter(l => l.asset));
+  const cost = jobCostOf(d);
+  const net = Math.max(0, subtotal(d.items) - (d.discount || 0));
+  const floor = cost ? priceFloor(cost, MARGIN_TARGET) : 0;
+  const geo = validGeo(d.venueGeo) ? d.venueGeo : undefined;
   const sched = d.schedule || [];
   const sum = scheduleSum(sched);
   const missing: Missing = !d.leadName.trim() ? { text: "Isi nama klien dulu.", at: "doc-client" }
@@ -136,6 +150,14 @@ export default function DocEditor({ kind, initial, leads, services, components =
     if (c) { set({ items: [...d.items, { name: c.name, qty: 1, price: c.price, unit: c.unit, cost: c.cost, componentId: c.id, ...(c.vendor ? { vendor: c.vendor } : {}) }] }); setAdded(d.items.length); }
   }
   function addManual() { set({ items: [...d.items, { name: "", qty: 1, price: 0 }] }); setAdded(d.items.length); }
+  // Production costs: from the catalog (gear you own comes in as its
+  // depreciation per job), or typed.
+  function addCost(id: string) {
+    const c = components.find(x => x.id === id);
+    if (!c) return;
+    set({ production: [...prod, { name: c.asset ? `Penyusutan ${c.name}` : c.name, kind: c.kind, qty: 1, unit: c.unit, cost: c.cost, componentId: c.id, ...(c.vendor ? { vendor: c.vendor } : {}), ...(c.asset ? { asset: true } : {}) }] });
+  }
+  function addCostManual() { set({ production: [...prod, { name: "", kind: "Lainnya", qty: 1, cost: 0 }] }); }
   // A template fills the work and the money; who it's for and when stay.
   function applyTemplate(id: string) {
     const t = templates.find(x => x.id === id);
@@ -143,6 +165,7 @@ export default function DocEditor({ kind, initial, leads, services, components =
     set({
       items: t.items.map(i => ({ ...i })), deliverables: t.deliverables || "", exclusions: t.exclusions || "", timeline: t.timeline || d.timeline,
       notes: t.notes || d.notes, ...(t.schedule?.length ? { schedule: t.schedule.map(s => ({ ...s })) } : {}), taxPercent: t.taxPercent,
+      ...(t.production?.length ? { production: t.production.map(l => ({ ...l })) } : {}),
       ...(t.validDays ? { validUntil: addDays(d.date, t.validDays) } : {}),
     });
     setApplied(`Template "${t.name}" dipakai. Klien dan acara tetap.`);
@@ -155,6 +178,8 @@ export default function DocEditor({ kind, initial, leads, services, components =
     (["deliverables", "exclusions", "timeline"] as const).forEach(k => { const v = (d[k] || "").trim(); if (v) doc[k] = v; });
     if (d.notes.trim()) doc.notes = d.notes.trim();
     if (sched.length) doc.schedule = sched;
+    const lines = cleanCosts(prod);
+    if (lines.length) doc.production = lines;
     if (d.taxPercent) doc.taxPercent = d.taxPercent;
     if (d.validUntil) { const days = daysBetween(d.date, d.validUntil); if (days > 0) doc.validDays = days; }
     try { await setDoc(spaceDoc(space, "quoteTemplates", id), doc); setTplName(null); setTplNote(`Tersimpan jadi template "${name}".`); }
@@ -283,7 +308,9 @@ export default function DocEditor({ kind, initial, leads, services, components =
       {margin && cost !== null && (
         <div role="status" aria-label="Margin, internal" style={{ display: "grid", gap: 2, padding: "8px 10px", borderRadius: 10, border: "1px dashed var(--app-line-strong)" }}>
           <span style={{ fontSize: 12, color: "var(--app-muted)" }}>Internal · modal {rupiah(cost)}</span>
+          {prod.length > 0 && <span style={{ fontSize: 12, color: "var(--app-muted)" }}>Item {rupiah(itemCost || 0)} · produksi {rupiah(prodCost)}{wear ? ` (penyusutan ${rupiah(wear)})` : ""}</span>}
           <b style={{ color: marginColor(margin.percent) }}>Margin {rupiah(margin.amount)}{margin.percent !== null ? ` (${margin.percent}%)` : ""}{margin.percent !== null && margin.percent < MARGIN_TARGET ? ` · di bawah ${MARGIN_TARGET}%` : ""}</b>
+          {floor > net && <span style={{ fontSize: 12, color: "var(--app-muted)" }}>Harga minimal buat margin {MARGIN_TARGET}%: {rupiah(floor)}</span>}
         </div>
       )}
       {kind === "quote" && sched.length > 0 && (
@@ -329,6 +356,18 @@ export default function DocEditor({ kind, initial, leads, services, components =
           {input("doc-event", "Tanggal acara", d.eventDate || "", v => set({ eventDate: v }), "", "date")}
           {input("doc-time", "Jam", d.eventTime || "", v => set({ eventTime: v }), "mis. 13.30–15.00 WIB")}
           {input("doc-venue", "Lokasi", d.venue || "", v => set({ venue: v }), "mis. Jl. Contoh No. 1, Jakarta", "text", "1/-1")}
+          {/* The exact point: printed as a Google Maps link on the quote, SPK and invoice. */}
+          <div style={{ gridColumn: "1/-1", display: "grid", gridTemplateColumns: wide ? "36px minmax(0, 1fr) auto" : "36px minmax(0, 1fr)", alignItems: "center", columnGap: 10, rowGap: 8, marginTop: -4 }}>
+            <span aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: geo ? "color-mix(in srgb, #005eb0 12%, transparent)" : "var(--app-inner)", color: geo ? "var(--brand-text)" : "var(--app-muted)" }}><Icon name="map" size={18} /></span>
+            <span style={{ minWidth: 0, fontSize: 13 }}>
+              <span style={{ display: "block", fontWeight: 600 }}>{geo ? "Titik di peta" : "Belum ada titik di peta"}</span>
+              <span className="tabnum" style={{ display: "block", fontSize: 12, color: "var(--app-muted)" }}>{geo ? `${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)} · dicetak jadi link Maps` : "Biar klien dan kru langsung ketemu tempatnya"}</span>
+            </span>
+            <span style={{ gridColumn: wide ? "auto" : "2", display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {geo && <a href={mapsUrl(geo)} target="_blank" rel="noreferrer" style={{ ...chip, display: "inline-flex", alignItems: "center", minHeight: 44, fontSize: 13, fontWeight: 600, color: "var(--app-text)", padding: "0 14px", textDecoration: "none" }}>Buka Maps</a>}
+            <button onClick={() => setPlacing(true)} style={{ ...chip, minHeight: 44, fontSize: 13, fontWeight: 700, color: "var(--brand-text)", padding: "0 14px" }}>{geo ? "Ubah titik" : "Atur di peta"}</button>
+            </span>
+          </div>
           {input("doc-timeline", "Estimasi waktu pengerjaan", d.timeline || "", v => set({ timeline: v }), "mis. File final 7 hari kerja setelah acara", "text", "1/-1")}
         </div>
       </Section>
@@ -361,6 +400,56 @@ export default function DocEditor({ kind, initial, leads, services, components =
           {d.items.map((it, i) => (wide ? itemRow(it, i) : itemCard(it, i)))}
         </div>
       </Section>
+
+      {kind === "quote" && (
+        <Section id="doc-production" t="Biaya produksi · internal" hint="Ga dicetak, ga dikirim ke klien. Yang kamu keluarkan buat job ini tapi ga ditagih per baris: kru, studio, transport, penyusutan alat.">
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+            {components.length > 0 && (
+              <select value="" onChange={e => addCost(e.target.value)} style={{ ...inputStyle, flex: "1 1 180px", width: "auto" }} aria-label="Tambah biaya dari komponen">
+                <option value="">+ dari komponen…</option>
+                {components.slice().sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name)).map(c => <option key={c.id} value={c.id}>{c.asset ? `Penyusutan ${c.name}` : c.name} · {rupiah(c.cost)}/{c.unit}</option>)}
+              </select>
+            )}
+            <button onClick={addCostManual} style={{ ...chip, fontSize: 13, fontWeight: 700, color: "var(--brand-text)", padding: "10px 14px", flex: "0 0 auto" }}>+ biaya manual</button>
+          </div>
+          {prod.length === 0 && <div style={{ fontSize: 13, color: "var(--app-muted)", padding: "4px 0" }}>Belum ada. Alat punya sendiri bisa dicatat di Paket → Komponen sebagai aset, biar penyusutannya kehitung.</div>}
+          {wide && prod.length > 0 && (
+            <div aria-hidden="true" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.6fr) minmax(0, 1fr) 64px 124px 116px 44px", gap: 8, padding: "0 10px 6px 12px", fontSize: 12, fontWeight: 600, color: "var(--app-muted)" }}>
+              <span>Biaya</span><span>Jenis</span><span style={{ textAlign: "center" }}>Qty</span><span style={{ textAlign: "right" }}>Biaya / satuan</span><span style={{ textAlign: "right" }}>Jumlah</span><span />
+            </div>
+          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: wide ? 8 : 10 }}>
+            {prod.map((l, i) => (
+              <div key={i} role="group" aria-label={`Biaya ${i + 1}`} style={{ display: "grid", gridTemplateColumns: wide ? "minmax(0, 1.6fr) minmax(0, 1fr) 64px 124px 116px 44px" : "72px minmax(0, 1fr)", gap: 8, alignItems: "center", padding: wide ? "10px 10px 10px 12px" : "8px 12px 12px", borderRadius: 12, background: "var(--app-inner)" }}>
+                {!wide && (
+                  <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, alignItems: "center" }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--app-muted)" }}>{l.asset ? "Penyusutan alat" : `Biaya ${i + 1}`} · {rupiah((l.qty || 0) * (l.cost || 0))}</span>
+                    <button onClick={() => set({ production: prod.filter((_, n) => n !== i) })} aria-label={`Hapus biaya ${i + 1}`} style={{ ...removeStyle, marginLeft: "auto", padding: "4px 0 4px 12px", minHeight: 32 }}>Hapus</button>
+                  </div>
+                )}
+                <input value={l.name} onChange={e => setCost(i, { name: e.target.value })} style={{ ...inputStyle, gridColumn: wide ? "auto" : "1 / -1" }} placeholder="mis. Asisten fotografer" aria-label={`Nama biaya ${i + 1}`} />
+                <select value={l.kind} onChange={e => setCost(i, { kind: e.target.value })} style={{ ...inputStyle, gridColumn: wide ? "auto" : "1 / -1" }} aria-label={`Jenis biaya ${i + 1}`}>
+                  {COMPONENT_KINDS.map(k => <option key={k} value={k}>{k}</option>)}
+                </select>
+                {!wide && <div aria-hidden="true" style={{ gridColumn: "1 / -1", fontSize: 12, color: "var(--app-muted)", marginBottom: -4 }}>Qty × biaya / satuan</div>}
+                <input inputMode="numeric" value={l.qty || ""} onChange={e => setCost(i, { qty: num(e.target.value) })} style={{ ...inputStyle, textAlign: "center" }} aria-label={`Qty biaya ${i + 1}`} />
+                <input inputMode="numeric" value={l.cost ? l.cost.toLocaleString("id-ID") : ""} onChange={e => setCost(i, { cost: num(e.target.value) })} style={{ ...inputStyle, textAlign: "right" }} placeholder="Biaya / satuan" aria-label={`Biaya per satuan, biaya ${i + 1}`} />
+                {wide && <>
+                  <b className="tabnum" style={{ textAlign: "right", fontSize: 13 }}>{rupiah((l.qty || 0) * (l.cost || 0))}</b>
+                  <button onClick={() => set({ production: prod.filter((_, n) => n !== i) })} aria-label={`Hapus biaya ${i + 1}`} title="Hapus" style={{ ...removeStyle, width: 44, height: 44, fontSize: 20 }}>×</button>
+                </>}
+                <input value={l.vendor || ""} onChange={e => setCost(i, { vendor: e.target.value })} style={{ ...inputStyle, gridColumn: wide ? "1 / 3" : "1 / -1" }} placeholder="Dibayar ke (opsional)" aria-label={`Vendor biaya ${i + 1}`} />
+              </div>
+            ))}
+          </div>
+          {prod.length > 0 && (
+            <div className="tabnum" role="status" aria-label="Biaya produksi, internal" style={{ display: "grid", gap: 2, marginTop: 10, fontSize: 13 }}>
+              <span>Biaya produksi <b>{rupiah(prodCost)}</b>{wear ? ` · penyusutan alat ${rupiah(wear)}` : ""}</span>
+              {cost !== null && <span style={{ color: "var(--app-muted)" }}>Total modal job {rupiah(cost)} · harga minimal buat margin {MARGIN_TARGET}%: {rupiah(floor)}</span>}
+            </div>
+          )}
+        </Section>
+      )}
 
       <Section t="Deliverables" hint="Yang klien terima. Satu baris satu poin.">
         <textarea id="doc-deliverables" aria-label="Deliverables" value={d.deliverables || ""} onChange={e => set({ deliverables: e.target.value })}
@@ -488,6 +577,13 @@ export default function DocEditor({ kind, initial, leads, services, components =
           </>
         )}
       </div>
+      {placing && (
+        <Sheet title="Titik lokasi acara" onClose={() => setPlacing(false)}>
+          <PlaceEditor what="titik" start={geo} address={d.venue}
+            onSave={(g, address) => setD(cur => ({ ...cur, venueGeo: g || undefined, ...(address && !cur.venue?.trim() ? { venue: address } : {}) }))}
+            onDone={() => setPlacing(false)} />
+        </Sheet>
+      )}
       {leaving && (
         <ConfirmSheet title="Buang perubahan?" action="Buang" busyLabel="Membuang…" onConfirm={async () => onClose()} onClose={() => setLeaving(false)}>
           Isian di {d.id ? <b>{d.number}</b> : kind === "quote" ? "penawaran baru ini" : "invoice baru ini"} belum disimpan. Kalau dibuang, hilang.
@@ -501,7 +597,19 @@ export default function DocEditor({ kind, initial, leads, services, components =
 export function briefOf(d: Brief): Brief {
   const out: Brief = {};
   (["project", "eventDate", "eventTime", "venue", "deliverables", "timeline", "exclusions"] as const).forEach(k => { const v = (d[k] || "").trim(); if (v) out[k] = v; });
+  if (validGeo(d.venueGeo)) out.venueGeo = d.venueGeo;
   return out;
+}
+
+// Production costs as stored: unnamed rows left out, internal by nature.
+export function cleanCosts(lines: CostLine[] = []): CostLine[] {
+  return lines.filter(l => l.name.trim()).map(l => ({
+    name: l.name.trim(), kind: l.kind || "Lainnya", qty: l.qty || 1, cost: l.cost || 0,
+    ...(l.unit ? { unit: l.unit } : {}),
+    ...(l.vendor?.trim() ? { vendor: l.vendor.trim() } : {}),
+    ...(l.componentId ? { componentId: l.componentId } : {}),
+    ...(l.asset ? { asset: true } : {}),
+  }));
 }
 
 export function cleanItems(items: LineItem[]): LineItem[] {
