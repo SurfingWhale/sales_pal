@@ -16,12 +16,25 @@ const OWNER_EMAIL = readFileSync(new URL("../../firestore.rules", import.meta.ur
 // Hunting has two parts: Prospek (everyone, as cards; a person's page to write
 // to them) and Performa. "Kirim" means that person's page; "Journey" and
 // "Percakapan" mean the list.
+// A tap that, when it can't land, says which one it was and what was on screen
+// (CI keeps only this line; its artifacts aren't reachable from every machine).
+const tap = (page, loc, what, o = {}) => loc.click(o).catch(async (e) => {
+  const seen = await page.evaluate(() => ({
+    dialogs: [...document.querySelectorAll("[role=dialog]")].map(d => d.getAttribute("aria-label") || d.id),
+    reopening: !!document.querySelector("#journey-prospek[data-reopening]"),
+    page: history.state && history.state.spPage, modal: history.state && history.state.spModal,
+  })).catch(() => null);
+  throw new Error(`${what}: ${e.message.split("\n")[0]} || ${JSON.stringify(seen)}`);
+});
+
 const pane = async (page, name) => {
   const tab = /^(Kirim|Journey|Percakapan)$/.test(name) ? "Prospek" : name;
   // A prospect's card opens as their own page; close it to reach the tabs.
   const contact = page.getByRole("button", { name: "Tutup kontak" });
   if (await contact.isVisible()) await contact.click({ timeout: 3000 }).catch(() => undefined);
-  await page.getByRole("tablist", { name: "Bagian Hunting" }).getByRole("tab", { name: new RegExp(`^${tab}`) }).click();
+  // Gone for real before the tabs are tapped (slow WebKit can still be drawing it).
+  await page.locator(".sp-pcontact").waitFor({ state: "detached", timeout: 5000 }).catch(() => undefined);
+  await tap(page, page.getByRole("tablist", { name: "Bagian Hunting" }).getByRole("tab", { name: new RegExp(`^${tab}`) }), `tab ${tab}`);
   if (name === "Kirim") {
     const resume = page.getByRole("button", { name: /^Lanjut ke / });
     if (await resume.isVisible()) await resume.click();
@@ -396,6 +409,13 @@ export const flows = [
         await pick.getByRole("button", { name: "Simpan" }).click();
         await pick.waitFor({ state: "detached" });
         await t.page.getByRole("dialog", { name: "Profil & Pengaturan" }).getByRole("button", { name: /Foto profil.*Singa/ }).waitFor();
+        // Closing the picker leaves Profil open under it.
+        await t.page.getByRole("button", { name: "Ganti foto profil" }).click();
+        await pick.waitFor();
+        await t.page.keyboard.press("Escape");
+        await pick.waitFor({ state: "detached" });
+        await t.page.waitForTimeout(300);
+        if (!(await t.page.getByRole("dialog", { name: "Profil & Pengaturan" }).isVisible())) throw new Error("closing the picture picker closed Profil too");
         await t.page.keyboard.press("Escape");
         await t.page.getByRole("dialog", { name: "Profil & Pengaturan" }).waitFor({ state: "detached" });
         await t.page.getByRole("button", { name: "Profil dan pengaturan" }).locator('img[src*="animal-lion"]').waitFor();
@@ -1598,7 +1618,7 @@ export const flows = [
         if (await contact.isVisible()) return;
         // It can still open on its own between that look and the tap (slow WebKit):
         // then the tap is blocked by it, which is as good.
-        await row(who).click({ timeout: 5000 }).catch(async (e) => { if (!(await contact.isVisible())) throw e; });
+        await tap(page, row(who), `card ${who}`, { timeout: 5000 }).catch(async (e) => { if (!(await contact.isVisible())) throw e; });
         await contact.waitFor();
       };
       // The list's view, picked from its title as in Notion.
@@ -1681,15 +1701,15 @@ export const flows = [
         await pick("Nunggu");
         await row("Toko Kue (@tokokue)").locator(".sp-pbadge").getByText("Intro terkirim").waitFor();
         await expand("Toko Kue (@tokokue)");
-        await page.getByRole("button", { name: "💬 Dibales" }).click();
+        await tap(page, page.getByRole("button", { name: "💬 Dibales" }), "Dibales");
         await page.getByLabel("Tempel balasannya (opsional)").fill("boleh kak, pricelist-nya berapa?");
-        await page.getByRole("button", { name: "Simpan", exact: true }).click();
+        await tap(page, page.getByRole("button", { name: "Simpan", exact: true }), "Simpan balasan");
         await pick("Terhubung");
         // Their card says what they last said; opening it shows the whole chat.
         await row("Toko Kue (@tokokue)").getByText(/boleh kak, pricelist-nya berapa\?/).waitFor();
         await expand("Toko Kue (@tokokue)");
         await page.getByRole("region", { name: /Riwayat Toko Kue/ }).getByText("boleh kak, pricelist-nya berapa?").first().waitFor();
-        await page.getByRole("group", { name: /Hasil untuk/ }).getByRole("button", { name: "✅ Tertarik" }).click();
+        await tap(page, page.getByRole("group", { name: /Hasil untuk/ }).getByRole("button", { name: "✅ Tertarik" }), "Tertarik");
         await row("Toko Kue (@tokokue)").locator(".sp-pbadge").getByText("Tertarik").waitFor();
       });
       await t.step("their page: the answer is marked there, Back returns to their card", async () => {
@@ -1754,6 +1774,8 @@ export const flows = [
         const chat = th.getByRole("log", { name: "Percakapan dengan Toko Kue (@tokokue)" });
         await chat.getByText("ada yang open jasa foto katalog buat UMKM?").first().waitFor();
         await chat.getByText("boleh kak, pricelist-nya berapa?").waitFor();
+        // Like a chat app: the stage and its templates sit behind one picker over the box.
+        await th.getByRole("button", { name: /^Template/ }).click();
         await th.getByRole("radiogroup", { name: "Tahap" }).getByRole("radio", { name: /Penawaran/ }).click();
         await th.locator("#th-text").fill("Halo kak, ini pricelist paket katalog ya");
         await th.getByRole("button", { name: "Copy", exact: true }).click();
@@ -1762,7 +1784,8 @@ export const flows = [
         // Logged once: the box empties, and someone who answered stays answered.
         if (await th.locator("#th-text").inputValue()) throw new Error("the message stayed in the box after it was logged");
         if (await th.locator("header").getByText(/Intro terkirim/).count()) throw new Error("a follow-up to someone who answered turned them back into an intro");
-        // Jangan hubungi asks first, and Batal leaves them be.
+        // What happened with them sits behind ⋯ in the header; Jangan hubungi asks first, and Batal leaves them be.
+        await th.getByRole("button", { name: "Status & aksi" }).click();
         await th.getByRole("button", { name: "🚫 Jangan hubungi" }).click();
         const ask = th.getByRole("group", { name: "Jangan hubungi lagi?" });
         await ask.getByRole("button", { name: "Batal" }).click();

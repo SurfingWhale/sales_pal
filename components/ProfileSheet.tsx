@@ -170,8 +170,12 @@ export default function ProfileSheet({ uid, name, email, version, isDark, onThem
           <Row label="Logout" danger onClick={onLogout} last />
         </div>
       </div>
-      {picking && <AvatarPicker uid={uid} current={avatar} name={name || email} onClose={() => setPicking(false)} />}
-      {admining && <AccessAdmin onClose={() => setAdmining(false)} />}
+      {/* Rendered inside Profil's backdrop: their own backdrop tap (and Escape, Back)
+          closes only them, not Profil under them. */}
+      <div style={{ display: "contents" }} onClick={e => e.stopPropagation()}>
+        {picking && <AvatarPicker uid={uid} current={avatar} name={name || email} onClose={() => setPicking(false)} />}
+        {admining && <AccessAdmin onClose={() => setAdmining(false)} />}
+      </div>
     </div>
   );
 }

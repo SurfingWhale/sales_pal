@@ -265,21 +265,6 @@ export default function TeamDashboard({ hunts, quotes, invoices, outreach, rejec
         );
       })()}
 
-      {paper && (() => {
-        const periodLabel = PERIODS.find(x => x.id === period)!.label;
-        const name = person ? person.name : manager ? space.name : space.me.name;
-        const doc = dashboardDoc({
-          title: name, team: manager && !who, period: periodLabel, cur, prev, s, p, trend,
-          rows: rows.map(r => ({ name: r.x.name, s: r.s })), quiet: quiet.map(r => ({ name: r.x.name, lastAt: r.s.lastAt })),
-        });
-        const stamp = period === "month" || period === "lastMonth" ? cur.from.slice(0, 7) : `${cur.from}_${cur.to}`;
-        return (
-          <ReportShell title={`Laporan ${name} · ${periodLabel}`} fileName={reportName(`Dashboard ${name}`, stamp)} doc={doc} onClose={() => setPaper(false)}>
-            <ReportPaper doc={doc} />
-          </ReportShell>
-        );
-      })()}
-
       <div ref={logRef} style={{ scrollMarginTop: 120 }}>
         {(who || !manager) && (
           <ActivityLog key={who || me} owner={who || me} title={person && who !== me ? `Log aktivitas ${person.name}` : "Log aktivitas kamu"}

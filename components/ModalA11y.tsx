@@ -54,9 +54,20 @@ export default function ModalA11y() {
     let inFlight = false;
     let owed = 0;
     let deferred = 0;
+    // A step back another part of the app took (Hunting leaving a person's
+    // page, announced with "sp:back"): its popstate is not someone pressing
+    // Back on a dialog opened meanwhile, which waits for it like for our own.
+    let external = 0;
+    const busy = () => inFlight || external > 0;
     const pushNow = () => window.history.pushState({ ...(window.history.state || {}), spModal: entries }, "");
-    const push = () => { entries++; if (inFlight) deferred++; else pushNow(); };
-    const drop = (n: number) => { if (inFlight) { owed += n; return; } inFlight = true; window.history.go(-n); };
+    const push = () => { entries++; if (busy()) deferred++; else pushNow(); };
+    const drop = (n: number) => { if (busy()) { owed += n; return; } inFlight = true; window.history.go(-n); };
+    const settle = () => {
+      if (owed) { const n = owed; owed = 0; drop(n); return; }
+      for (; deferred > 0; deferred--) pushNow();
+    };
+    // If its popstate never comes, don't wait on it for ever.
+    const onExternal = () => { external++; setTimeout(() => { if (external > 0) { external--; if (!busy()) settle(); } }, 3000); };
     const topmost = () => {
       const all = document.querySelectorAll<HTMLElement>(".modal-overlay");
       return all.length ? all[all.length - 1] : null;
@@ -119,10 +130,14 @@ export default function ModalA11y() {
       else if (!e.shiftKey && (document.activeElement === last || !box.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
     }
     function onPop() {
+      if (external > 0) {
+        external--;
+        if (!busy()) settle();
+        return;
+      }
       if (inFlight) {
         inFlight = false;
-        if (owed) { const n = owed; owed = 0; drop(n); return; }
-        for (; deferred > 0; deferred--) pushNow();
+        if (!busy()) settle();
         return;
       }
       const overlay = topmost();
@@ -135,7 +150,8 @@ export default function ModalA11y() {
 
     document.addEventListener("keydown", onKey);
     window.addEventListener("popstate", onPop);
-    return () => { observer.disconnect(); document.removeEventListener("keydown", onKey); window.removeEventListener("popstate", onPop); };
+    window.addEventListener("sp:back", onExternal);
+    return () => { observer.disconnect(); document.removeEventListener("keydown", onKey); window.removeEventListener("popstate", onPop); window.removeEventListener("sp:back", onExternal); };
   }, []);
   return null;
 }
