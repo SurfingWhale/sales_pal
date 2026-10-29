@@ -118,10 +118,14 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   // taken for the one being closed). Not if they moved on to another view meanwhile.
   const focusNow = useRef(focusId);
   focusNow.current = focusId;
+  const [reopening, setReopening] = useState(!!focusId);
   useEffect(() => {
     if (!focusId) return;
     let done = false;
-    const go = () => { if (done) return; done = true; window.removeEventListener("popstate", go); setTimeout(() => { if (focusNow.current === focusId) setOpenId(focusId); }, 0); };
+    const go = () => {
+      if (done) return; done = true; window.removeEventListener("popstate", go);
+      setTimeout(() => { if (focusNow.current === focusId) setOpenId(focusId); setReopening(false); }, 0);
+    };
     window.addEventListener("popstate", go);
     const t = setTimeout(go, 400);
     return () => { done = true; window.removeEventListener("popstate", go); clearTimeout(t); };
@@ -306,7 +310,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   })();
 
   return (
-    <div id="journey-prospek" className={embedded ? "sp-plist" : undefined} style={embedded ? undefined : { ...card, padding: 20, marginBottom: 20 }}>
+    <div id="journey-prospek" data-reopening={reopening || undefined} className={embedded ? "sp-plist" : undefined} style={embedded ? undefined : { ...card, padding: 20, marginBottom: 20 }}>
       {askSheet}
       {!embedded && <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>

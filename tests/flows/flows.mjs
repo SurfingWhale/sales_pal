@@ -1525,12 +1525,12 @@ export const flows = [
     async run(t) {
       const { page, base } = t;
       const row = (who) => page.getByRole("button", { name: `Journey ${who}`, exact: true });
-      // Back from a person's page their card opens by itself, just after the
-      // step back lands; give it that moment before tapping it open.
+      // Back from a person's page their card opens by itself once the step back
+      // lands (the list is marked data-reopening till then); a tap would close it.
       const expand = async (who) => {
+        await page.locator("#journey-prospek:not([data-reopening])").waitFor();
         const contact = page.getByRole("dialog", { name: `Kontak ${who}` });
-        if (await contact.waitFor({ timeout: 1000 }).then(() => true, () => false)) return;
-        await row(who).click();
+        if (!(await contact.isVisible())) await row(who).click();
         await contact.waitFor();
       };
       // The list's view, picked from its title as in Notion.
@@ -1612,14 +1612,14 @@ export const flows = [
       await t.step("they answer: the reply goes in the history, then Tertarik", async () => {
         await pick("Nunggu");
         await row("Toko Kue (@tokokue)").locator(".sp-pbadge").getByText("Intro terkirim").waitFor();
-        if ((await row("Toko Kue (@tokokue)").getAttribute("aria-expanded")) !== "true") await row("Toko Kue (@tokokue)").click();
+        await expand("Toko Kue (@tokokue)");
         await page.getByRole("button", { name: "💬 Dibales" }).click();
         await page.getByLabel("Tempel balasannya (opsional)").fill("boleh kak, pricelist-nya berapa?");
         await page.getByRole("button", { name: "Simpan", exact: true }).click();
         await pick("Terhubung");
         // Their card says what they last said; opening it shows the whole chat.
         await row("Toko Kue (@tokokue)").getByText(/boleh kak, pricelist-nya berapa\?/).waitFor();
-        await row("Toko Kue (@tokokue)").click();
+        await expand("Toko Kue (@tokokue)");
         await page.getByRole("region", { name: /Riwayat Toko Kue/ }).getByText("boleh kak, pricelist-nya berapa?").first().waitFor();
         await page.getByRole("group", { name: /Hasil untuk/ }).getByRole("button", { name: "✅ Tertarik" }).click();
         await row("Toko Kue (@tokokue)").locator(".sp-pbadge").getByText("Tertarik").waitFor();
@@ -1680,7 +1680,7 @@ export const flows = [
         await pick("ETB");
         const card = row("Toko Kue (@tokokue)");
         await card.getByRole("list", { name: /^Tahap Data, 5 dari 5/ }).waitFor();
-        if ((await card.getAttribute("aria-expanded")) !== "true") await card.click();
+        await expand("Toko Kue (@tokokue)");
         await page.getByRole("button", { name: "💬 Percakapan" }).first().click();
         const th = page.getByRole("dialog", { name: "Toko Kue (@tokokue)" });
         const chat = th.getByRole("log", { name: "Percakapan dengan Toko Kue (@tokokue)" });
@@ -1746,7 +1746,7 @@ export const flows = [
       await t.step("find a journey by its ID, with its summary", async () => {
         await page.getByLabel("Cari prospek pakai ID atau @username").fill("Threads_tokokue");
         await expectText(page, "1 ketemu");
-        if ((await row("Toko Kue (@tokokue)").getAttribute("aria-expanded")) !== "true") await row("Toko Kue (@tokokue)").click();
+        await expand("Toko Kue (@tokokue)");
         await page.getByRole("region", { name: /Riwayat Toko Kue/ }).getByText(/ID Threads_tokokue · \d+ pesan/).waitFor();
         await page.getByRole("button", { name: "Tutup kontak" }).click();
         await page.getByLabel("Cari prospek pakai ID atau @username").fill("");
