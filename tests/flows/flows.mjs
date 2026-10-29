@@ -1525,8 +1525,14 @@ export const flows = [
     async run(t) {
       const { page, base } = t;
       const row = (who) => page.getByRole("button", { name: `Journey ${who}`, exact: true });
-      // Back from a person's page their card is open already; a tap would close it.
-      const expand = async (who) => { if ((await row(who).getAttribute("aria-expanded")) !== "true") await row(who).click(); };
+      // Back from a person's page their card opens by itself, just after the
+      // step back lands; give it that moment before tapping it open.
+      const expand = async (who) => {
+        const contact = page.getByRole("dialog", { name: `Kontak ${who}` });
+        if (await contact.waitFor({ timeout: 1000 }).then(() => true, () => false)) return;
+        await row(who).click();
+        await contact.waitFor();
+      };
       // The list's view, picked from its title as in Notion.
       const pick = async (f) => { await pane(page, "Journey"); await page.getByLabel("Tampilan").selectOption(f); };
       let email = "";
