@@ -161,10 +161,11 @@ export default function LandingPage() {
               </form>
 
               <div className="lp-actions">
-                <Link href="/login" className="lp-btn">Mulai gratis</Link>
+                <Link href="/login" className="lp-btn">Masuk pakai undangan</Link>
                 <a href={wa} target="_blank" rel="noreferrer" className="lp-link">Kirim contoh ini ke WhatsApp</a>
               </div>
-              <div className="lp-card-foot"><a href="#alur" className="lp-link">Lihat alurnya</a><a href="#isi" className="lp-link">Isinya apa aja</a><Link href="/login" className="lp-link">Udah punya akun</Link></div>
+              {/* Invite-only (PRD-015): someone without an invite signs in with Google and asks the admin from there. */}
+              <div className="lp-card-foot"><a href="#alur" className="lp-link">Lihat alurnya</a><a href="#isi" className="lp-link">Isinya apa aja</a><Link href="/login" className="lp-link">Belum diundang? Minta akses</Link></div>
             </div>
           </div>
           <figure className="lp-room" aria-label="Layar SalesPal, berganti sepanjang hari">
@@ -191,7 +192,7 @@ export default function LandingPage() {
               <p data-rise="" style={{ ["--i" as string]: 1 }}>{t.body}</p>
             </div>
             <div className="lp-cells">
-              <Link href="/login">Coba gratis</Link>
+              <Link href="/login">Minta akses</Link>
               <a href="#alur">Lihat satu hari</a>
             </div>
           </div>
@@ -267,21 +268,21 @@ export default function LandingPage() {
             <p>Kami jalanin studio foto dan video sendiri. Klien datang dari mana-mana: post Threads, DM Instagram, chat WhatsApp jam sebelas malam.</p>
             <p>Dulu semuanya di kepala dan di galeri screenshot. Siapa yang udah ditawarin, siapa yang belum bayar DP, acara tanggal berapa bentrok sama apa.</p>
             <p>SalesPal kami bikin buat <mark>kerjaan yang terjadi di HP</mark>: nyapa orang yang lagi nyari, ngingetin follow-up, dan ngirim penawaran yang rapi tanpa buka laptop.</p>
-            <p>Gratis buat dipakai sendiri. Kalau tim kamu nambah, bikin guild.</p>
+            <p>Sekarang masih uji coba terbatas, buat tim yang diundang. Belum diundang? Masuk pakai Google, lalu minta akses ke admin.</p>
             <div className="lp-sign">Tim SalesPal</div>
             <span>dibikin orang studio, buat orang studio</span>
           </div>
           <div className="lp-tear">
-            <span style={{ fontWeight: 700 }}>Masuk pakai Google atau email</span>
+            <span style={{ fontWeight: 700 }}>Uji coba terbatas · masuk pakai Google</span>
             <Link href="/login" className="lp-btn">Masuk</Link>
           </div>
         </section>
 
         {/* 5. One word is the button */}
-        <Link href="/login" className="lp-cta" aria-label="Mulai pakai SalesPal, gratis">
-          <span className="say">Bikin akun, tempel satu link post, kirim DM pertama kamu.</span>
+        <Link href="/login" className="lp-cta" aria-label="Masuk ke SalesPal pakai undangan">
+          <span className="say">Punya undangan? Masuk, tempel satu link post, kirim DM pertama kamu.</span>
           <svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="4"><path d="M12 36 36 12M16 12h20v20" /></svg>
-          <span className="word" aria-hidden="true">Mulai</span>
+          <span className="word" aria-hidden="true">Masuk</span>
         </Link>
       </main>
 
@@ -289,7 +290,7 @@ export default function LandingPage() {
         <div className="stripe" aria-hidden="true">{Array.from({ length: 80 }, (_, i) => <span key={i} />)}</div>
         <div className="inv">
           <p>Jualan studio, rapi dari HP.</p>
-          <Link href="/login" className="lp-btn">Masuk / Daftar</Link>
+          <Link href="/login" className="lp-btn">Masuk</Link>
         </div>
         <ul>
           <li><Link href="/login">Masuk</Link></li>
