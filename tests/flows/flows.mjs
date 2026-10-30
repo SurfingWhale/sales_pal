@@ -2268,8 +2268,9 @@ export const flows = [
       });
       await t.step("the add-lead dialog focuses its first field and keeps Tab inside", async () => {
         await page.getByRole("button", { name: /tambah lead/i }).click();
+        // A field, not the close button: the Tempel box comes first (PRD-018), then Nama bisnis.
         const tag = await page.evaluate(() => document.activeElement?.tagName);
-        if (tag !== "INPUT") throw new Error(`focus on ${tag}`);
+        if (tag !== "INPUT" && tag !== "TEXTAREA") throw new Error(`focus on ${tag}`);
         for (let i = 0; i < 25; i++) await page.keyboard.press("Tab");
         const inside = await page.evaluate(() => !!document.activeElement?.closest("[role=dialog]"));
         if (!inside) throw new Error("Tab left the dialog");
