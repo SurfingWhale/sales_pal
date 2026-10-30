@@ -200,6 +200,7 @@ export default function Services({ services, components, templates, history, bus
       {deleting && (
         <ConfirmSheet title="Hapus paket?" onConfirm={() => remove(deleting.id)} onClose={() => setDeleting(null)}>
           <b>{deleting.name}</b> hilang dari daftar paket. Penawaran dan invoice yang udah dibuat ga ikut berubah.
+          {deleting.sites && Object.keys(deleting.sites).length > 0 && <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--app-muted)" }}>Paket ini terhubung ke situs. Cuma owner yang bisa hapus, dan paketnya ikut hilang dari situs.</p>}
         </ConfirmSheet>
       )}
     </div>

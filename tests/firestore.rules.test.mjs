@@ -112,6 +112,7 @@ await t("cannot take a higher role than the invite gives", assertFails(setDoc(do
 await t("cannot join with an expired invite", assertFails(setDoc(doc(X, "guilds", G, "members", "outsider"), me("outsider", "member", "inv-old"))));
 await t("cannot join without an invite", assertFails(setDoc(doc(X, "guilds", G, "members", "outsider"), me("outsider", "member"))));
 await t("officer cannot invite another officer", assertFails(setDoc(doc(O, "guilds", G, "invites", "inv-o2"), { role: "officer", guildName: "x", createdBy: "offi", createdAt: 1, expiresAt: week() })));
+await t("an invite can't outlive 30 days", assertFails(setDoc(doc(O, "guilds", G, "invites", "inv-long"), { role: "member", guildName: "x", createdBy: "offi", createdAt: 1, expiresAt: Date.now() + 31 * 86400000 })));
 await t("officer invites a member", assertSucceeds(setDoc(doc(O, "guilds", G, "invites", "inv-o3"), { role: "member", guildName: "x", createdBy: "offi", createdAt: 1, expiresAt: week() })));
 await t("member cannot list invites", assertFails(getDocs(collection(M, "guilds", G, "invites"))));
 await t("members read the guild and the roster", assertSucceeds(getDocs(collection(V, "guilds", G, "members"))));
@@ -150,6 +151,10 @@ await t("cannot log an activity as someone else", assertFails(setDoc(doc(M, "gui
 await t("outsider cannot log an activity", assertFails(setDoc(doc(X, "guilds", G, "activities", "a3"), act("outsider", "joined"))));
 await t("an activity cannot carry other fields", assertFails(setDoc(doc(M, "guilds", G, "activities", "a4"), act("memb", "deal_created", { amount: 9 }))));
 await t("officer logs a reassignment about a member", assertSucceeds(setDoc(doc(O, "guilds", G, "activities", "a5"), act("offi", "deal_reassigned", { about: "memb2" }))));
+await t("an activity can't be dated long ago", assertFails(setDoc(doc(M, "guilds", G, "activities", "a6"), { ...act("memb", "deal_created"), at: Date.now() - 30 * 86400000 })));
+await t("an activity can't be dated ahead", assertFails(setDoc(doc(M, "guilds", G, "activities", "a7"), { ...act("memb", "deal_created"), at: Date.now() + 7 * 86400000 })));
+await t("an activity written offline two days ago still lands", assertSucceeds(setDoc(doc(M, "guilds", G, "activities", "a8"), { ...act("memb", "deal_created"), at: Date.now() - 2 * 86400000 })));
+await t("an activity can't carry a huge detail", assertFails(setDoc(doc(M, "guilds", G, "activities", "a9"), act("memb", "deal_created", { detail: "x".repeat(2000) }))));
 await t("activities cannot be edited", assertFails(updateDoc(doc(M, "guilds", G, "activities", "a1"), { what: "deal_paid" })));
 await t("activities cannot be deleted, even by the leader", assertFails(deleteDoc(doc(L, "guilds", G, "activities", "a1"))));
 await t("leader reads the whole log", assertSucceeds(getDocs(collection(L, "guilds", G, "activities"))));
@@ -217,6 +222,21 @@ await t("officer edits a package without touching its sites", assertSucceeds(set
 await t("officer cannot put a package on a site", assertFails(setDoc(doc(O, "guilds", G, "services", "s1"), { name: "Foto Menu", price: 1750000, sites: { visufavor: { shown: true, linked: true, from: 1750000 } } })));
 await t("leader cannot create a package already on a site", assertFails(setDoc(doc(L, "guilds", G, "services", "s9"), { name: "x", price: 1, sites: { visufavor: { shown: true, linked: true, from: 1 } } })));
 await t("the owner puts a package on a site from their own space", assertSucceeds(setDoc(doc(owner, "users", "owner1", "services", "p1"), { name: "Foto Menu", price: 1500000, sites: { visufavor: { shown: true, linked: false, from: 1250000 } } })));
+await t("the price record can't be rewritten", (async () => {
+  await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), "guilds", G, "pricelistHistory", "h0"), { serviceId: "s1", new: 2 }));
+  await assertFails(updateDoc(doc(O, "guilds", G, "pricelistHistory", "h0"), { new: 9 }));
+  await assertFails(deleteDoc(doc(L, "guilds", G, "pricelistHistory", "h0")));
+})());
+await t("a package on a site is deleted by the owner only", (async () => {
+  await env.withSecurityRulesDisabled(async c => {
+    const d = c.firestore();
+    await setDoc(doc(d, "guilds", G, "services", "listed"), { name: "P", price: 1, sites: { visufavor: { shown: true, linked: true, from: 1 } } });
+    await setDoc(doc(d, "guilds", G, "services", "plain"), { name: "Q", price: 1 });
+  });
+  await assertFails(deleteDoc(doc(O, "guilds", G, "services", "listed")));
+  await assertFails(deleteDoc(doc(L, "guilds", G, "services", "listed")));
+  await assertSucceeds(deleteDoc(doc(O, "guilds", G, "services", "plain")));
+})());
 await t("officer logs a price change", assertSucceeds(setDoc(doc(O, "guilds", G, "pricelistHistory", "h1"), { serviceId: "s1", field: "price", from: "salespal", by: "off", old: 1500000, new: 1750000, at: 1 })));
 await t("member cannot write the price history", assertFails(setDoc(doc(M, "guilds", G, "pricelistHistory", "h2"), { serviceId: "s1", at: 1 })));
 await t("no one writes an unknown guild collection", assertFails(setDoc(doc(L, "guilds", G, "secrets", "x"), { ownerUid: "lead" })));

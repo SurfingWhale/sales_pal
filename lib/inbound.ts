@@ -107,14 +107,22 @@ export function mergeInbound(existing: Partial<LeadFields> | null, incoming: Lea
   const campaignOf = (src = "") => src.split(" · ").slice(2).join(" · ");
   const keptCampaign = !campaignOf(incoming.source) && campaignOf(existing.source) ? campaignOf(existing.source) : "";
   const keep = (existing.notes || "").split(" · ").filter(n => n && n !== MEMBER_NOTE && (keptCampaign || !n.startsWith("Campaign: ")) && !incoming.notes.includes(n));
+  // A public form proves nothing about who sent it, and the lead it lands on
+  // is picked by an account id nobody verified. The number and address already
+  // here stay; a different one waits in the notes for the seller to check.
+  const digits = (s = "") => s.replace(/\D/g, "");
+  const otherContact = [
+    existing.phone && incoming.phone && digits(existing.phone) !== digits(incoming.phone) ? `Nomor lain di form: ${incoming.phone}` : "",
+    existing.email && incoming.email && existing.email.toLowerCase() !== incoming.email.toLowerCase() ? `Email lain di form: ${incoming.email}` : "",
+  ];
   return {
     ...incoming,
     source: keptCampaign ? `${incoming.source} · ${keptCampaign}` : incoming.source,
     status: (RANK[existing.status || ""] ?? -1) > RANK[incoming.status] ? (existing.status as string) : incoming.status,
     score: Math.max(existing.score || 0, incoming.score),
     value: Math.max(existing.value || 0, incoming.value),
-    phone: incoming.phone || existing.phone || "",
-    email: incoming.email || existing.email || "",
-    notes: [incoming.notes, ...keep].filter(Boolean).join(" · "),
+    phone: existing.phone || incoming.phone || "",
+    email: existing.email || incoming.email || "",
+    notes: [incoming.notes, ...otherContact, ...keep].filter(Boolean).join(" · "),
   };
 }

@@ -61,6 +61,10 @@ service cloud.firestore {
     // to change: a Leader or Officer edits the package, never its `sites`.
     function sitesKeptOnCreate(coll) { return coll != 'services' || isOwner() || !('sites' in request.resource.data); }
     function sitesKeptOnUpdate(coll) { return coll != 'services' || isOwner() || request.resource.data.get('sites', null) == resource.data.get('sites', null); }
+    // Deleting a package takes it off the sites too.
+    function sitesKeptOnDelete(coll) { return coll != 'services' || isOwner() || !('sites' in resource.data); }
+    // Every price change stays on the record: added, never edited or removed.
+    function onRecord(c) { return c == 'pricelistHistory'; }
     function memberShape(d) {
       return d.keys().hasOnly(['uid', 'name', 'email', 'role', 'inviteCode', 'joinedAt', 'avatar'])
         && d.role in ['leader', 'officer', 'member', 'viewer']
@@ -115,6 +119,8 @@ service cloud.firestore {
         allow list: if manager(g);
         allow create: if request.resource.data.keys().hasOnly(['role', 'roleTitle', 'guildName', 'createdBy', 'createdAt', 'expiresAt'])
           && request.resource.data.createdBy == request.auth.uid && request.resource.data.expiresAt is number
+          // The link works for anyone who holds it, so it can't live for long.
+          && request.resource.data.expiresAt <= request.time.toMillis() + 30 * 86400000
           && ((hasRole(g, ['leader']) && request.resource.data.role in ['officer', 'member', 'viewer'])
               || (hasRole(g, ['officer']) && request.resource.data.role in ['member', 'viewer']));
         allow delete: if manager(g);
@@ -156,9 +162,9 @@ service cloud.firestore {
         allow update: if (ownedData(coll) && (manager(g)
               || (seller(g) && resource.data.ownerUid == request.auth.uid
                   && request.resource.data.ownerUid == resource.data.ownerUid)))
-          || (catalog(coll) && manager(g) && notToolsUnlessLeader(g, coll, id) && sitesKeptOnUpdate(coll));
+          || (catalog(coll) && !onRecord(coll) && manager(g) && notToolsUnlessLeader(g, coll, id) && sitesKeptOnUpdate(coll));
         allow delete: if (ownedData(coll) && (manager(g) || (seller(g) && resource.data.ownerUid == request.auth.uid)))
-          || (catalog(coll) && manager(g) && notToolsUnlessLeader(g, coll, id));
+          || (catalog(coll) && !onRecord(coll) && manager(g) && notToolsUnlessLeader(g, coll, id) && sitesKeptOnDelete(coll));
       }
       // A client's chats, content and reports go with the client's owner.
       match /clients/{c}/{sub}/{id} {
@@ -174,7 +180,13 @@ service cloud.firestore {
           || (inGuild(g) && (resource.data.who == request.auth.uid || resource.data.get('about', '') == request.auth.uid));
         allow create: if inGuild(g) && request.resource.data.who == request.auth.uid
           && request.resource.data.keys().hasOnly(['who', 'whoName', 'what', 'ref', 'refName', 'detail', 'about', 'at'])
-          && request.resource.data.what is string && request.resource.data.at is number;
+          && str(request.resource.data.what, 40) && request.resource.data.at is number
+          // Stamped by the phone, which may sync late, but never far from now.
+          && request.resource.data.at > request.time.toMillis() - 7 * 86400000
+          && request.resource.data.at < request.time.toMillis() + 86400000
+          && opt(request.resource.data, 'whoName', 120) && opt(request.resource.data, 'about', 128)
+          && opt(request.resource.data, 'ref', 200) && opt(request.resource.data, 'refName', 200)
+          && opt(request.resource.data, 'detail', 1000);
         allow update, delete: if false;
       }
     }
