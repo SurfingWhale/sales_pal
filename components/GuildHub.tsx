@@ -228,7 +228,7 @@ export default function GuildHub({ uid, name, email, onUseSpace }: { uid: string
             </>
           )}
           {view === "report" && <TeamReport gid={gid} guild={guild} me={me} members={members} deals={deals} targets={targets} reports={reports} />}
-          {view === "aktivitas" && isSeller(role) && <Activities gid={gid} me={me} />}
+          {view === "aktivitas" && isSeller(role) && <Activities gid={gid} me={me} members={members} />}
           {view === "anggota" && <Members gid={gid} guild={guild} me={me} members={members} invites={invites} uid={uid} onSettings={() => setEditing(true)} />}
         </>
       )}
@@ -908,7 +908,7 @@ function ago(at: number): string {
   return new Date(at).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
 }
 
-function Activities({ gid, me }: { gid: string; me: Member }) {
+function Activities({ gid, me, members }: { gid: string; me: Member; members: Member[] }) {
   const [items, setItems] = useState<Activity[] | null>(null);
   useEffect(() => {
     const col = collection(db, "guilds", gid, "activities");
@@ -938,7 +938,7 @@ function Activities({ gid, me }: { gid: string; me: Member }) {
         {items.map(a => (
           <div key={a.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "10px 0", borderBottom: "1px solid var(--app-inner)", fontSize: 12.5 }}>
             <div style={{ minWidth: 0 }}>
-              <b>{a.who === me.uid ? "Kamu" : a.whoName}</b> {ACTIVITY_TEXT[a.what] || a.what}
+              <b>{a.who === me.uid ? "Kamu" : members.find(m => m.uid === a.who)?.name || a.whoName}</b> {ACTIVITY_TEXT[a.what] || a.what}
               {a.refName && <> · <b>{a.refName}</b></>}
               {a.detail && <span style={{ color: "var(--app-muted)" }}> · {a.detail}</span>}
             </div>
