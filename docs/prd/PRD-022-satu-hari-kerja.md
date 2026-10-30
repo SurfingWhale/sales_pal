@@ -61,27 +61,26 @@ Lembar kerja prospek (PRD-019 §3.4) dan lembar kerja lead memakai pola yang sam
 
 ## 5. Biaya: bisa jualan murah?
 
-**Jawaban singkat: bisa, kecuali hosting.** Rincian dan sumber ada di audit.
+**Budget sekarang Rp 0 (keputusan owner, 31 Okt).** Semua jalan manual sampai ada uang, jadi tidak ada fitur berbayar di rencana ini. Rp 300.000 per bulan adalah rencana nanti. Urutan bayarnya ada di halaman Notion *Budget SalesPal*. Rincian dan sumber harga ada di audit.
 
-| Pos | Per bulan |
-|---|---|
-| WhatsApp manual | Rp 0 |
-| Firebase Spark | Rp 0, berhenti di batas, tidak menagih |
-| Cari di Maps | Rp 0 sampai 900 panggilan, dikunci di app |
-| Domain | ±Rp 18.000 |
-| Email manual | Rp 0 di mailbox gratis, tambah ±Rp 11.000–18.000 buat domain kedua |
-| Baca gambar | ±Rp 6 per scan kalau pindah ke Gemini |
-| **Total tanpa Vercel Pro** | **±Rp 18.000–36.000** |
-| Vercel Pro, kalau wajib | Rp 363.000: sendirian melewati budget Rp 300.000 |
+| Pos | Sekarang | Kalau ada uang, per bulan |
+|---|---|---|
+| WhatsApp | Rp 0, manual | Rp 0 |
+| Firebase Spark | Rp 0, berhenti di batas, tidak menagih | Rp 0 |
+| Cari di Maps | Rp 0 sampai 900 panggilan, dikunci di app | Rp 0 |
+| Domain | Belum, pakai alamat `vercel.app` | ±Rp 18.000 |
+| Email | Manual, sesekali | ±Rp 11.000–18.000 buat domain kedua |
+| Baca gambar | Dimatikan: tempel teks atau Excel | ±Rp 6 per scan lewat Gemini |
+| Vercel Pro | Belum | Rp 363.000: sendirian melewati Rp 300.000 |
 
 ### 5.1 Hosting
-Vercel Hobby tidak boleh dipakai komersial. Paket yang aktif belum terbaca lewat API. Keputusan owner: cek paketnya, lalu pilih bayar Pro, pindah hosting, atau terima risikonya.
+Vercel Hobby tidak boleh dipakai komersial. Paket yang aktif belum terbaca lewat API. Selama budget Rp 0, app tetap di paket yang sekarang dan risikonya diterima sementara. Owner mengecek paketnya di dashboard.
 
 ### 5.2 Email
-PRD-016 merencanakan Resend. Resend, SES, Mailgun, Postmark, dan Brevo melarang cold email atau mewajibkan opt-in. Email dingin dikirim manual dari mailbox biasa, maksimal 20 per hari setelah pemanasan 3–4 minggu.
+PRD-016 merencanakan Resend. Resend, SES, Mailgun, Postmark, dan Brevo melarang cold email atau mewajibkan opt-in. Selama budget Rp 0 email dikirim sendiri sesekali. Kalau nanti dipakai serius: mailbox biasa di domain kedua, maksimal 20 per hari setelah pemanasan 3–4 minggu.
 
 ### 5.3 WhatsApp
-Tidak ada angka aman resmi. Satu vendor melaporkan peringatan di 300 chat tak terbalas per bulan, jadi perencanaannya 10–14 chat baru per hari kerja. API resmi hanya buat yang sudah opt-in: Rp 586 per pesan marketing, jadi Rp 300.000 setara ±460 pesan termasuk PPN.
+Tidak ada angka aman resmi. Satu vendor melaporkan peringatan di 300 chat tak terbalas per bulan, jadi perencanaannya 10–14 chat baru per hari kerja. Semua dikirim manual. API resmi nanti hanya buat yang sudah opt-in: Rp 586 per pesan marketing, jadi Rp 300.000 setara ±460 pesan termasuk PPN.
 
 ### 5.4 Yang membatasi
 Bukan uang, tapi jumlah kontak aman per hari dan follow-up. Dengan 12 chat per hari kerja, sebulan ±260 kontak. Hitungan buat harga paket Rp 450.000:
@@ -120,14 +119,14 @@ Rules: koleksi di atas sudah tertutup. `firestore.rules` tetap dites per peran s
 
 | Fase | Isi | Selesai kalau |
 |---|---|---|
-| 0 | Temuan P1 audit: script salah tahap, tiga tombol, Mereka bales, warna; Q2, Q3, Q5, Q7, Q8, Q9 | Flow `sehari kerja` lulus dengan langkah baru |
+| 0 | Temuan P1 audit: script salah tahap, tiga tombol, Mereka bales, warna; Q2, Q3, Q5, Q7, Q8, Q9; Scan gambar tampil sebagai "belum aktif", arahkan ke tempel teks atau Excel | Flow `sehari kerja` lulus dengan langkah baru |
 | 1 | Pesan + Script Management + konfirmasi kirim (QA-4 Chat) | Intro 12 lead beruntun tanpa balik ke daftar |
 | 2 | Tambah lead satu pintu, Pilih semua, cek dobel di Maps dan Excel (Q12, Q13) | Beda ejaan dengan nomor sama ketahuan |
 | 3 | Biaya alat | Kamera 15 juta menghasilkan margin masuk akal |
 | 4 | Hunting Workspace: Island, tab Leads, cari gabungan (Q11) | Cari nama lead di Hunting ketemu |
 | 5 | Performa ringkas, rekap harian jujur | "Berapa kekirim hari ini" satu angka |
 | 6 | Peta: cari, layar penuh, pin (PRD-019 §3.1) | Di-grill dulu |
-| 7 | Email manual, tulis ulang PRD-016 | Di-grill dulu |
+| 7 | Email, tulis ulang PRD-016 | Nunggu budget, di-grill dulu |
 
 Fase 1 sebelum Fase 4 karena Hunting tidak berguna kalau kirimnya belum enak.
 
@@ -142,6 +141,6 @@ Sebelum PR: `PROD=1`, karena CI memakai production build dan `next dev` tidak me
 - **Hosting:** §5.1.
 - **Target harian:** 12 itu perkiraan dari laporan vendor. Sesuaikan kalau ada peringatan dari WhatsApp.
 - **Hukum:** kirim iklan elektronik diizinkan PP 80/2019, tapi nomor HP pribadi termasuk data pribadi di UU PDP. PP 33/2026 berlaku 16 Januari 2027. Ada risiko abu-abu buat cold chat ke nomor pribadi, jadi lead perlu status Jangan dihubungi dan penghapusan yang cepat. Ini bukan nasihat hukum: tanyakan ke ahli hukum sebelum outreach dibuat lebih masif.
-- **Scan gambar:** pindah penyedia atau matikan. Teks klien dikirim ke pihak ketiga, dan paket gratis Gemini memakai konten buat melatih produknya.
+- **Scan gambar:** mati selama budget Rp 0. Kalau nanti dinyalakan lewat Gemini, pakai yang berbayar: teks klien dikirim ke pihak ketiga, dan paket gratisnya memakai konten buat melatih produk.
 - **App Check:** keputusan terpisah karena menyentuh tiga situs.
 - **Draft pesan:** "Simpan draft" di mock ditunda.

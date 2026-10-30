@@ -72,7 +72,7 @@ P1 = menghalangi kerja harian. P2 = bikin lambat atau bingung. P3 = rapikan.
 
 ## Biaya
 
-Kurs ±Rp 18.100 per dolar. Harga per Oktober 2026.
+Budget sekarang Rp 0, jadi semua dikerjakan manual. Harga di bawah buat nanti kalau sudah ada uang. Kurs ±Rp 18.100 per dolar, harga per Oktober 2026.
 
 | Pos | Harga | Catatan |
 |---|---|---|
