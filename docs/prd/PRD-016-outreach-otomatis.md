@@ -41,7 +41,7 @@ Semua yang dihitung per pemakaian dapat batas bulanan di app. Budget alert saja 
 ### A. Email otomatis 3 langkah (dibangun pertama)
 Alasannya: paling cepat jalan, paling murah, dan tidak menunggu review Meta.
 
-- **Persiapan owner:** domain pengirim (mis. `halo@<domain>`), SPF + DKIM + DMARC di DNS, dan akun layanan kirim (Resend atau sejenisnya). Env: `EMAIL_API_KEY`, `OUTREACH_FROM`.
+- **Persiapan owner:** domain pengirim (mis. `halo@<domain>`), SPF + DKIM + DMARC di DNS, dan akun layanan kirim (Resend atau sejenisnya). **Koreksi 31 Okt:** Resend, SES, Mailgun, Postmark, dan Brevo melarang cold email atau mewajibkan opt-in, jadi bagian ini perlu ditulis ulang (PRD-022 §5.2). Env: `EMAIL_API_KEY`, `OUTREACH_FROM`.
 - **Urutan per kampanye:** Perkenalan (hari 0) → Follow-up (hari 3) → Penutup (hari 7). Template pakai variabel PRD-012 §5 (`{nama} {kelemahan} {rating} {bisnis} {jasa}`) + link penawaran atau pricelist (PRD-017). Versi AI di fase D.
 - **Masuk urutan cuma kalau dipilih owner.** Di Leads atau hasil Cari bisnis ada centang **"Masukkan ke urutan email"**, dan cuma lead yang punya email yang bisa dicentang. Tidak ada kirim ke semua lead.
 - **Pengiriman:** Vercel Cron tiap jam kerja (Senin–Jumat, 09–16 WIB), maksimal `OUTREACH_DAILY_LIMIT` (bawaan 25) per hari untuk seluruh akun, dengan jeda acak.
