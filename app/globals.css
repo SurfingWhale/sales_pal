@@ -934,6 +934,18 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 @media (max-width: 640px) {
   .modal-overlay:not(.print-overlay) > [aria-modal] { animation: sp-sheet-in .22s cubic-bezier(.2, .8, .2, 1); }
 }
+/* A popover (Profil & Pengaturan): on a wider screen it hangs under the
+   button that opened it, at --pop-top/--pop-right, with no scrim — a click
+   outside still closes it. A phone keeps the full-screen sheet above. */
+@media (min-width: 641px) {
+  .modal-overlay.sp-popover { display: block; padding: 0; background: transparent; }
+  .modal-overlay.sp-popover > [aria-modal] {
+    position: absolute; top: var(--pop-top, 64px); right: var(--pop-right, 16px);
+    width: min(400px, calc(100vw - 32px)) !important; max-height: calc(100dvh - var(--pop-top, 64px) - 16px);
+    overflow-y: auto; overscroll-behavior: contain;
+    border-radius: var(--r-l) !important; box-shadow: var(--panel-shadow); transform-origin: top right;
+  }
+}
 @media (hover: none) {
   button:not(:disabled):active, [role="button"]:active, .sp-sub-btn:active { transform: scale(.97); transition: transform .08s ease-out; }
 }

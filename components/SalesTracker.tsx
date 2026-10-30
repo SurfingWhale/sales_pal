@@ -291,6 +291,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   // "Atur target": a small sheet with Batal/Simpan instead of the browser's prompt().
   const bellBtn = useRef<HTMLButtonElement>(null);
   const bellPop = useRef<HTMLDivElement>(null);
+  const profileBtn = useRef<HTMLButtonElement>(null);
   // What sticks under the header (Hunting's tabs, "‹ Daftar") sits at its real
   // height: the session bar and a section's sub-tabs change it.
   const topRef = useRef<HTMLElement>(null);
@@ -1002,7 +1003,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               <Icon name="bell" size={19} stroke={1.6} />
               {todo.some(t => t.when <= now) && <span aria-hidden="true" style={{ position: "absolute", top: 10, right: 11, width: 8, height: 8, borderRadius: "50%", background: "#005eb0", boxShadow: "0 0 0 2px var(--app-bg)" }} />}
             </button>
-            <button className="sp-iconbtn" onClick={() => { setShowProfile(true); setUpdateInfo(null); }} aria-label="Profil dan pengaturan" title="Profil & pengaturan">
+            <button ref={profileBtn} className="sp-iconbtn" aria-haspopup="dialog" aria-expanded={showProfile} onClick={() => { setShowProfile(true); setUpdateInfo(null); }} aria-label="Profil dan pengaturan" title="Profil & pengaturan">
               <MeAvatar avatar={myAvatar} name={user.displayName || user.email || "U"} size={32} />
             </button>
           </div>
@@ -1335,7 +1336,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       {showProfile && (
         <ProfileSheet uid={user.uid} name={user.displayName || ""} email={user.email || ""} version={APP_VERSION} isDark={isDark} onTheme={toggleTheme}
           onCheckUpdate={checkUpdate} checking={checkingUpdate} update={updateInfo} onRefresh={clearCacheAndReload} refreshing={clearing}
-          onLogout={handleLogout} onClose={() => setShowProfile(false)} />
+          onLogout={handleLogout} onClose={() => setShowProfile(false)} anchor={profileBtn} />
       )}
 
       {/* Atur target closing */}
