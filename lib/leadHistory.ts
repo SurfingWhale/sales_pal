@@ -40,6 +40,9 @@ export function leadHistory(l: { id: string; name: string; lastReplyAt?: string 
 
 /** "2 penawaran · 1 invoice": what's on file, at a glance. */
 export function historySummary(items: HistoryItem[]): string {
-  const n = (k: HistoryItem["kind"]) => items.filter(i => i.kind === k).length;
-  return [n("penawaran") && `${n("penawaran")} penawaran`, n("invoice") && `${n("invoice")} invoice`].filter(Boolean).join(" · ");
+  // Plain counts on purpose: Next 14.2's minifier turned a small counting
+  // helper here into a crash (`items is not defined`) in the production build.
+  const quotes = items.filter(i => i.kind === "penawaran").length;
+  const invoices = items.filter(i => i.kind === "invoice").length;
+  return [quotes && `${quotes} penawaran`, invoices && `${invoices} invoice`].filter(Boolean).join(" · ");
 }
