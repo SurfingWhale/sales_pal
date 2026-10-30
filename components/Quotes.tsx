@@ -32,7 +32,7 @@ function blank(b: Business, lead?: LeadRef): DocDraft {
   };
 }
 
-export default function Quotes({ quotes, invoices, leads, services, components, templates, business, startFor, onStarted, onInvoiceCreated }: {
+export default function Quotes({ quotes, invoices, leads, services, components, templates, business, startFor, onStarted, onInvoiceCreated, openId, onOpened }: {
   quotes: Quote[];
   invoices: Invoice[];
   leads: LeadRef[];
@@ -42,6 +42,8 @@ export default function Quotes({ quotes, invoices, leads, services, components, 
   business: Business;
   startFor: LeadRef | null;
   onStarted: () => void;
+  openId?: string | null;          // open this quote right away (from a lead's Riwayat)
+  onOpened?: () => void;
   onInvoiceCreated: () => void;
 }) {
   const space = useSpace();
@@ -99,6 +101,10 @@ export default function Quotes({ quotes, invoices, leads, services, components, 
   useEffect(() => {
     if (startFor) { setEditing(blank(business, startFor)); onStarted(); }
   }, [startFor, onStarted]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const q = openId ? quotes.find(x => x.id === openId) : null;
+    if (q) { setPrinting(q); onOpened?.(); }
+  }, [openId, quotes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sorted = quotes.slice().sort((a, b) => b.date.localeCompare(a.date) || b.number.localeCompare(a.number));
   const shown = filter === "All" ? sorted : sorted.filter(q => q.status === filter);

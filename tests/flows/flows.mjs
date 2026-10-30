@@ -201,8 +201,6 @@ async function addLead(page, name, { value } = {}) {
   await expectText(page, name);
 }
 
-// Leads (PRD-008): on a wide screen a lead opens in the panel beside the
-// list; on a phone it opens as a full-screen profile.
 const isWide = (page) => (page.viewportSize()?.width || 0) >= 1024;
 
 // The street map's tiles come from OpenFreeMap; tests draw a plain background
@@ -217,11 +215,10 @@ async function openLeadRow(page, name) {
   await closeAll(page);
   await go(page, "Jualan", "Leads");
   await page.locator(".lead-row", { hasText: name }).first().click();
-  if (!isWide(page)) await page.getByRole("dialog", { name: new RegExp(`^Profil ${name}`) }).waitFor();
+  await page.getByRole("dialog", { name: new RegExp(`^Profil ${name}`) }).waitFor();
 }
-// The full profile: already open on a phone, behind "Profil lengkap" on desktop.
+// A lead opens as one worksheet on every screen (PRD-021).
 async function fullProfile(page) {
-  if (isWide(page)) await page.getByRole("button", { name: "Profil lengkap" }).click();
   await page.getByRole("dialog", { name: /^Profil / }).waitFor();
 }
 // The "Kenapa" list: always shown in the panel, folded on the phone profile.
@@ -378,7 +375,7 @@ export const flows = [
         await expectText(t.page, "Latihan jawab customer sebelum ketemu beneran");
         if (await t.page.locator(".sp-subhint").count()) throw new Error("Simulator says what it's for twice");
         await go(t.page, "Jualan", "Leads");
-        await expectText(t.page, "Semua calon customer: skor potensi");
+        await expectText(t.page, "Semua calon customer: siapa yang belum dikontak");
       });
       // WCAG 1.4.10: every place reflows at 320px (= 200% zoom) without sideways scroll.
       await t.step("no sideways scroll on any of them, also at 320px", async () => {
@@ -436,10 +433,10 @@ export const flows = [
       });
       await t.step("add a lead worth 5jt", () => addLead(t.page, "Kopi Flow", { value: "5jt" }));
       await t.step("filter Cold shows it", async () => { await t.page.locator("#status-filter").selectOption("Cold"); await expectText(t.page, "Kopi Flow"); });
-      await t.step("a new Cold lead isn't contacted yet: Belum dihubungi finds it", async () => {
+      await t.step("a new Cold lead isn't contacted yet: Belum dikontak finds it", async () => {
         await t.page.locator("#status-filter").selectOption("All");
         const views = t.page.getByRole("group", { name: "Tampilan cepat" });
-        await views.getByRole("button", { name: /^Belum dihubungi/ }).click();
+        await views.getByRole("button", { name: /^Belum dikontak/ }).click();
         await expectText(t.page, "Kopi Flow");
         await views.getByRole("button", { name: /^Semua/ }).click();
       });
@@ -454,17 +451,11 @@ export const flows = [
         await t.page.getByPlaceholder(/Kirim portfolio/).fill("Kirim portfolio");
         await t.page.getByRole("button", { name: "Besok" }).click();
         await t.page.getByRole("button", { name: "Simpan jadwal" }).click();
-        // Saved: the phone's sheet closes by itself; the panel's editor folds.
+        // Saved: the sheet closes by itself.
         await t.page.getByRole("button", { name: "Simpan jadwal" }).waitFor({ state: "detached" });
         await expectText(t.page, "Kenapa 75");
         await expectText(t.page, "Potensi tinggi");
         await closeAll(t.page);
-      });
-      await t.step("the Tinggi filter finds it", async () => {
-        await go(t.page, "Jualan", "Leads");
-        await t.page.getByRole("button", { name: /^Tinggi/ }).click();
-        await expectText(t.page, "Kopi Flow");
-        await t.page.getByRole("group", { name: "Saring menurut potensi" }).getByRole("button", { name: /^Semua/ }).click();
       });
       await t.step("it sits on the lead map as Cepat closing, and opens from there", async () => {
         await go(t.page, "Beranda");
@@ -781,8 +772,69 @@ export const flows = [
         await modal(page).getByText(/Mirip lead yang udah ada: Kopi Tempel Flow \(no HP sama\)/).waitFor();
         await modal(page).getByRole("button", { name: "Buka yang udah ada" }).click();
         await page.locator("#nl-paste").waitFor({ state: "detached" });
-        if (!isWide(page)) await page.getByRole("dialog", { name: /^Profil Kopi Tempel Flow/ }).waitFor();
-        else await expectText(page, "Kopi Tempel Flow");
+        await page.getByRole("dialog", { name: /^Profil Kopi Tempel Flow/ }).waitFor();
+      });
+    },
+  },
+  {
+    name: "satu funnel: a stamped date isn't a contact, the card says what's next, Riwayat tells the story",
+    async run(t) {
+      const { page, project } = t;
+      const card = (name) => page.locator("article", { has: page.locator(".lead-row", { hasText: name }) });
+      await t.step("sign up, with leads imported before 29 Okt and one offer out", async () => {
+        const email = await signup(t);
+        const uid = await uidOf(project, email);
+        if (!uid) throw new Error(`no emulator user for ${email}`);
+        const lead = (name, more) => ({ name, contact: "", source: "Google Maps", status: "Cold", email: "", phone: "081234560001", category: "Health", notes: "", lastContact: daysAgo(8), value: 0, ...more });
+        await seedDocs(project, [
+          [`users/${uid}/leads/fn_stamped`, lead("Yoga Stempel", { geo: { lat: -6.2, lng: 106.8, by: "maps" } })],
+          [`users/${uid}/leads/fn_nonum`, lead("Yoga Tanpa Nomor", { phone: "" })],
+          [`users/${uid}/leads/fn_offer`, lead("Yoga Ditawar", { phone: "081234560002", status: "Warm", lastContact: daysAgo(3) })],
+          [`users/${uid}/quotes/fn_q1`, {
+            number: "Q-FUNNEL-1", leadId: "fn_offer", leadName: "Yoga Ditawar", contact: "", phone: "", items: [{ name: "Paket foto", qty: 1, price: 1_500_000, description: "" }],
+            discount: 0, dpPercent: 50, notes: "", date: daysAgo(2), validUntil: daysAgo(-12), status: "Terkirim", sentAt: daysAgo(2),
+          }],
+          [`users/${uid}/pitchTemplates/fn_intro`, { title: "Kenalan buat studio yoga", body: "Halo {nama}, aku fotografer di Bintaro.", stage: "intro" }],
+        ]);
+        await page.reload();
+        await page.waitForURL("**/dashboard");
+      });
+      await t.step("a date stamped on import isn't a contact: it reads Belum dikontak, with Kirim intro", async () => {
+        await go(page, "Jualan", "Leads");
+        await card("Yoga Stempel").getByText("Belum dikontak", { exact: true }).waitFor();
+        await card("Yoga Stempel").getByRole("button", { name: "Kirim intro: Yoga Stempel" }).waitFor();
+        await page.getByRole("group", { name: "Tampilan cepat" }).getByRole("button", { name: /^Belum dikontak 2/ }).waitFor();
+        await t.audit("Leads: status, what's missing, one button");
+      });
+      await t.step("no number: the card says so and asks for it", async () => {
+        await card("Yoga Tanpa Nomor").getByText("Kurang: No HP, Lokasi").waitFor();
+        await card("Yoga Tanpa Nomor").getByRole("button", { name: "Tambah nomor: Yoga Tanpa Nomor" }).click();
+        await page.getByRole("dialog", { name: "Profil", exact: true }).waitFor();
+        await closeAll(page);
+      });
+      await t.step("Kirim intro opens the scripts on Intro, not Follow-up", async () => {
+        await card("Yoga Stempel").getByRole("button", { name: "Kirim intro: Yoga Stempel" }).click();
+        const picker = page.getByRole("dialog", { name: /^Chat ke / });
+        await picker.getByRole("radio", { name: /Intro/ }).and(page.locator('[aria-checked="true"]')).waitFor();
+        await picker.getByRole("button", { name: /Kenalan buat studio yoga/ }).waitFor();
+        await closeAll(page);
+      });
+      await t.step("the lead's page: where it stands, the next message, and Riwayat opens the offer", async () => {
+        await openLeadRow(page, "Yoga Ditawar");
+        const sheet = page.getByRole("dialog", { name: /^Profil Yoga Ditawar/ });
+        await sheet.getByText("Penawaran terkirim").waitFor();
+        await sheet.getByRole("heading", { name: /^Pesan berikutnya/ }).waitFor();
+        await sheet.getByText("1 penawaran").waitFor();
+        await t.audit("A lead's worksheet with its Riwayat");
+        await sheet.getByRole("button", { name: /^Buka Penawaran Q-FUNNEL-1/ }).click();
+        await page.locator(".sp-print-head").waitFor();
+        await closeAll(page);
+      });
+      await t.step("search finds the customer by the offer's number", async () => {
+        await go(page, "Jualan", "Leads");
+        await page.locator("#lead-search").fill("Q-FUNNEL-1");
+        await page.locator(".lead-row", { hasText: "Yoga Ditawar" }).waitFor();
+        await page.locator(".lead-row", { hasText: "Yoga Stempel" }).waitFor({ state: "detached" });
       });
     },
   },
@@ -880,7 +932,7 @@ export const flows = [
         await page.locator("#biz-name").waitFor({ state: "detached" });
         await go(page, "Jualan", "Penawaran");
       });
-      await t.step("accepting closed the lead", async () => { await go(page, "Jualan", "Leads"); await page.locator(".lead-row", { hasText: "Bakso Flow" }).getByText("Closed").first().waitFor(); });
+      await t.step("accepting closed the lead", async () => { await go(page, "Jualan", "Leads"); await page.locator(".lead-row", { hasText: "Bakso Flow" }).getByText("Deal", { exact: true }).first().waitFor(); });
       await t.step("raise the DP invoice: one term, as a draft", async () => {
         await go(page, "Jualan", "Penawaran");
         await page.getByRole("button", { name: "Buat invoice DP 50% →" }).click();
@@ -1275,6 +1327,19 @@ export const flows = [
         await seedDocs(project, bigAccount(uid));
         await page.reload();
         await page.waitForURL("**/dashboard");
+      });
+      await t.step("Leads scrolled far: the header is solid, the funnel stays, tapping the tab goes back up", async () => {
+        await go(page, "Jualan", "Leads");
+        await page.evaluate(() => window.scrollTo(0, 1800));
+        await page.waitForTimeout(150);
+        const { bg, gap } = await page.evaluate(() => ({
+          bg: getComputedStyle(document.querySelector(".sp-top")).backgroundColor,
+          gap: document.querySelector(".sp-leads-bar").getBoundingClientRect().top - document.querySelector(".sp-top").getBoundingClientRect().bottom,
+        }));
+        if (/rgba\(.*, 0\)|transparent/.test(bg)) throw new Error(`the header shows what's under it (${bg})`);
+        if (Math.abs(gap) > 1) throw new Error(`the funnel row isn't under the header (off by ${gap}px)`);
+        await page.locator(".sp-sub-btn", { hasText: /^Leads$/ }).click();
+        await page.waitForFunction(() => window.scrollY === 0, null, { timeout: 2000 });
       });
       await t.step("Peta 3D: leads with a point show as pins; a pin opens its card with Rute", async () => {
         await stubMap(page);
@@ -2170,10 +2235,10 @@ export const flows = [
       const acct = { provider: "google.com", uid: `flow${Date.now()}`, project: "visufavor" };
       await t.step("a member signs up on the site", () => sendInbound(project, { ...base, contact: { name: "Rina Flow", email: "rina@contoh.id" }, attribution: { utm_source: "threads", utm_campaign: "flow" }, account: acct }));
       await t.step("the owner signs in", () => ownerLogin(t));
-      await t.step("the member shows as a Cold lead", async () => { await go(page, "Jualan", "Leads"); await page.locator(".lead-row", { hasText: "Rina Flow" }).getByText("Cold").first().waitFor({ timeout: 15000 }); });
+      await t.step("the member shows as a lead nobody has contacted yet", async () => { await go(page, "Jualan", "Leads"); await page.locator(".lead-row", { hasText: "Rina Flow" }).getByText("Belum dikontak").first().waitFor({ timeout: 15000 }); });
       await t.step("the same person claims the offer", () => sendInbound(project, { ...base, contact: { name: "Rina Flow", email: "rina@contoh.id", whatsapp: "0812 3456 789", business: "Kopi Rina Flow" }, offer: { code: "VISU10-FLOWX", kind: "discount", value: 10 }, answers: { need: "Menu photos", timing: "This month", budget: "Rp 300.000" }, account: acct }));
-      await t.step("it becomes one Hot lead, not two", async () => {
-        await page.locator(".lead-row", { hasText: "Kopi Rina Flow" }).getByText("Hot").first().waitFor({ timeout: 15000 });
+      await t.step("it becomes one lead that wrote in, not two", async () => {
+        await page.locator(".lead-row", { hasText: "Kopi Rina Flow" }).getByText("Dibales hari ini").first().waitFor({ timeout: 15000 });
         const n = await page.locator(".lead-row", { hasText: "Rina Flow" }).count();
         if (n !== 1) throw new Error(`${n} rows for one person`);
       });
@@ -2300,20 +2365,13 @@ export const flows = [
         await addLead(page, "Keyboard Flow");
         await page.locator(".lead-row", { hasText: "Keyboard Flow" }).first().focus();
         await page.keyboard.press("Enter");
-        if (isWide(page)) {
-          // Desktop: Enter shows it in the panel; its full profile is the dialog.
-          await page.getByRole("complementary", { name: "Detail lead" }).waitFor();
-          await page.getByRole("button", { name: "Profil lengkap" }).focus();
-          await page.keyboard.press("Enter");
-        }
         await page.getByRole("dialog").waitFor();
       });
       await t.step("Escape closes it and focus returns to what opened it", async () => {
         await page.keyboard.press("Escape");
         await page.getByRole("dialog").waitFor({ state: "detached" });
         const back = await page.evaluate(() => document.activeElement?.getAttribute("aria-label") || document.activeElement?.textContent?.trim());
-        const want = isWide(page) ? "Profil lengkap" : "Buka lead Keyboard Flow";
-        if (back !== want) throw new Error(`focus went to "${back}"`);
+        if (back !== "Buka lead Keyboard Flow") throw new Error(`focus went to "${back}"`);
       });
       await t.step("the add-lead dialog focuses its first field and keeps Tab inside", async () => {
         await page.getByRole("button", { name: /tambah lead/i }).click();

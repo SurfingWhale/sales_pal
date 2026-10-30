@@ -1,6 +1,6 @@
 # PRD-018 — Tempel apa saja → kolom terisi; scroll yang tidak bikin kerja dua kali
 
-- **Status:** fase 1 dibangun 30 Okt (§4). Fase 2 (scroll) dan 3 (Google + AI) menyusul.
+- **Status:** fase 1 dibangun 30 Okt (§4). Fase 2 (scroll) sebagian lewat PRD-021 §3.5. Fase 3 (Google + AI) menyusul.
 - **Terkait:** PRD-009 (unfurl Threads), PRD-012 (Cari bisnis, email dari website), PRD-013 (`readPlace`: membaca link Maps dan koordinat), PRD-015 (izin dan batas Google), PRD-010 dan `docs/standards/design.md` (standar native dan desain).
 
 ## 1. Masalah
@@ -67,4 +67,6 @@ Satu kolom **Tempel** di *Tambah lead* (nanti juga di target Hunting dan Lokasi 
    - **Belum:** kolom Tempel di target Hunting dan Lokasi lead; ID tempat Google sebagai kunci duplikat (lead belum menyimpannya).
    - **Tes:** flow `tempel lead` (Maps share → kolom + titik peta; website mengisi yang kosong saja; no HP sama → Buka yang udah ada). Lulus di Chromium HP & desktop dan iPhone 12 WebKit, audit HIG 0 temuan.
 2. Scroll: header dan toolbar menempel, tap nav aktif → atas, posisi kembali (Leads dulu, lalu Penawaran dan Invoice).
+   - ✅ **Lewat PRD-021 (30 Okt):** header solid, animasi ikut-scroll dibuang, baris funnel Leads menempel, tap tab aktif → atas, posisi tetap karena lembar kerja membuka di atas daftar.
+   - Belum: Penawaran dan Invoice, judul mengecil, tombol "ke atas".
 3. "Lengkapi dari Google" + AI untuk teks berantakan (pakai budget PRD-016).

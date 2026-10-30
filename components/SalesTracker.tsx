@@ -1,21 +1,22 @@
 "use client";
 
 import { ink } from "@/components/ui";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { signOut, User } from "firebase/auth";
 import { STALL_DAYS, stalledWhat, useStalledDeals } from "@/lib/stalled";
-import { LEVEL_WORD, Level, inPlay, isHigh, scoreLead } from "@/lib/score";
+import { inPlay, isHigh, scoreLead } from "@/lib/score";
 import Beranda from "@/components/Beranda";
 import BerandaReport from "@/components/BerandaReport";
 import BerandaLearn from "@/components/BerandaLearn";
-import HeatDots from "@/components/HeatDots";
-import { DetailActions, LeadPage, LeadPanel, LeadPatch, LostNote } from "@/components/LeadDetail";
-import { CATEGORIES, SOURCES, STATUS_COLOR, channelOf, firstContact, parseRupiah, statusWord } from "@/lib/leadEdit";
+import { DetailActions, LeadPage, LeadPatch, LostNote } from "@/components/LeadDetail";
+import { CATEGORIES, SOURCES, channelOf, firstContact, parseRupiah } from "@/lib/leadEdit";
 import Icon, { IconName } from "@/components/Icon";
 import ProfileSheet, { MeAvatar, useMyAvatar } from "@/components/ProfileSheet";
 import LeadFinder, { Found } from "@/components/LeadFinder";
 import PasteFill, { DupNotice, PastePlace } from "@/components/PasteFill";
 import { fillEmpty } from "@/lib/paste";
+import { missingOf, nextMove, standOf, withStand } from "@/lib/leadStand";
+import { leadHistory } from "@/lib/leadHistory";
 import { snippet } from "@/lib/places";
 import { downscaleImage } from "@/lib/image";
 import { registerWorker, takeSharedFile } from "@/lib/share";
@@ -72,7 +73,7 @@ const SECTIONS: { id: string; label: string; short: string; icon: string; tabs: 
 // Only tabs without a heading of their own get a line here; the others say
 // what they're for under their own title, and saying it twice read as clutter.
 const TAB_HINT: Record<string, string> = {
-  Leads: "Semua calon customer: skor potensi, profil, dan jadwal follow-up.",
+  Leads: "Semua calon customer: siapa yang belum dikontak, posisinya di mana, dan riwayatnya.",
   "Report Klien": "Report bulanan buat klien: konten, chat, sampai lunas.",
 };
 const sectionOf = (tab: string) => SECTIONS.find(x => x.tabs.includes(tab)) || SECTIONS[0];
@@ -260,17 +261,18 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     localStorage.setItem("sp-theme", next);
     document.documentElement.setAttribute("data-theme", next);
   }
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [storedLeads, setLeads] = useState<Lead[]>([]);
   const [outreach, setOutreach] = useState<Outreach[]>([]);
   const [rejections, setRejections] = useState<Rejection[]>([]);
   const [filterStatus, setFilterStatus] = useState("All");
-  const [filterLevel, setFilterLevel] = useState<0 | Level>(0);
   const [leadQ, setLeadQ] = useState("");
   const [leadLimit, setLeadLimit] = useState(20);
   const [leadView, setLeadView] = useState<LeadView>("semua");
   const [leadSort, setLeadSort] = useState<Sort>("skor");
   const [fuRun, setFuRun] = useState<Lead[] | null>(null);
   const [pageOpen, setPageOpen] = useState(false);
+  const [pageStart, setPageStart] = useState<"chat" | "edit" | null>(null);
+  const [openDoc, setOpenDoc] = useState<string | null>(null);   // a quote or invoice opened from a lead's Riwayat
   const wide = !useIsNarrow(1023);
   const [showAddLead, setShowAddLead] = useState(false);
   const [addLeadErr, setAddLeadErr] = useState("");
@@ -348,6 +350,9 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   // Prospect journeys and the hunting session (PRD-009), shared by the bar,
   // Hunting and Perlu Ditindak.
   const { rows: prospects, ready: prospectsReady } = useProspects(space);
+  // The list, the score and the scripts all see leads through this (PRD-021):
+  // a contact counts only if something shows it happened.
+  const leads = useMemo(() => withStand(storedLeads, { outreach, hunts, quotes, invoices }), [storedLeads, outreach, hunts, quotes, invoices]);
   const strategy = useStrategy(space);
   const huntSession = useHuntSession(space);
   const stuck = useStalledDeals(uid);
@@ -621,13 +626,14 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     await deleteDoc(spaceDoc(space, "leads", id));
   }
 
-  function openLead(lead: Lead) {
+  function openLead(lead: Lead, start: "chat" | "edit" | null = null) {
     setSelectedLead(lead);
     setFu({ action: lead.nextAction || "", date: lead.nextActionDate || "" });
-    if (wide) { setActiveTab("Leads"); setPageOpen(false); } else setPageOpen(true);
+    setPageStart(start);
+    setPageOpen(true);
   }
 
-  // Everything a lead's panel or page can do (components/LeadDetail.tsx).
+  // Everything a lead's page can do (components/LeadDetail.tsx).
   function leadActions(l: Lead): DetailActions {
     return {
       onSaveProfile: profile => updateDoc(spaceDoc(space, "leads", l.id), { profile }),
@@ -723,6 +729,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
   // Done: log today as the last contact and clear the reminder.
   async function doneFollowUp(id: string) {
+    const l = leads.find(x => x.id === id);
+    if (l) await logContact(l, `Follow-up: ${l.nextAction || "selesai"}`);
     await updateDoc(spaceDoc(space, "leads", id), { nextAction: "", nextActionDate: "", lastContact: today() });
     setFu({ action: "", date: "" });
   }
@@ -785,7 +793,6 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   // Search every field, a quick view, then the chosen order (lib/leadQuery.ts).
   const filteredLeads = sortLeads(
     (filterStatus === "All" ? leads : leads.filter(l => l.status === filterStatus))
-      .filter(l => !filterLevel || sc(l).level === filterLevel)
       .filter(l => inView(l, leadView, today()))
       .filter(l => matches(l, leadQ)),
     leadSort, l => sc(l).total);
@@ -913,7 +920,9 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       {askSheet}
       <style>{`
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: var(--app-card); } ::-webkit-scrollbar-thumb { background: var(--app-border); border-radius: 4px; }
-        .sp-top { position: sticky; top: 0; z-index: 50; }
+        /* Solid: what scrolls under it must not show through the tabs. */
+        .sp-top { position: sticky; top: 0; z-index: 50; background: var(--app-bg); }
+        .sp-leads-bar { position: sticky; top: var(--sp-head, 68px); z-index: 6; background: var(--app-bg); padding-block: 8px; margin-top: 4px !important; }
         .sp-top-in { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 0 32px; height: 68px; display: flex; align-items: center; gap: 24px; }
         .sp-nav { margin: 0 auto; display: flex; gap: 2px; padding: 3px; border-radius: 999px; }
         .sp-nav-btn { position: relative; height: 44px; padding: 0 16px; display: flex; align-items: center; gap: 6px; border: none; border-radius: 999px; background: transparent; color: var(--app-ink-2); font: 500 14px 'Plus Jakarta Sans', sans-serif; cursor: pointer; white-space: nowrap; }
@@ -968,23 +977,12 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           .sp-chiprow { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding-inline: 16px; scroll-padding-inline: 16px; }
           .sp-chiprow::-webkit-scrollbar { display: none; }
         }
-        /* Scrolling feels alive: the header gains its edge as content slides
-           under it, and each block rises into place as it enters the screen.
-           Transform only (contrast never dips); off under Reduce Motion. */
+        /* The header gains its edge as content slides under it. Nothing else
+           moves with the scroll: the page goes where the finger goes (PRD-018 §3). */
         @supports (animation-timeline: scroll()) {
           .sp-top::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--app-border); opacity: 0; pointer-events: none;
             animation: sp-edge linear both; animation-timeline: scroll(root); animation-range: 0 56px; }
           @keyframes sp-edge { to { opacity: 1; } }
-        }
-        @supports (animation-timeline: view()) {
-          /* A moving ancestor would trap a fixed dialog inside it, so a block
-             that holds an open dialog (or the pinned undo bar) stays still. */
-          @media (prefers-reduced-motion: no-preference) {
-            .sp-main > * > :not(.modal-overlay):not(.sp-toast):not([role="tablist"]):not(style):not(:has(.modal-overlay, .sp-toast, [role="dialog"])) {
-              animation: sp-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 45%;
-            }
-            @keyframes sp-rise { from { transform: translateY(32px) scale(.98); } to { transform: none; } }
-          }
         }
         /* A small phone with the workspace picker: the paw alone says SalesPal,
            so the bell and the avatar keep their place on screen. */
@@ -1026,7 +1024,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               const on = sectionOf(activeTab).id === sec.id;
               return (
                 <button key={sec.id} className={`sp-nav-btn${on ? " is-on" : ""}`} aria-current={on ? "page" : undefined}
-                  onClick={() => { if (!on) setActiveTab(sec.tabs[0]); }}>
+                  onClick={() => { if (on) window.scrollTo({ top: 0 }); else setActiveTab(sec.tabs[0]); }}>
                   <span className="sp-nav-icon"><Icon name={sec.icon} size={22} stroke={on ? 1.9 : 1.6} /></span>
                   <span className="sp-nav-label">{sec.label}</span>
                   <span className="sp-nav-short" aria-hidden="true">{sec.short}</span>
@@ -1075,7 +1073,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         {sectionOf(activeTab).tabs.length > 1 && (
           <div className="sp-subnav" role="tablist" aria-label={sectionOf(activeTab).label} style={{ position: "relative", zIndex: 1 }}>
             {sectionOf(activeTab).tabs.map(tab => (
-              <button key={tab} role="tab" aria-selected={activeTab === tab} className={`sp-sub-btn${activeTab === tab ? " is-on" : ""}`} onClick={() => setActiveTab(tab)}>{tab}</button>
+              <button key={tab} role="tab" aria-selected={activeTab === tab} className={`sp-sub-btn${activeTab === tab ? " is-on" : ""}`} onClick={() => { if (activeTab === tab) window.scrollTo({ top: 0 }); else setActiveTab(tab); }}>{tab}</button>
             ))}
           </div>
         )}
@@ -1113,7 +1111,6 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         {activeTab === "Leads" && (() => {
           const shownLeads = filteredLeads.slice(0, leadLimit);
           const leadField: React.CSSProperties = { height: 44, border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "var(--app-card)", color: "var(--app-text)", fontSize: wide ? 14 : 16, fontFamily: "inherit" };
-          const panelLead = wide ? (liveLead && filteredLeads.some(l => l.id === liveLead.id) ? liveLead : filteredLeads[0]) : null;
           return (
           <div className="sp-leads">
             {space.kind === "guild" && personalLeads > 0 && (
@@ -1149,7 +1146,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
             </div>
 
             {leads.length > 0 && (
-              <div className="sp-leads-head" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 12 }}>
+              <div className="sp-leads-head sp-leads-bar" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 12 }}>
                 {dueLeads.length > 0 && (
                   <button onClick={() => setFuRun(dueLeads)} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                     <Icon name="play" size={14} />Follow-up beruntun <span className="tabnum" style={{ background: "rgba(0,0,0,0.28)", borderRadius: 999, padding: "1px 8px" }}>{dueLeads.length}</span>
@@ -1171,22 +1168,6 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               </div>
             )}
 
-            {leads.length > 0 && (
-              <div role="group" aria-label="Saring menurut potensi" className="sp-chiprow" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-                {([0, 5, 4, 3, 2, 1] as (0 | Level)[]).map(lv => {
-                  const on = filterLevel === lv;
-                  const n = lv ? leads.filter(l => sc(l).level === lv).length : leads.length;
-                  return (
-                    <button key={lv} onClick={() => setFilterLevel(lv)} aria-pressed={on}
-                      style={{ flexShrink: 0, whiteSpace: "nowrap", height: wide ? 36 : 44, padding: "0 14px", borderRadius: 999, border: `1px solid ${on ? "var(--app-text)" : "var(--app-line-strong)"}`, background: on ? "var(--app-text)" : "transparent", color: on ? "var(--app-card)" : "var(--app-ink-2)", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, fontFamily: "inherit" }}>
-                      {lv > 0 && <HeatDots level={lv as Level} size={5} gap={2} />}
-                      {lv ? LEVEL_WORD[lv as Level] : "Semua"} <span className="tabnum" style={{ fontWeight: 500 }}>{n}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
             {filteredLeads.length === 0 ? (
               <div style={{ marginTop: 24, background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 20, padding: "56px 24px", textAlign: "center" }}>
                 <div style={{ display: "flex", justifyContent: "center", marginBottom: 12, color: "var(--app-muted)" }}><Icon name={leads.length === 0 ? "users" : "search"} size={34} stroke={1.4} /></div>
@@ -1198,7 +1179,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                     <button onClick={() => setShowAddLead(true)} style={{ height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>+ Lead pertama</button>
                   </div>
                 ) : (
-                  <button onClick={() => { setFilterStatus("All"); setFilterLevel(0); setLeadQ(""); }} style={{ height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Reset saringan</button>
+                  <button onClick={() => { setFilterStatus("All"); setLeadView("semua"); setLeadQ(""); }} style={{ height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Reset saringan</button>
                 )}
               </div>
             ) : (
@@ -1206,31 +1187,32 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                 <section aria-label="Daftar lead" style={{ flex: "999 1 560px", minWidth: 0 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
                     {shownLeads.map(lead => {
-                      const s = sc(lead);
-                      const on = panelLead?.id === lead.id;
-                      const contactAgo = lead.lastContact ? (() => { const d = daysBetween(lead.lastContact, now); return d <= 0 ? "hari ini" : d === 1 ? "kemarin" : `${d} hari lalu`; })() : "—";
+                      const stand = standOf(lead, now);
+                      const missing = missingOf(lead);
+                      const move = nextMove(lead);
                       return (
-                        <button key={lead.id} className="lead-row lift" aria-pressed={wide ? on : undefined} aria-label={`Buka lead ${lead.name}`} onClick={() => openLead(lead)}
-                          style={{ textAlign: "left", padding: 18, borderRadius: 16, border: `1px solid ${on ? "#005eb0" : "var(--app-border)"}`, boxShadow: on ? "0 0 0 1px #005eb0" : "none", background: on ? "var(--brand-tint)" : "var(--app-card)", color: "var(--app-text)", cursor: "pointer", display: "flex", flexDirection: "column", gap: 16, fontFamily: "inherit" }}>
-                          <span style={{ display: "flex", alignItems: "center", gap: 12, width: "100%" }}>
-                            <span aria-hidden="true" style={{ flexShrink: 0, width: 36, height: 36, borderRadius: "50%", background: "var(--app-inner)", color: "var(--app-ink-2)", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>{lead.name.replace(/[^A-Za-z0-9À-ÿ ]/g, "").split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?"}</span>
-                            <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-                              <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lead.name}</span>
-                              <span style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lead.category} · {lead.source}{showOwner && lead.ownerName ? ` · 👤 ${lead.ownerName}` : ""}</span>
+                        <article key={lead.id} style={{ display: "flex", flexDirection: "column", borderRadius: 16, border: "1px solid var(--app-border)", background: "var(--app-card)", overflow: "hidden" }}>
+                          <button className="lead-row" aria-label={`Buka lead ${lead.name}`} onClick={() => openLead(lead)}
+                            style={{ textAlign: "left", width: "100%", padding: "16px 16px 12px", border: 0, background: "transparent", color: "var(--app-text)", cursor: "pointer", display: "flex", flexDirection: "column", gap: 10, fontFamily: "inherit" }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: 12, width: "100%" }}>
+                              <span aria-hidden="true" style={{ flexShrink: 0, width: 36, height: 36, borderRadius: "50%", background: "var(--app-inner)", color: "var(--app-ink-2)", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>{lead.name.replace(/[^A-Za-z0-9À-ÿ ]/g, "").split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?"}</span>
+                              <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+                                <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lead.name}</span>
+                                <span style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lead.category} · {lead.source}{showOwner && lead.ownerName ? ` · 👤 ${lead.ownerName}` : ""}</span>
+                              </span>
                             </span>
-                            <span style={{ flexShrink: 0, alignSelf: "flex-start", padding: "3px 9px", borderRadius: 999, background: "var(--app-inner)", color: STATUS_COLOR[lead.status] || "var(--app-ink-2)", fontSize: 12, fontWeight: 600 }}>{statusWord(lead.status)}</span>
-                          </span>
-                          <span style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
-                            <HeatDots level={s.level} />
-                            <span style={{ fontSize: 13, color: "var(--app-ink-2)" }}>Potensi {s.word.toLowerCase()}</span>
-                            <span className="tabnum" style={{ marginLeft: "auto", fontSize: 15, fontWeight: 600 }} aria-label={`Skor potensi ${s.total}`}>{s.total}</span>
-                          </span>
-                          {lead.nextActionDate && <span style={{ fontSize: 12.5, color: lead.nextActionDate < now ? "var(--hot)" : lead.nextActionDate === now ? "var(--warm)" : "var(--app-muted)", display: "flex", alignItems: "center", gap: 6 }}><Icon name="clock" size={14} />{lead.nextAction || "Follow-up"} · {longDate(lead.nextActionDate)}</span>}
-                          <span style={{ display: "flex", justifyContent: "space-between", gap: 8, width: "100%", paddingTop: 12, borderTop: "1px solid var(--app-border)", fontSize: 13, color: "var(--app-muted)" }}>
-                            <span>Kontak: {contactAgo}</span>
-                            <span className="tabnum" style={{ color: "var(--app-ink-2)", fontWeight: 500 }}>{lead.value ? `Rp ${(lead.value / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt` : "—"}</span>
-                          </span>
-                        </button>
+                            <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600 }}>
+                              <span aria-hidden="true" style={{ flexShrink: 0, width: 8, height: 8, borderRadius: "50%", background: stand.color }} />{stand.word}
+                            </span>
+                            {missing.length > 0 && <span style={{ fontSize: 13, color: "var(--app-muted)" }}>Kurang: {missing.join(", ")}</span>}
+                            {lead.nextActionDate && <span style={{ fontSize: 13, color: lead.nextActionDate < now ? "var(--hot)" : lead.nextActionDate === now ? "var(--warm)" : "var(--app-muted)", display: "flex", alignItems: "center", gap: 6 }}><Icon name="clock" size={14} />{lead.nextAction || "Follow-up"} · {longDate(lead.nextActionDate)}</span>}
+                          </button>
+                          <div style={{ marginTop: "auto", padding: "0 16px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                            <span className="tabnum" style={{ fontSize: 13, color: "var(--app-ink-2)", fontWeight: 500 }}>{lead.value ? `Rp ${(lead.value / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt` : ""}</span>
+                            <button onClick={() => openLead(lead, move.kind === "open" ? null : move.kind)} aria-label={`${move.label}: ${lead.name}`}
+                              style={{ flexShrink: 0, minHeight: 44, padding: "0 16px", borderRadius: 999, border: "1px solid var(--app-line-strong)", background: "transparent", color: "var(--brand-text)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>{move.label}</button>
+                          </div>
+                        </article>
                       );
                     })}
                   </div>
@@ -1239,12 +1221,6 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                     {filteredLeads.length > shownLeads.length && <button onClick={() => setLeadLimit(leadLimit + 20)} style={{ height: 44, padding: "0 18px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Muat lagi</button>}
                   </div>
                 </section>
-                {panelLead && (
-                  <div style={{ flex: "1 1 360px", maxWidth: 440, minWidth: 0, alignSelf: "stretch" }}>
-                    <LeadPanel key={panelLead.id + (shareFor?.leadId === panelLead.id ? "_share" : "")} lead={panelLead} score={sc(panelLead)} actions={leadActions(panelLead)}
-                      onOpenFull={() => { setSelectedLead(panelLead); setPageOpen(true); }} shareFile={shareFor?.leadId === panelLead.id ? shareFor.file : null} />
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -1265,10 +1241,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         {activeTab === "Penawaran" && (
           <Quotes quotes={quotes} invoices={invoices} services={services} components={components} templates={quoteTemplates} business={business}
             leads={leads.map(l => ({ id: l.id, name: l.name, contact: l.contact, phone: l.phone }))}
-            startFor={quoteFor} onStarted={clearQuoteFor} onInvoiceCreated={gotoInvoices} />
+            startFor={quoteFor} onStarted={clearQuoteFor} onInvoiceCreated={gotoInvoices} openId={openDoc} onOpened={() => setOpenDoc(null)} />
         )}
         {activeTab === "Invoice" && <Invoices invoices={invoices} business={business} services={services} components={components}
-          leads={leads.map(l => ({ id: l.id, name: l.name, contact: l.contact, phone: l.phone }))} />}
+          leads={leads.map(l => ({ id: l.id, name: l.name, contact: l.contact, phone: l.phone }))} openId={openDoc} onOpened={() => setOpenDoc(null)} />}
         {activeTab === "Paket" && <Services services={services} components={components} templates={quoteTemplates} history={priceHistory} business={business} />}
 
         {activeTab === "Dashboard tim" && <TeamDashboard hunts={hunts} quotes={quotes} invoices={invoices} outreach={outreach} rejections={rejections}
@@ -1376,10 +1352,12 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         </div>
       )}
 
-      {/* Profil customer: full screen on phones, "Profil lengkap" on desktop */}
+      {/* A lead's worksheet: over whatever opened it, so closing lands right back there */}
       {liveLead && pageOpen && (
-        <LeadPage key={liveLead.id + (shareFor?.leadId === liveLead.id ? "_share" : "")} lead={liveLead} score={sc(liveLead)} actions={leadActions(liveLead)}
-          onClose={() => { setPageOpen(false); if (!wide) setSelectedLead(null); }} shareFile={!wide && shareFor?.leadId === liveLead.id ? shareFor.file : null} />
+        <LeadPage key={liveLead.id + (shareFor?.leadId === liveLead.id ? "_share" : "")} lead={liveLead} score={sc(liveLead)} actions={leadActions(liveLead)} wide={wide} start={pageStart}
+          history={leadHistory(liveLead, { quotes, invoices, outreach, hunts })}
+          onOpenDoc={item => { setPageOpen(false); setSelectedLead(null); setOpenDoc(item.docId || null); setActiveTab(item.kind === "penawaran" ? "Penawaran" : "Invoice"); }}
+          onClose={() => { setPageOpen(false); setSelectedLead(null); }} shareFile={shareFor?.leadId === liveLead.id ? shareFor.file : null} />
       )}
 
       {/* Profile & Settings Modal */}

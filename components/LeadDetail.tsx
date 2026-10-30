@@ -14,22 +14,24 @@ import { CATEGORIES, SOURCES, STATUSES, STATUS_COLOR, parseRupiah, statusWord } 
 import { LeadGeo, routeUrl, validGeo } from "@/lib/geo";
 import Sheet from "@/components/Sheet";
 import PlaceEditor from "@/components/PlaceEditor";
-import ChatPicker from "@/components/ChatPicker";
+import ChatPicker, { NextMessage } from "@/components/ChatPicker";
+import LeadHistory from "@/components/LeadHistory";
 import { categoryOf } from "@/lib/scriptPick";
+import type { HistoryItem } from "@/lib/leadHistory";
+import { missingOf, standOf } from "@/lib/leadStand";
 
-// A lead, as drawn in the SalesPal Redesign canvas (PRD-008):
-//   LeadPanel — the detail beside the list on Leads (desktop)
-//   LeadPage  — "Profil customer", full screen on phones and behind
-//               "Profil lengkap" on desktop
-// Both run the same actions: schedule the next step, mark a reply, fill the
-// profile by hand or from WhatsApp, open the right script, quote, delete,
-// edit the lead itself (status, value, contact), and log a chat.
+// A lead's worksheet (PRD-008, PRD-021): one page on every screen, full height
+// on a phone, a centred column on a laptop. It holds where the lead stands,
+// what's missing, the next message, everything that has happened so far, and
+// the actions: schedule the next step, mark a reply, fill the profile by hand
+// or from WhatsApp, open the right script, quote, delete, edit the lead itself
+// (status, value, contact), and log a chat.
 
 export interface DetailLead {
   id: string; name: string; contact: string; phone: string; email: string; category: string; source: string;
   status: string; value: number; notes: string; lastContact: string; lastReplyAt?: string;
   nextAction?: string; nextActionDate?: string; profile?: LeadProfile; ownerName?: string;
-  address?: string; geo?: LeadGeo;
+  address?: string; geo?: LeadGeo; quoted?: boolean;
 }
 
 export interface DetailActions {
@@ -435,109 +437,14 @@ function LocationRow({ lead, actions }: { lead: DetailLead; actions: DetailActio
   );
 }
 
-// ---------------------------------------------------------------- LeadPanel
-
-export function LeadPanel({ lead, score, actions, onOpenFull, shareFile }: {
-  lead: DetailLead; score: Score; actions: DetailActions; onOpenFull: () => void; shareFile?: File | null;
-}) {
-  const p = lead.profile || {};
-  const [editing, setEditing] = useState(false);
-  const [editingLead, setEditingLead] = useState(false);
-  const [importing, setImporting] = useState(Boolean(shareFile));
-  const [scheduling, setScheduling] = useState(false);
-  const late = lead.nextActionDate && lead.nextActionDate < today();
-  const { logged, chatted, clear, choose, picker } = useChatLog(actions);
-
-  return (
-    <aside aria-label="Detail lead" style={{ position: "sticky", top: 120, maxHeight: "calc(100vh - 140px)", overflowY: "auto", overscrollBehavior: "contain", background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 20, boxShadow: "var(--panel-shadow)", padding: 24 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-        <span aria-hidden="true" style={{ flexShrink: 0, width: 44, height: 44, borderRadius: "50%", background: "var(--app-inner)", color: "var(--app-ink-2)", fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(lead.name)}</span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h2 style={{ margin: 0, fontSize: 22, lineHeight: 1.2, fontWeight: 600, letterSpacing: "-0.02em" }}>{lead.name}</h2>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--app-muted)" }}>{lead.category} · dari {lead.source || "—"} · {jt(lead.value)}</p>
-        </div>
-        <StatusBadge status={lead.status} onEdit={() => setEditingLead(true)} />
-        <Menu lead={lead} actions={actions} onEdit={() => setEditing(true)} onEditLead={() => setEditingLead(true)} compact />
-      </div>
-
-      <div style={{ marginTop: 24, padding: "20px 0", borderTop: "1px solid var(--app-border)", borderBottom: "1px solid var(--app-border)", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16 }}>
-        <div>
-          <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 500, color: "var(--app-muted)" }}>Skor potensi</p>
-          <p style={{ margin: 0, display: "flex", alignItems: "baseline", gap: 6 }}><span className="num" style={{ fontSize: 64 }}>{score.total}</span><span className="num" style={{ fontSize: 24, color: "var(--app-muted)" }}>/ 100</span></p>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, paddingBottom: 4 }}>
-          <HeatDots level={score.level} size={9} gap={4} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-ink-2)" }}>Potensi {score.word.toLowerCase()}</span>
-        </div>
-      </div>
-
-      <h3 style={{ margin: "20px 0 4px", fontSize: 14, fontWeight: 600 }}>Kenapa {score.total}</h3>
-      <Why score={score} onReplied={actions.onReplied} />
-
-      <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--app-border)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14 }}>
-          <Icon name="clock" style={{ color: "var(--app-muted)" }} />
-          <span style={{ color: "var(--app-muted)" }}>Berikutnya</span>
-          <span style={{ fontWeight: 600, color: lead.nextActionDate ? (late ? "var(--hot)" : "var(--app-text)") : "var(--app-muted)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {lead.nextActionDate ? `${lead.nextAction || "Follow-up"} · ${longDate(lead.nextActionDate)}` : "Belum dijadwalkan"}
-          </span>
-          <button onClick={() => setScheduling(!scheduling)} aria-expanded={scheduling} style={{ marginLeft: "auto", flexShrink: 0, minHeight: 36, padding: 0, border: 0, background: "none", color: "var(--brand-text)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Jadwalkan</button>
-        </div>
-        {scheduling && <div style={{ marginTop: 12 }}><FollowUp lead={lead} actions={actions} onCancel={() => setScheduling(false)} onSaved={() => setScheduling(false)} /></div>}
-      </div>
-
-      <section aria-label="Lokasi" style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--app-border)" }}>
-        <LocationRow lead={lead} actions={actions} />
-      </section>
-
-      <div style={{ margin: "24px 0 0", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>Profil</h3>
-        <button onClick={onOpenFull} style={{ display: "inline-flex", alignItems: "center", gap: 4, minHeight: 32, padding: 0, border: 0, background: "none", color: "var(--brand-text)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Profil lengkap <Icon name="chevronRight" size={14} stroke={2} /></button>
-      </div>
-      {hasProfile(p) ? (
-        <>
-          <dl style={{ margin: "8px 0 0", display: "grid", gap: 14 }}>
-            {p.brief && !p.need && <div><dt style={{ fontSize: 12, fontWeight: 500, color: "var(--app-muted)" }}>Brief</dt><dd style={{ margin: "3px 0 0", fontSize: 14, lineHeight: 1.5 }}>{p.brief}</dd></div>}
-            {([["Kebutuhan", p.need], ["Pain point", p.pain], ["Keberatan", p.objection]] as [string, string | undefined][]).filter(([, v]) => v).map(([k, v]) => (
-              <div key={k}><dt style={{ fontSize: 12, fontWeight: 500, color: "var(--app-muted)" }}>{k}</dt><dd style={{ margin: "3px 0 0", fontSize: 14, lineHeight: 1.5 }}>{v}</dd></div>
-            ))}
-          </dl>
-          <p style={{ margin: "12px 0 0", display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--app-muted)" }}>
-            <Icon name="chat" size={13} stroke={1.8} />
-            {p.source === "wa-export" ? `Dari chat WhatsApp, ${dayText(p.at)}` : `Diisi manual, ${dayText(p.at)}`}
-            <button onClick={() => setImporting(true)} style={{ marginLeft: "auto", minHeight: 32, padding: 0, border: 0, background: "none", color: "var(--brand-text)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{p.source === "wa-export" ? "Tarik ulang" : "Tarik dari WhatsApp"}</button>
-          </p>
-        </>
-      ) : (
-        <div style={{ marginTop: 8, padding: 16, border: "1px dashed var(--app-line-strong)", borderRadius: 12 }}>
-          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: "var(--app-muted)" }}>Belum diisi. Tarik dari chat WhatsApp, atau isi sendiri setelah chat pertama. QuickPitch pakai ini buat nyusun pitch.</p>
-          <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={() => setImporting(true)} style={{ ...pill(true), minHeight: 40, padding: "0 16px", fontSize: 13 }}><Icon name="chat" size={15} stroke={1.8} />Tarik dari WhatsApp</button>
-            <button onClick={() => setEditing(true)} style={{ ...pill(false), minHeight: 40, padding: "0 16px", fontSize: 13 }}>Isi manual</button>
-          </div>
-        </div>
-      )}
-
-      <div style={{ marginTop: 24, display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {lead.phone
-          ? <button onClick={choose} style={{ ...pill(true), flex: "1 1 160px" }}><Icon name="chat" />Chat WhatsApp</button>
-          : <button onClick={() => setEditing(true)} style={{ ...pill(true), flex: "1 1 160px" }}>Tambah nomor</button>}
-        <button onClick={actions.onQuote} style={{ ...pill(false), flex: "1 1 140px" }}>Buat penawaran</button>
-      </div>
-      {logged && <div style={{ marginTop: 12 }}><ChatNote key={logged.n} lead={lead} logged={logged} actions={actions} onClose={clear} /></div>}
-      {picker(lead)}
-
-      {editing && <ProfileEditor profile={p} phone={lead.phone} onSave={actions.onSaveProfile} onSavePhone={actions.onSavePhone} onClose={() => setEditing(false)} />}
-      {editingLead && <LeadEditor lead={lead} onSave={actions.onSaveLead} onClose={() => setEditingLead(false)} />}
-      {importing && <WaImport leadName={lead.contact || lead.name} profile={p} initialFile={shareFile} onSave={actions.onImport} onClose={() => setImporting(false)} />}
-    </aside>
-  );
-}
-
 // ---------------------------------------------------------------- LeadPage
 
-export function LeadPage({ lead, score, actions, onClose, shareFile }: {
+export function LeadPage({ lead, score, actions, onClose, shareFile, wide, start, history, onOpenDoc }: {
   lead: DetailLead; score: Score; actions: DetailActions; onClose: () => void; shareFile?: File | null;
+  wide: boolean;
+  start?: "chat" | "edit" | null;       // a card's button: go straight to the scripts, or to the missing number
+  history: HistoryItem[];
+  onOpenDoc: (item: HistoryItem) => void;
 }) {
   const p = lead.profile || {};
   const [editing, setEditing] = useState(false);
@@ -545,6 +452,10 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
   const [importing, setImporting] = useState(Boolean(shareFile));
   const [scheduling, setScheduling] = useState(false);
   const { logged, chatted, clear, choose, picker } = useChatLog(actions);
+  useEffect(() => {
+    if (start === "chat") choose();
+    else if (start === "edit") setEditing(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // The chat note floats over the bottom of the page; the page makes room for
   // it, so the last rows (Kontak) can still be scrolled into view.
   const noteRef = useRef<HTMLDivElement>(null);
@@ -565,6 +476,8 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
   const name = lead.contact || lead.name;
   const scriptText = sc ? sc.script.replace(/\{nama\}/gi, name) : "";
   const chat = p.chat;
+  const stand = standOf(lead, today());
+  const missing = missingOf(lead);
 
   const section: React.CSSProperties = { background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 20 };
   const h2: React.CSSProperties = { margin: "0 4px 8px", fontSize: 13, fontWeight: 600, color: "var(--app-muted)" };
@@ -576,12 +489,12 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
   return createPortal(
     <div className="modal-overlay sp-leadpage" onClick={onClose}
       style={{ alignItems: "stretch", justifyContent: "center", padding: 0, background: "var(--scrim)", zIndex: 110 }}>
-      <div role="dialog" aria-modal="true" aria-label={`Profil ${lead.name}`} onClick={e => e.stopPropagation()} className="sp-leads" style={{ position: "relative", width: "100%", maxWidth: 480, height: "100%", overflowY: "auto", background: "var(--app-bg)", color: "var(--app-text)", fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}>
+      <div role="dialog" aria-modal="true" aria-label={`Profil ${lead.name}`} onClick={e => e.stopPropagation()} className="sp-leads" style={{ position: "relative", width: "100%", maxWidth: wide ? 720 : 480, height: "100%", overflowY: "auto", background: "var(--app-bg)", color: "var(--app-text)", fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}>
         <div style={{ position: "sticky", top: 0, zIndex: 9, height: 0 }}>
           <div className="pb t" aria-hidden="true" style={{ top: 0, height: 100 }}><span /><span /><span /><span /><span /><span /></div>
           <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 100, background: "linear-gradient(to bottom, var(--bar-tint) 0%, var(--bar-tint) 35%, transparent 100%)", pointerEvents: "none" }} />
           <div style={{ position: "absolute", top: "calc(10px + env(safe-area-inset-top, 0px))", left: 12, right: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <button className="glass" onClick={onClose} aria-label="Kembali ke Leads" style={{ width: 44, height: 44, border: 0, borderRadius: "50%", color: "var(--app-text)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}><Icon name="chevronLeft" size={20} stroke={2} /></button>
+            <button className="glass" onClick={onClose} aria-label="Kembali ke Leads" style={{ width: 44, height: 44, border: 0, borderRadius: "50%", color: "var(--app-text)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}><Icon name={wide ? "close" : "chevronLeft"} size={20} stroke={2} /></button>
             <Menu lead={lead} actions={actions} onEdit={() => setEditing(true)} onEditLead={() => setEditingLead(true)} />
           </div>
         </div>
@@ -592,9 +505,10 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
             <h1 style={{ margin: "14px 0 0", fontSize: 27, lineHeight: 1.15, fontWeight: 600, letterSpacing: "-0.02em" }}>{lead.name}</h1>
             <p style={{ margin: "5px 0 0", fontSize: 14, color: "var(--app-muted)" }}>{[lead.contact, lead.category, p.wa?.category].filter(Boolean).join(" · ")}{lead.ownerName ? ` · 👤 ${lead.ownerName}` : ""}</p>
             <div style={{ marginTop: 12, display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
-              {lead.phone && <span style={{ height: 28, padding: "0 11px", borderRadius: 999, background: "var(--app-card)", border: "1px solid var(--app-border)", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--app-ink-2)" }}><Icon name="shield" size={14} stroke={1.9} style={{ color: "var(--brand-text)" }} />Nomor WhatsApp ada</span>}
+              <span style={{ height: 28, padding: "0 11px", borderRadius: 999, background: "var(--app-card)", border: "1px solid var(--app-border)", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--app-ink-2)" }}><span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: stand.color }} />{stand.word}</span>
               <StatusBadge status={lead.status} onEdit={() => setEditingLead(true)} card />
             </div>
+            {missing.length > 0 && <p style={{ margin: "10px 0 0", fontSize: 13, color: "var(--app-muted)" }}>Kurang: {missing.join(", ")}</p>}
           </div>
 
           <nav aria-label="Aksi cepat" className="sp-quick" style={{ marginTop: 22, display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
@@ -603,6 +517,12 @@ export function LeadPage({ lead, score, actions, onClose, shareFile }: {
             <button onClick={actions.onQuote} style={quick(false)}><Icon name="doc" size={22} />Penawaran</button>
             <button onClick={() => setScheduling(true)} style={quick(false)}><Icon name="calendar" size={22} />Jadwal</button>
           </nav>
+
+          <NextMessage onOpen={choose} lead={{
+            name: lead.name, contact: lead.contact, phone: lead.phone, status: lead.status, lastContact: lead.lastContact,
+            category: categoryOf(p.wa?.category) || categoryOf(lead.category), need: p.need, pain: p.pain,
+          }} />
+          <LeadHistory items={history} onOpen={onOpenDoc} />
 
           <section aria-labelledby="brief-h" style={{ marginTop: 20, position: "relative", isolation: "isolate", borderRadius: 26, overflow: "hidden" }}>
             <span aria-hidden="true" style={{ position: "absolute", width: 240, height: 240, left: -60, top: -90, borderRadius: "50%", background: "radial-gradient(circle, var(--glow-a) 0%, transparent 70%)" }} />

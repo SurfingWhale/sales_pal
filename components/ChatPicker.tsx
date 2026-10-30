@@ -106,7 +106,9 @@ export default function ChatPicker({ lead, onSend }: {
           style={{ minHeight: 48, padding: "0 18px", borderRadius: 999, border: "1px solid var(--app-line-strong)", background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: ready ? 1 : 0.5 }}>
           {copied === "ok" ? "✓ Tersalin" : copied === "fail" ? "Gagal copy" : "Copy"}
         </button>
-        {ready ? (
+        {!lead.phone ? (
+          <p style={{ flex: 1, margin: 0, alignSelf: "center", fontSize: 13, color: "var(--app-muted)" }}>Belum ada nomor: copy, lalu kirim lewat DM.</p>
+        ) : ready ? (
           <a href={waLink(lead.phone, text)} target="_blank" rel="noreferrer" onClick={() => onSend(tpl ? tpl.title : "Chat WhatsApp")}
             style={{ flex: 1, minHeight: 48, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 15, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, textDecoration: "none" }}>
             <Icon name="chat" size={18} stroke={1.8} />Kirim di WhatsApp
@@ -116,5 +118,30 @@ export default function ChatPicker({ lead, onSend }: {
         )}
       </div>
     </div>
+  );
+}
+
+// On a lead's page: the script that fits where they are, so the next message
+// is one look away. Picking and sending stay in ChatPicker.
+export function NextMessage({ lead, onOpen }: { lead: ChatLead; onOpen: () => void }) {
+  const space = useSpace();
+  const templates = useSpaceCollection<PitchTemplate>(space, "pitchTemplates");
+  const business = useBusiness(space);
+  const stage = leadStage(lead);
+  const label = STAGES.find(s => s.id === stage)?.label || "";
+  const best = rankScripts(templates.filter(t => stageOf(t) === stage), lead).filter(r => !r.out)[0]?.t;
+  return (
+    <section aria-labelledby="next-h" style={{ marginTop: 20, padding: 16, background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 20 }}>
+      <h2 id="next-h" style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--app-muted)" }}>Pesan berikutnya: {label}</h2>
+      {best ? (
+        <>
+          <p style={{ margin: "8px 0 0", fontSize: 15, fontWeight: 600 }}>{best.title}</p>
+          <p style={{ margin: "4px 0 0", fontSize: 14, lineHeight: 1.5, color: "var(--app-ink-2)", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {fillTemplate(best.body, { nama: lead.contact || lead.name, bisnis: business.name, kebutuhan: lead.need })}
+          </p>
+        </>
+      ) : <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--app-muted)" }}>Belum ada script {label}. Bikin di Hunting → + → Kelola template, atau tulis langsung.</p>}
+      <button type="button" onClick={onOpen} style={{ marginTop: 12, width: "100%", minHeight: 48, border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Pilih script & kirim</button>
+    </section>
   );
 }

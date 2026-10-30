@@ -101,7 +101,7 @@ Tidak ada komponen tooltip. Hanya atribut `title=` bawaan browser, misalnya "Pro
 | `WaImport` | `components/WaImport.tsx` | LeadDetail, atau langsung terbuka dari file share | guard; × | `parseWaExport`, `/api/scan` |
 | Menu "Tambah" Hunting | `Hunting.tsx` (`addMenu`) | Tombol + | STD; × | ke template / paste / radar / script |
 | Preview chat & "Perlu ditindak" | `components/Beranda.tsx` (`chatOf`, `sheet`) | Kartu Beranda | STD; Tutup | – |
-| `LeadPage` (layar penuh) | `components/LeadDetail.tsx` | `openLead` (HP) / "Profil lengkap" | Back; "Kembali ke Leads" | `leadActions` → leads |
+| `LeadPage` (lembar kerja) | `components/LeadDetail.tsx` | `openLead`: kartu, tombol kartu (`start` chat/edit), peta, Perlu ditindak | Back / ✕ (laptop), Escape; "Kembali ke Leads" | `leadActions` → leads; Riwayat buka penawaran/invoice |
 | Halaman kontak prospek (`.sp-pcontact`) | `components/ProspectList.tsx` (`openId`) | Tap kartu; terbuka lagi setelah Back dari halaman kirim | STD; "Tutup kontak"; ganti tampilan | `useOutcome`, `saveProspect` |
 | `PrintSheet` / `ReportShell` (PDF) | `components/PrintSheet.tsx`, `ReportShell.tsx` | Quotes/Invoices "PDF"; TeamDashboard; GuildHub; ClientHub | Tutup | `buildPdf`, `sharePdf` (simpan/bagikan file; tanpa print browser) |
 | Halaman kirim Hunting (bukan overlay) | `Hunting.tsx` (`open` + `history.state.spPage`) | `compose`, `toTarget`, cari | Back / Escape → `backToList` | – |
