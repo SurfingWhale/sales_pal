@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useState } from "react";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { AVATARS } from "@/lib/guild";
@@ -79,12 +79,27 @@ const Switch = ({ on }: { on: boolean }) => (
 
 const Chevron = () => <span aria-hidden="true" style={{ color: "var(--app-muted)", fontSize: 18, lineHeight: 1 }}>›</span>;
 
-export default function ProfileSheet({ uid, name, email, version, isDark, onTheme, onCheckUpdate, checking, update, onRefresh, refreshing, onLogout, onClose }: {
+export default function ProfileSheet({ uid, name, email, version, isDark, onTheme, onCheckUpdate, checking, update, onRefresh, refreshing, onLogout, onClose, anchor }: {
   uid: string; name: string; email: string; version: string; isDark: boolean; onTheme: () => void;
   onCheckUpdate: () => void; checking: boolean; update: { latest?: string; hasUpdate?: boolean; error?: boolean } | null;
   onRefresh: () => void; refreshing: boolean; onLogout: () => void; onClose: () => void;
+  anchor?: RefObject<HTMLElement>;
 }) {
   const avatar = useMyAvatar(uid);
+  // Wider than a phone, it opens as a popover under the button that opened it,
+  // like the bell's (globals.css .sp-popover); a phone keeps the full-screen sheet.
+  const [at, setAt] = useState<{ top: number; right: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = anchor?.current;
+    if (!el) return;
+    const place = () => {
+      const r = el.getBoundingClientRect();
+      setAt({ top: Math.round(r.bottom + 8), right: Math.max(16, Math.round(document.documentElement.clientWidth - r.right)) });
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [anchor]);
   const [picking, setPicking] = useState(false);
   const [push, setPush] = useState<PushState | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
@@ -121,7 +136,8 @@ export default function ProfileSheet({ uid, name, email, version, isDark, onThem
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className={`modal-overlay${at ? " sp-popover" : ""}`} onClick={onClose}
+      style={at ? { "--pop-top": `${at.top}px`, "--pop-right": `${at.right}px` } as React.CSSProperties : undefined}>
       <div role="dialog" aria-modal="true" aria-labelledby="prof-h" onClick={e => e.stopPropagation()}
         style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 20, width: "100%", maxWidth: 440 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
