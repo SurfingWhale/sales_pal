@@ -29,6 +29,11 @@ export interface Todo {
   action: string;      // the main button
   phone: string; text: string;  // a WhatsApp message, when the action is one
   wa?: boolean;        // the main action is the WhatsApp message
+  // Opening that message is the send (like Hunting's Copy = kirim): it is
+  // written down at once, `logged` says what, and the undo is Batal.
+  onSent?: () => Promise<(() => Promise<void>) | void>;
+  logged?: string;
+  amount: number;      // rupiah at stake; due tasks with more go first
   snooze?: () => void; // "Tunda": push it to tomorrow
   open: () => void;
   // A prospect from Hunting: how far along, the chat so far, their profile.
@@ -87,6 +92,9 @@ const css = `
 .sp-btn.blue { background: #005eb0; color: #fff; }
 .sp-btn.hunt { background: #b93a06; color: #fff; }
 .sp-btn.ghost { background: transparent; color: var(--app-ink-2); font-weight: 500; padding: 0 12px; }
+.sp-sent { display: flex; align-items: center; gap: 4px; padding: 0 4px 0 16px; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
+.sp-sent > span { flex: 1; min-width: 0; padding: 12px 0; }
+.sp-sent .is-err { color: var(--hot); }
 
 .sp-find { display: flex; align-items: center; gap: 14px; padding: 16px; margin-top: 12px; }
 .sp-find-ic { width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; background: #005eb0; color: #fff; }
@@ -272,6 +280,23 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
   const setMode = (m: BerandaMode) => { setModeState(m); try { localStorage.setItem(MODE_KEY, m); } catch { /* private mode */ } };
   const [sheet, setSheet] = useState(false);
   const [chatOf, setChatOf] = useState<Todo | null>(null);
+  // What the last WhatsApp from a card left behind, with Batal.
+  const [sent, setSent] = useState<{ say: string; undo?: () => Promise<void>; err?: boolean } | null>(null);
+  const [undoing, setUndoing] = useState(false);
+  function sendOf(t: Todo) {
+    if (!t.onSent) return;
+    Promise.resolve(t.onSent()).then(
+      undo => setSent({ say: `✓ ${t.logged || "Dicatat"}`, undo: undo || undefined }),
+      () => setSent({ say: "WhatsApp kebuka, tapi gagal dicatat. Cek koneksi.", err: true }),
+    );
+  }
+  async function takeBack() {
+    if (!sent?.undo) return;
+    setUndoing(true);
+    try { await sent.undo(); setSent({ say: "Dibatalin, ga dicatat." }); }
+    catch { setSent({ ...sent, say: "Gagal batalin. Cek koneksi lalu coba lagi.", err: true }); }
+    setUndoing(false);
+  }
   const due = todo.filter(t => t.when <= now).length;
   // A queue, not a feed: the phone swipes through the first ten (the desktop
   // grid shows four), and the whole list opens in its own scrolling sheet.
@@ -397,6 +422,13 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
           <h2 id="todo-h" style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em" }}>Perlu ditindak <span className="tabnum" style={{ color: "var(--app-muted)", fontWeight: 500 }}>{due}{todo.length > due ? ` hari ini · ${todo.length - due} nanti` : ""}</span></h2>
           {todo.length > 1 && <button onClick={() => setSheet(true)} className="sp-todo-more" aria-haspopup="dialog">Lihat semua<Icon name="chevronRight" size={14} stroke={1.8} /></button>}
         </div>
+        {sent && (
+          <div role="group" aria-label="Catatan kiriman" className="sp-card sp-sent">
+            <span role="status" className={sent.err ? "is-err" : undefined}>{sent.say}</span>
+            {sent.undo && !sent.err && <button onClick={takeBack} disabled={undoing} className="sp-btn line" style={{ borderRadius: 999 }}>Batal</button>}
+            <button onClick={() => setSent(null)} aria-label="Tutup catatan kiriman" className="sp-btn ghost"><Icon name="close" size={14} stroke={2.2} /></button>
+          </div>
+        )}
         {todo.length === 0 ? (
           <div className="sp-card" style={{ padding: 16, fontSize: 14, color: "var(--app-muted)" }}>
             Aman. Ga ada follow-up, penawaran, deal macet, atau tagihan yang nunggu. Pasang jadwal follow-up dari detail lead.
@@ -431,10 +463,10 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
                   })()}
                   <div className="sp-task-acts">
                     {t.wa && t.phone
-                      ? <a href={waLink(t.phone, t.text)} target="_blank" rel="noreferrer" className="sp-btn line">{t.action}</a>
+                      ? <a href={waLink(t.phone, t.text)} target="_blank" rel="noreferrer" onClick={() => sendOf(t)} className="sp-btn line">{t.action}</a>
                       : <button onClick={t.open} className="sp-btn line">{t.action}</button>}
                     {t.snooze && <button onClick={t.snooze} className="sp-btn ghost">Tunda</button>}
-                    {!t.snooze && t.wa && t.phone && <button onClick={t.open} className="sp-btn ghost">Buka</button>}
+                    {t.wa && t.phone && <button onClick={t.open} className="sp-btn ghost">Buka</button>}
                     {t.journey && t.journey.chat.length > 0 && <button onClick={() => setChatOf(t)} className="sp-btn ghost" aria-haspopup="dialog" aria-label={`Chat terakhir dengan ${t.title}`}>Chat</button>}
                   </div>
                 </article>

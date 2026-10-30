@@ -215,6 +215,7 @@ export interface Invoice extends Brief {
   date: string;
   dueDate: string;
   payments: Payment[];
+  remindedAt?: string;    // the last reminder sent from Perlu Ditindak
   ownerUid?: string;      // guild: the seller (lib/space.ts stamp)
   ownerName?: string;
   issuer?: Issuer;        // frozen when the invoice is made (PRD-011)

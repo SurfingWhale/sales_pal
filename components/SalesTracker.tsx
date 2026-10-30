@@ -53,7 +53,7 @@ import { useHuntSession, useProspects, useStrategy } from "@/lib/prospectStore";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { parseVCards } from "@/lib/vcard";
 import { authFetch } from "@/lib/authFetch";
-import { Component, Invoice, PriceChange, Quote, QuoteTemplate, Service, addDays, balance, daysBetween, invoiceState, owed, longDate, rupiah, today, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
+import { Component, Invoice, PriceChange, Quote, QuoteTemplate, Service, addDays, balance, daysBetween, invoiceState, owed, longDate, rupiah, today, total, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
 import { useConfirm } from "@/components/ConfirmSheet";
 import { LeadGeo, validGeo } from "@/lib/geo";
 
@@ -681,6 +681,35 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     };
   }
 
+  // WhatsApp sent from a Perlu Ditindak card. Each writes down what it was, so
+  // the card steps aside instead of asking again tomorrow; Batal puts it back.
+  // A follow-up: today's contact, and the same reminder three days on.
+  const FOLLOW_AGAIN = 3;
+  async function followedUp(l: Lead) {
+    const ref = spaceDoc(space, "leads", l.id);
+    const prev = l.nextActionDate || "";
+    const undoContact = await logContact(l, `Follow-up: ${l.nextAction || "Follow-up"}`);
+    await updateDoc(ref, { nextActionDate: addDays(today(), FOLLOW_AGAIN) });
+    return async () => { await updateDoc(ref, { nextActionDate: prev }); await undoContact?.(); };
+  }
+  // A quote nudged (the same field the Penawaran tab's Follow-up WA sets), and
+  // the chat counted on its lead.
+  async function nudgedQuote(q: Quote) {
+    const ref = spaceDoc(space, "quotes", q.id);
+    const prev = q.followUpAt;
+    const lead = leads.find(l => l.id === q.leadId);
+    const undoContact = lead ? await logContact(lead, `Follow-up penawaran ${q.number}`) : undefined;
+    await updateDoc(ref, { followUpAt: today() });
+    return async () => { await updateDoc(ref, { followUpAt: prev ?? deleteField() }); await undoContact?.(); };
+  }
+  // A bill reminded: off the list for two days.
+  async function remindedInvoice(i: Invoice) {
+    const ref = spaceDoc(space, "invoices", i.id);
+    const prev = i.remindedAt;
+    await updateDoc(ref, { remindedAt: today() });
+    return async () => { await updateDoc(ref, { remindedAt: prev ?? deleteField() }); };
+  }
+
   async function saveFollowUp(id: string) {
     await updateDoc(spaceDoc(space, "leads", id), { nextAction: fu.action.trim(), nextActionDate: fu.date });
   }
@@ -771,54 +800,68 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       profile: p.url || (p.platform === "Threads" ? profileUrl(h) : p.platform === "IG" ? `https://www.instagram.com/${h}/` : undefined),
     };
   };
+  const hasWa = (phone?: string) => (phone || "").replace(/\D/g, "").length >= 8;
+  // A quote waits three days after it went out or was last nudged.
+  const lastAsk = (q: Quote) => (q.followUpAt && q.followUpAt > (q.sentAt || "") ? q.followUpAt : q.sentAt || "");
   const todo = [
     ...leads.filter(l => l.nextActionDate && l.nextActionDate <= soon && inPlay(l.status)).map(l => ({
       key: `l_${l.id}`, when: l.nextActionDate as string, icon: "calendar" as IconName, title: l.name,
       what: l.nextAction || "Follow-up", phone: l.phone, text: `Halo ${l.contact || l.name}, `,
-      kind: "Follow-up", action: "Buka lead", wa: false,
+      kind: "Follow-up", action: hasWa(l.phone) ? "Chat" : "Buka lead", wa: hasWa(l.phone), amount: Number(l.value) || 0,
+      onSent: () => followedUp(l), logged: `Follow-up ke ${l.name} dicatat · berikutnya ${longDate(addDays(now, FOLLOW_AGAIN))}`,
       snooze: () => { updateDoc(spaceDoc(space, "leads", l.id), { nextActionDate: addDays(today(), 1) }); },
       open: () => openLead(l),
     })),
     ...queue(prospects, now, strategy).map(p => ({
       key: `p_${p.id}`, when: view(p, now, strategy).due as string, icon: "target" as IconName, title: p.name ? `${p.name} (${p.handle})` : p.handle,
       what: `${statusLabel(p, view(p, now, strategy))} via ${p.platform}`, phone: "", text: "",
-      kind: "Hunting", action: p.contact === "baru" ? "Kirim intro" : "Follow-up", wa: false,
+      kind: "Hunting", action: p.contact === "baru" ? "Kirim intro" : "Follow-up", wa: false, amount: 0,
       open: () => setActiveTab("Hunting"),
       journey: journeyOf(p),
     })),
     ...hunts.filter(h => h.status === "Tertarik" && !h.leadId && !h.prospectId).map(h => ({
       key: `h_${h.id}`, when: h.date, icon: "target" as IconName, title: h.target || "Tanpa nama",
       what: `Tertarik via ${h.platform} — jadiin lead`, phone: "", text: "",
-      kind: "Tertarik di Hunting", action: "Jadiin lead", wa: false,
+      kind: "Tertarik di Hunting", action: "Jadiin lead", wa: false, amount: 0,
       open: () => setActiveTab("Hunting"),
     })),
-    ...quotes.filter(q => q.status === "Terkirim" && q.sentAt && daysBetween(q.sentAt, now) >= 3).map(q => ({
-      key: `q_${q.id}`, when: addDays(q.sentAt as string, 3), icon: "doc" as IconName, title: q.leadName,
-      what: `Penawaran ${q.number} belum dijawab ${daysBetween(q.sentAt as string, now)} hari`, phone: q.phone,
+    ...quotes.filter(q => q.status === "Terkirim" && q.sentAt && daysBetween(lastAsk(q), now) >= 3).map(q => ({
+      key: `q_${q.id}`, when: addDays(lastAsk(q), 3), icon: "doc" as IconName, title: q.leadName,
+      what: `Penawaran ${q.number} belum dijawab ${daysBetween(q.sentAt as string, now)} hari${q.followUpAt ? ` · follow-up ${longDate(q.followUpAt)}` : ""}`, phone: q.phone,
       text: `Halo ${q.contact || q.leadName}, mau follow up penawaran ${q.number} kemarin. Ada yang bisa aku bantu jelasin?`,
-      kind: "Penawaran nunggu", action: q.phone ? "Follow up via WA" : "Lihat penawaran", wa: Boolean(q.phone),
+      kind: "Penawaran nunggu", action: q.phone ? "Follow up via WA" : "Lihat penawaran", wa: Boolean(q.phone), amount: total(q),
+      onSent: () => nudgedQuote(q), logged: `Follow-up ${q.number} dicatat · muncul lagi ${longDate(addDays(now, 3))} kalau belum dijawab`,
       open: () => setActiveTab("Penawaran"),
     })),
     ...stuck.map(s => ({
       key: `s_${s.key}`, when: addDays(s.lastMove, STALL_DAYS), icon: "pause" as IconName, title: s.deal.contactName,
       what: stalledWhat(s), phone: s.deal.phone || "", text: `Halo ${s.deal.contactName}, `,
-      kind: "Deal macet", action: "Geser deal", wa: false,
+      kind: "Deal macet", action: "Geser deal", wa: false, amount: s.deal.quoteValue || 0,
       open: () => setActiveTab(s.where === "guild" ? "Guild" : "Report Klien"),
     })),
     ...rejections.filter(r => r.followUpDate && r.followUpDate <= soon && r.followUpDate >= addDays(now, -14)).map(r => ({
       key: `r_${r.id}`, when: r.followUpDate, icon: "refresh" as IconName, title: r.leadName,
       what: `Coba lagi setelah ditolak (${r.reason || r.channel})`, phone: "", text: "",
-      kind: "Coba lagi", action: "Lihat catatan", wa: false,
+      kind: "Coba lagi", action: "Lihat catatan", wa: false, amount: 0,
       open: () => setActiveTab("Rejection Log"),
     })),
-    ...invoices.filter(i => owed(i) > 0 && i.dueDate && i.dueDate <= soon).map(i => ({
+    // A reminder sent today or yesterday rests the bill for those two days.
+    ...invoices.filter(i => owed(i) > 0 && i.dueDate && i.dueDate <= soon && !(i.remindedAt && i.remindedAt >= addDays(now, -1))).map(i => ({
       key: `i_${i.id}`, when: i.dueDate, icon: "receipt" as IconName, title: i.leadName,
       what: `${invoiceState(i, now) === "Telat" ? "Telat bayar" : "Jatuh tempo"} ${i.number} · sisa ${rupiah(balance(i))}`, phone: i.phone,
       text: `Halo ${i.contact || i.leadName}, reminder invoice ${i.number} jatuh tempo ${longDate(i.dueDate)}, sisa ${rupiah(balance(i))}. Terima kasih!`,
-      kind: invoiceState(i, now) === "Telat" ? "Invoice telat" : "Invoice jatuh tempo", action: i.phone ? "Kirim pengingat" : "Lihat invoice", wa: Boolean(i.phone),
+      kind: invoiceState(i, now) === "Telat" ? "Invoice telat" : "Invoice jatuh tempo", action: i.phone ? "Kirim pengingat" : "Lihat invoice", wa: Boolean(i.phone), amount: balance(i),
+      onSent: () => remindedInvoice(i), logged: `Pengingat ${i.number} dicatat · muncul lagi ${longDate(addDays(now, 2))} kalau belum lunas`,
       open: () => setActiveTab("Invoice"),
     })),
-  ].sort((a, b) => a.when.localeCompare(b.when));
+  // What's due now comes first, the most money at stake on top (a late Rp 10 jt
+  // invoice before a follow-up on a lead with no value); what's coming later
+  // stays in date order.
+  ].sort((a, b) => {
+    const an = a.when <= now, bn = b.when <= now;
+    if (an !== bn) return an ? -1 : 1;
+    return (an ? b.amount - a.amount : 0) || a.when.localeCompare(b.when);
+  });
 
   function setClosingTarget() {
     setTargetError("");

@@ -1929,6 +1929,55 @@ export const flows = [
     },
   },
   {
+    name: "perlu ditindak: most money first, WhatsApp from a card is logged, Batal",
+    async run(t) {
+      const { page } = t;
+      const card = (name) => page.locator(".sp-task", { hasText: name });
+      const order = () => page.locator(".sp-task h3").allTextContents();
+      const note = () => page.getByRole("group", { name: "Catatan kiriman" });
+      await t.step("sign up, then two follow-ups and a late bill arrive", async () => {
+        const email = await signup(t);
+        const uid = await uidOf(t.project, email);
+        const lead = (name, phone, value, nextActionDate) => ({ name, contact: "", phone, email: "", category: "F&B", source: "Referral", status: "Warm", notes: "", value, lastContact: daysAgo(5), nextAction: "Tanya keputusan", nextActionDate });
+        await seedDocs(t.project, [
+          // The older promise is worth less: it used to come first.
+          [`users/${uid}/leads/fu_kecil`, lead("Kopi Kecil", "081200000001", 1_000_000, daysAgo(2))],
+          [`users/${uid}/leads/fu_besar`, lead("Resto Besar", "081200000002", 20_000_000, daysAgo(0))],
+          [`users/${uid}/invoices/inv_telat`, { number: "INV-TELAT-001", quoteId: "", leadId: "", leadName: "Toko Tagih", contact: "", phone: "081200000003",
+            items: [{ name: "Foto produk", qty: 1, price: 5_000_000 }], discount: 0, dpPercent: 0, notes: "", date: daysAgo(10), dueDate: daysAgo(1), payments: [] }],
+        ]);
+        await card("Toko Tagih").first().waitFor();
+      });
+      await t.step("what's due goes by money: Resto Besar, Toko Tagih, then Kopi Kecil", async () => {
+        const o = (await order()).slice(0, 3).join(" · ");
+        if (o !== "Resto Besar · Toko Tagih · Kopi Kecil") throw new Error(`order: ${o}`);
+        await card("Resto Besar").getByText("Paling mendesak").waitFor();
+      });
+      await t.step("Chat on a follow-up opens WhatsApp, is logged, and comes back in three days", async () => {
+        await page.context().route("https://wa.me/**", r => r.fulfill({ status: 200, contentType: "text/html", body: "<title>wa</title>" }));
+        // The lead is still a tap away beside it.
+        await card("Resto Besar").getByRole("button", { name: "Buka", exact: true }).waitFor();
+        const [pop] = await Promise.all([page.waitForEvent("popup"), card("Resto Besar").getByRole("link", { name: "Chat", exact: true }).click()]);
+        if (!pop.url().startsWith("https://wa.me/6281200000002")) throw new Error(`opened ${pop.url()}`);
+        await pop.close();
+        await note().getByText(/^✓ Follow-up ke Resto Besar dicatat · berikutnya /).waitFor();
+        await page.waitForFunction(() => document.querySelector(".sp-task h3")?.textContent === "Toko Tagih", null, { timeout: 8000 });
+      });
+      await t.step("Batal puts it back on top", async () => {
+        await note().getByRole("button", { name: "Batal", exact: true }).click();
+        await note().getByText("Dibatalin, ga dicatat.").waitFor();
+        await page.waitForFunction(() => document.querySelector(".sp-task h3")?.textContent === "Resto Besar", null, { timeout: 8000 });
+      });
+      await t.step("Kirim pengingat on a late bill rests it for two days", async () => {
+        const [pop] = await Promise.all([page.waitForEvent("popup"), card("Toko Tagih").getByRole("link", { name: "Kirim pengingat" }).click()]);
+        if (!pop.url().startsWith("https://wa.me/6281200000003")) throw new Error(`opened ${pop.url()}`);
+        await pop.close();
+        await note().getByText(/^✓ Pengingat INV-TELAT-001 dicatat/).waitFor();
+        await card("Toko Tagih").first().waitFor({ state: "detached", timeout: 8000 });
+      });
+    },
+  },
+  {
     name: "beranda: three modes — jualan, report & closing, belajar",
     async run(t) {
       const { page } = t;
