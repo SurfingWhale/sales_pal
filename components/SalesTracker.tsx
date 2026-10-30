@@ -14,6 +14,8 @@ import { CATEGORIES, SOURCES, STATUS_COLOR, channelOf, firstContact, parseRupiah
 import Icon, { IconName } from "@/components/Icon";
 import ProfileSheet, { MeAvatar, useMyAvatar } from "@/components/ProfileSheet";
 import LeadFinder, { Found } from "@/components/LeadFinder";
+import PasteFill, { DupNotice, PastePlace } from "@/components/PasteFill";
+import { fillEmpty } from "@/lib/paste";
 import { snippet } from "@/lib/places";
 import { downscaleImage } from "@/lib/image";
 import { registerWorker, takeSharedFile } from "@/lib/share";
@@ -275,6 +277,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [savingLead, setSavingLead] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [newLead, setNewLead] = useState({ name: "", contact: "", source: "GMaps", status: "Cold", email: "", phone: "", category: "F&B", notes: "", value: "" });
+  const [newPlace, setNewPlace] = useState<PastePlace>({});   // from a pasted Maps link (PRD-018)
   const [showImport, setShowImport] = useState(false);
   const [showFinder, setShowFinder] = useState(false);
   const [importHeaders, setImportHeaders] = useState<string[]>([]);
@@ -598,8 +601,11 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       await setDoc(spaceDoc(space, "leads", id), stamp(space, {
         ...newLead, name: newLead.name.trim(), lastContact: firstContact(newLead.status, today()),
         value: parseRupiah(newLead.value),
+        ...(newPlace.address ? { address: newPlace.address } : {}),
+        ...(newPlace.geo ? { geo: newPlace.geo } : {}),
       }));
       setNewLead({ name: "", contact: "", source: "GMaps", status: "Cold", email: "", phone: "", category: "F&B", notes: "", value: "" });
+      setNewPlace({});
       setShowAddLead(false);
     } catch {
       setAddLeadErr("Gagal menyimpan. Cek koneksi, lalu coba lagi.");
@@ -1292,6 +1298,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               <h2 id="nl-h" style={{ margin: 0, fontSize: 18, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Tambah lead</h2>
               <button type="button" onClick={closeAddLead} aria-label="Tutup" style={{ flexShrink: 0, width: 44, height: 44, margin: "-10px -10px -10px 0", borderRadius: "50%", background: "transparent", border: "none", color: "var(--app-ink-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={18} stroke={2} /></button>
             </div>
+            <PasteFill place={newPlace} onFill={p => setNewLead(prev => fillEmpty(prev, p))} onPlace={setNewPlace} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {([["name", "Nama bisnis", "mis. Kopi Senja", "text", "organization"], ["contact", "Nama kontak", "mis. Dina", "text", "off"], ["email", "Email", "nama@contoh.id", "email", "off"], ["phone", "No. WhatsApp", "mis. 0812 3456 7890", "tel", "off"], ["value", "Nilai deal (Rp)", "mis. 5jt atau 5.000.000", "text", "off"]] as [keyof typeof newLead, string, string, string, string][]).map(([k, label, ph, type, ac]) => (
                 <div key={k} style={{ gridColumn: k === "name" ? "1/-1" : "auto" }}>
@@ -1316,6 +1323,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                 <textarea id="nl-notes" value={newLead.notes} onChange={e => setNewLead({ ...newLead, notes: e.target.value })} style={{ ...inputStyle, fontSize: 16, resize: "vertical", minHeight: 80 }} placeholder="mis. ketemu di GMaps, buka cabang baru bulan depan" />
               </div>
             </div>
+            <DupNotice leads={leads} draft={newLead} onOpen={l => { setShowAddLead(false); setAddLeadErr(""); openLead(l); }} />
             {addLeadErr && newLead.name.trim() && <p role="alert" style={{ margin: "12px 0 0", fontSize: 13, color: "var(--hot)" }}>{addLeadErr}</p>}
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
               <button type="button" onClick={closeAddLead} disabled={savingLead} style={{ ...btnPrimary, flex: 1, minHeight: 44, background: "var(--app-inner)", color: "var(--app-text)" }}>Batal</button>

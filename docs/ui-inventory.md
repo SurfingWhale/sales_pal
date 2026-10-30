@@ -29,7 +29,7 @@ Singkatan kolom "Tutup":
 
 | Komponen (state) | Didefinisikan | Dibuka dari | Tutup / interaksi | Data |
 |---|---|---|---|---|
-| Tambah lead (`showAddLead`) | `SalesTracker.tsx` | `setShowAddLead(true)`: tab Leads, Beranda `onAdd` | STD + guard; Simpan → `addLead()` | `setDoc` leads |
+| Tambah lead (`showAddLead`) | `SalesTracker.tsx` | `setShowAddLead(true)`: tab Leads, Beranda `onAdd` | STD + guard; kolom Tempel (`PasteFill`) mengisi yang kosong, `DupNotice` → "Buka yang udah ada" (`openLead`); Simpan → `addLead()` | `setDoc` leads (+ `address`, `geo` dari tempelan) |
 | Target closing bulanan (`targetDraft`) | `SalesTracker.tsx` | Beranda "Atur target" → `setClosingTarget` | STD + guard; Simpan → `saveClosingTarget` | `setDoc` settings/hunting |
 | Pilih lead untuk file share (`shared`) | `SalesTracker.tsx` | Effect membaca `?share` → `takeSharedFile()` (`lib/share.ts`, dari `public/sw.js`). **Tidak bisa dipicu statis.** | Pilih lead → `openLead`; "+ Lead baru" | `setDoc` leads |
 | Import leads (`showImport`) | `SalesTracker.tsx` | Beranda/Leads, LeadFinder | STD; Selesai | parse xlsx/csv/vcf, `/api/scan`, `writeBatch` leads |

@@ -29,7 +29,7 @@ Browser / PWA
 
 - **Frontend:** React 18 + Next.js 14. Hampir semua layar adalah *client component* (`"use client"` di baris pertama), artinya jalan di browser, bukan di server. [cek]
 - **Data:** Firebase. Browser baca dan tulis Firestore langsung (`lib/firebase.ts`). Yang boleh dan nggak boleh diatur di `firestore.rules`. [cek]
-- **Server:** cuma buat yang butuh rahasia atau kuota: `app/api/*` (Google Places, geocode, scan gambar, Threads, push, pricelist untuk situs). [cek]
+- **Server:** cuma buat yang butuh rahasia atau kuota: `app/api/*` (Google Places, geocode, scan gambar, Threads, push, pricelist untuk situs, baca website yang ditempel). [cek]
 - **Tidak ada router per layar di dalam app.** Semua layar setelah login ada di satu halaman (`/dashboard`), dan pindah layar = ganti state `activeTab`. [cek]
 
 ---

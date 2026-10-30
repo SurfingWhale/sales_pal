@@ -1,6 +1,6 @@
 # PRD-018 — Tempel apa saja → kolom terisi; scroll yang tidak bikin kerja dua kali
 
-- **Status:** rencana, 23 Okt. Belum dibangun.
+- **Status:** fase 1 dibangun 30 Okt (§4). Fase 2 (scroll) dan 3 (Google + AI) menyusul.
 - **Terkait:** PRD-009 (unfurl Threads), PRD-012 (Cari bisnis, email dari website), PRD-013 (`readPlace`: membaca link Maps dan koordinat), PRD-015 (izin dan batas Google), PRD-010 dan `docs/standards/design.md` (standar native dan desain).
 
 ## 1. Masalah
@@ -51,6 +51,20 @@ Satu kolom **Tempel** di *Tambah lead* (nanti juga di target Hunting dan Lokasi 
   - semua di HP (WebKit iPhone 12) dan desktop.
 
 ## 4. Fase
-1. Kolom Tempel: Threads, Maps, teks bebas (pola), website; cek duplikat.
+1. ✅ **Dibangun 30 Okt:** kolom **Tempel** di *Tambah lead* + cek duplikat.
+   - **Membaca:** `lib/paste.ts`, pola saja, langsung di HP:
+     - link Maps: nama, alamat dari teks bagikan, titik peta;
+     - link Threads dan Instagram: @handle;
+     - teks bebas: no HP (`08…`, `+62…`, `wa.me/…`), email, @handle;
+     - domain polos (`kopisenja.id`): website.
+   - **Lalu ke server, gratis:**
+     - post Threads lewat unfurl yang sudah ada;
+     - link Maps pendek lewat `/api/geocode`;
+     - website dan profil Instagram lewat `/api/site` baru (`lib/siteRead.ts`, dipakai juga oleh Cari bisnis): nama, deskripsi, email publik, nomor WA atau telepon, IG. Batas 60 per hari per orang; hanya alamat publik.
+   - **Mengisi:** hanya kolom yang masih kosong; yang sudah diketik tidak ditimpa. Sumber ikut link (GMaps, Threads, DM IG, Lainnya), dan catatan dapat satu baris "Dari tempelan …: link".
+   - **Hasil:** "Dari Maps: Nama ✓ · Kontak — · No HP ✓ · Email — · Lokasi ✓". Titik peta dan alamat ikut tersimpan ke lead dan bisa dihapus sebelum simpan.
+   - **Duplikat:** `lib/leadDupes.ts` membandingkan no HP (`08…` = `+62…`), email, @handle, atau nama yang sama. Hasilnya peringatan "Mirip lead yang udah ada: X (no HP sama)" dengan tombol **Buka yang udah ada**; bukan blokir, karena dua cabang bisa bernama sama. Indeksnya dibangun sekali per daftar, jadi bisa dipakai import CSV besar.
+   - **Belum:** kolom Tempel di target Hunting dan Lokasi lead; ID tempat Google sebagai kunci duplikat (lead belum menyimpannya).
+   - **Tes:** flow `tempel lead` (Maps share → kolom + titik peta; website mengisi yang kosong saja; no HP sama → Buka yang udah ada). Lulus di Chromium HP & desktop dan iPhone 12 WebKit, audit HIG 0 temuan.
 2. Scroll: header dan toolbar menempel, tap nav aktif → atas, posisi kembali (Leads dulu, lalu Penawaran dan Invoice).
 3. "Lengkapi dari Google" + AI untuk teks berantakan (pakai budget PRD-016).

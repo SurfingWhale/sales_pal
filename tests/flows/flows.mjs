@@ -731,6 +731,62 @@ export const flows = [
     },
   },
   {
+    name: "tempel lead: a paste fills the form, a duplicate is offered",
+    async run(t) {
+      const { page } = t;
+      await stubMap(page);
+      // The server reads websites (/api/site); flows answer for it, so nothing here leaves the machine.
+      await page.route("**/api/site", r => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+        url: "https://kopisitus.id/", title: "Kopi Situs Flow", name: "Kopi Situs Flow", description: "Kopi susu dan roti di Bintaro",
+        email: "halo@kopisitus.id", phone: "6281299990000", instagram: "@kopisitus" }) }));
+      const paste = (text) => modal(page).locator("#nl-paste").evaluate((el, value) => {
+        const data = new DataTransfer();
+        data.setData("text/plain", value);
+        el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+      }, text);
+      const openForm = async () => { await go(page, "Jualan", "Leads"); await page.getByRole("button", { name: /tambah lead/i }).click(); };
+      const saveForm = async () => {
+        await modal(page).getByRole("button", { name: "Simpan lead" }).click();
+        await page.locator(".modal-overlay").waitFor({ state: "detached", timeout: 10000 });
+      };
+      await t.step("sign up", () => signup(t));
+      await t.step("a Maps share fills name, number, address and the point", async () => {
+        await openForm();
+        await paste("Kopi Tempel Flow\nJl. Tempel No. 3, Jakarta\nhttps://www.google.com/maps/place/Kopi+Tempel+Flow/@-6.22,106.84,17z/data=!3m1!4b1!8m2!3d-6.2253771!4d106.8487123\nWA 0812 1111 2222");
+        await modal(page).getByRole("status").filter({ hasText: "Dari Maps" }).waitFor();
+        if (await modal(page).locator("#nl-name").inputValue() !== "Kopi Tempel Flow") throw new Error("name not filled from the Maps share");
+        if (await modal(page).locator("#nl-phone").inputValue() !== "081211112222") throw new Error("phone not filled from the Maps share");
+        if (await modal(page).locator("#nl-source").inputValue() !== "GMaps") throw new Error("source not set to GMaps");
+        await modal(page).getByText(/Jl\. Tempel No\. 3, Jakarta · titik peta ✓/).first().waitFor();
+        await t.audit("Tambah lead filled from a pasted Maps share");
+        await saveForm();
+        await openLeadRow(page, "Kopi Tempel Flow");
+        await page.getByText(/Muncul di Peta 3D · dari link peta/).first().waitFor();
+      });
+      await t.step("a website fills only what's empty; the typed name stays", async () => {
+        await closeAll(page);
+        await openForm();
+        await modal(page).locator("#nl-name").fill("Nama Ketik Sendiri");
+        await paste("kopisitus.id");
+        await modal(page).getByRole("status").filter({ hasText: /Dari website: .*Email ✓/ }).waitFor();
+        if (await modal(page).locator("#nl-name").inputValue() !== "Nama Ketik Sendiri") throw new Error("a typed name was overwritten");
+        if (await modal(page).locator("#nl-email").inputValue() !== "halo@kopisitus.id") throw new Error("email not filled from the website");
+        if (await modal(page).locator("#nl-phone").inputValue() !== "081299990000") throw new Error("phone not filled from the website");
+        if (await modal(page).locator("#nl-contact").inputValue() !== "@kopisitus") throw new Error("@handle not filled from the website");
+        await saveForm();
+      });
+      await t.step("the same WhatsApp number offers the lead that's already there", async () => {
+        await openForm();
+        await modal(page).locator("#nl-phone").fill("+62 812-1111-2222");
+        await modal(page).getByText(/Mirip lead yang udah ada: Kopi Tempel Flow \(no HP sama\)/).waitFor();
+        await modal(page).getByRole("button", { name: "Buka yang udah ada" }).click();
+        await page.locator("#nl-paste").waitFor({ state: "detached" });
+        if (!isWide(page)) await page.getByRole("dialog", { name: /^Profil Kopi Tempel Flow/ }).waitFor();
+        else await expectText(page, "Kopi Tempel Flow");
+      });
+    },
+  },
+  {
     name: "sell: package → quote → accepted → invoice → DP",
     async run(t) {
       const { page } = t;
