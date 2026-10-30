@@ -1929,7 +1929,7 @@ export const flows = [
     },
   },
   {
-    name: "perlu ditindak: most money first, WhatsApp from a card is logged, Batal",
+    name: "perlu ditindak: the most money due on top, WhatsApp from a card is logged, Batal",
     async run(t) {
       const { page } = t;
       const card = (name) => page.locator(".sp-task", { hasText: name });
@@ -1948,9 +1948,9 @@ export const flows = [
         ]);
         await card("Toko Tagih").first().waitFor();
       });
-      await t.step("what's due goes by money: Resto Besar, Toko Tagih, then Kopi Kecil", async () => {
+      await t.step("the most money due is Paling mendesak; the rest by date", async () => {
         const o = (await order()).slice(0, 3).join(" · ");
-        if (o !== "Resto Besar · Toko Tagih · Kopi Kecil") throw new Error(`order: ${o}`);
+        if (o !== "Resto Besar · Kopi Kecil · Toko Tagih") throw new Error(`order: ${o}`);
         await card("Resto Besar").getByText("Paling mendesak").waitFor();
       });
       await t.step("Chat on a follow-up opens WhatsApp, is logged, and comes back in three days", async () => {

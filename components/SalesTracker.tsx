@@ -801,7 +801,6 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     };
   };
   const hasWa = (phone?: string) => (phone || "").replace(/\D/g, "").length >= 8;
-  const MONEY_FIRST = 3;
   // A quote waits three days after it went out or was last nudged.
   const lastAsk = (q: Quote) => (q.followUpAt && q.followUpAt > (q.sentAt || "") ? q.followUpAt : q.sentAt || "");
   const todo = [
@@ -856,11 +855,12 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       open: () => setActiveTab("Invoice"),
     })),
   ].sort((a, b) => a.when.localeCompare(b.when));
-  // The three due tasks with the most money at stake go first (a late Rp 10 jt
-  // bill before a follow-up on a lead with no value); the rest keep date
-  // order, so the day's Hunting and follow-ups aren't pushed off the cards.
-  const top = todo.filter(t => t.when <= now && t.amount > 0).sort((a, b) => b.amount - a.amount).slice(0, MONEY_FIRST);
-  todo.splice(0, todo.length, ...top, ...todo.filter(t => !top.includes(t)));
+  // Paling mendesak is the due task with the most money at stake (a late
+  // Rp 10 jt bill before a follow-up on a lead with no value). The rest keep
+  // date order: desktop shows four cards, and the day's Hunting and
+  // follow-ups must stay among them.
+  const top = todo.filter(t => t.when <= now && t.amount > 0).reduce<(typeof todo)[number] | null>((m, t) => (!m || t.amount > m.amount ? t : m), null);
+  if (top) todo.splice(0, todo.length, top, ...todo.filter(t => t !== top));
 
   function setClosingTarget() {
     setTargetError("");
