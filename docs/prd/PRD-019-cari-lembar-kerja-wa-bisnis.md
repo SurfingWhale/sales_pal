@@ -1,6 +1,6 @@
 # PRD-019 — QA 28 Okt: satu kolom cari, lembar kerja prospek, kirim yang dicatat setelah dikonfirmasi, WA Bisnis, tab Tim, profil bisnis guild
 
-- **Status:** Rencana, 29 Okt. Semua keputusan D1–D6 udah dijawab owner 29 Okt. D7 masih usul. Sebagian §3.4 dan §3.6 udah dibangun sesi lain (#78, #85, #87, #88); sisanya belum.
+- **Status:** Rencana, 29 Okt. Semua keputusan D1–D7 udah dijawab owner 29–30 Okt. Sebagian §3.4 dan §3.6 udah dibangun sesi lain (#78, #85, #87, #88); sisanya belum.
 - **Tanggal:** 2026-10-29
 - **Konteks:** Owner nguji versi live di iPhone 28 Okt (Notion: SalesPAL → Sales PAL Iterasi → "QA-3 Test", 5 screenshot). Ada sembilan temuan di lima tempat: Beranda, Hunting, Jualan → Leads, Tim, Guild. Bagian 1 isinya fakta yang udah dicek di kode `main` `b1b400b`. Rekomendasi ditandai **[usul]**, yang belum pasti ditandai **[cek]**. Peta file: `docs/ARCHITECTURE.md`, daftar dialog/sheet: `docs/ui-inventory.md`.
 - **Terkait:** PRD-009 (journey prospek; **D1 "Copy = kirim" diganti §3.5**), PRD-011 §5 #2–3 (Profil bisnis, belum dibangun), PRD-012 (Cari bisnis), PRD-013 (Peta 3D), PRD-015 (kuota Google), PRD-016 (batas WA), PRD-018 §3 (header nempel), PRD-010 dan `docs/standards/design.md`.
@@ -137,7 +137,7 @@ Kartu paling atas di Beranda jadi satu kolom cari + saklar **[Data saya | Bisnis
 ### 3.3 Satu daftar tipe bisnis + fokus per hari (Fase 2)
 
 - **Satu sumber: `lib/categories.ts`.** Isinya daftar `{ id, label, words, color, glyph, parent? }`. `CATEGORIES` di `lib/leadEdit.ts` dan `CATEGORY_WORDS` + `categoryOf()` di `lib/scriptPick.ts` pindah ke file ini dan di-re-export, jadi kode yang manggil ga berubah. `FAMILIES` di `GeoMap.tsx` dihapus, dan warna + glyph Maki (§3.1) diambil dari daftar yang sama.
-- **D7 [usul]: tambah dua tipe.** **Sport** (olahraga & kebugaran: gym, fitness, yoga, pilates, padel, renang, futsal, lari) dan **Beauty** (salon, spa, skincare, barber, nail). Sekarang dua-duanya nyampur di Health, padahal peta udah misahin, dan contoh owner ("yoga") belum kebaca sama sekali.
+- **D7 (disetujui owner 30 Okt): tambah dua tipe.** **Sport** (olahraga & kebugaran: gym, fitness, yoga, pilates, padel, renang, futsal, lari) dan **Beauty** (salon, spa, skincare, barber, nail). Sekarang dua-duanya nyampur di Health, padahal peta udah misahin, dan contoh owner ("yoga") belum kebaca sama sekali.
   - Kata-katanya dipindah dari Health.
   - Lead lama yang tersimpan "Health" tetap "Health". Kalau ada kategori Google aslinya, `categoryOf` tetap bisa baca dari situ.
   - Biar script yang ditandai Health ga tiba-tiba hilang buat lead Sport/Beauty, kedua tipe baru punya `parent: "Health"`, dan `rankScripts` nganggap tag induk juga cocok.
@@ -274,7 +274,7 @@ Ga ada koleksi baru, jadi daftar koleksi di `CLAUDE.md` ga berubah.
 | D4 | Di iPhone, WhatsApp biasa + WhatsApp Business dua-duanya terpasang? Boleh dites? | **Iya, dua-duanya; boleh dites** (spike di awal Fase 3, §3.6 B) |
 | D5 | Report Tim → Dashboard, Aktivitas → Log? | **Boleh** |
 | D6 | Batas chat satu-satu? | **Ga ada batas.** Dicatat di Log aktivitas harian sebagai ukuran (§3.7) |
-| D7 | Tambah tipe bisnis **Sport** dan **Beauty** (dipisah dari Health), dengan script Health tetap kepakai? | **Usul**, nunggu owner. Kalau ditolak: "yoga", "pilates", dan seterusnya ditambah ke kata-kata Health, dan peta tetap satu warna buat Health |
+| D7 | Tambah tipe bisnis **Sport** dan **Beauty** (dipisah dari Health), dengan script Health tetap kepakai? | **Boleh** (30 Okt). Sport dan Beauty masuk `lib/categories.ts` dengan `parent: "Health"` |
 
 ---
 
