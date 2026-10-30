@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser, takeQuota } from "@/lib/serverAuth";
 import { giveBackMonthly, mayUse, takeMonthly } from "@/lib/access";
 import type { Place } from "@/lib/places";
+import { emailOf } from "@/lib/siteRead";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,44 +26,6 @@ interface GPlace {
   websiteUri?: string; rating?: number; userRatingCount?: number; googleMapsUri?: string; primaryTypeDisplayName?: { text?: string };
   location?: { latitude?: number; longitude?: number };
   reviews?: { rating?: number; text?: { text?: string }; originalText?: { text?: string }; relativePublishTimeDescription?: string }[];
-}
-
-const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
-const NOT_EMAIL = /\.(png|jpe?g|gif|webp|svg|css|js)$|example\.|sentry|wixpress|@2x|domain\.com/i;
-
-// A public email on the business's own site: its home page, then a contact page.
-// Only a public web address: no IP literals, no local or internal hosts.
-function publicSite(site: string): boolean {
-  try {
-    const u = new URL(site);
-    if (u.protocol !== "https:" && u.protocol !== "http:") return false;
-    const h = u.hostname.toLowerCase();
-    return h.includes(".") && !/^[\d.]+$/.test(h) && !h.includes(":") && !/(^|\.)(localhost|local|internal|lan)$/.test(h);
-  } catch { return false; }
-}
-
-async function emailOf(site: string): Promise<string> {
-  if (!publicSite(site)) return "";
-  for (const path of ["", "/kontak", "/contact", "/hubungi-kami"]) {
-    try {
-      const url = new URL(path || "/", site).toString();
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 4000);
-      const get = (u: string) => fetch(u, { signal: ctrl.signal, redirect: "manual", headers: { "User-Agent": "SalesPal/1.0 (+lead finder)" } });
-      let res = await get(url);
-      // One redirect (http → https, www), and only to another public site.
-      const next = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
-      if (next) { const to = new URL(next, url).toString(); if (!publicSite(to)) { clearTimeout(t); continue; } res = await get(to); }
-      clearTimeout(t);
-      if (!res.ok || !(res.headers.get("content-type") || "").includes("text/html")) continue;
-      const html = (await res.text()).slice(0, 400_000);
-      const found = (html.match(EMAIL) || []).map(e => e.toLowerCase()).filter(e => !NOT_EMAIL.test(e));
-      const host = new URL(site).hostname.replace(/^www\./, "");
-      const own = found.find(e => e.endsWith(`@${host}`));
-      if (own || found[0]) return own || found[0];
-    } catch { /* unreachable site: try the next page */ }
-  }
-  return "";
 }
 
 export async function POST(req: Request) {
