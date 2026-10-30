@@ -203,7 +203,8 @@
 /* ---------- 5 cta: one word is the button ---------- */
 .lp a.lp-cta { display: block; position: relative; min-height: 60svh; background: var(--paper); color: var(--ground); text-decoration: none; padding: 24px var(--m); overflow: hidden; }
 .lp a.lp-cta:hover, .lp a.lp-cta:focus-visible { background: var(--ground); color: var(--paper); }
-.lp-cta .say { max-width: 26ch; color: inherit; font-weight: 600; }
+/* A span: block so the measure holds, and clear of the arrow in the corner. */
+.lp-cta .say { display: block; max-width: min(26ch, 100% - 64px); color: inherit; font-weight: 600; }
 .lp-cta svg { position: absolute; right: var(--m); top: 24px; width: 48px; height: 48px; }
 .lp-cta .word { position: absolute; left: var(--m); bottom: 24px; font-size: var(--t-giant); font-weight: 800; letter-spacing: -0.06em; line-height: .8; white-space: nowrap; }
 @media (max-width: 720px) { .lp-cta { min-height: 46svh; }  .lp-cta svg { width: 32px; height: 32px; } }

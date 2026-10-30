@@ -337,8 +337,10 @@ export const flows = [
         await page.getByRole("tablist", { name: "Bagian app" }).getByRole("tab", { name: "Guild" }).click();
         await page.getByRole("heading", { name: "Satu tim, satu angka." }).waitFor();
       });
-      await t.step("Mulai gratis leads to the login", async () => {
-        await page.getByRole("link", { name: "Mulai gratis" }).click();
+      // Invite-only (PRD-015): the page offers a way in with an invite, never an open sign-up.
+      await t.step("Masuk pakai undangan leads to the login", async () => {
+        if (await page.getByText(/Mulai gratis|Coba gratis|Gratis buat dipakai|Google atau email/).count()) throw new Error("the landing still reads as open to everyone");
+        await page.getByRole("link", { name: "Masuk pakai undangan" }).click();
         await page.waitForURL("**/login");
       });
     },
