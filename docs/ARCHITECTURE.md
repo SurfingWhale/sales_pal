@@ -75,7 +75,7 @@ Definisinya di `SECTIONS` (`components/SalesTracker.tsx`):
 |---|---|---|
 | Beranda | Dashboard | `components/Beranda.tsx` (+ `BerandaReport`, `BerandaLearn`) |
 | Hunting | Hunting | `components/Hunting.tsx` |
-| Jualan | Leads · Penawaran · Invoice · Paket | Leads digambar langsung di `SalesTracker` (+ `LeadPanel`/`LeadPage` dari `components/LeadDetail.tsx`) · `components/Quotes.tsx` · `components/Invoices.tsx` · `components/Services.tsx` |
+| Jualan | Leads · Penawaran · Invoice · Paket | Leads digambar langsung di `SalesTracker` (+ `LeadPage` dari `components/LeadDetail.tsx`) · `components/Quotes.tsx` · `components/Invoices.tsx` · `components/Services.tsx` |
 | Tim & Report | Dashboard tim · Guild · Report Klien · Log aktivitas · Outreach · Rejection Log | `TeamDashboard.tsx` · `GuildHub.tsx` · `SalesReport.tsx` + `ClientHub.tsx` · `ActivityLog` · `TeamLogs.tsx` |
 | Belajar | Script Library · Simulator · AI Playbook | `ScriptLibrary.tsx` · `SalesSimulator` · (di dalam `SalesTracker`) |
 
@@ -181,7 +181,7 @@ Pola yang sama dipakai buat data lain lewat hook `useSpaceCollection(space, "quo
 | `components/Hunting.tsx` | Tempat Hunting: Prospek, halaman kirim, sesi | `ProspectList`, `ProspectThread`, `lib/prospectStore` |
 | `components/ProspectList.tsx` | Daftar prospek ala Notion + halaman kontak | `ProspectOutcome` (`useOutcome`) |
 | `components/ProspectThread.tsx` | Halaman chat satu prospek, gaya app chat: header ← avatar ⋯ (status & aksi), chat, satu baris tulis + pemilih template | `lib/prospects`, `lib/templates`, `ConvertSheet` |
-| `components/LeadDetail.tsx` | `LeadPanel` (desktop) dan `LeadPage` (HP) | `Sheet`, `PlaceEditor`, `ChatPicker`, `WaImport` |
+| `components/LeadDetail.tsx` | `LeadPage`: lembar kerja lead di semua layar | `Sheet`, `PlaceEditor`, `ChatPicker`, `LeadHistory`, `WaImport` |
 | `components/ChatPicker.tsx` | Chat ke lead lewat script kamu: pilih tahap (Intro, Follow-up, …), script paling cocok terpilih otomatis, edit, kirim di WhatsApp | `pitchTemplates`, `lib/templates`, `lib/scriptPick`, `useBusiness` |
 | `lib/scriptPick.ts` | Memilih script yang cocok buat lead: tag "Buat tipe bisnis" di template, kata khas tipe bisnis (`CATEGORY_WORDS`), dan kebutuhan/pain point; `categoryOf` membaca tipe bisnis dari teks | `lib/leadEdit` |
 | `components/Quotes.tsx`, `Invoices.tsx` | Daftar dan alur penawaran/invoice | `DocEditor`, `PrintSheet`, `WaSendSheet` |

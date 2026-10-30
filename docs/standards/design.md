@@ -77,6 +77,16 @@ Kotak **jangan** dipakai buat:
 - **Ilustrasi:** karakter clay owner (`public/archetypes`, `public/guild`) buat empty state, peran, dan tipe customer. Ilustrasi vektor baru = aset dari owner/desainer, bukan digambar AI.
 - **Warna teks:** token (`--brand-text`, `--ok`, `ink()`), bukan warna mentah. Lihat native.md.
 
+## Scroll
+
+Konten yang bergerak, kontrol tetap di tempat (PRD-018 §3, PRD-021 §3.5).
+
+- **Ga ada yang ikut gerak sama scroll** selain garis tepi header. Ga ada parallax, ga ada blok yang naik pas masuk layar: bikin halaman terasa "magnetic" dan orang ga yakin masih bisa di-scroll.
+- **Apa pun yang menempel punya latar solid**, dan offset-nya `var(--sp-head)`, bukan angka mati. Isi halaman ga boleh kelihatan tembus di balik tab.
+- **Satu layar, satu scroll.** Hindari panel dengan scroll sendiri di dalam halaman yang juga scroll: orang ga tau ada isi di bawahnya.
+- **Tap tab yang aktif → ke atas.** Buka detail di atas daftar, jadi tutup = posisi yang sama.
+- *Snap* cuma buat konten yang emang per halaman (antrean kartu).
+
 ## 5. Cek sebelum PR (visual)
 
 - [ ] Ada **satu** hero, dan dia memang hal paling penting di layar itu

@@ -1,7 +1,7 @@
 "use client";
 
 import Icon from "@/components/Icon";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { deleteDoc, deleteField, setDoc, updateDoc } from "firebase/firestore";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import { Component,
@@ -17,11 +17,16 @@ import { badge, btnMuted, btnPrimary, card, chip, font, heading, inputStyle, lab
 
 const FILTERS = ["All", "Draft", "Belum bayar", "DP masuk", "Telat", "Lunas", "Dibatalkan"] as const;
 
-export default function Invoices({ invoices, business, leads, services, components }: { invoices: Invoice[]; business: Business; leads: LeadRef[]; services: Service[]; components: Component[] }) {
+export default function Invoices({ invoices, business, leads, services, components, openId, onOpened }: { invoices: Invoice[]; business: Business; leads: LeadRef[]; services: Service[]; components: Component[]; openId?: string | null; onOpened?: () => void }) {
   const space = useSpace();
   const [editing, setEditing] = useState<DocDraft | null>(null);
   const [paying, setPaying] = useState<{ inv: Invoice; amount: string; date: string; note: string } | null>(null);
   const [printing, setPrinting] = useState<Invoice | null>(null);
+  // Opened from a lead's Riwayat.
+  useEffect(() => {
+    const inv = openId ? invoices.find(x => x.id === openId) : null;
+    if (inv) { setPrinting(inv); onOpened?.(); }
+  }, [openId, invoices]); // eslint-disable-line react-hooks/exhaustive-deps
   const [billing, setBilling] = useState<Invoice | null>(null);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
   // Ten at a time: the list ends, and the rest is one tap away.
