@@ -148,6 +148,15 @@ export function weekColumns(today: string, weeks: number): (string | null)[][] {
 }
 
 // Days in a row with something done, up to today (or yesterday, while today is still open).
+// The seven days, Monday first, of the week `offset` weeks from the one holding `day`.
+export function weekOf(day: string, offset = 0): string[] {
+  const back = (new Date(day + "T12:00:00").getDay() + 6) % 7;
+  return Array.from({ length: 7 }, (_, i) => addDay(day, i - back + offset * 7));
+}
+
+// What the heat map on Hunting counts: the work of reaching people, not every note (QA-4).
+export const OUTREACH_TYPES: ActType[] = ["dm", "outreach", "quote", "quoteSent"];
+
 export function streak(counts: Map<string, number>, today: string): number {
   let day = counts.get(today) ? today : addDay(today, -1);
   let n = 0;

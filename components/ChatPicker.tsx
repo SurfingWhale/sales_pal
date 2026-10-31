@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { PitchTemplate } from "@/lib/hunting";
 import { useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
 import { useSpace } from "@/lib/space";
-import { STAGES, Stage, fillTemplate, stageOf, workflowOf } from "@/lib/templates";
+import { STAGES, Stage, brandOf, fillTemplate, stageOf, workflowOf } from "@/lib/templates";
 import { rankScripts } from "@/lib/scriptPick";
 import { SITES } from "@/lib/sites";
 import Icon from "@/components/Icon";
@@ -40,7 +40,7 @@ function useScripts(lead: ChatLead, stage: Stage, brand: string) {
   const space = useSpace();
   const all = useSpaceCollection<PitchTemplate>(space, "pitchTemplates");
   const business = useBusiness(space);
-  const usable = all.filter(t => !t.archived && workflowOf(t) !== "hunting" && (!brand || !t.brand || t.brand === brand));
+  const usable = all.filter(t => !t.archived && workflowOf(t) !== "hunting" && (!brand || !brandOf(t) || brandOf(t) === brand));
   const ranked = rankScripts(usable.filter(t => stageOf(t) === stage), lead).filter(r => !r.out)
     .sort((a, b) => Number(!!b.t.isDefault) - Number(!!a.t.isDefault));
   const fill = (t: PitchTemplate) => fillTemplate(t.body, { nama: lead.contact || lead.name, bisnis: business.name, kebutuhan: lead.need });
@@ -66,6 +66,7 @@ export default function ChatPicker({ lead, wide, draft, next, onSend, onManage }
   const [copied, setCopied] = useState<"" | "ok" | "fail">("");
   // A phone opens on the message: the script is already in, one tap sends it.
   const [step, setStep] = useState<"pick" | "write" | "sent">("write");
+  const [find, setFind] = useState("");
   const choose = (t: PitchTemplate, why: string[] | null) => { setTpl(t); setText(fill(t)); setAuto(why); };
   const take = (t: PitchTemplate) => { touched.current = true; choose(t, null); setStep("write"); };
   // The best fit is put in for you, on opening and on each stage you look at,
@@ -79,6 +80,8 @@ export default function ChatPicker({ lead, wide, draft, next, onSend, onManage }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, brand, usable.length, businessName]);
   const ready = text.trim().length > 0;
+  const needle = find.trim().toLowerCase();
+  const listed = needle ? forStage.filter(r => `${r.t.title} ${r.t.body}`.toLowerCase().includes(needle)) : forStage;
   const what = tpl ? tpl.title : draft?.what || "Chat WhatsApp";
   const label = STAGES.find(s => s.id === stage)?.label;
   const pickBrand = (v: string) => {
@@ -131,8 +134,12 @@ export default function ChatPicker({ lead, wide, draft, next, onSend, onManage }
             </select>
             {onManage && <button type="button" onClick={onManage} style={{ ...soft, minHeight: 44 }}>Kelola</button>}
           </div>
+          {forStage.length > 3 && <>
+            <label htmlFor="cp-find" className="vh">Cari script</label>
+            <input id="cp-find" type="search" value={find} onChange={e => setFind(e.target.value)} placeholder="Cari script" style={{ width: "100%", boxSizing: "border-box", minHeight: 44, padding: "0 12px", borderRadius: 12, border: "1px solid var(--app-line-strong)", background: "var(--app-card)", color: "var(--app-text)", fontSize: 16, fontFamily: "inherit" }} />
+          </>}
           <div role="group" aria-label="Script" style={{ display: "grid", gap: 6 }}>
-            {forStage.length ? forStage.map(({ t, score }, i) => (
+            {listed.length ? listed.map(({ t, score }, i) => (
               <button key={t.id} type="button" aria-pressed={tpl?.id === t.id} onClick={() => take(t)}
                 style={{ display: "grid", gap: 2, width: "100%", minHeight: 52, padding: "8px 12px", borderRadius: 14, textAlign: "left", cursor: "pointer", fontFamily: "inherit", color: "var(--app-text)",
                   border: `1px solid ${tpl?.id === t.id ? "#005eb0" : "var(--app-border)"}`, background: tpl?.id === t.id ? "color-mix(in srgb, #005eb0 8%, var(--app-card))" : "var(--app-card)" }}>
@@ -143,7 +150,7 @@ export default function ChatPicker({ lead, wide, draft, next, onSend, onManage }
                 <span style={{ fontSize: 12, color: "var(--app-muted)", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{fill(t)}</span>
               </button>
             )) : (
-              <p style={{ margin: 0, fontSize: 13, color: "var(--app-muted)" }}>Belum ada script {label} buat Leads. {onManage ? "Buat lewat Kelola, atau tulis langsung." : "Tulis langsung di kolom pesan."}</p>
+              <p style={{ margin: 0, fontSize: 13, color: "var(--app-muted)" }}>{needle ? "Ga ada script yang cocok." : `Belum ada script ${label} buat Leads.`} {needle ? "" : onManage ? "Buat lewat Kelola, atau tulis langsung." : "Tulis langsung di kolom pesan."}</p>
             )}
           </div>
           {!wide && <button type="button" onClick={() => setStep("write")} style={big}>Lanjut</button>}

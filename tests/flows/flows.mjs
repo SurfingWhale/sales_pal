@@ -49,7 +49,13 @@ const openLog = async (page) => {
   const log = page.locator("details").filter({ has: page.locator("summary", { hasText: /^Log kiriman/ }) });
   if (!(await log.evaluate(d => d.open))) await log.locator("summary").click();
 };
-const huntRow = (page, target) => page.locator("div").filter({ has: page.getByText(target, { exact: true }) }).filter({ has: page.getByRole("button", { name: /^Hapus DM/ }) }).last();
+const huntRow = (page, target) => page.locator("div").filter({ has: page.getByText(target, { exact: true }) }).filter({ has: page.getByRole("button", { name: /^Ubah DM ke / }) }).last();
+// A log row shows one button; the rest opens under it.
+const openRow = async (page, target) => {
+  const b = page.getByRole("button", { name: `Ubah DM ke ${target}` });
+  if ((await b.getAttribute("aria-expanded")) !== "true") await b.click();
+  return huntRow(page, target);
+};
 
 // ---- Production-size account (PRD-010): written straight into the emulator
 // as the owner, so a flow can open the app the way a busy seller sees it.
@@ -360,7 +366,7 @@ export const flows = [
     name: "navigation reaches every place and tab",
     async run(t) {
       await t.step("sign up", () => signup(t));
-      const places = [["Beranda", null, "Perlu ditindak"], ["Hunting", null, "Hunting Mode"],
+      const places = [["Beranda", null, "Perlu ditindak"], ["Hunting", null, "Kalender aktivitas"],
         ["Jualan", "Leads", "Belum ada lead"], ["Jualan", "Penawaran", "Susun dari paket"], ["Jualan", "Invoice", "Invoice & Pembayaran"], ["Jualan", "Paket", "Paket & Harga"],
         ["Tim", "Dashboard tim", "Belum ada yang bisa dihitung"], ["Tim", "Guild", "Belum ikut guild"], ["Tim", "Report Klien", "Report Klien"], ["Tim", "Log aktivitas", "Belum ada aktivitas"], ["Tim", "Outreach", "Outreach Tracker"], ["Tim", "Rejection Log", "Rejection"],
         ["Belajar", "Script Library", "Script Library"], ["Belajar", "Simulator", "Simulator"], ["Belajar", "AI Playbook", "Playbook"]];
@@ -432,9 +438,12 @@ export const flows = [
         await t.page.locator(".modal-overlay").waitFor({ state: "detached" });
       });
       await t.step("add a lead worth 5jt", () => addLead(t.page, "Kopi Flow", { value: "5jt" }));
-      await t.step("filter Cold shows it", async () => { await t.page.locator("#status-filter").selectOption("Cold"); await expectText(t.page, "Kopi Flow"); });
+      await t.step("search finds it by status", async () => {
+        await t.page.locator("#lead-search").fill("cold");
+        await expectText(t.page, "Kopi Flow");
+        await t.page.locator("#lead-search").fill("");
+      });
       await t.step("a new Cold lead isn't contacted yet: Belum dikontak finds it", async () => {
-        await t.page.locator("#status-filter").selectOption("All");
         const views = t.page.getByRole("group", { name: "Tampilan cepat" });
         await views.getByRole("button", { name: /^Belum dikontak/ }).click();
         await expectText(t.page, "Kopi Flow");
@@ -533,6 +542,57 @@ export const flows = [
     },
   },
   {
+    name: "hunting workspace: the day in one row, leads inside Hunting, a known name stays a lead",
+    async run(t) {
+      const { page } = t;
+      const island = () => page.getByRole("region", { name: "Hari ini" });
+      await t.step("sign up, add two leads", async () => {
+        await signup(t);
+        await addLead(page, "Warung Workspace");
+        await addLead(page, "Warung Kedua");
+        await page.locator("#lead-sort").getByRole("option", { name: "Perlu dikerjain", selected: true }).waitFor({ state: "attached" });
+      });
+      await t.step("the island: the target is 12, and it opens on the week, 17 weeks and the jobs", async () => {
+        await go(page, "Hunting");
+        await island().getByRole("button", { name: /^Hari ini 0 dari 12 pesan/ }).waitFor();
+        const week = island().getByRole("group", { name: "Kalender minggu ini" });
+        await week.getByRole("button", { name: /^(Sen|Sel|Rab|Kam|Jum|Sab|Min) \d+ \w+: 0 outreach/ }).first().waitFor();
+        await week.locator('[aria-current="date"]').click();
+        await island().getByRole("region", { name: /^Aktivitas / }).waitFor();
+        await week.locator('[aria-current="date"]').click();
+        await island().getByRole("button", { name: "Heat map dan jadwal job" }).click();
+        await island().getByRole("img", { name: /outreach dan penawaran dalam 17 minggu/ }).waitFor();
+        await island().getByRole("region", { name: "Kalender okupansi" }).waitFor();
+        await t.audit("Hunting: island");
+        await island().getByRole("button", { name: "Heat map dan jadwal job" }).click();
+      });
+      await t.step("Enter on a name with two leads keeps the list; one lead opens it", async () => {
+        await page.locator("#hunt-search").fill("warung");
+        const found = page.getByRole("group", { name: "Ada di Leads" });
+        await found.getByRole("button", { name: /Warung Kedua/ }).waitFor();
+        await found.getByRole("button", { name: /Warung Workspace/ }).waitFor();
+        await page.locator("#hunt-search").press("Enter");
+        await found.getByRole("button", { name: /Warung Kedua/ }).waitFor();
+        await page.locator("#hunt-search").fill("warung kedua");
+        await page.locator("#hunt-search").press("Enter");
+        await page.getByRole("dialog", { name: "Profil Warung Kedua" }).waitFor();
+        await closeAll(page);
+      });
+      await t.step("Kirim ke … still makes a new target from that name", async () => {
+        await page.locator("#hunt-search").fill("warung baru");
+        await page.getByRole("button", { name: /^Kirim ke “warung baru”/ }).click();
+        await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "warung baru");
+        await page.getByRole("button", { name: "Kembali ke daftar" }).click();
+      });
+      await t.step("the Leads tab holds the same cards, and a Pesan from it goes on to the next one", async () => {
+        await pane(page, "Leads");
+        await page.getByRole("group", { name: "Tampilan cepat" }).getByRole("button", { name: /^Belum ada nomor/ }).waitFor();
+        await page.locator(".lead-row").filter({ hasText: "Warung Workspace" }).waitFor();
+        await t.audit("Hunting: Leads");
+      });
+    },
+  },
+  {
     name: "script management: brand and use, default, archive, and marking a lead as contacted",
     async run(t) {
       const { page } = t;
@@ -570,6 +630,10 @@ export const flows = [
         await manager().getByRole("button", { name: "Lainnya: Intro post" }).click();
         await manager().getByRole("button", { name: "Duplikat" }).click();
         await manager().getByRole("listitem").filter({ hasText: "Intro post (salinan)" }).waitFor();
+        // The list is longer than the screen: Tutup stays in view while it scrolls.
+        await manager().evaluate(el => { el.scrollTop = el.scrollHeight; });
+        const shut = await manager().getByRole("button", { name: "Tutup" }).boundingBox();
+        if (!shut || shut.y < 0 || shut.y > page.viewportSize().height) throw new Error(`Tutup scrolled away (y=${shut?.y})`);
         await manager().getByRole("button", { name: "Tutup" }).click();
         await manager().waitFor({ state: "detached" });
         await go(page, "Jualan", "Leads");
@@ -726,9 +790,10 @@ export const flows = [
         await expectText(page, "Belum dijadwalkan");
         await closeAll(page);
         await go(page, "Jualan", "Leads");
-        await page.locator("#status-filter").selectOption("Lost");
+        const views = page.getByRole("group", { name: "Tampilan cepat" });
+        await views.getByRole("button", { name: /^Gugur/ }).click();
         await expectText(page, "Sate Flow");
-        await page.locator("#status-filter").selectOption("All");
+        await views.getByRole("button", { name: /^Semua/ }).click();
         await go(page, "Tim", "Rejection Log");
         await expectText(page, "Budget dipotong");
       });
@@ -970,8 +1035,8 @@ export const flows = [
       });
       await t.step("walk the day", async () => {
         await job("1. Pagi: siapa yang bales", async () => {
-          await go(page, "Jualan", "Leads");
-          await views().getByRole("button", { name: /^Dibales/ }).click();
+          await go(page, "Hunting");
+          await page.getByRole("button", { name: /^\d+ perlu dibales$/ }).click();
           return (await views().getByRole("button", { name: /^Dibales/ }).textContent()).trim();
         });
         await job("2. Balas satu orang", async () => {
@@ -995,16 +1060,14 @@ export const flows = [
           return `${before} → ${after}`;
         }, 27);
         await job("4. Cari lead di Hunting", async () => {
-          await go(page, "Hunting");
-          await page.locator("#hunt-search").fill("Studio Yoga 3");
-          await page.waitForTimeout(500);
-          const said = (await page.locator("#journey-prospek").innerText()).split("\n").filter(Boolean).slice(-3).join(" / ").slice(0, 140);
+          await pane(page, "Prospek");
+          await page.locator("#hunt-search").fill("Studio Yoga 120");
+          await page.getByRole("group", { name: "Ada di Leads" }).getByRole("button", { name: /Studio Yoga 120/ }).waitFor();
           await page.locator("#hunt-search").press("Enter");
-          await page.waitForTimeout(600);
-          const target = await page.locator("#hunt-target").inputValue().catch(() => "(ga ada kolom target)");
-          await closeAll(page);
-          return `layar: "${said}" · Enter isi target prospek baru: "${target}"`;
-        });
+          await page.getByRole("dialog", { name: /^Profil Studio Yoga 120/ }).waitFor();
+          if ((await page.locator("#hunt-target").count()) && (await page.locator("#hunt-target").inputValue())) throw new Error("a known lead became a new target");
+          await closeLead();
+        }, 3);
         await job("5. Import 20 dari Excel", async () => {
           const XLSX = (await import("xlsx")).default;
           const rows = [["Nama Bisnis", "No. HP", "Kategori"], ...Array.from({ length: 20 }, (_, i) => [`Resto Excel ${i}`, `08140000${String(i).padStart(4, "0")}`, "F&B"])];
@@ -1917,10 +1980,10 @@ export const flows = [
       });
       await t.step("the log row says when it went out and what to do next", async () => {
         await openLog(page);
-        await page.getByRole("link", { name: "Profil ↗" }).first().waitFor();
         await huntRow(page, "@kopiflow").getByText(/(DM|balas di post) hari ini \d{2}\.\d{2}/).waitFor();
         await huntRow(page, "@kopiflow").getByText("Nunggu balasan. Begitu dia bales, tandai di bawah.").waitFor();
-        await huntRow(page, "@kopiflow").getByRole("button", { name: "Tandai Ga dibales" }).waitFor();
+        await (await openRow(page, "@kopiflow")).getByRole("button", { name: "Tandai Ga dibales" }).waitFor();
+        await page.getByRole("link", { name: "Profil ↗" }).first().waitFor();
       });
       await t.step("mark it Tertarik and make it a lead", async () => {
         await page.getByRole("button", { name: "Tandai Tertarik" }).first().click();
@@ -1932,18 +1995,19 @@ export const flows = [
         await page.locator("#hunt-target").fill("@rotiflow");
         await page.getByRole("button", { name: "Copy", exact: true }).first().click();
         await openLog(page);
+        await openRow(page, "@rotiflow");
         await page.getByRole("button", { name: "Hapus DM ke @rotiflow" }).click();
         // Asked in the app, not the browser's confirm(): Batal keeps the row.
         const ask = page.getByRole("dialog", { name: "Hapus catatan DM?" });
         await ask.getByRole("button", { name: "Batal" }).click();
         await ask.waitFor({ state: "detached" });
-        await huntRow(page, "@rotiflow").getByRole("button", { name: "Tandai Ditolak" }).click();
+        await (await openRow(page, "@rotiflow")).getByRole("button", { name: "Tandai Ditolak" }).click();
         await page.getByLabel("Alasan ditolak").fill("udah punya fotografer");
         await page.getByRole("button", { name: "Simpan", exact: true }).click();
         await expectText(page, "“udah punya fotografer”");
       });
       await t.step("Balas cepat picks 'Sudah Punya' from the reason and copies a reply", async () => {
-        await huntRow(page, "@rotiflow").getByRole("button", { name: "💡 Balas" }).click();
+        await (await openRow(page, "@rotiflow")).getByRole("button", { name: "💡 Balas" }).click();
         await page.getByRole("button", { name: "✋ Sudah Punya", pressed: true }).waitFor();
         const inView = await page.evaluate(() => {
           const b = document.querySelector('[role="region"][aria-label^="Saran balasan"] button[aria-pressed="true"]');
@@ -1960,7 +2024,7 @@ export const flows = [
         await panel.getByText(/Terima kasih atas balasannya, rotiflow/).waitFor();
       });
       await t.step("back to Terkirim, Balas cepat closes with its button", async () => {
-        await huntRow(page, "@rotiflow").getByRole("button", { name: "Tandai Belum dibales" }).click();
+        await (await openRow(page, "@rotiflow")).getByRole("button", { name: "Tandai Belum dibales" }).click();
         await page.getByRole("region", { name: /Saran balasan/ }).waitFor({ state: "detached" });
       });
       await t.step("a Threads target: Copy & DM opens Instagram's DM to that username", async () => {
@@ -2000,7 +2064,7 @@ export const flows = [
         await sheet.getByRole("alert").getByText("minimal 1").waitFor();
         await page.locator("#goal-n").fill("25");
         await sheet.getByRole("button", { name: "Simpan target" }).click();
-        await page.getByRole("button", { name: /dari 25 DM/ }).waitFor();
+        await page.getByRole("button", { name: /dari 25 pesan/ }).waitFor();
       });
       await t.step("a name typed by hand drops the last person's link", async () => {
         await page.locator("#hunt-target").fill("@tehsenja");
@@ -2009,7 +2073,7 @@ export const flows = [
       });
       await t.step("the referral editor has Batal, and status buttons sit in a grid", async () => {
         await openLog(page);
-        await huntRow(page, "@rotiflow").getByRole("button", { name: "↪ Rekomendasiin orang" }).click();
+        await (await openRow(page, "@rotiflow")).getByRole("button", { name: "↪ Rekomendasiin orang" }).click();
         await page.getByLabel("Akun yang direkomendasiin").waitFor();
         await huntRow(page, "@rotiflow").getByRole("button", { name: "Batal", exact: true }).click();
         await page.getByLabel("Akun yang direkomendasiin").waitFor({ state: "detached" });
@@ -2426,7 +2490,7 @@ export const flows = [
         await page.getByRole("heading", { name: /^Perlu ditindak/ }).waitFor();
         await page.getByRole("region", { name: "Hunting hari ini" }).getByRole("button", { name: "Mulai hunting" }).click();
         await page.getByRole("region", { name: "Sesi hunting" }).waitFor();
-        await expectText(page, "Hunting Mode");
+        await expectText(page, "Kalender aktivitas");
       });
     },
   },
