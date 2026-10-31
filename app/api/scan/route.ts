@@ -53,7 +53,7 @@ export async function POST(req: Request) {
   const key = process.env.XAI_API_KEY || process.env.GROK_API_KEY;
   if (!key) {
     return NextResponse.json(
-      { error: "Scan belum dikonfigurasi — env XAI_API_KEY belum diset di server." },
+      { error: "Baca dari gambar belum aktif. Pakai Excel, atau tempel teksnya di Tambah lead." },
       { status: 503 },
     );
   }

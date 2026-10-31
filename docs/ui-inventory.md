@@ -38,8 +38,8 @@ Singkatan kolom "Tutup":
 | `LeadFinder` | `components/LeadFinder.tsx` | `setShowFinder(true)` | guard; Tutup | `/api/places`; `saveFound` → `writeBatch` leads |
 | `FollowUpRun` (`fuRun`) | `components/FollowUpRun.tsx` | `setFuRun(dueLeads)` | STD; Tutup | `updateDoc` leads |
 | Target DM harian (`goalDraft`) | `components/Hunting.tsx` | `changeGoal` | STD + guard | `setDoc` settings/hunting |
-| Kelola template (`tplManage`) | `Hunting.tsx` | Menu "Tambah" | × sendiri | lewat TemplateBoard |
-| Editor template (`editing`) | `components/TemplateBoard.tsx` | Edit / baru / `newRequest` | STD; Batal | `setDoc`/`deleteDoc` pitchTemplates |
+| `ScriptManager` (`scripts`), layar penuh | `components/ScriptManager.tsx` | Menu "Tambah" Hunting, Kelola di Pesan | × "Tutup"; editor: Batal/Simpan | `setDoc`/`updateDoc`/`deleteDoc` pitchTemplates; `canEditCatalog` |
+| Editor template (`editing`) | `components/TemplateBoard.tsx` | Tombol edit di kartu pesan Hunting | STD; Batal | `setDoc`/`deleteDoc` pitchTemplates |
 | `DefaultsSheet` | `components/DefaultsSheet.tsx` | Menu "Tambah" | STD; Batal | `saveFillDefaults` |
 | `ProspectThread` (`threadId`), gaya app chat, layar penuh di HP | `components/ProspectThread.tsx` | `ProspectList` `onOpen` → `setThreadId` | STD; ← "Tutup"; kirim (bulat) / Copy. Escape menutup panel yang terbuka dulu | `recordSend`, `saveProspect` |
 | `ConvertSheet` ("Kasih data") | `components/ConvertSheet.tsx` | ProspectThread, `useOutcome().sheet` | guard; Simpan | `setDoc` leads, `saveProspect` |
@@ -85,7 +85,7 @@ Tidak ada komponen tooltip. Hanya atribut `title=` bawaan browser, misalnya "Pro
 | "Tercatat" + Batal / Berikutnya | `Hunting.tsx` (`.sp-toast`) | `logSent` | 10 dtk; Batal → `takeBack` | undo `recordSend` |
 | Undo kampanye | `Campaigns.tsx` | `send` | 5 dtk | undo `recordSend` |
 | Undo kirim di thread | `ProspectThread.tsx` | `send` | 10 dtk | undo kirim |
-| ChatNote "Dicatat: chat hari ini" | `LeadDetail.tsx` | Kirim dari `ChatPicker`, script tipe customer, atau Balas | × / Batal; di HP halaman memberi ruang setinggi catatan (PR #88) | `logContact` |
+| ChatNote "Dicatat: chat hari ini" | `LeadDetail.tsx` | "Udah" di `ChatPicker`, atau Tandai udah dikontak | × / Batal; di HP halaman memberi ruang setinggi catatan (PR #88) | `logContact` |
 | Error share (`shareMsg`) | `SalesTracker.tsx` | `?share` gagal | Tap | – |
 | Pesan `role=status` / `alert` di tempat | banyak (`setMsg`, `setPasteMsg`, `setOutcomeMsg`) | aksi | diganti aksi berikutnya / timer 1,8–3 dtk | – |
 | Web Push | `lib/push.ts`, `public/sw.js`, `app/api/push`, `app/api/cron/digest` | Toggle di lonceng/profil | OS | `/api/push` |
@@ -96,7 +96,7 @@ Tidak ada komponen tooltip. Hanya atribut `title=` bawaan browser, misalnya "Pro
 | Komponen | File | Buka | Tutup | Data |
 |---|---|---|---|---|
 | `Sheet` (bottom sheet, portal) | `components/Sheet.tsx` | Lead: profil, ubah lead, **lokasi lead** (`PlaceEditor`), langkah berikutnya, hapus. Penawaran/invoice: **"Titik lokasi acara"** (`DocEditor` `placing`) | Scrim (`stopPropagation`), × "Tutup", Batal | `updateDoc` leads; `venueGeo` di draft |
-| `ChatPicker` (isi sheet "Chat ke …") | `components/ChatPicker.tsx` ← `useChatLog().picker` di `LeadDetail.tsx` | Tombol Chat / Chat WhatsApp / Chat di WhatsApp (`choose`) | Scrim, × "Tutup", Kirim di WhatsApp (menutup sheet) | `pitchTemplates` (baca), `useBusiness`; kirim → `onContacted` (log kontak + Outreach) |
+| `ChatPicker` (panel "Pesan ke …", `Sheet full`) | `components/ChatPicker.tsx` ← `useChatLog().picker` di `LeadDetail.tsx` | Tulis pesan, tombol kartu lead, script tipe customer, Balas | × "Tutup", Belum, Udah | `pitchTemplates` (baca), `logContact` setelah Udah |
 | `PlaceEditor` (isi sheet) | `components/PlaceEditor.tsx` | Di dalam Sheet | Pilih hasil / "Pakai titik ini" / GPS → simpan dan tutup | `/api/geocode`, geolocation, `GeoPicker` |
 | `WaImport` | `components/WaImport.tsx` | LeadDetail, atau langsung terbuka dari file share | guard; × | `parseWaExport`, `/api/scan` |
 | Menu "Tambah" Hunting | `Hunting.tsx` (`addMenu`) | Tombol + | STD; × | ke template / paste / radar / script |

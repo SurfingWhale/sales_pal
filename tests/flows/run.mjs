@@ -224,6 +224,8 @@ async function main() {
       page, base: BASE, project, device: DEVICE, touch: Boolean(opts.hasTouch),
       // A HIG checkpoint: recorded, never stops the flow, fails the run at the end.
       async audit(label) {
+        // SHOTS=1 keeps a picture of every audited screen, for a look by eye.
+        if (process.env.SHOTS) { await page.waitForTimeout(500); await page.screenshot({ path: `${OUT}shot-${label.replace(/\W+/g, "-")}.png` }).catch(() => {}); }
         if (res.failed) return;
         const found = await audit(page, Boolean(opts.hasTouch)).catch(e => [`audit crashed: ${e.message}`]);
         ux.audits.push({ label, found });

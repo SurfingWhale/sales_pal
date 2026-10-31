@@ -9,12 +9,13 @@ import WaImport, { WaPatch } from "@/components/WaImport";
 import { Score } from "@/lib/score";
 import { LeadProfile, guessArchetype, hasProfile, objectionTypeOf, scriptsFor } from "@/lib/profile";
 import { archetypes, objections } from "@/lib/salespal-data";
-import { addDays, longDate, rupiah, today, waLink } from "@/lib/billing";
+import { addDays, longDate, rupiah, today } from "@/lib/billing";
 import { CATEGORIES, SOURCES, STATUSES, STATUS_COLOR, parseRupiah, statusWord } from "@/lib/leadEdit";
 import { LeadGeo, routeUrl, validGeo } from "@/lib/geo";
 import Sheet from "@/components/Sheet";
 import PlaceEditor from "@/components/PlaceEditor";
-import ChatPicker, { NextMessage } from "@/components/ChatPicker";
+import ChatPicker, { ChatLead, NextMessage } from "@/components/ChatPicker";
+import ScriptManager from "@/components/ScriptManager";
 import LeadHistory from "@/components/LeadHistory";
 import { categoryOf } from "@/lib/scriptPick";
 import type { HistoryItem } from "@/lib/leadHistory";
@@ -29,7 +30,7 @@ import { missingOf, standOf } from "@/lib/leadStand";
 
 export interface DetailLead {
   id: string; name: string; contact: string; phone: string; email: string; category: string; source: string;
-  status: string; value: number; notes: string; lastContact: string; lastReplyAt?: string;
+  status: string; value: number; notes: string; lastContact: string; lastReplyAt?: string; contactedAt?: string;
   nextAction?: string; nextActionDate?: string; profile?: LeadProfile; ownerName?: string;
   address?: string; geo?: LeadGeo; quoted?: boolean;
 }
@@ -45,9 +46,11 @@ export interface DetailActions {
   onSavePhone: (phone: string) => Promise<void> | void;
   onSaveGeo: (geo: LeadGeo | null, address?: string) => Promise<void> | void;
   onSaveLead: (patch: LeadPatch, lost?: LostNote) => Promise<void>;
-  // A tap on Chat: counts as today's contact; resolves to its undo (none when
-  // today was already counted).
+  // A message confirmed sent: counts as today's contact; resolves to its undo
+  // (none when today was already counted).
   onContacted: (what: string) => Promise<(() => Promise<void>) | void>;
+  // Contact made outside the app; resolves to its undo.
+  onMarkContacted: () => Promise<() => Promise<void>>;
 }
 
 export interface LeadPatch {
@@ -278,34 +281,52 @@ function StatusBadge({ status, onEdit, card }: { status: string; onEdit: () => v
   );
 }
 
-// What a tap on Chat left behind: today's contact, counted at once with Batal
-// to take it back (like Hunting's Copy = kirim), and one tap for the next
-// follow-up when nothing is scheduled ahead.
-// n: each tap gets a fresh note (rendered with key={n}), not the last one's state.
-type Logged = { n: number; undo?: () => Promise<void>; err?: string };
+// What a confirmed message left behind: today's contact, with Batal to take it
+// back, and one tap for the next follow-up when nothing is scheduled ahead.
+// n: each one gets a fresh note (rendered with key={n}), not the last one's state.
+type Logged = { n: number; undo?: () => Promise<void>; err?: string; say?: string };
+type Draft = { text: string; what: string };
+export type NextLead = { name: string; go: () => void };
 
-function useChatLog(actions: DetailActions) {
+function chatLead(l: DetailLead): ChatLead {
+  return {
+    name: l.name, contact: l.contact, phone: l.phone, email: l.email, status: l.status, lastContact: l.lastContact, quoted: l.quoted,
+    // What WhatsApp says they are beats the list's category (often left at its default).
+    category: categoryOf(l.profile?.wa?.category) || categoryOf(l.category),
+    need: l.profile?.need, pain: l.profile?.pain,
+  };
+}
+
+function useChatLog(actions: DetailActions, wide: boolean, next: NextLead | null | undefined, open: boolean) {
   const [logged, setLogged] = useState<Logged | null>(null);
-  // The link opens WhatsApp by itself; this only writes it down.
-  const chatted = (what: string) => () => {
+  const chatted = (what: string) => {
     Promise.resolve(actions.onContacted(what)).then(
       undo => setLogged({ n: Date.now(), undo: undo || undefined }),
-      () => setLogged({ n: Date.now(), err: "WhatsApp kebuka, tapi chat-nya gagal dicatat. Cek koneksi." }),
+      () => setLogged({ n: Date.now(), err: "Chat-nya gagal dicatat. Cek koneksi." }),
     );
   };
-  // Chat opens your scripts first (ChatPicker); sending from there opens WhatsApp.
-  const [choosing, setChoosing] = useState(false);
-  const picker = (lead: DetailLead) => choosing && (
-    <Sheet title={`Chat ke ${lead.contact || lead.name}`} onClose={() => setChoosing(false)}>
-      <ChatPicker lead={{
-        name: lead.name, contact: lead.contact, phone: lead.phone, status: lead.status, lastContact: lead.lastContact,
-        // What WhatsApp says they are beats the list's category (often left at its default).
-        category: categoryOf(lead.profile?.wa?.category) || categoryOf(lead.category),
-        need: lead.profile?.need, pain: lead.profile?.pain,
-      }} onSend={what => { chatted(what)(); setChoosing(false); }} />
-    </Sheet>
+  const marked = () => {
+    actions.onMarkContacted().then(
+      undo => setLogged({ n: Date.now(), undo, say: "✓ Ditandai udah dikontak" }),
+      () => setLogged({ n: Date.now(), err: "Gagal menandai. Cek koneksi." }),
+    );
+  };
+  // Pesan replaces the page while it's open (Sheet full), so a card's button
+  // lands on it directly and nothing is stacked.
+  const [writing, setWriting] = useState<Draft | true | null>(open ? true : null);
+  const [managing, setManaging] = useState(false);
+  const picker = (lead: DetailLead) => (
+    <>
+      {writing && (
+        <Sheet full title={`Pesan ke ${lead.contact || lead.name}`} onClose={() => setWriting(null)}>
+          <ChatPicker lead={chatLead(lead)} wide={wide} next={next} draft={writing === true ? null : writing}
+            onSend={what => { chatted(what); setWriting(null); }} onManage={() => setManaging(true)} />
+        </Sheet>
+      )}
+      {managing && <ScriptManager onClose={() => setManaging(false)} />}
+    </>
   );
-  return { logged, chatted, clear: () => setLogged(null), choose: () => setChoosing(true), picker };
+  return { logged, marked, clear: () => setLogged(null), write: (d?: Draft) => setWriting(d || true), picker };
 }
 
 function ChatNote({ lead, logged, actions, onClose }: { lead: DetailLead; logged: Logged; actions: DetailActions; onClose: () => void }) {
@@ -314,7 +335,7 @@ function ChatNote({ lead, logged, actions, onClose }: { lead: DetailLead; logged
   const [err, setErr] = useState("");
   const on = today();
   const ahead = !!lead.nextActionDate && lead.nextActionDate > on;
-  const say = logged.err || err || (undone ? "Dibatalin, chat ini ga dicatat." : logged.undo ? "✓ Dicatat: chat hari ini" : "✓ Kontak hari ini udah kecatat");
+  const say = logged.err || err || (undone ? "Dibatalin, ga dicatat." : logged.say || (logged.undo ? "✓ Dicatat: chat hari ini" : "✓ Kontak hari ini udah kecatat"));
 
   async function run(fn: () => Promise<void> | void, after?: () => void) {
     setBusy(true); setErr("");
@@ -344,8 +365,7 @@ function ChatNote({ lead, logged, actions, onClose }: { lead: DetailLead; logged
   );
 }
 
-function Why({ score, onReplied }: { score: Score; onReplied: () => void }) {
-  const [noted, setNoted] = useState(false);
+function Why({ score }: { score: Score }) {
   return (
     <>
       <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
@@ -362,17 +382,13 @@ function Why({ score, onReplied }: { score: Score; onReplied: () => void }) {
         ))}
       </ul>
       {score.tip && <p style={{ margin: "8px 0 0", padding: "12px 14px", borderRadius: 12, background: "var(--brand-tint)", fontSize: 13, lineHeight: 1.5, color: "var(--app-ink-2)" }}><span style={{ fontWeight: 600, color: "var(--brand-text)" }}>Biar naik:</span> {score.tip}.</p>}
-      <button onClick={() => { onReplied(); setNoted(true); setTimeout(() => setNoted(false), 2500); }} style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, minHeight: 44, padding: 0, border: 0, background: "none", color: "var(--brand-text)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-        <Icon name="chat" size={15} stroke={1.8} /> Mereka bales hari ini
-      </button>
-      <span role="status" style={{ marginLeft: 10, fontSize: 13, color: "var(--ok)" }}>{noted ? "✓ Dicatat" : ""}</span>
     </>
   );
 }
 
 // The ⋯ menu closes on a tap outside it and on Escape (before Escape reaches
 // the lead page). Hapus asks in a sheet with Batal next to it.
-function Menu({ lead, actions, onEdit, onEditLead, compact }: { lead: DetailLead; actions: DetailActions; onEdit: () => void; onEditLead: () => void; compact?: boolean }) {
+function Menu({ lead, actions, onEdit, onEditLead, onMarked, compact }: { lead: DetailLead; actions: DetailActions; onEdit: () => void; onEditLead: () => void; onMarked?: () => void; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const [asking, setAsking] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -394,6 +410,7 @@ function Menu({ lead, actions, onEdit, onEditLead, compact }: { lead: DetailLead
         <div role="menu" className="frost" style={{ position: "absolute", right: 0, top: 50, zIndex: 20, minWidth: 210, borderRadius: 18, padding: 6, boxShadow: "inset 0 0 0 1px var(--frost-ring), 0 12px 32px var(--frost-float)" }}>
           <button role="menuitem" className="rowhover" onClick={() => { setOpen(false); onEditLead(); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", border: 0, borderRadius: 12, background: "transparent", color: "var(--app-text)", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}><Icon name="pencil" size={17} /> Ubah data lead</button>
           <button role="menuitem" className="rowhover" onClick={() => { setOpen(false); onEdit(); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", border: 0, borderRadius: 12, background: "transparent", color: "var(--app-text)", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}><Icon name="brief" size={17} /> Ubah profil</button>
+          {onMarked && <button role="menuitem" className="rowhover" onClick={() => { setOpen(false); onMarked(); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", border: 0, borderRadius: 12, background: "transparent", color: "var(--app-text)", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}><Icon name="chat" size={17} /> Tandai udah dikontak</button>}
           <button role="menuitem" className="rowhover" aria-label={`Hapus lead ${lead.name}`} onClick={() => { setOpen(false); setErr(""); setAsking(true); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", border: 0, borderRadius: 12, background: "transparent", color: "var(--hot)", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}><Icon name="trash" size={17} /> Hapus lead</button>
         </div>
       )}
@@ -439,10 +456,11 @@ function LocationRow({ lead, actions }: { lead: DetailLead; actions: DetailActio
 
 // ---------------------------------------------------------------- LeadPage
 
-export function LeadPage({ lead, score, actions, onClose, shareFile, wide, start, history, onOpenDoc }: {
+export function LeadPage({ lead, score, actions, onClose, shareFile, wide, start, next, history, onOpenDoc }: {
   lead: DetailLead; score: Score; actions: DetailActions; onClose: () => void; shareFile?: File | null;
   wide: boolean;
   start?: "chat" | "edit" | null;       // a card's button: go straight to the scripts, or to the missing number
+  next?: NextLead | null;               // who comes after this one in the list
   history: HistoryItem[];
   onOpenDoc: (item: HistoryItem) => void;
 }) {
@@ -451,11 +469,11 @@ export function LeadPage({ lead, score, actions, onClose, shareFile, wide, start
   const [editingLead, setEditingLead] = useState(false);
   const [importing, setImporting] = useState(Boolean(shareFile));
   const [scheduling, setScheduling] = useState(false);
-  const { logged, chatted, clear, choose, picker } = useChatLog(actions);
+  const { logged, marked, clear, write, picker } = useChatLog(actions, wide, next, start === "chat");
   useEffect(() => {
-    if (start === "chat") choose();
-    else if (start === "edit") setEditing(true);
+    if (start === "edit") setEditing(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [noted, setNoted] = useState(false);
   // The chat note floats over the bottom of the page; the page makes room for
   // it, so the last rows (Kontak) can still be scrolled into view.
   const noteRef = useRef<HTMLDivElement>(null);
@@ -495,11 +513,11 @@ export function LeadPage({ lead, score, actions, onClose, shareFile, wide, start
           <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 100, background: "linear-gradient(to bottom, var(--bar-tint) 0%, var(--bar-tint) 35%, transparent 100%)", pointerEvents: "none" }} />
           <div style={{ position: "absolute", top: "calc(10px + env(safe-area-inset-top, 0px))", left: 12, right: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <button className="glass" onClick={onClose} aria-label="Kembali ke Leads" style={{ width: 44, height: 44, border: 0, borderRadius: "50%", color: "var(--app-text)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}><Icon name={wide ? "close" : "chevronLeft"} size={20} stroke={2} /></button>
-            <Menu lead={lead} actions={actions} onEdit={() => setEditing(true)} onEditLead={() => setEditingLead(true)} />
+            <Menu lead={lead} actions={actions} onEdit={() => setEditing(true)} onEditLead={() => setEditingLead(true)} onMarked={stand.id === "belum" ? marked : undefined} />
           </div>
         </div>
 
-        <div style={{ padding: `calc(68px + env(safe-area-inset-top, 0px)) 16px calc(${150 + (noteH ? noteH + 12 : 0)}px + env(safe-area-inset-bottom, 0px))` }}>
+        <div style={{ padding: `calc(68px + env(safe-area-inset-top, 0px)) 16px calc(${28 + (noteH ? noteH + 12 : 0)}px + env(safe-area-inset-bottom, 0px))` }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
             <span aria-hidden="true" style={{ width: 92, height: 92, borderRadius: "50%", background: "linear-gradient(160deg, #6ea9e4 0%, #005eb0 100%)", color: "#fff", fontSize: 32, fontWeight: 600, letterSpacing: "-0.02em", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 10px 28px rgba(0,94,176,0.28)" }}>{initials(lead.name)}</span>
             <h1 style={{ margin: "14px 0 0", fontSize: 27, lineHeight: 1.15, fontWeight: 600, letterSpacing: "-0.02em" }}>{lead.name}</h1>
@@ -511,17 +529,15 @@ export function LeadPage({ lead, score, actions, onClose, shareFile, wide, start
             {missing.length > 0 && <p style={{ margin: "10px 0 0", fontSize: 13, color: "var(--app-muted)" }}>Kurang: {missing.join(", ")}</p>}
           </div>
 
-          <nav aria-label="Aksi cepat" className="sp-quick" style={{ marginTop: 22, display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
-            {lead.phone ? <button onClick={choose} style={quick(true)}><Icon name="chat" size={22} />Chat</button> : <button onClick={() => setEditing(true)} style={quick(true)}><Icon name="chat" size={22} />Chat</button>}
+          <NextMessage onOpen={() => write()} lead={chatLead(lead)} />
+
+          <nav aria-label="Aksi cepat" className="sp-quick" style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
+            <button aria-label="Mereka bales hari ini" onClick={() => { actions.onReplied(); setNoted(true); setTimeout(() => setNoted(false), 2500); }} style={quick(false)}><Icon name="chat" size={22} />Mereka bales</button>
             {lead.phone ? <a href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`} style={quick(false)}><Icon name="phone" size={22} />Telepon</a> : <button onClick={() => setEditing(true)} aria-label="Telepon: belum ada nomor, tambah nomor" style={quick(false)}><Icon name="phone" size={22} />Tambah no.</button>}
             <button onClick={actions.onQuote} style={quick(false)}><Icon name="doc" size={22} />Penawaran</button>
             <button onClick={() => setScheduling(true)} style={quick(false)}><Icon name="calendar" size={22} />Jadwal</button>
           </nav>
-
-          <NextMessage onOpen={choose} lead={{
-            name: lead.name, contact: lead.contact, phone: lead.phone, status: lead.status, lastContact: lead.lastContact,
-            category: categoryOf(p.wa?.category) || categoryOf(lead.category), need: p.need, pain: p.pain,
-          }} />
+          <p role="status" style={{ margin: "6px 4px 0", minHeight: 18, fontSize: 13, color: "var(--ok)" }}>{noted ? "✓ Dicatat" : ""}</p>
           <LeadHistory items={history} onOpen={onOpenDoc} />
 
           <section aria-labelledby="brief-h" style={{ marginTop: 20, position: "relative", isolation: "isolate", borderRadius: 26, overflow: "hidden" }}>
@@ -541,7 +557,7 @@ export function LeadPage({ lead, score, actions, onClose, shareFile, wide, start
               </dl>
               {!hasProfile(p) && (
                 <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button onClick={() => setImporting(true)} style={{ ...pill(true), minHeight: 44, padding: "0 16px", fontSize: 13 }}><Icon name="chat" size={15} stroke={1.8} />Tarik dari WhatsApp</button>
+                  <button onClick={() => setImporting(true)} style={{ ...pill(false), minHeight: 44, padding: "0 16px", fontSize: 13 }}><Icon name="chat" size={15} stroke={1.8} />Tarik dari WhatsApp</button>
                   <button onClick={() => setEditing(true)} style={{ ...pill(false), minHeight: 44, padding: "0 16px", fontSize: 13 }}>Isi manual</button>
                 </div>
               )}
@@ -561,7 +577,7 @@ export function LeadPage({ lead, score, actions, onClose, shareFile, wide, start
               </span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: 13, fontWeight: 600, color: "var(--brand-text)" }}>Kenapa {score.total}<Icon name={why ? "chevronDown" : "chevronRight"} size={14} stroke={2} /></span>
             </button>
-            {why && <div style={{ padding: "0 16px 14px" }}><Why score={score} onReplied={actions.onReplied} /></div>}
+            {why && <div style={{ padding: "0 16px 14px" }}><Why score={score} /></div>}
           </div>
 
           <section aria-labelledby="wa-h" style={{ marginTop: 28 }}>
@@ -641,7 +657,7 @@ export function LeadPage({ lead, score, actions, onClose, shareFile, wide, start
                       <p style={{ margin: 0, fontSize: 12, color: "var(--app-muted)" }}>{sc.tips}</p>
                       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                         <button onClick={async () => { let ok = true; try { await navigator.clipboard.writeText(scriptText); } catch { ok = false; } setCopied(ok ? "ok" : "fail"); setTimeout(() => setCopied(""), 2000); }} style={{ ...pill(false), minHeight: 44 }}>{copied === "ok" ? "✓ Tersalin" : copied === "fail" ? "Gagal copy" : "Copy"}</button>
-                        {lead.phone && <a href={waLink(lead.phone, scriptText)} target="_blank" rel="noreferrer" onClick={chatted(`Script ${objection?.label || archetype.name}`)} style={{ ...pill(true), minHeight: 44 }}>Kirim WA</a>}
+                        <button onClick={() => write({ text: scriptText, what: `Script ${objection?.label || archetype.name}` })} style={{ ...pill(true), minHeight: 44 }}>Tulis pesan</button>
                       </div>
                     </div>
                   ) : <p style={{ margin: "10px 0 0", fontSize: 13, color: "var(--app-muted)" }}>Isi jenis keberatannya (Ubah profil) buat dapet script yang pas.</p>
@@ -660,7 +676,7 @@ export function LeadPage({ lead, score, actions, onClose, shareFile, wide, start
                       <p style={{ margin: 0, fontSize: 14, lineHeight: 1.4 }}>“{q.text}”</p>
                       <p style={{ margin: "3px 0 0", fontSize: 12, fontWeight: q.answered ? 400 : 600, color: q.answered ? "var(--app-muted)" : "var(--hot)" }}>{dayText(q.at)} · {q.answered ? "dijawab" : "belum dijawab"}</p>
                     </div>
-                    {!q.answered && lead.phone && <a href={waLink(lead.phone, "")} target="_blank" rel="noreferrer" onClick={chatted(`Balas: ${q.text.slice(0, 80)}`)} style={{ flexShrink: 0, height: 44, padding: "0 16px", borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", textDecoration: "none" }}>Balas</a>}
+                    {!q.answered && <button onClick={() => write({ text: `Halo ${name}, `, what: `Balas: ${q.text.slice(0, 80)}` })} style={{ flexShrink: 0, height: 44, padding: "0 16px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", cursor: "pointer", fontFamily: "inherit" }}>Balas</button>}
                   </li>
                 ))}
               </ul>
@@ -669,13 +685,7 @@ export function LeadPage({ lead, score, actions, onClose, shareFile, wide, start
         </div>
 
         <div style={{ position: "sticky", bottom: 0, height: 0, zIndex: 9 }}>
-          {logged && <div ref={noteRef} style={{ position: "absolute", left: 14, right: 14, bottom: "calc(84px + env(safe-area-inset-bottom, 0px))" }}><ChatNote key={logged.n} lead={lead} logged={logged} actions={actions} onClose={clear} /></div>}
-          <div className="glass" style={{ position: "absolute", left: 14, right: 14, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", padding: 6, borderRadius: 32, display: "flex", gap: 6 }}>
-            {lead.phone
-              ? <button onClick={choose} style={{ flex: 1, height: 52, borderRadius: 26, background: "#005eb0", color: "#fff", fontSize: 15, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, border: 0, cursor: "pointer", fontFamily: "inherit" }}><Icon name="chat" size={19} stroke={1.8} />Chat di WhatsApp</button>
-              : <button onClick={actions.onQuote} style={{ flex: 1, height: 52, border: 0, borderRadius: 26, background: "#005eb0", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Buat penawaran</button>}
-            <button onClick={() => setImporting(true)} aria-label="Tarik ulang dari WhatsApp" style={{ width: 52, height: 52, border: 0, borderRadius: "50%", background: "var(--glass-btn)", color: "var(--app-text)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><Icon name="refresh" size={20} stroke={1.8} /></button>
-          </div>
+          {logged && <div ref={noteRef} style={{ position: "absolute", left: 14, right: 14, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))" }}><ChatNote key={logged.n} lead={lead} logged={logged} actions={actions} onClose={clear} /></div>}
         </div>
       </div>
 
