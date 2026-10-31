@@ -47,6 +47,20 @@ export function stageFor(p: Prospect | undefined, v: View | undefined): Stage {
   }
 }
 
+// ---- where a script is used -------------------------------------------------
+
+export type Workflow = "leads" | "hunting" | "semua";
+export const WORKFLOWS: { id: Workflow; label: string }[] = [
+  { id: "leads", label: "Leads" }, { id: "hunting", label: "Hunting (DM)" }, { id: "semua", label: "Semua" },
+];
+
+// Older scripts say nothing. One whose message talks about their post was
+// written for a DM, and reads wrong to a business found on Maps (QA-4 Chat §2).
+// The message decides, not the title: "Cold DM" with a plain intro works anywhere.
+export function workflowOf(t: { workflow?: Workflow; body: string }): Workflow {
+  return t.workflow || (/\bdm\b|postingan|post-?nya|\{post\}|threads/i.test(t.body) ? "hunting" : "semua");
+}
+
 // ---- the words a template can carry ---------------------------------------
 
 export const VARIABLES = [

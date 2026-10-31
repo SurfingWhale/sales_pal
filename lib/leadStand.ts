@@ -10,7 +10,7 @@ export type Move = { kind: "chat" | "edit" | "open"; label: string };
 
 export interface StandLead {
   id: string; name: string; status: string; source: string; contact: string; phone: string; lastContact: string;
-  lastReplyAt?: string; geo?: unknown; quoted?: boolean;
+  email?: string; lastReplyAt?: string; contactedAt?: string; geo?: unknown; quoted?: boolean;
 }
 
 // What says a lead was really reached, and which quotes still count as an offer.
@@ -26,8 +26,10 @@ const low = (s: string) => (s || "").trim().toLowerCase();
 
 // Until 29 Okt every new or imported lead was stamped "contacted today", so a
 // Cold lead's lastContact proves nothing by itself. Without a chat, a DM, a
-// reply or a document behind it, the lead was never contacted: it reads as new
-// everywhere (the list, the score, the first script), and nothing is rewritten.
+// reply, a document or contactedAt behind it, the lead was never contacted: it
+// reads as new everywhere (the list, the score, the first script), and nothing
+// is rewritten. contactedAt lives on the lead because a Member can't read
+// another seller's Outreach rows.
 // `quoted` and `docs` (quote and invoice numbers, for search) come along.
 export function withStand<T extends StandLead>(leads: T[], t: Touches): (T & { quoted: boolean; docs: string })[] {
   const reached = new Set<string>();
@@ -44,7 +46,7 @@ export function withStand<T extends StandLead>(leads: T[], t: Touches): (T & { q
 
   return leads.map(l => {
     const both = [l.id, `n:${low(l.name)}`];
-    const never = l.status === "Cold" && !l.lastReplyAt && !both.some(k => reached.has(k));
+    const never = l.status === "Cold" && !l.lastReplyAt && !l.contactedAt && !both.some(k => reached.has(k));
     return {
       ...l,
       ...(never ? { lastContact: "" } : {}),
@@ -75,7 +77,8 @@ export function standOf(l: StandLead, on: string): { id: StandId; word: string; 
     case "penawaran": return { id, word: "Penawaran terkirim", color: "var(--brand-text)" };
     case "dibales": return { id, word: `Dibales ${ago(l.lastReplyAt as string, on)}`, color: "var(--ok)" };
     case "dikontak": return { id, word: `Dikontak ${ago(l.lastContact, on)}`, color: "var(--warm)" };
-    default: return { id, word: "Belum dikontak", color: "var(--hot)" };
+    // Neutral: most of a list is here, and red is Hot's color.
+    default: return { id, word: "Belum dikontak", color: "var(--app-muted)" };
   }
 }
 
@@ -91,7 +94,11 @@ export function nextMove(l: StandLead): Move {
   const id = standId(l);
   if (id === "deal" || id === "gugur") return { kind: "open", label: "Buka" };
   if (id === "penawaran") return { kind: "open", label: "Lihat penawaran" };
-  if (noNumber(l) && !reachedByDm(l)) return { kind: "edit", label: "Tambah nomor" };
-  if (id === "dibales") return { kind: "chat", label: "Balas" };
+  if (noNumber(l) && !reachedByDm(l) && !l.email) return { kind: "edit", label: "Tambah nomor" };
+  // Balas only when it's our turn: if we wrote last, it's a follow-up. Marking
+  // a reply stamps lastContact too, so contactedAt, what we sent, decides once
+  // it exists. Dates are whole days: a reply on the day we wrote reads as ours.
+  const reply = l.lastReplyAt as string;
+  if (id === "dibales" && (l.contactedAt ? reply > l.contactedAt : reply >= l.lastContact)) return { kind: "chat", label: "Balas" };
   return { kind: "chat", label: id === "belum" ? "Kirim intro" : "Follow-up" };
 }

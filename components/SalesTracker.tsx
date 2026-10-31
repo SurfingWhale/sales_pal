@@ -86,6 +86,7 @@ interface Lead {
   accountUid?: string;
   ownerUid?: string; ownerName?: string;   // in a guild space
   lastReplyAt?: string;                    // when they last answered (PRD-008 §2)
+  contactedAt?: string;                    // last confirmed contact from us; everyone in a guild reads it (PRD-022 Q3)
   profile?: LeadProfile;                   // need, pain, objection, type (PRD-008 §3)
   address?: string;
   geo?: LeadGeo;                           // where it is on the street map (PRD-013)
@@ -654,6 +655,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       onSaveGeo: (geo, address) => updateDoc(spaceDoc(space, "leads", l.id), { geo: geo || deleteField(), ...(address !== undefined ? { address } : {}) }),
       onSaveLead: (patch, lost) => saveLead(l, patch, lost),
       onContacted: what => logContact(l, what),
+      onMarkContacted: () => markContacted(l),
     };
   }
 
@@ -669,29 +671,39 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     await batch.commit();
   }
 
-  // A tap on Chat WhatsApp is today's contact: once a day per lead, logged in
+  // A message confirmed sent is today's contact: once a day per lead, logged in
   // Outreach under whoever chatted (Log aktivitas, Dashboard tim). The undo
   // puts both back.
   const contacted = useRef(new Set<string>());
   async function logContact(l: Lead, what: string) {
     const on = today();
     const key = `${l.id}_${on}`;
-    if (l.lastContact === on || contacted.current.has(key)) return;
+    if (l.contactedAt === on || contacted.current.has(key)) return;
     contacted.current.add(key);
-    const prev = l.lastContact || "";
+    const prev = { lastContact: l.lastContact || "", contactedAt: l.contactedAt ?? deleteField() };
     const ref = spaceDoc(space, "leads", l.id);
     const out = spaceDoc(space, "outreach", `out_${Date.now()}`);
     const batch = writeBatch(db);
-    batch.update(ref, { lastContact: on });
+    batch.update(ref, { lastContact: on, contactedAt: on });
     batch.set(out, stamp(space, { leadName: l.name, leadId: l.id, type: "WhatsApp", date: on, subject: what, status: "Sent", opens: 0, clicks: 0 }));
     try { await batch.commit(); } catch (e) { contacted.current.delete(key); throw e; }
     return async () => {
       const b = writeBatch(db);
-      b.update(ref, { lastContact: prev });
+      b.update(ref, prev);
       b.delete(out);
       await b.commit();
       contacted.current.delete(key);
     };
+  }
+
+  // Contact made outside the app (PRD-022 Q2): on the lead, not in Outreach,
+  // since nothing was sent from here.
+  async function markContacted(l: Lead) {
+    const on = today();
+    const ref = spaceDoc(space, "leads", l.id);
+    const prev = { lastContact: l.lastContact || "", contactedAt: l.contactedAt ?? deleteField() };
+    await updateDoc(ref, { lastContact: on, contactedAt: on });
+    return async () => { await updateDoc(ref, prev); };
   }
 
   // WhatsApp sent from a Perlu Ditindak card. Each writes down what it was, so
@@ -798,6 +810,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     leadSort, l => sc(l).total);
   const dueLeads = followUpQueue(leads, today());
   const liveLead = selectedLead ? leads.find(l => l.id === selectedLead.id) || selectedLead : null;
+  // Who comes after this one in the list as it's shown, so a run of intros
+  // doesn't go back to the list each time (PRD-022 §2).
+  const liveAt = liveLead ? filteredLeads.findIndex(l => l.id === liveLead.id) : -1;
+  const nextUp = liveAt < 0 ? undefined : filteredLeads.slice(liveAt + 1).find(l => nextMove(l).kind === "chat");
 
   // Everything that needs a move today: reminders due, quotes left hanging,
   // invoices late or nearly due. Upcoming reminders show three days ahead.
@@ -1355,6 +1371,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       {/* A lead's worksheet: over whatever opened it, so closing lands right back there */}
       {liveLead && pageOpen && (
         <LeadPage key={liveLead.id + (shareFor?.leadId === liveLead.id ? "_share" : "")} lead={liveLead} score={sc(liveLead)} actions={leadActions(liveLead)} wide={wide} start={pageStart}
+          next={nextUp ? { name: nextUp.name, go: () => openLead(nextUp, "chat") } : null}
           history={leadHistory(liveLead, { quotes, invoices, outreach, hunts })}
           onOpenDoc={item => { setPageOpen(false); setSelectedLead(null); setOpenDoc(item.docId || null); setActiveTab(item.kind === "penawaran" ? "Penawaran" : "Invoice"); }}
           onClose={() => { setPageOpen(false); setSelectedLead(null); }} shareFile={shareFor?.leadId === liveLead.id ? shareFor.file : null} />

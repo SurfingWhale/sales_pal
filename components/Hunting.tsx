@@ -17,8 +17,9 @@ import ProspectThread, { type SendHow, type SendOut } from "@/components/Prospec
 import Campaigns from "@/components/Campaigns";
 import HunterStats from "@/components/HunterStats";
 import CustomerContext from "@/components/CustomerContext";
+import ScriptManager from "@/components/ScriptManager";
 import TemplateBoard from "@/components/TemplateBoard";
-import { dataFor, defaultsWith, fillTemplate, stageFor } from "@/lib/templates";
+import { dataFor, defaultsWith, fillTemplate, stageFor, workflowOf } from "@/lib/templates";
 import DefaultsSheet from "@/components/DefaultsSheet";
 import { TOPICS, Tone, defaultTopic, fromLibrary, repliesFor } from "@/lib/replies";
 import { profileUrl } from "@/lib/threads";
@@ -57,7 +58,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   const space = useSpace();
   const canEdit = canEditCatalog(space);
   const { prospects, strategy, live } = journey;
-  const templates = useSpaceCollection<PitchTemplate>(space, "pitchTemplates").slice().sort((a, b) => a.title.localeCompare(b.title));
+  const templates = useSpaceCollection<PitchTemplate>(space, "pitchTemplates").filter(t => !t.archived && workflowOf(t) !== "leads").sort((a, b) => a.title.localeCompare(b.title));
   const [target, setTarget] = useState("");
   const [platform, setPlatform] = useState<Platform>("IG");
   const [channel, setChannel] = useState<Channel>("dm");
@@ -92,8 +93,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   const [q, setQ] = useState("");
   const [addMenu, setAddMenu] = useState(false);
   // Messages and scripts live behind the + menu too (owner, 23 Okt).
-  const [tplNew, setTplNew] = useState(0);
-  const [tplManage, setTplManage] = useState<false | "list" | "new">(false);
+  const [scripts, setScripts] = useState<false | "list" | "new">(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const [queued, setQueued] = useState<{ label: string; ids: string[] } | null>(null);
   const [editDefaults, setEditDefaults] = useState(false);
@@ -624,32 +624,15 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
             </ul>
             <h3 className="sp-kadd-sec">Pesan & script</h3>
             <ul>
-              {canEdit && <li><button onClick={() => { setAddMenu(false); if (open) setTplNew(n => n + 1); else setTplManage("new"); }}><Icon name="plus" size={20} />Template pesan baru</button></li>}
-              <li><button onClick={() => { setAddMenu(false); setTplManage("list"); }}><Icon name="doc" size={20} />Kelola template pesan</button></li>
+              {canEdit && <li><button onClick={() => { setAddMenu(false); setScripts("new"); }}><Icon name="plus" size={20} />Script pesan baru</button></li>}
+              <li><button onClick={() => { setAddMenu(false); setScripts("list"); }}><Icon name="doc" size={20} />Kelola script pesan</button></li>
               <li><button onClick={() => { setAddMenu(false); setEditDefaults(true); }}><Icon name="sliders" size={20} />Default kalau kosong</button></li>
               {onOpenScripts && <li><button onClick={() => { setAddMenu(false); onOpenScripts(); }}><Icon name="book" size={20} />Script Library</button></li>}
             </ul>
           </section>
         </div>
       )}
-      {tplManage === "new" && (
-        // Just the editor: the deck behind it closes with it.
-        <TemplateBoard templates={templates} scores={scores} data={fillData} stage={stageFor(undefined, undefined)} editorOnly startNew onEditDone={() => setTplManage(false)}
-          blocked={false} copiedId={copiedId} copyFail={copyFail} onPick={() => undefined} canEdit={canEdit} send={sendOut} sampleName="" />
-      )}
-      {tplManage === "list" && (
-        // The message deck on its own, to add and change templates without a target.
-        <div className="modal-overlay" onClick={() => setTplManage(false)}>
-          <div role="dialog" aria-modal="true" aria-labelledby="tpl-manage-h" onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 560 }}>
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-              <h2 id="tpl-manage-h" style={{ margin: 0, fontSize: "var(--fs-section)", fontWeight: 700 }}>Template pesan</h2>
-              <button className="sp-x" onClick={() => setTplManage(false)} aria-label="Tutup"><span><Icon name="close" size={13} stroke={2.4} /></span></button>
-            </div>
-            <TemplateBoard templates={templates} scores={scores} data={fillData} stage={stageFor(undefined, undefined)} manage
-              blocked={false} copiedId={copiedId} copyFail={copyFail} onPick={() => undefined} canEdit={canEdit} send={sendOut} sampleName="" />
-          </div>
-        </div>
-      )}
+      {scripts && <ScriptManager startNew={scripts === "new"} stage={stageFor(cur, cur ? view(cur, now, strategy) : undefined)} data={fillData} onClose={() => setScripts(false)} />}
       {open ? (
       <div ref={sendRef} className="sp-hunt-send" style={{ ...card, padding: 20, marginBottom: 20 }}>
         <div className="sp-kback-row">
@@ -754,7 +737,6 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
         <TemplateBoard templates={templates} scores={scores} data={fillData} stage={stageFor(cur, cur ? view(cur, now, strategy) : undefined)}
           blocked={isBlocked} copiedId={copiedId} copyFail={copyFail} onPick={pick} canEdit={canEdit} send={sendOut}
           sampleName={target.trim() ? (cur?.name || target.trim()) : ""}
-          newRequest={open ? tplNew : 0}
           extra={<button onClick={() => setAddMenu(true)} aria-haspopup="dialog" style={{ ...chip, display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="plus" size={15} stroke={2} />Template & script</button>} />
 
         {/* Mounted before its text, so screen readers announce "Tercatat". */}

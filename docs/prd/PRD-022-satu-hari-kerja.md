@@ -1,6 +1,6 @@
 # PRD-022 — Satu hari kerja
 
-- **Status:** rencana, 31 Okt. Keputusan owner sudah masuk (§3). Belum dibangun.
+- **Status:** Fase 1 dibangun, 31 Okt. Fase 0 juga, kecuali Q5 dan Q7 yang ikut Fase 4. Keputusan owner sudah masuk (§3).
 - **Peran dokumen ini:** tulang punggung. Fitur baru mengikuti alur di sini, bukan sebaliknya.
 - **Terkait:** PRD-009 (journey), PRD-012 (Cari bisnis), PRD-016 (outreach), PRD-017 (biaya), PRD-018 (tempel, scroll), PRD-019 (lembar kerja, kirim dikonfirmasi), PRD-021 (posisi lead), QA-4 di Notion, `GLOSSARY.md`, `docs/qa-reviews/2026-10-31-audit-satu-hari-kerja.md`.
 - **Desain per komponen:** artifact [Hunting Workspace](https://claude.ai/artifact/FAsiHgRjGGtAu1oMBs222F) (private).
@@ -53,9 +53,9 @@ Mengikuti desain owner, dengan empat perubahan yang dijelaskan di artifact: edit
 
 - **Activity Island:** ringkasan hari ini, kalender minggu, heatmap 17 minggu. Sumbernya `lib/activity.ts`. Kalender job tampil sebagai Jadwal.
 - **Tab Prospek · Leads · Performa:** kolom cari membaca Prospek dan Leads. Hasil di daftar lain ditawarkan, bukan malah membuat prospek baru.
-- **Pesan:** satu panel menggantikan lembar kerja, tanpa modal di atas modal. Di HP dua layar berurutan.
-- **Script Management:** halaman sendiri. `pitchTemplates` mendapat `workflow` dan `brand`. Template lama dibaca Semua.
-- **Konfirmasi kirim:** app tidak bisa tahu pesan terkirim, karena `wa.me` hanya membuka WhatsApp. Setelah balik, penjual konfirmasi, lalu lanjut ke orang berikutnya. Ini menggantikan PRD-009 D1 dan menjalankan PRD-019 §3.5.
+- **Pesan:** satu panel menggantikan lembar kerja, tanpa modal di atas modal. Di laptop script dan pesan berdampingan. Di HP langsung ke pesan dengan script yang paling cocok, dan **Ganti script** membuka daftarnya.
+- **Script Management:** halaman sendiri. `pitchTemplates` mendapat `workflow` dan `brand`. Script lama dibaca Semua, kecuali isinya menyebut DM atau post, yang dibaca Hunting.
+- **Konfirmasi kirim:** app tidak bisa tahu pesan terkirim, karena `wa.me` hanya membuka WhatsApp. Setelah balik, penjual konfirmasi, lalu lanjut ke orang berikutnya. Ini menggantikan PRD-009 D1 dan menjalankan PRD-019 §3.5. Kartu Beranda dan Follow-up beruntun belum ikut: masih mencatat saat dipencet, dengan Batal.
 
 Lembar kerja prospek (PRD-019 §3.4) dan lembar kerja lead memakai pola yang sama.
 
@@ -110,7 +110,8 @@ Tidak ada koleksi baru.
 |---|---|---|
 | `leads` | `contactedAt` | Q2, Q3: bukti kontak yang sama bagi semua orang di guild |
 | `pitchTemplates` | `workflow`, `brand`, `archived`, `isDefault` | Script Management |
-| `outreach`, `hunts` | status kirim dikonfirmasi | Log dan heatmap jujur |
+| `outreach` | Tanpa field baru: baris hanya ditulis setelah konfirmasi | Log dan heatmap jujur |
+| `hunts` | status kirim dikonfirmasi (Fase 5) | Log dan heatmap jujur |
 | `services` | `parts` (komponen dan jumlahnya) | Biaya alat |
 
 Rules: koleksi di atas sudah tertutup. `firestore.rules` tetap dites per peran sebelum deploy.
@@ -132,7 +133,7 @@ Fase 1 sebelum Fase 4 karena Hunting tidak berguna kalau kirimnya belum enak.
 
 ## 9. Tes
 
-Flow `sehari kerja` menjalankan hari di §2 dengan akun seukuran milik owner dan mengukur tap tiap pekerjaan. Sekarang ia hanya gagal kalau ada jalan buntu. Tiap fase menambah syaratnya, misalnya "intro 12 lead maksimal 2 tap per orang".
+Flow `sehari kerja` menjalankan hari di §2 dengan akun seukuran milik owner dan mengukur tap tiap pekerjaan. Ia gagal kalau ada jalan buntu, atau kalau pekerjaan melewati batas tapnya. Tiap fase menambah syarat. Fase 1: intro 12 lead maksimal 27 tap, 2 per orang.
 
 Sebelum PR: `PROD=1`, karena CI memakai production build dan `next dev` tidak menangkap crash minifier.
 

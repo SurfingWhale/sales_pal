@@ -722,6 +722,15 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
 }
+/* A full sheet is a step of its own: nothing of what opened it shows. */
+.sp-sheet-full { padding: 0 !important; justify-content: center; }
+.sp-sheet-full .sp-sheet { max-height: 100dvh; }
+/* Script Management: the stages beside the list on a laptop, above it on a phone. */
+.sp-scripts { display: grid; gap: 16px; }
+@media (min-width: 1024px) {
+  .sp-scripts { grid-template-columns: 200px minmax(0, 1fr); align-items: start; }
+  .sp-scripts-rail { flex-direction: column; flex-wrap: nowrap !important; }
+}
 /* The four quick actions on a lead: two by two on the narrowest phones. */
 @media (max-width: 359px) { .sp-quick { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
 /* Potensi chips: one row that scrolls sideways on a phone, not a pile. */

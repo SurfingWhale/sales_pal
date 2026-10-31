@@ -29,6 +29,10 @@ export interface PitchTemplate {
   body: string;
   stage?: string;        // lib/templates.ts STAGES; older ones are placed by title
   categories?: string[]; // types of business it's for (lib/leadEdit CATEGORIES); none = any
+  workflow?: "leads" | "hunting" | "semua"; // where it's used; none = lib/templates.ts workflowOf
+  brand?: string;        // lib/sites.ts SiteId; none = any brand
+  isDefault?: boolean;   // first in its stage
+  archived?: boolean;    // kept, but out of every list
 }
 
 export interface Hunt {
