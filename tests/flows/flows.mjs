@@ -839,6 +839,175 @@ export const flows = [
     },
   },
   {
+    name: "sehari kerja: an owner's day, measured",
+    async run(t) {
+      const { page, project } = t;
+      page.setDefaultTimeout(8000);
+      const out = [];
+      await page.addInitScript(() => { window.__tapN = 0; addEventListener("click", () => window.__tapN++, true); });
+      await page.context().route(/wa\.me|api\.whatsapp\.com/, r => r.fulfill({ status: 200, contentType: "text/html", body: "ok" }));
+      const taps = () => page.evaluate(() => window.__tapN || 0);
+      const job = async (name, fn) => {
+        const a = await taps(), t0 = Date.now();
+        let note = "";
+        try { note = (await fn()) || ""; } catch (e) { note = `BUNTU: ${e.message.split("\n")[0]}`; await closeAll(page); }
+        out.push({ name, taps: (await taps()) - a, sec: Math.round((Date.now() - t0) / 100) / 10, note });
+      };
+      const sendWa = async () => {
+        const picker = page.getByRole("dialog", { name: /^Chat ke / });
+        const [pop] = await Promise.all([page.waitForEvent("popup"), picker.getByRole("link", { name: "Kirim di WhatsApp" }).click()]);
+        await pop.close();
+      };
+      const closeLead = async () => { await page.getByRole("button", { name: "Kembali ke Leads" }).click(); await page.getByRole("dialog", { name: /^Profil / }).waitFor({ state: "detached" }); };
+      const views = () => page.getByRole("group", { name: "Tampilan cepat" });
+      await t.step("sign up with an account like the owner's: 130 Maps leads, 12 who replied, scripts, a package", async () => {
+        const email = await signup(t);
+        const uid = await uidOf(project, email);
+        const u = `users/${uid}`;
+        const docs = [];
+        for (let i = 0; i < 130; i++) docs.push([`${u}/leads/gm_${i}`, { name: `Studio Yoga ${i}`, contact: "", source: "Google Maps", status: "Cold", email: "", phone: i % 8 === 7 ? "" : `08120000${String(i).padStart(4, "0")}`, category: "Health", notes: "", lastContact: daysAgo(8), value: 0, ...(i % 2 ? { geo: { lat: -6.2, lng: 106.8, by: "maps" } } : {}) }]);
+        for (let i = 0; i < 12; i++) docs.push([`${u}/leads/rp_${i}`, { name: `Kopi Bales ${i}`, contact: "", source: "Threads", status: "Warm", email: "", phone: `08130000${String(i).padStart(4, "0")}`, category: "F&B", notes: "", lastContact: daysAgo(2), lastReplyAt: daysAgo(1), value: 0 }]);
+        for (const [id, stage, title] of [["intro", "intro", "Kenalan singkat"], ["fu", "followup", "Follow-up santai"], ["gali", "gali", "Tanya kebutuhan"], ["off", "offering", "Kirim paket"]]) docs.push([`${u}/pitchTemplates/${id}`, { title, body: "Halo {nama}, aku fotografer di Bintaro.", stage }]);
+        docs.push([`${u}/services/pkg`, { name: "Foto 1 Jam", category: "F&B", price: 300000, unit: "per sesi", description: "40 foto edit" }]);
+        await seedDocs(project, docs);
+        await page.reload();
+        await page.waitForURL("**/dashboard");
+      });
+      await t.step("walk the day", async () => {
+        await job("1. Pagi: siapa yang bales", async () => {
+          await go(page, "Jualan", "Leads");
+          await views().getByRole("button", { name: /^Dibales/ }).click();
+          return (await views().getByRole("button", { name: /^Dibales/ }).textContent()).trim();
+        });
+        await job("2. Balas satu orang", async () => {
+          await page.getByRole("button", { name: /^Balas: / }).first().click();
+          await sendWa();
+          await closeLead();
+        });
+        await job("3. Intro 5 lead dari Maps", async () => {
+          await views().getByRole("button", { name: /^Belum dikontak/ }).click();
+          const before = (await views().getByRole("button", { name: /^Belum dikontak/ }).textContent()).trim();
+          for (let i = 0; i < 5; i++) {
+            await page.getByRole("button", { name: /^Kirim intro: / }).first().click();
+            await sendWa();
+            await closeLead();
+          }
+          const after = (await views().getByRole("button", { name: /^Belum dikontak/ }).textContent()).trim();
+          return `${before} → ${after}`;
+        });
+        await job("4. Cari lead di Hunting", async () => {
+          await go(page, "Hunting");
+          await page.locator("#hunt-search").fill("Studio Yoga 3");
+          await page.waitForTimeout(500);
+          const said = (await page.locator("#journey-prospek").innerText()).split("\n").filter(Boolean).slice(-3).join(" / ").slice(0, 140);
+          await page.locator("#hunt-search").press("Enter");
+          await page.waitForTimeout(600);
+          const target = await page.locator("#hunt-target").inputValue().catch(() => "(ga ada kolom target)");
+          await closeAll(page);
+          return `layar: "${said}" · Enter isi target prospek baru: "${target}"`;
+        });
+        await job("5. Import 20 dari Excel", async () => {
+          const XLSX = (await import("xlsx")).default;
+          const rows = [["Nama Bisnis", "No. HP", "Kategori"], ...Array.from({ length: 20 }, (_, i) => [`Resto Excel ${i}`, `08140000${String(i).padStart(4, "0")}`, "F&B"])];
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Leads");
+          const file = new URL("./out/day.xlsx", import.meta.url).pathname;
+          XLSX.writeFile(wb, file);
+          await go(page, "Jualan", "Leads");
+          await page.getByRole("button", { name: "Import lead dari file" }).click();
+          await page.locator('input[type="file"][accept*=".xlsx"]').setInputFiles(file);
+          await page.getByRole("button", { name: "Import 20 lead" }).click();
+          await page.getByRole("button", { name: "Selesai" }).click();
+        });
+        await job("6. Cari di Maps, simpan 20", async () => {
+          const place = (i, name, phone) => ({ id: `p${i}`, name, category: "Cafe", address: `Jl. Contoh ${i}`, lat: -6.2, lng: 106.81, phone, website: i % 2 ? `https://cafe${i}.id` : "", rating: 4.6, reviewCount: 200, mapsUrl: "", reviews: [] });
+          const places = Array.from({ length: 20 }, (_, i) => place(i, `Cafe Maps ${i}`, `08150000${String(i).padStart(4, "0")}`));
+          places[19] = place(19, "STUDIO YOGA 1 Bintaro", "0812 0000 0001");   // already a lead, spelled differently
+          await page.route("**/api/places", r => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ places, nextPageToken: "" }) }));
+          await go(page, "Beranda");
+          await page.getByRole("region", { name: "Cari calon klien" }).getByRole("button", { name: "Cari bisnis" }).click();
+          const sheet = page.getByRole("dialog", { name: "Cari bisnis" });
+          await sheet.locator("#lf-q").fill("cafe bintaro");
+          await sheet.getByRole("button", { name: "Cari", exact: true }).click();
+          await sheet.getByRole("article", { name: "Cafe Maps 0" }).waitFor();
+          const boxes = sheet.getByRole("checkbox", { name: /^Pilih / });
+          const n = await boxes.count();
+          const selectAll = await sheet.getByRole("button", { name: /pilih semua/i }).count();
+          const dupMarked = await sheet.getByRole("article", { name: "STUDIO YOGA 1 Bintaro" }).getByText(/udah ada di Leads/).count();
+          let picked = 0;
+          for (let i = 0; i < n; i++) if (!(await boxes.nth(i).isChecked())) { await boxes.nth(i).click(); picked++; }
+          await sheet.getByRole("button", { name: /^Simpan \d+ jadi lead/ }).click();
+          await sheet.getByText(/bisnis masuk Leads/).waitFor();
+          await closeAll(page);
+          return `tombol pilih semua: ${selectAll} · centang manual: ${picked} · nomor sama beda ejaan ditandai dobel: ${dupMarked}`;
+        });
+        await job("7. Catat: dia bales", async () => {
+          await go(page, "Jualan", "Leads");
+          await views().getByRole("button", { name: /^Dikontak/ }).click();
+          await page.locator(".lead-row").first().click();
+          await page.getByRole("dialog", { name: /^Profil / }).waitFor();
+          await page.getByRole("button", { name: /^\d+ Potensi .* Kenapa \d+/ }).click();
+          await page.getByRole("button", { name: "Mereka bales hari ini" }).click();
+          await closeLead();
+        });
+        await job("8. Bikin penawaran dari lead", async () => {
+          await views().getByRole("button", { name: /^Dibales/ }).click();
+          await page.locator(".lead-row").first().click();
+          await page.getByRole("dialog", { name: /^Profil / }).getByRole("button", { name: "Penawaran", exact: true }).click();
+          await page.locator("#doc-client").waitFor();
+          await page.getByLabel("Tambah dari paket").selectOption({ index: 1 });
+          await page.getByRole("button", { name: "Simpan", exact: true }).click();
+          await page.locator("#doc-client").waitFor({ state: "detached" });
+        });
+        await job("8b. Kirim penawaran", async () => {
+          await page.getByRole("button", { name: "Kirim penawaran" }).click();
+          const sheet = page.getByRole("dialog", { name: "Kirim penawaran" });
+          await sheet.getByRole("button", { name: "Bagikan PDF" }).click();
+          await sheet.getByText(/tercatat terkirim/).waitFor();
+          await sheet.getByRole("button", { name: "Selesai" }).click();
+          await sheet.waitFor({ state: "detached" });
+        });
+        await job("8c. Disetujui, bikin invoice DP", async () => {
+          await page.getByRole("button", { name: "✓ Disetujui" }).click();
+          await page.getByRole("button", { name: /^Buat invoice/ }).first().click();
+          await go(page, "Jualan", "Invoice");
+          await page.getByRole("button", { name: "Terbitkan" }).first().waitFor();
+        });
+        await job("9. Paket 300rb, kamera 15 juta", async () => {
+          await go(page, "Jualan", "Paket");
+          await page.getByRole("button", { name: "+ Paket" }).click();
+          const ins = modal(page).locator("input");
+          await ins.nth(0).fill("Paket Kamera"); await ins.nth(1).fill("300000");
+          await page.locator("#svc-cost").fill("15000000");
+          const warned = (await modal(page).getByText(/penyusutan|harga beli|per job|alat/i).count());
+          await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
+          const line = await page.getByText(/^Modal .* margin/).first().textContent();
+          return `${line.trim()} · ada peringatan/arah ke penyusutan: ${warned}`;
+        });
+        await job("9b. Jalur penyusutan yang bener", async () => {
+          await page.getByRole("button", { name: "+ Komponen" }).click();
+          await page.locator("#cmp-kind").selectOption("Alat");
+          await page.getByText("Alat punya sendiri: modal dari penyusutan").click();
+          const per = await page.getByLabel(/Harga beli/).count();
+          await page.keyboard.press("Escape");
+          await closeAll(page);
+          const canAttach = await page.locator("#svc-components, [aria-label*='Komponen paket']").count();
+          return `form penyusutan ada: ${per} · paket bisa dipasangi komponen: ${canAttach}`;
+        });
+        await job("10. Sore: berapa kekirim hari ini", async () => {
+          await go(page, "Tim", "Log aktivitas");
+          await page.waitForTimeout(400);
+          const body = await page.locator(".sp-main").innerText();
+          return body.split("\n").filter(Boolean).slice(0, 8).join(" | ").slice(0, 300);
+        });
+      });
+      const { writeFileSync } = await import("node:fs");
+      writeFileSync(new URL(`./out/day-${process.env.DESKTOP ? "desktop" : "phone"}.json`, import.meta.url).pathname, JSON.stringify(out, null, 1));
+      const stuck = out.filter(j => j.note.startsWith("BUNTU"));
+      if (stuck.length) throw new Error(stuck.map(j => `${j.name}: ${j.note}`).join(" · "));
+    },
+  },
+  {
     name: "sell: package → quote → accepted → invoice → DP",
     async run(t) {
       const { page } = t;
