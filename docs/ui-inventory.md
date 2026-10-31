@@ -74,6 +74,12 @@ Disclosure di tempat (bukan overlay): tombol `aria-expanded` dan `<details>` di 
 
 Tidak ditemukan: `<dialog>`, `popover`, `role=tooltip`, `role=listbox`.
 
+## Filter yang bisa ditumpuk
+
+| Komponen | File | Dipakai di | Tutup / interaksi | Data |
+|---|---|---|---|---|
+| `FilterPills` (`role=group`, tombol `aria-pressed`) | `components/FilterPills.tsx` ([PRD-026](prd/PRD-026-filter-pills.md)) | Log aktivitas: "Jenis kerjaan" (Tim & Report, dan Dashboard tim) | Tap pil = pilih/lepas, × "Hapus semua filter" = lepas semua, fokus pindah ke pil pertama. Jumlah hasil lewat `role=status` | State lokal, ga nulis apa-apa |
+
 ## Tooltip
 
 Tidak ada komponen tooltip. Hanya atribut `title=` bawaan browser, misalnya "Profil & pengaturan" di header, "Tutup (Esc)" di PrintSheet, dan angka bar chart di LeadDetail. Readout hover chart di `TeamDashboard.tsx` (`role=status`) mirip tooltip.

@@ -2705,7 +2705,7 @@ export const flows = [
         await map.getByRole("button", { name: /^Respon/ }).click();
         await todayList.getByText("Simpan post Toko Kue (@tokokue)").waitFor({ state: "detached" });
         await todayList.getByText("Toko Kue (@tokokue) jadi lead (ETB)").waitFor();
-        await map.getByRole("button", { name: /^Semua/ }).click();
+        await map.getByRole("button", { name: "Hapus semua filter" }).click();
         await page.getByRole("button", { name: /^Hapus filter/ }).click();
         await page.getByRole("button", { name: /^Hapus filter/ }).waitFor({ state: "detached" });
       });
@@ -2718,6 +2718,251 @@ export const flows = [
         await page.getByRole("region", { name: "Funnel periode ini" }).getByText("Closing").waitFor();
         await page.getByRole("radio", { name: "Bulan lalu" }).click();
         await page.getByRole("radio", { name: "Bulan lalu", checked: true }).waitFor();
+      });
+    },
+  },
+  {
+    // Log aktivitas, PRD-026. Every claim about motion is read off the running
+    // animations: a tap is stopped on its first frame, where nothing may have jumped.
+    name: "filter pills: stack, merge into one bar, reverse, clear",
+    async run(t) {
+      const { page } = t;
+      const group = page.getByRole("group", { name: "Jenis kerjaan" });
+      const pill = (name) => group.getByRole("button", { name: new RegExp(`^${name} `) });
+      const clear = group.getByRole("button", { name: "Hapus semua filter" });
+      const status = page.locator(".sp-fp-status");
+      const heading = page.getByRole("region", { name: /Hari ini|Kemarin/ }).first();
+      // What the row reads, left to right: * = picked, × = the clear button.
+      const order = () => group.getByRole("button").evaluateAll(bs => bs.map(b => `${b.getAttribute("aria-pressed") === "true" ? "*" : ""}${b.textContent.trim().split(" ")[0] || "×"}`).join(" "));
+      // Everything landed: nothing left transformed, and reading order = order on screen.
+      const atRest = async (want) => {
+        const seen = await group.evaluate(async (row) => {
+          await Promise.all(row.getAnimations({ subtree: true }).map(a => a.finished.catch(() => undefined)));
+          const shown = [...row.children].filter(c => getComputedStyle(c).visibility !== "hidden");
+          return {
+            stuck: [...row.querySelectorAll("button, .sp-fp-fill")].filter(e => getComputedStyle(e).transform !== "none").length,
+            sorted: shown.every((c, i) => !i || c.getBoundingClientRect().left >= shown[i - 1].getBoundingClientRect().left),
+          };
+        });
+        if (seen.stuck) throw new Error(`${seen.stuck} element(s) left transformed`);
+        if (!seen.sorted) throw new Error("tab order differs from what's on screen");
+        const now = await order();
+        if (now !== want) throw new Error(`row reads "${now}", wanted "${want}"`);
+      };
+      // Tap, then stop on frame one: the state is new, but every pill must still
+      // be where it was, or the move starts with a jump.
+      const tapFirstFrame = async (loc) => {
+        const seen = await loc.evaluate(async (b) => {
+          const row = b.parentElement;
+          const chips = () => [...row.querySelectorAll(".sp-fp-chip")];
+          const before = new Map(chips().map(c => [c, c.getBoundingClientRect().left]));
+          b.click();
+          await null;   // React commits in a microtask
+          const flying = row.getAnimations({ subtree: true });
+          flying.forEach(a => { a.pause(); a.currentTime = 0; });
+          const jumped = chips().map(c => [c.textContent, c.getBoundingClientRect().left - before.get(c)]).filter(([, by]) => Math.abs(by) > 1).map(([n, by]) => `${n} by ${by.toFixed(1)}px`);
+          const clearShown = getComputedStyle(row.firstElementChild).visibility !== "hidden";
+          flying.forEach(a => a.play());
+          return { flying: flying.length, jumped, clearShown };
+        });
+        if (!seen.flying) throw new Error("the tap started no animation");
+        if (seen.jumped.length) throw new Error(`jumped on frame one: ${seen.jumped.join(", ")}`);
+        return seen;
+      };
+      // A finger on touch screens: unlike a click, a tap gives an iPhone button no focus.
+      const press = (loc) => t.touch ? loc.tap() : loc.click();
+      const inView = (loc) => loc.evaluate((b) => { const r = b.getBoundingClientRect(), v = b.parentElement.getBoundingClientRect(); return r.left >= v.left && r.right <= v.right; });
+      // SHOTS=1: the same tap, frozen halfway, for a look by eye.
+      const tapMidShot = async (loc, label) => {
+        if (!process.env.SHOTS) return tapFirstFrame(loc);
+        await loc.evaluate(async (b) => {
+          const row = b.parentElement;
+          b.click();
+          await null;
+          row.getAnimations({ subtree: true }).forEach(a => { a.pause(); a.currentTime = 90; });
+        });
+        await page.screenshot({ path: new URL(`./out/shot-${label}.png`, import.meta.url).pathname });
+        await group.evaluate(row => row.getAnimations({ subtree: true }).forEach(a => a.finish()));
+      };
+
+      let notes;
+      await t.step("a kind with nothing in it can't be picked", async () => {
+        const email = await signup(t);
+        const u = `users/${await uidOf(t.project, email)}`;
+        const docs = [];
+        for (let i = 1; i <= 6; i++) docs.push([`${u}/hunts/pill_h${i}`, { target: `@contoh${i}`, date: daysAgo(i), status: "Terkirim", channel: "DM", createdAt: Date.now() - i * 864e5 }]);
+        for (let i = 1; i <= 3; i++) docs.push([`${u}/rejections/pill_r${i}`, { leadName: `Kopi Contoh ${i}`, date: daysAgo(i), reason: "Budget belum ada" }]);
+        for (let i = 1; i <= 4; i++) docs.push([`${u}/quotes/pill_q${i}`, { number: `Q-PILL-${i}`, leadId: "", leadName: `Usaha Contoh ${i}`, contact: "", phone: "", items: [{ name: "Paket foto", qty: 1, price: 1_000_000 }], discount: 0, dpPercent: 50, notes: "", date: daysAgo(i), validUntil: daysAgo(i - 14), status: "Draft" }]);
+        notes = [1, 2].map(i => [`${u}/outreach/pill_o${i}`, { leadName: `Studio Contoh ${i}`, type: "Email", date: daysAgo(i), subject: "Halo" }]);
+        await seedDocs(t.project, docs);
+        await go(page, "Tim", "Log aktivitas");
+        await pill("Catatan").waitFor();
+        if (!(await pill("Catatan").isDisabled())) throw new Error("an empty kind can be picked");
+        await t.audit("pills 0 empty kind");
+      });
+      await t.step("when one arrives, its pill opens up where it stands", async () => {
+        await seedDocs(t.project, notes);
+        await group.getByRole("button", { name: "Catatan 2" }).waitFor();
+        if (await pill("Catatan").isDisabled()) throw new Error("still disabled");
+      });
+      await t.step("default: neutral pills, no ×, the total", async () => {
+        await atRest("Hunting Respon Jualan Catatan");
+        await status.getByText("15 aktivitas", { exact: true }).waitFor();
+        await heading.getByText("DM ke @contoh1").waitFor();
+        await t.audit("pills 1 default");
+      });
+      await t.step("one picked: it becomes a bar with ×, the others stay in reach", async () => {
+        await tapMidShot(pill("Jualan"), "pills-2-mid-merge");
+        await atRest("× *Jualan Hunting Respon Catatan");
+        await status.getByText("4 dari 15 aktivitas").waitFor();
+        await heading.getByText("Bikin penawaran Q-PILL-1 · Usaha Contoh 1").waitFor();
+        await heading.getByText("DM ke @contoh1").waitFor({ state: "detached" });
+        await t.audit("pills 2 one");
+      });
+      await t.step("a second one joins the same bar, and the first stays", async () => {
+        await tapFirstFrame(pill("Hunting"));
+        await atRest("× *Jualan *Hunting Respon Catatan");
+        await status.getByText("10 dari 15 aktivitas").waitFor();
+        await heading.getByText("DM ke @contoh1").waitFor();
+        // One shape: × and both pills touch, and the next pill stands apart.
+        const gaps = await group.evaluate(row => [...row.children].filter(c => getComputedStyle(c).visibility !== "hidden").map(c => c.getBoundingClientRect())
+          .map((r, i, all) => i ? Math.round(r.left - all[i - 1].right) : 0).slice(1));
+        if (gaps.join() !== "0,0,8,8") throw new Error(`gaps ${gaps.join()}`);
+        await t.audit("pills 3 two");
+      });
+      await t.step("tapping an active one sends it home; the other stays active", async () => {
+        await tapMidShot(pill("Jualan"), "pills-4-mid-reverse");
+        await atRest("× *Hunting Respon Jualan Catatan");
+        await status.getByText("6 dari 15 aktivitas").waitFor();
+        await heading.getByText("Bikin penawaran Q-PILL-1 · Usaha Contoh 1").waitFor({ state: "detached" });
+        await t.audit("pills 4 reversed");
+      });
+      await t.step("the keyboard keeps its place while pills move", async () => {
+        const focused = () => page.evaluate(() => document.activeElement?.textContent?.trim() || document.activeElement?.tagName);
+        await pill("Catatan").focus();
+        await page.keyboard.press("Space");
+        await atRest("× *Hunting *Catatan Respon Jualan");
+        if (!/^Catatan/.test(await focused())) throw new Error(`picking lost focus: ${await focused()}`);
+        await t.audit("pills focus in the bar");
+        await page.keyboard.press("Space");
+        await atRest("× *Hunting Respon Jualan Catatan");
+        if (!/^Catatan/.test(await focused())) throw new Error(`going home lost focus: ${await focused()}`);
+        await t.audit("pills focus neutral");
+      });
+      await t.step("× clears everything, and focus lands on a pill, not the page", async () => {
+        await clear.focus();
+        // A tap that lands mid-flight, on a clock held still so First is exact:
+        // the new move must start from where the pills had got to.
+        await press(pill("Jualan"));
+        await group.evaluate(row => row.getAnimations({ subtree: true }).forEach(a => { a.pause(); a.currentTime = 70; }));
+        // Still there on frame one: it closes into the pill, it doesn't vanish.
+        if (!(await tapFirstFrame(clear)).clearShown) throw new Error("× vanished instead of closing");
+        await atRest("Hunting Respon Jualan Catatan");
+        await clear.waitFor({ state: "hidden" });
+        await status.getByText("15 aktivitas", { exact: true }).waitFor();
+        const on = await page.evaluate(() => document.activeElement?.textContent?.trim());
+        if (!/^Hunting/.test(on)) throw new Error(`focus went to "${on}"`);
+        // The same with a finger, and with no ring left behind by a tap.
+        await press(pill("Respon"));
+        await atRest("× *Respon Hunting Jualan Catatan");
+        await press(clear);
+        await atRest("Hunting Respon Jualan Catatan");
+        const after = await page.evaluate(() => ({ on: document.activeElement?.textContent?.trim(), ring: document.activeElement?.matches(":focus-visible") }));
+        if (!/^Hunting/.test(after.on)) throw new Error(`after a tap focus went to "${after.on}"`);
+        if (t.touch && after.ring) throw new Error("a tap left a focus ring");
+      });
+      await t.step("a double tap mid-slide leaves nothing stuck", async () => {
+        await pill("Catatan").evaluate(async (b) => {
+          b.click();
+          await new Promise(r => setTimeout(r, 60));
+          b.click();
+        });
+        await atRest("Hunting Respon Jualan Catatan");
+        await pill("Jualan").dblclick();
+        await atRest("Hunting Respon Jualan Catatan");
+        // A third tap landing on the way back, and two pills in a row.
+        await pill("Respon").evaluate(async (b) => {
+          for (const at of [b, b, b, b.parentElement.querySelector("[data-key=note]")]) {
+            at.click();
+            await new Promise(r => setTimeout(r, 50));
+          }
+        });
+        await atRest("× *Respon *Catatan Hunting Jualan");
+        await press(clear);
+        await atRest("Hunting Respon Jualan Catatan");
+      });
+      await t.step("320px: the page stays put, the last pill is reachable, a tap while scrolled doesn't jump", async () => {
+        const size = page.viewportSize();
+        await page.setViewportSize({ width: 320, height: size.height });
+        await page.waitForTimeout(200);
+        const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+        if (over > 0) throw new Error(`page is ${over}px wider than the screen`);
+        const scrolled = await group.evaluate((row) => { row.scrollLeft = row.scrollWidth; return row.scrollLeft; });
+        if (!scrolled) throw new Error("the row doesn't scroll at 320px");
+        await tapFirstFrame(pill("Catatan"));
+        await atRest("× *Catatan Hunting Respon Jualan");
+        if (await group.evaluate(row => row.scrollLeft) || !(await inView(pill("Catatan")))) throw new Error("the bar isn't in view");
+        await t.audit("pills 5 320");
+        // Going home past the edge of the row: the row follows it.
+        await press(pill("Catatan"));
+        await atRest("Hunting Respon Jualan Catatan");
+        if (!(await inView(pill("Catatan")))) throw new Error("the pill went home out of view");
+        // All four: wider than the screen, and the last one in is still in view.
+        for (const name of ["Hunting", "Respon", "Jualan", "Catatan"]) await press(pill(name));
+        await atRest("× *Hunting *Respon *Jualan *Catatan");
+        if (!(await inView(pill("Catatan")))) throw new Error("the last pill picked is out of view");
+        if (await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)) throw new Error("page scrolls sideways");
+        await t.audit("pills 5b 320 all four");
+        await group.evaluate((row) => { row.scrollLeft = 0; });
+        await press(clear);
+        await atRest("Hunting Respon Jualan Catatan");
+        await page.setViewportSize(size);
+      });
+      await t.step("a vertical swipe that starts on the row scrolls the page", async () => {
+        const action = await group.evaluate(row => [row, ...row.children].map(e => getComputedStyle(e).touchAction).join());
+        if (/pan-x|none/.test(action)) throw new Error(`touch-action: ${action}`);
+        if (!t.touch || t.device) return;   // WebKit's driver has no touch gestures
+        const size = page.viewportSize();
+        await page.setViewportSize({ width: size.width, height: 480 });
+        const box = await group.boundingBox();
+        const cdp = await page.context().newCDPSession(page);
+        const from = await page.evaluate(() => scrollY);
+        await cdp.send("Input.synthesizeScrollGesture", { x: box.x + 120, y: box.y + 22, yDistance: -160, gestureSourceType: "touch", speed: 1600 });
+        const to = await page.evaluate(() => scrollY);
+        await page.setViewportSize(size);
+        if (to <= from) throw new Error(`page stayed at ${to}`);
+      });
+      await t.step("Reduce Motion: the state changes, nothing moves", async () => {
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        const flying = await pill("Respon").evaluate(async (b) => {
+          b.click();
+          await null;
+          // Scripted ones only: the app's Reduce Motion rule turns every style change into a .001ms CSS transition.
+          return document.querySelector(".sp-main").getAnimations({ subtree: true }).filter(a => a.constructor === Animation).length;
+        });
+        if (flying) throw new Error(`${flying} animation(s) ran`);
+        await atRest("× *Respon Hunting Jualan Catatan");
+        await clear.click();
+        await atRest("Hunting Respon Jualan Catatan");
+        await page.emulateMedia({ reducedMotion: null });
+      });
+      await t.step("dark: the bar's edge clears 3:1 against the page", async () => {
+        await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+        await pill("Hunting").click();
+        await pill("Jualan").click();
+        await atRest("× *Hunting *Jualan Respon Catatan");
+        const ratio = await pill("Hunting").evaluate((b) => {
+          const lum = (rgb) => { const [r, g, b] = rgb.match(/[\d.]+/g).map(Number).map(c => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+          const edge = lum(getComputedStyle(b.querySelector(".sp-fp-fill")).borderTopColor);
+          const probe = document.createElement("i");
+          probe.style.color = "var(--app-bg)";
+          document.body.append(probe);
+          const page = lum(getComputedStyle(probe).color);
+          probe.remove();
+          return (Math.max(edge, page) + 0.05) / (Math.min(edge, page) + 0.05);
+        });
+        if (ratio < 3) throw new Error(`edge ${ratio.toFixed(2)}:1`);
+        await t.audit("pills 6 dark");
       });
     },
   },
