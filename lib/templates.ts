@@ -4,6 +4,7 @@
 // reads like a kanban of the conversation, and the stage that fits the person
 // in front of you is the one lit up.
 
+import { SITES } from "@/lib/sites";
 import type { Prospect, View } from "@/lib/prospects";
 import type { PostContext } from "@/lib/postContext";
 
@@ -61,6 +62,14 @@ export function workflowOf(t: { workflow?: Workflow; body: string }): Workflow {
   return t.workflow || (/\bdm\b|postingan|post-?nya|\{post\}|threads/i.test(t.body) ? "hunting" : "semua");
 }
 
+// Older scripts have no brand, but most say it in the title or the message.
+// An empty brand set by hand means every brand.
+export function brandOf(t: { brand?: string; title: string; body: string }): string {
+  if (t.brand !== undefined) return t.brand;
+  const text = `${t.title} ${t.body}`.toLowerCase();
+  return SITES.find(s => text.includes(s.name.toLowerCase()))?.id || "";
+}
+
 // ---- the words a template can carry ---------------------------------------
 
 export const VARIABLES = [
@@ -86,7 +95,8 @@ export function fillTemplate(body: string, data: FillData): string {
   const val = (k: string) => (data[k as VarKey] || "").trim();
   const known = (k: string) => (VARIABLES as readonly { key: string }[]).some(v => v.key === k.toLowerCase());
   const OPEN = "\u0001", CLOSE = "\u0002";
-  let out = body;
+  // "kak{nama}" reads "kakLa Alcienda" otherwise (QA-4).
+  let out = body.replace(/([a-zà-ÿ])\{nama\}/gi, "$1 {nama}");
   for (let i = 0; i < 6; i++) {
     const next = out.replace(/\[([^[\]]*)\]/g, (_, inner: string) => {
       const keys = Array.from(inner.matchAll(/\{(\w+)\}/g), m => m[1].toLowerCase()).filter(known);

@@ -37,7 +37,7 @@ Singkatan kolom "Tutup":
 | `AvatarPicker`, `AccessAdmin` | `ProfileSheet.tsx`, `AccessAdmin.tsx` | Dari dalam ProfileSheet | Batal/Tutup; scrim/Escape/Back hanya menutup dirinya (diperbaiki di PR #87) | `setDoc` profil; `/api/access/admin` |
 | `LeadFinder` | `components/LeadFinder.tsx` | `setShowFinder(true)` | guard; Tutup | `/api/places`; `saveFound` → `writeBatch` leads |
 | `FollowUpRun` (`fuRun`) | `components/FollowUpRun.tsx` | `setFuRun(dueLeads)` | STD; Tutup | `updateDoc` leads |
-| Target DM harian (`goalDraft`) | `components/Hunting.tsx` | `changeGoal` | STD + guard | `setDoc` settings/hunting |
+| Target DM harian (`goalDraft`) | `components/Hunting.tsx` | `changeGoal`, sel Outreach di `ActivityIsland` | STD + guard | `setDoc` settings/hunting |
 | `ScriptManager` (`scripts`), layar penuh | `components/ScriptManager.tsx` | Menu "Tambah" Hunting, Kelola di Pesan | × "Tutup"; editor: Batal/Simpan | `setDoc`/`updateDoc`/`deleteDoc` pitchTemplates; `canEditCatalog` |
 | Editor template (`editing`) | `components/TemplateBoard.tsx` | Tombol edit di kartu pesan Hunting | STD; Batal | `setDoc`/`deleteDoc` pitchTemplates |
 | `DefaultsSheet` | `components/DefaultsSheet.tsx` | Menu "Tambah" | STD; Batal | `saveFillDefaults` |
@@ -96,6 +96,8 @@ Tidak ada komponen tooltip. Hanya atribut `title=` bawaan browser, misalnya "Pro
 | Komponen | File | Buka | Tutup | Data |
 |---|---|---|---|---|
 | `Sheet` (bottom sheet, portal) | `components/Sheet.tsx` | Lead: profil, ubah lead, **lokasi lead** (`PlaceEditor`), langkah berikutnya, hapus. Penawaran/invoice: **"Titik lokasi acara"** (`DocEditor` `placing`) | Scrim (`stopPropagation`), × "Tutup", Batal | `updateDoc` leads; `venueGeo` di draft |
+| `ActivityIsland` | `components/ActivityIsland.tsx` ← `Hunting.tsx` | Selalu tampil di atas tab Hunting; tombol buka: heatmap (HP) dan kalender job | Tombol yang sama | `lib/activity.ts`, baca saja |
+| `HuntLeads` + `LeadRow` (tab Leads di Hunting) | `components/HuntLeads.tsx`, `components/LeadCard.tsx` | Tab Leads, angka Perlu dibales dan Follow-up di island | – | Baca `leads`; buka `LeadPage` |
 | `ChatPicker` (panel "Pesan ke …", `Sheet full`) | `components/ChatPicker.tsx` ← `useChatLog().picker` di `LeadDetail.tsx` | Tulis pesan, tombol kartu lead, script tipe customer, Balas | × "Tutup", Belum, Udah | `pitchTemplates` (baca), `logContact` setelah Udah |
 | `PlaceEditor` (isi sheet) | `components/PlaceEditor.tsx` | Di dalam Sheet | Pilih hasil / "Pakai titik ini" / GPS → simpan dan tutup | `/api/geocode`, geolocation, `GeoPicker` |
 | `WaImport` | `components/WaImport.tsx` | LeadDetail, atau langsung terbuka dari file share | guard; × | `parseWaExport`, `/api/scan` |

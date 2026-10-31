@@ -6,7 +6,7 @@ import { db } from "@/lib/firebase";
 import { useSpaceCollection } from "@/lib/billing";
 import { canEditCatalog, spaceDoc, useSpace } from "@/lib/space";
 import type { PitchTemplate } from "@/lib/hunting";
-import { FillData, SAMPLE, STAGES, STARTERS, Stage, VARIABLES, WORKFLOWS, Workflow, fillTemplate, stageOf, workflowOf } from "@/lib/templates";
+import { FillData, SAMPLE, STAGES, STARTERS, Stage, VARIABLES, WORKFLOWS, Workflow, brandOf, fillTemplate, stageOf, workflowOf } from "@/lib/templates";
 import { CATEGORIES } from "@/lib/leadEdit";
 import { SITES } from "@/lib/sites";
 import Sheet from "@/components/Sheet";
@@ -52,7 +52,7 @@ export default function ScriptManager({ onClose, startNew, stage, data }: {
   }
 
   const needle = q.trim().toLowerCase();
-  const pool = all.filter(t => (!brand || !t.brand || t.brand === brand)
+  const pool = all.filter(t => (!brand || !brandOf(t) || brandOf(t) === brand)
     && (!use || workflowOf(t) === use || workflowOf(t) === "semua")
     && (!needle || `${t.title} ${t.body}`.toLowerCase().includes(needle)));
   const live = pool.filter(t => !t.archived);
@@ -123,7 +123,7 @@ export default function ScriptManager({ onClose, startNew, stage, data }: {
                       <span style={{ minWidth: 0 }}>{t.title}</span>
                       {t.isDefault && <span style={{ flexShrink: 0, padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: "var(--brand-tint)", color: "var(--brand-text)" }}>Default</span>}
                     </p>
-                    <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--app-muted)" }}>{[STAGES[stageIndex(t)]?.label, useName(workflowOf(t)), brandName(t.brand)].join(" · ")}</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--app-muted)" }}>{[STAGES[stageIndex(t)]?.label, useName(workflowOf(t)), brandName(brandOf(t))].join(" · ")}</p>
                     <p style={{ margin: "6px 0 0", fontSize: 13, lineHeight: 1.45, color: "var(--app-ink-2)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{fillTemplate(t.body, sample)}</p>
                     {canEdit && (
                       <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -181,7 +181,7 @@ function ScriptEditor({ start, sample, onDone }: { start: PitchTemplate; sample:
     try {
       await setDoc(spaceDoc(space, "pitchTemplates", t.id || `tpl_${Date.now()}`), {
         title: t.title.trim(), body: t.body.trim(), stage: stageOf(t), workflow: workflowOf(t),
-        ...(t.brand ? { brand: t.brand } : {}),
+        brand: brandOf(t),
         ...(t.categories?.length ? { categories: t.categories } : {}),
         ...(t.isDefault ? { isDefault: true } : {}),
         ...(t.archived ? { archived: true } : {}),
@@ -200,7 +200,7 @@ function ScriptEditor({ start, sample, onDone }: { start: PitchTemplate; sample:
       <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
         <div>
           <label htmlFor="tpl-brand" style={label}>Brand</label>
-          <select id="tpl-brand" value={t.brand || ""} onChange={e => setT({ ...t, brand: e.target.value || undefined })} style={select}>
+          <select id="tpl-brand" value={brandOf(t)} onChange={e => setT({ ...t, brand: e.target.value })} style={select}>
             <option value="">Semua brand</option>
             {SITES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>

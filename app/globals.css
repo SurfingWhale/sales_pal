@@ -722,6 +722,18 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
 }
+/* Activity Island: the week, with the heat map beside it on a laptop and under
+   the chevron on a phone. */
+.sp-island { margin-bottom: var(--sp-4); border-radius: 18px; border: 1px solid var(--app-border); background: var(--app-card); overflow: hidden; }
+.sp-island-top { display: grid; grid-template-columns: minmax(0, 1fr); }
+.sp-island-heat { display: none; padding: 10px 14px 12px; border-top: 1px solid var(--app-border); }
+.sp-island.open .sp-island-heat { display: block; }
+@media (min-width: 1024px) {
+  .sp-island-top { grid-template-columns: minmax(0, 1fr) 340px; }
+  .sp-island-heat { display: block; border-top: 0; border-inline-start: 1px solid var(--app-border); }
+}
+/* Hunting search: what's already in Leads, above "Kirim ke …". */
+.sp-kfound { padding: 8px 4px 4px; font-size: 13px; font-weight: 600; color: var(--app-muted); }
 /* A full sheet is a step of its own: nothing of what opened it shows. */
 .sp-sheet-full { padding: 0 !important; justify-content: center; }
 .sp-sheet-full .sp-sheet { max-height: 100dvh; }
