@@ -12,7 +12,7 @@ import { today, useSpaceCollection } from "@/lib/billing";
 import { useSpace } from "@/lib/space";
 import { ACT_KINDS, ActKind, activities, addDay, countByDay, heatLevel, kindLabel, streak, weekColumns } from "@/lib/activity";
 import type { Outreach, Rejection } from "@/components/TeamLogs";
-import FilterPills, { settleIn } from "@/components/FilterPills";
+import FilterPills from "@/components/FilterPills";
 import { card, chip, font, heading, subheading } from "@/components/ui";
 
 const WEEKS = 17;
@@ -102,7 +102,7 @@ export default function ActivityLog({ hunts, sessions, quotes, invoices, outreac
             const n = acts.filter(a => a.kind === k.id).length;
             return { id: k.id, label: k.label, count: n, disabled: !n };
           })}
-          onChange={next => { setKinds(next); setPages(1); settleIn(listRef.current); }}
+          onChange={next => { setKinds(next); setPages(1); }}
           status={kinds.length ? `${shown.length} dari ${acts.length} aktivitas` : `${acts.length} aktivitas`} />
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start" }}>

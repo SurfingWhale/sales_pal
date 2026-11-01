@@ -158,12 +158,6 @@ function land(row: HTMLElement, f: Flight) {
   }
 }
 
-// What a filter changed settles in rather than pops.
-export function settleIn(el: HTMLElement | null) {
-  if (!el || window.matchMedia(STILL).matches) return;
-  el.animate([{ opacity: 0.4 }, { opacity: 1 }], { duration: MORPH_MS, easing: "ease-out" });
-}
-
 export default function FilterPills<T extends string>({ label, pills, value, onChange, status, clearLabel = "Hapus semua filter" }: {
   label: string;           // what the group of filters is, for screen readers
   pills: Pill<T>[];
