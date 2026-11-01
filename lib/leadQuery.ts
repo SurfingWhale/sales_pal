@@ -2,12 +2,12 @@
 // query"). One search across everything a lead holds, quick views for the
 // questions a seller asks every day, and a sort. Pure; no Firestore.
 
-import { standId } from "@/lib/leadStand";
+import { ourTurn, standId } from "@/lib/leadStand";
 
 export interface QueryLead {
   id: string; name: string; contact: string; status: string; category: string; source: string;
   phone: string; email: string; notes: string; value: number; lastContact: string;
-  nextAction?: string; nextActionDate?: string; lastReplyAt?: string;
+  nextAction?: string; nextActionDate?: string; lastReplyAt?: string; contactedAt?: string;
   quoted?: boolean;                        // a live offer is out (lib/leadStand.ts)
   docs?: string;                           // its quote and invoice numbers, for search
   profile?: { need?: string; pain?: string; objection?: string; brief?: string };
@@ -24,10 +24,12 @@ export const VIEWS = [
   { id: "penawaran", label: "Penawaran" },
   { id: "deal", label: "Deal" },
   { id: "tanpa-nomor", label: "Belum ada nomor" },
+  { id: "gugur", label: "Gugur" },
 ] as const;
 export type View = (typeof VIEWS)[number]["id"];
 
 export const SORTS = [
+  { id: "kerja", label: "Perlu dikerjain" },
   { id: "skor", label: "Skor tertinggi" },
   { id: "jadwal", label: "Follow-up terdekat" },
   { id: "nilai", label: "Nilai terbesar" },
@@ -44,6 +46,7 @@ export function inView(l: QueryLead, v: View, on: string): boolean {
     case "telat": return open(l) && !!l.nextActionDate && l.nextActionDate < on;
     case "belum": case "dikontak": case "dibales": case "penawaran": case "deal": return standId(l) === v;
     case "tanpa-nomor": return open(l) && (l.phone || "").replace(/\D/g, "").length < 8;
+    case "gugur": return l.status === "Lost";
     default: return true;
   }
 }
@@ -58,8 +61,17 @@ export function matches(l: QueryLead, q: string): boolean {
   return words.every(w => hay.includes(w.replace(/^0/, "")) || hay.includes(w));
 }
 
+// Perlu dikerjain (PRD-022 Q7): whoever's waiting on us, then what we promised,
+// then who's new, then the rest. Done deals sit below the open ones.
+function workRank(l: QueryLead, on: string): number {
+  if (!open(l)) return 4;
+  if (ourTurn(l)) return 0;
+  if (l.nextActionDate && l.nextActionDate <= on) return 1;
+  return standId(l) === "belum" ? 2 : 3;
+}
+
 // Gugur leads go last whatever the order, so the list leads with who's still in play.
-export function sortLeads<T extends QueryLead>(xs: T[], s: Sort, score: (l: T) => number): T[] {
+export function sortLeads<T extends QueryLead>(xs: T[], s: Sort, score: (l: T) => number, on = ""): T[] {
   const lost = (l: T) => (l.status === "Lost" ? 1 : 0);
   const by = (f: (l: T) => number | string) => [...xs].sort((a, b) => { const x = f(a), y = f(b); return lost(a) - lost(b) || (x < y ? -1 : x > y ? 1 : 0); });
   switch (s) {
@@ -67,6 +79,7 @@ export function sortLeads<T extends QueryLead>(xs: T[], s: Sort, score: (l: T) =
     case "nilai": return by(l => -(l.value || 0));
     case "diam": return by(l => l.lastContact || "0000");
     case "nama": return by(l => l.name.toLowerCase());
+    case "kerja": return by(l => workRank(l, on) * 1000 - score(l));
     default: return by(l => -score(l));
   }
 }

@@ -54,7 +54,8 @@ export interface Hunt {
   statusAt?: number;     // when the status last changed: "dibales 3 hari setelah DM"
 }
 
-export const DEFAULT_GOAL = 20;
+// New chats a working day that a WhatsApp number can take (PRD-022 §5.3).
+export const DEFAULT_GOAL = 12;
 
 // DMs a day to aim for, from the space's settings/hunting.
 export function useHuntGoal(space: Space): number {

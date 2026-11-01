@@ -1,6 +1,6 @@
 # PRD-022 — Satu hari kerja
 
-- **Status:** Fase 1 dibangun, 31 Okt. Fase 0 juga, kecuali Q5 dan Q7 yang ikut Fase 4. Keputusan owner sudah masuk (§3).
+- **Status:** Fase 0, 1, dan 4 dibangun, 31 Okt. Keputusan owner sudah masuk (§3).
 - **Peran dokumen ini:** tulang punggung. Fitur baru mengikuti alur di sini, bukan sebaliknya.
 - **Terkait:** PRD-009 (journey), PRD-012 (Cari bisnis), PRD-016 (outreach), PRD-017 (biaya), PRD-018 (tempel, scroll), PRD-019 (lembar kerja, kirim dikonfirmasi), PRD-021 (posisi lead), QA-4 di Notion, `GLOSSARY.md`, `docs/qa-reviews/2026-10-31-audit-satu-hari-kerja.md`.
 - **Desain per komponen:** artifact [Hunting Workspace](https://claude.ai/artifact/FAsiHgRjGGtAu1oMBs222F) (private).
@@ -49,12 +49,13 @@ Q4 ditarik dan diganti Q11.
 
 ## 4. Hunting Workspace (QA-4)
 
-Mengikuti desain owner, dengan empat perubahan yang dijelaskan di artifact: editor template memakai Simpan, ada langkah konfirmasi setelah WhatsApp, Island ciut secara bawaan, menu bawah HP tetap lima.
+Mengikuti desain owner, dengan tiga perubahan yang dijelaskan di artifact: editor template memakai Simpan, ada langkah konfirmasi setelah WhatsApp, menu bawah HP tetap lima.
 
-- **Activity Island:** ringkasan hari ini, kalender minggu, heatmap 17 minggu. Sumbernya `lib/activity.ts`. Kalender job tampil sebagai Jadwal.
-- **Tab Prospek · Leads · Performa:** kolom cari membaca Prospek dan Leads. Hasil di daftar lain ditawarkan, bukan malah membuat prospek baru.
+- **Activity Island:** kalender minggu dengan tanggal dan tiga angka hari ini selalu tampil. Tap satu hari untuk melihat yang tercatat dan yang dijadwalkan. Heatmap 17 minggu ada di samping kalender di laptop, dan di bawah tombol buka di HP, bersama kalender job. Sumbernya `lib/activity.ts`.
+- **Heatmap menghitung kerja, bukan jadwal:** DM, chat Outreach, dan penawaran. Catatan dan status tidak ikut.
+- **Tab Prospek · Leads · Performa:** kartu Leads memakai pola kartu Prospek dan tombol langkah berikutnya. Kolom cari membaca Prospek dan Leads. Hasil di daftar lain ditawarkan, bukan malah membuat prospek baru.
 - **Pesan:** satu panel menggantikan lembar kerja, tanpa modal di atas modal. Di laptop script dan pesan berdampingan. Di HP langsung ke pesan dengan script yang paling cocok, dan **Ganti script** membuka daftarnya.
-- **Script Management:** halaman sendiri. `pitchTemplates` mendapat `workflow` dan `brand`. Script lama dibaca Semua, kecuali isinya menyebut DM atau post, yang dibaca Hunting.
+- **Script Management:** halaman sendiri. `pitchTemplates` mendapat `workflow` dan `brand`. Script lama dibaca Semua, kecuali isinya menyebut DM atau post, yang dibaca Hunting. Brand script lama dibaca dari nama brand di judul atau isinya.
 - **Konfirmasi kirim:** app tidak bisa tahu pesan terkirim, karena `wa.me` hanya membuka WhatsApp. Setelah balik, penjual konfirmasi, lalu lanjut ke orang berikutnya. Ini menggantikan PRD-009 D1 dan menjalankan PRD-019 §3.5. Kartu Beranda dan Follow-up beruntun belum ikut: masih mencatat saat dipencet, dengan Batal.
 
 Lembar kerja prospek (PRD-019 §3.4) dan lembar kerja lead memakai pola yang sama.

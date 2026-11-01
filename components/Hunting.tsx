@@ -5,8 +5,10 @@ import { type CSSProperties, type Dispatch, type SetStateAction, useEffect, useL
 import { deleteDoc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { Invoice, Quote, addDays, daysBetween, longDate, today, useBusiness, useSpaceCollection } from "@/lib/billing";
 import { jobsFrom } from "@/components/JobCalendar";
-import OccupancyCalendar from "@/components/OccupancyCalendar";
-import { canEditCatalog, spaceDoc, stamp, useSpace } from "@/lib/space";
+import { canEditCatalog, seesEveryone, spaceDoc, stamp, useSpace } from "@/lib/space";
+import { View as LeadView, followUpQueue, inView, matches } from "@/lib/leadQuery";
+import { ourTurn, standOf } from "@/lib/leadStand";
+import type { Outreach, Rejection } from "@/components/TeamLogs";
 import {
   HUNT_STATUS, Hunt, HuntStatus, MIN_SAMPLE, PLATFORMS, STALE_DAYS, PitchTemplate, Platform,
   fill, waLinkFor, huntAction, huntColor, huntIcon, isStale, parseProfile, pct, platformSource, responded, scoreTemplates, verdict,
@@ -17,6 +19,8 @@ import ProspectThread, { type SendHow, type SendOut } from "@/components/Prospec
 import Campaigns from "@/components/Campaigns";
 import HunterStats from "@/components/HunterStats";
 import CustomerContext from "@/components/CustomerContext";
+import ActivityIsland, { ownRows } from "@/components/ActivityIsland";
+import HuntLeads, { HuntLead } from "@/components/HuntLeads";
 import ScriptManager from "@/components/ScriptManager";
 import TemplateBoard from "@/components/TemplateBoard";
 import { dataFor, defaultsWith, fillTemplate, stageFor, workflowOf } from "@/lib/templates";
@@ -36,8 +40,9 @@ type Filter = "Semua" | "Follow-up" | "Tertarik";
 // One part of Hunting at a time (QA 15 Okt: "tiap component mesti scroll panjang"):
 // writing the message, the people, the log, and the numbers.
 // Two parts (owner, 23 Okt): everyone you hunt in one list of cards, and how it's going.
-type Pane = "kirim" | "performa";
-const PANES: [Pane, string][] = [["kirim", "Prospek"], ["performa", "Performa"]];
+// Leads came in with PRD-022 Q11: two lists, one place to work.
+type Pane = "kirim" | "leads" | "performa";
+const PANES: [Pane, string][] = [["kirim", "Prospek"], ["leads", "Leads"], ["performa", "Performa"]];
 // An inline editor under a log row: the field on its own line, Batal beside the action.
 const inlineEditor: CSSProperties = { marginTop: 10, padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)" };
 const editorButtons: CSSProperties = { display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap", marginTop: 10 };
@@ -53,7 +58,13 @@ export interface HuntingSession {
   end: () => Promise<void>;
 }
 
-export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts: Hunt[]; goal: number; onOpenScripts?: () => void; journey: HuntingSession }) {
+export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, outreach, rejections, quotes, invoices, score, onOpenLead, onGo }: {
+  hunts: Hunt[]; goal: number; onOpenScripts?: () => void; journey: HuntingSession;
+  leads: HuntLead[]; outreach: Outreach[]; rejections: Rejection[]; quotes: Quote[]; invoices: Invoice[];
+  score: (l: HuntLead) => number;
+  onOpenLead: (id: string, start: "chat" | "edit" | null, list: string[]) => void;
+  onGo: (tab: string) => void;
+}) {
   const [ask, askSheet] = useConfirm();
   const space = useSpace();
   const canEdit = canEditCatalog(space);
@@ -94,12 +105,12 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   const [addMenu, setAddMenu] = useState(false);
   // Messages and scripts live behind the + menu too (owner, 23 Okt).
   const [scripts, setScripts] = useState<false | "list" | "new">(false);
+  const [leadView, setLeadView] = useState<LeadView>("semua");
+  const [logRow, setLogRow] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [queued, setQueued] = useState<{ label: string; ids: string[] } | null>(null);
   const [editDefaults, setEditDefaults] = useState(false);
-  const allQuotes = useSpaceCollection<Quote>(space, "quotes");
-  const allInvoices = useSpaceCollection<Invoice>(space, "invoices");
-  const jobs = jobsFrom(allQuotes, allInvoices);
+  const jobs = jobsFrom(quotes, invoices);
   const targetRef = useRef<HTMLInputElement>(null);
   const sendRef = useRef<HTMLDivElement>(null);
   const topicsRef = useRef<HTMLDivElement>(null);
@@ -290,7 +301,8 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
   const engaged = !!cur && !isBlocked && cur.contact === "terhubung" && cur.result !== "tolak";
   const weekAgo = addDays(now, -6);
   const sorted = hunts.slice().sort((a, b) => b.createdAt - a.createdAt);
-  const sentToday = hunts.filter(h => h.date === now).length;
+  // DMs from here and chats from a lead's Pesan: one number for the day.
+  const sentToday = hunts.filter(h => h.date === now).length + ownRows(outreach, space).filter(o => o.date === now && o.status === "Sent").length;
   const week = hunts.filter(h => h.date >= weekAgo);
   const weekReplied = week.filter(responded).length;
   const weekInterested = week.filter(h => h.status === "Tertarik").length;
@@ -405,16 +417,26 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     outcome.stop();
   }
 
-  // The search box is the way in: a match opens its page, anything else
-  // (a link, an @name) becomes a new target.
+  // The search box is the way in: a match opens its page, a link or a new
+  // @name becomes a target. A name you already have in Leads is that lead, not
+  // a new prospect (PRD-022 Q11); "Kirim ke …" is still there for one who isn't.
   function commitSearch(text = q) {
     const v = text.trim();
     if (!v) return;
-    setQ(""); setQueued(null);
-    if (/https?:\/\//.test(v) && apply(v)) return;
+    if (/https?:\/\//.test(v)) { setQ(""); setQueued(null); if (apply(v)) return; newTarget(v); return; }
     const key = v.replace(/^@/, "").toLowerCase();
     const hit = prospects.find(p => p.handle.replace(/^@/, "").toLowerCase() === key);
-    if (hit) { compose(hit); return; }
+    if (hit) { setQ(""); setQueued(null); compose(hit); return; }
+    // A full name is that lead; a word can match many, and its digits can match a phone.
+    const same = leads.filter(l => l.name.toLowerCase() === v.toLowerCase());
+    const known = same.length ? same : leads.filter(l => matches(l, v));
+    if (known.length > 1) return;   // listed under the box: which one is yours to pick
+    if (known.length === 1) { setQ(""); onOpenLead(known[0].id, null, []); return; }
+    newTarget(v);
+  }
+
+  function newTarget(v: string) {
+    setQ(""); setQueued(null);
     setTarget(v); setUrl(""); setSource({ kind: "manual" }); setChannel("dm"); setPasteMsg("");
     setOpen(true);
   }
@@ -546,16 +568,35 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
     }
   }
 
-  const progress = Math.min(1, sentToday / goal);
   const lastSession = journey.sessions.find(x => x.endedAt) || null;
+  // Names first: "120" also sits in most phone numbers.
+  const asName = q.trim().toLowerCase();
+  const leadHits = asName ? leads.filter(l => matches(l, q)).sort((a, b) => Number(b.name.toLowerCase().includes(asName)) - Number(a.name.toLowerCase().includes(asName))) : [];
+  const leadsDue = followUpQueue(leads, now).length;
+  const dueCount = queueGroup(prospects, "due", now, strategy).length;
+  // What's on the calendar for a day: promised follow-ups, then shoots.
+  const schedule = [
+    ...leads.flatMap(l => (l.nextActionDate ? [{ day: l.nextActionDate, title: `${l.nextAction || "Follow-up"}: ${l.name}` }] : [])),
+    ...prospects.filter(p => !p.closed && p.contact !== "dnc" && p.contact !== "baru").flatMap(p => {
+      const d = view(p, now, strategy).due;
+      return d ? [{ day: d, title: `Follow-up ${p.name || p.handle}` }] : [];
+    }),
+    ...jobs.map(j => ({ day: j.date, title: `Job: ${j.who}` })),
+  ];
+  // From the island: to whoever it counted. Leads first, they're further along.
+  function goDue() {
+    if (!leadsDue) { setPane("kirim"); return; }
+    setLeadView(leads.some(l => inView(l, "telat", now)) ? "telat" : "hari-ini");
+    setPane("leads");
+  }
 
   return (
     <div className="sp-hunt">
       {askSheet}
       <div className="sp-page-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
         <div style={{ minWidth: 0, flex: "1 1 240px" }}>
-          <div style={heading}>Hunting Mode</div>
-          <div style={subheading}>Kirim DM, catat hasilnya sekali tap, dan lihat pesan mana yang beneran dibales.</div>
+          <div style={heading}>Hunting</div>
+          <div style={subheading}>Cari orangnya, kirim pesan, dan lihat siapa yang bales.</div>
           {!live && lastSession && (
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>
               Sesi terakhir: {Math.round(sessionMinutes(lastSession, Date.now()))} menit · {lastSession.counts?.intros || 0} intro · {lastSession.counts?.replies || 0} dibales · {lastSession.counts?.converted || 0} data
@@ -563,42 +604,30 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
             </div>
           )}
         </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button onClick={() => setScripts("list")} style={{ ...btnMuted, minHeight: 44 }}>Script pesan</button>
         {live
           ? <button onClick={journey.end} style={{ ...btnMuted, minHeight: 44 }}>■ Akhiri sesi</button>
           : <button onClick={journey.start} style={{ ...btnPrimary, minHeight: 44, background: "#b93a06", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Icon name="play" size={16} />Mulai hunting</button>}
-      </div>
-
-      {/* Today in one line; the full numbers are under Performa. */}
-      {/* Two numbers split by a hairline (docs/standards/design.md §2), not two boxes. */}
-      <div className="sp-strip two" style={{ marginBottom: "var(--sp-4)" }}>
-        <button onClick={changeGoal} disabled={!canEdit} aria-label={`Hari ini ${sentToday} dari ${goal} DM. ${canEdit ? "Ubah target harian" : "Target harian diatur Leader atau Officer"}`}
-          style={{ minWidth: 0, minHeight: 44, paddingBlock: "var(--sp-2)", border: 0, borderRadius: 0, textAlign: "left", cursor: canEdit ? "pointer" : "default", color: "inherit", fontFamily: font }}>
-          <span style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-            <span className="tabnum" style={{ fontSize: "var(--fs-section)", fontWeight: 700, color: progress >= 1 ? "var(--ok)" : "var(--brand-text)" }}>{sentToday}<span style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)", fontWeight: 600 }}>/{goal}</span></span>
-            <span style={{ fontSize: "var(--fs-meta)", fontWeight: 600 }}>DM hari ini</span>
-            <span aria-hidden="true" style={{ marginLeft: "auto", display: "inline-flex", color: progress >= 1 ? "var(--ok)" : "var(--app-muted)" }}>{progress >= 1 ? <Icon name="target" size={16} /> : canEdit ? <Icon name="pencil" size={16} /> : null}</span>
-          </span>
-          <span aria-hidden="true" style={{ display: "block", height: 4, background: "var(--app-inner)", borderRadius: 2, marginTop: 6, overflow: "hidden" }}>
-            <span style={{ display: "block", width: `${progress * 100}%`, height: "100%", background: progress >= 1 ? "var(--ok)" : "var(--heat-3)" }} />
-          </span>
-        </button>
-        <div className="tabnum" style={{ minWidth: 0, paddingBlock: "var(--sp-2)", fontSize: "var(--fs-meta)", color: "var(--app-sub)", display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 }}>
-          <span>Dibales 7 hr <b style={{ color: "var(--app-text)" }}>{week.length ? pct(weekReplied / week.length) : "—"}</b></span>
-          <span>Tertarik 7 hr <b style={{ color: "var(--app-text)" }}>{weekInterested}</b></span>
         </div>
       </div>
+
+      {/* Today in one row; the full numbers are under Performa. */}
+      <ActivityIsland sent={sentToday} goal={goal} replies={leads.filter(ourTurn).length} rate={week.length ? pct(weekReplied / week.length) : "—"} due={leadsDue + dueCount} canEdit={canEdit}
+        onGoal={changeGoal} onReplies={() => { setLeadView("dibales"); setPane("leads"); }} onDue={goDue} onLog={() => onGo("Log aktivitas")}
+        schedule={schedule} prospects={prospects} hunts={hunts} sessions={journey.sessions} quotes={quotes} invoices={invoices} outreach={outreach} rejections={rejections} />
 
       <div role="tablist" aria-label="Bagian Hunting" className="sp-hunt-panes"
         style={{ display: "grid", gridTemplateColumns: `repeat(${PANES.length}, minmax(0, 1fr))`, gap: 4, padding: 4, marginBottom: 16, borderRadius: 12, background: "var(--app-inner)", border: "1px solid var(--app-border)" }}>
         {PANES.map(([k, l]) => {
-          const n = k === "kirim" ? queueGroup(prospects, "due", now, strategy).length : 0;
+          const n = k === "kirim" ? dueCount : k === "leads" ? leads.filter(ourTurn).length : 0;
           return (
             <button key={k} role="tab" id={`hp-${k}`} aria-selected={pane === k} aria-controls={`hpane-${k}`}
               onClick={() => { if (k === "kirim" && pane === "kirim" && open) backToList(); setPane(k); }}
-              aria-label={n ? `${l}, ${n} perlu follow-up` : l}
+              aria-label={n ? `${l}, ${n} ${k === "kirim" ? "perlu follow-up" : "perlu dibales"}` : l}
               style={{ minHeight: 40, minWidth: 0, padding: "0 4px", borderRadius: 9, border: 0, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 background: pane === k ? "var(--app-card)" : "transparent", color: pane === k ? "var(--app-text)" : "var(--app-sub)", boxShadow: pane === k ? "0 1px 3px rgba(0,0,0,.12)" : "none" }}>
-              {l}{n ? <span aria-hidden="true" style={{ marginLeft: 4, padding: "0 6px", borderRadius: 999, background: "#ff990033", color: "var(--warn-text)", fontSize: 11 }}>{n}</span> : null}
+              {l}{n ? <span aria-hidden="true" style={{ marginLeft: 4, padding: "0 6px", borderRadius: 999, background: "var(--app-card)", color: "var(--app-text)", fontSize: 11 }}>{n}</span> : null}
             </button>
           );
         })}
@@ -792,8 +821,20 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
             <button className="sp-icon44" onClick={() => { clearTarget(); setQueued(null); }} aria-label={`Tutup ${target.trim()}`}><Icon name="close" size={14} stroke={2.2} /></button>
           </div>
         )}
+        {leadHits.length > 0 && (
+          <div role="group" aria-label="Ada di Leads">
+            <div className="sp-kfound">Ada di Leads ({leadHits.length})</div>
+            {leadHits.slice(0, 5).map(l => (
+              <button key={l.id} className="sp-krow" onClick={() => { setQ(""); onOpenLead(l.id, null, []); }}>
+                <span className="sp-kini" aria-hidden="true">{l.name.slice(0, 2).toUpperCase()}</span>
+                <span className="sp-knm">{l.name}<span className="sp-ksub">{standOf(l, now).word}{l.category ? ` · ${l.category}` : ""}</span></span>
+              </button>
+            ))}
+            {leadHits.length > 5 && <button className="sp-krow" onClick={() => setPane("leads")}><span className="sp-knm">Lihat semua di tab Leads</span></button>}
+          </div>
+        )}
         {q.trim() && !prospects.some(p => p.handle.replace(/^@/, "").toLowerCase() === q.trim().replace(/^@/, "").toLowerCase()) && (
-          <button className="sp-krow sp-knew" onClick={() => commitSearch()}>
+          <button className="sp-krow sp-knew" onClick={() => newTarget(q.trim())}>
             <span className="sp-kini" aria-hidden="true"><Icon name="plus" size={16} stroke={2} /></span>
             <span className="sp-knm">Kirim ke “{q.trim()}”<span className="sp-ksub">Target baru, belum ada di journey</span></span>
           </button>
@@ -807,7 +848,16 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       )}
       </div>
 
+      {pane === "leads" && (
+        <div id="hpane-leads" role="tabpanel" aria-labelledby="hp-leads">
+          <HuntLeads leads={leads} view={leadView} setView={setLeadView} q={q} setQ={setQ} now={now} showOwner={seesEveryone(space)} score={score} onOpen={onOpenLead} />
+        </div>
+      )}
+
       <div id="hpane-performa" role="tabpanel" aria-labelledby="hp-performa" hidden={pane !== "performa"}>
+      <p className="tabnum" style={{ margin: "0 0 12px", fontSize: "var(--fs-meta)", color: "var(--app-sub)" }}>
+        Dibales 7 hr <b style={{ color: "var(--app-text)" }}>{week.length ? pct(weekReplied / week.length) : "—"}</b> · Tertarik 7 hr <b style={{ color: "var(--app-text)" }}>{weekInterested}</b>
+      </p>
       <Campaigns prospects={prospects} templates={templates} strategy={strategy} sessionId={live?.id} defaults={defaults} />
       {/* The old per-message log, folded: every send is in its conversation now. */}
       <details style={{ ...card, padding: "4px 20px", marginBottom: 20 }}>
@@ -855,6 +905,8 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
                 <span style={badge(huntColor[h.status])}>{huntIcon[h.status]} {h.status}</span>
               </div>
               <div style={{ fontSize: 12, color: "var(--app-sub)", marginTop: 8 }}>{next}</div>
+              <button onClick={() => setLogRow(logRow === h.id ? null : h.id)} aria-expanded={logRow === h.id} aria-label={`Ubah DM ke ${h.target || "target"}`} style={{ ...chip, minHeight: 44, marginTop: 8, fontWeight: 600 }}>Ubah</button>
+              {logRow === h.id && <>
               <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 10, marginBottom: 6 }}>Ubah jadi</div>
               <div role="group" aria-label={`Hasil DM ke ${h.target || "target"}`} className="sp-choice-grid">
                 {HUNT_STATUS.filter(s => s !== h.status).map(s => (
@@ -944,6 +996,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
                   </div>
                 </div>
               )}
+              </>}
             </div>
           );
         })}
@@ -951,7 +1004,6 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey }: { hunts
       </div>
       </details>
 
-      <OccupancyCalendar quotes={allQuotes} invoices={allInvoices} />
       {/* Which message works */}
       <div style={{ ...card, padding: 20, marginBottom: 20 }}>
         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font, marginBottom: 4 }}>Pesan mana yang works?</div>

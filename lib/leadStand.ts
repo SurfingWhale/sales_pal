@@ -90,15 +90,20 @@ export const missingOf = (l: StandLead) => [noNumber(l) ? "No HP" : "", l.geo ? 
 // A DM lead needs no phone number: the script is copied into the DM.
 const reachedByDm = (l: StandLead) => /threads|instagram|\big\b/i.test(l.source || "") || (l.contact || "").startsWith("@");
 
+// They answered and we haven't: if we wrote last, it's a follow-up. Marking a
+// reply stamps lastContact too, so contactedAt, what we sent, decides once it
+// exists. Dates are whole days: a reply on the day we wrote reads as ours.
+export function ourTurn(l: Pick<StandLead, "status" | "quoted" | "lastReplyAt" | "lastContact" | "contactedAt">): boolean {
+  if (standId(l) !== "dibales") return false;
+  const reply = l.lastReplyAt as string;
+  return l.contactedAt ? reply > l.contactedAt : reply >= l.lastContact;
+}
+
 export function nextMove(l: StandLead): Move {
   const id = standId(l);
   if (id === "deal" || id === "gugur") return { kind: "open", label: "Buka" };
   if (id === "penawaran") return { kind: "open", label: "Lihat penawaran" };
   if (noNumber(l) && !reachedByDm(l) && !l.email) return { kind: "edit", label: "Tambah nomor" };
-  // Balas only when it's our turn: if we wrote last, it's a follow-up. Marking
-  // a reply stamps lastContact too, so contactedAt, what we sent, decides once
-  // it exists. Dates are whole days: a reply on the day we wrote reads as ours.
-  const reply = l.lastReplyAt as string;
-  if (id === "dibales" && (l.contactedAt ? reply > l.contactedAt : reply >= l.lastContact)) return { kind: "chat", label: "Balas" };
+  if (ourTurn(l)) return { kind: "chat", label: "Balas" };
   return { kind: "chat", label: id === "belum" ? "Kirim intro" : "Follow-up" };
 }
