@@ -47,7 +47,7 @@ Dinilai pakai K1–K10 (lihat `docs/standards/native.md`), prinsipnya diambil, k
 | Pakai Framer Motion / shared layout | FLIP manual | §4 |
 | Pegas | Overshoot `cubic-bezier`, maksimal 220 ms | K9 |
 | Ga nyebut soal "Semua" | Chip "Semua" **dihapus** | Keadaan default brief = ga ada yang kepilih, dan × udah jadi jalan keluarnya. Total pindah ke baris status ("15 aktivitas", "4 dari 15 aktivitas") |
-| Konsep "content transition" | Crossfade 180 ms di daftar aja, heat map dan angka langsung ganti | Cukup buat ngasih tau isinya berubah, tanpa bikin satu layar gerak semua |
+| Konsep "content transition" | **Ga dibangun.** Isi di bawah pil langsung ganti | Crossfade di daftar sempat dibangun, lalu dibuang: animasi opacity di pembungkus daftar bikin daftar nyangkut di warna tema lama setelah tema diganti (Chromium, tes: 5 dari 7 kali; tanpa crossfade 0 dari 7). Mekanisme persisnya di browser belum ketemu. Flow-nya sekarang ngecek ini langsung |
 
 Beda dari Spotify: di klip Ripplix (Apple Watch) × berdiri sendiri dan cuma satu filter yang kelihatan aktif. "Nyatu jadi satu bar" tafsiran kita atas brief, bukan tiruan.
 

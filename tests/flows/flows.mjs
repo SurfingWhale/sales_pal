@@ -2773,6 +2773,19 @@ export const flows = [
         await pill("Hunting").click();
         await pill("Jualan").click();
         await atRest("× *Hunting *Jualan Respon Catatan");
+        // The list under the pills follows the theme too: an opacity animation on
+        // its wrapper once left it on the old one, and the audit only caught that
+        // on some runs (PRD-023 §5).
+        const stale = await page.evaluate(() => {
+          const h3 = document.querySelector("section[aria-label^='Heat map']").nextElementSibling.querySelector("h3");
+          const probe = document.createElement("i");
+          probe.style.color = "var(--app-text)";
+          document.body.append(probe);
+          const want = getComputedStyle(probe).color;
+          probe.remove();
+          return getComputedStyle(h3).color === want ? null : getComputedStyle(h3).color;
+        });
+        if (stale) throw new Error(`the list kept the old theme: ${stale}`);
         const ratio = await pill("Hunting").evaluate((b) => {
           const lum = (rgb) => { const [r, g, b] = rgb.match(/[\d.]+/g).map(Number).map(c => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
           const edge = lum(getComputedStyle(b.querySelector(".sp-fp-fill")).borderTopColor);
