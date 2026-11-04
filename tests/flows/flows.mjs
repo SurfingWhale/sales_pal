@@ -2748,11 +2748,13 @@ export const flows = [
         await page.setViewportSize({ width: size.width, height: 480 });
         const box = await group.boundingBox();
         const cdp = await page.context().newCDPSession(page);
-        const from = await page.evaluate(() => scrollY);
-        await cdp.send("Input.synthesizeScrollGesture", { x: box.x + 120, y: box.y + 22, yDistance: -160, gestureSourceType: "touch", speed: 1600 });
+        // Swipe toward whichever way the page still has room: on a short page it may already sit at the bottom.
+        const [from, room] = await page.evaluate(() => [scrollY, document.documentElement.scrollHeight - innerHeight - scrollY]);
+        const down = room > 40;
+        await cdp.send("Input.synthesizeScrollGesture", { x: box.x + 120, y: box.y + 22, yDistance: down ? -160 : 160, gestureSourceType: "touch", speed: 1600 });
         const to = await page.evaluate(() => scrollY);
         await page.setViewportSize(size);
-        if (to <= from) throw new Error(`page stayed at ${to}`);
+        if (down ? to <= from : to >= from) throw new Error(`page stayed at ${to} (from ${from}, room ${room})`);
       });
       await t.step("Reduce Motion: the state changes, nothing moves", async () => {
         await page.emulateMedia({ reducedMotion: "reduce" });
