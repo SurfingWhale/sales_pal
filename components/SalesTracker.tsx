@@ -9,17 +9,13 @@ import Beranda from "@/components/Beranda";
 import BerandaReport from "@/components/BerandaReport";
 import BerandaLearn from "@/components/BerandaLearn";
 import { DetailActions, LeadPage, LeadPatch, LostNote } from "@/components/LeadDetail";
-import { CATEGORIES, SOURCES, channelOf, firstContact, parseRupiah } from "@/lib/leadEdit";
+import { channelOf } from "@/lib/leadEdit";
 import Icon, { IconName } from "@/components/Icon";
 import ProfileSheet, { MeAvatar, useMyAvatar } from "@/components/ProfileSheet";
-import LeadFinder, { Found } from "@/components/LeadFinder";
-import PasteFill, { DupNotice, PastePlace } from "@/components/PasteFill";
-import { fillEmpty } from "@/lib/paste";
+import AddLead, { AddWay } from "@/components/AddLead";
 import { nextMove, withStand } from "@/lib/leadStand";
 import LeadCard from "@/components/LeadCard";
 import { leadHistory } from "@/lib/leadHistory";
-import { snippet } from "@/lib/places";
-import { downscaleImage } from "@/lib/image";
 import { registerWorker, takeSharedFile } from "@/lib/share";
 import type { LeadProfile } from "@/lib/profile";
 import { Space, SpaceContext, seesEveryone, spaceDoc, spaceQuery, stamp } from "@/lib/space";
@@ -28,7 +24,6 @@ import { disablePush, restorePush } from "@/lib/push";
 import PushToggle from "@/components/PushToggle";
 import { collection, doc, getCountFromServer, getDoc, setDoc, onSnapshot, deleteDoc, deleteField, writeBatch, query, where, updateDoc, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
-import * as XLSX from "xlsx";
 import { auth, db } from "@/lib/firebase";
 import { clearCacheAndReload as resetAppCache } from "@/lib/appCache";
 import SalesSimulator from "@/components/SalesSimulator";
@@ -55,8 +50,6 @@ import { JOURNEY_STEPS, Prospect, journeyStep, queue, statusColor as prospectCol
 import { profileUrl } from "@/lib/threads";
 import { useHuntSession, useProspects, useStrategy } from "@/lib/prospectStore";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
-import { parseVCards } from "@/lib/vcard";
-import { authFetch } from "@/lib/authFetch";
 import { Component, Invoice, PriceChange, Quote, QuoteTemplate, Service, addDays, balance, daysBetween, invoiceState, owed, longDate, rupiah, today, total, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
 import { useConfirm } from "@/components/ConfirmSheet";
 import { LeadGeo, validGeo } from "@/lib/geo";
@@ -156,62 +149,6 @@ const btnPrimary = {
 
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || "dev";
 
-// --- XLS/CSV import ---
-const IMPORT_FIELDS: { key: string; label: string; required?: boolean; keywords: string[] }[] = [
-  { key: "name", label: "Nama Perusahaan", required: true, keywords: ["perusahaan", "nama", "company", "name", "client", "bisnis"] },
-  { key: "contact", label: "Kontak", keywords: ["kontak", "contact", "pic", "person", "cp"] },
-  { key: "email", label: "Email", keywords: ["email", "e-mail", "mail"] },
-  { key: "phone", label: "No. HP", keywords: ["hp", "phone", "telp", "telepon", "wa", "whatsapp", "nomor", "no."] },
-  { key: "category", label: "Kategori", keywords: ["kategori", "category", "industri", "industry", "segmen"] },
-  { key: "source", label: "Source", keywords: ["source", "sumber", "channel", "asal"] },
-  { key: "status", label: "Status", keywords: ["status", "stage", "tahap"] },
-  { key: "value", label: "Value (Rp)", keywords: ["value", "nilai", "deal", "amount", "harga", "estimasi", "potensi"] },
-  { key: "notes", label: "Notes", keywords: ["notes", "catatan", "note", "keterangan", "remark"] },
-  // The Google Maps columns of the Excel template (lib/places.ts, PRD-012).
-  { key: "address", label: "Alamat", keywords: ["alamat", "address"] },
-  { key: "website", label: "Website", keywords: ["website", "situs", "web"] },
-  { key: "rating", label: "Rating", keywords: ["rating", "bintang"] },
-  { key: "reviewCount", label: "Jumlah ulasan", keywords: ["jumlah ulasan", "ulasan", "reviews", "review"] },
-  { key: "mapsUrl", label: "Link Google Maps", keywords: ["google maps", "maps", "gmaps"] },
-  { key: "weak", label: "Titik lemah", keywords: ["titik lemah", "kelemahan", "lemah", "weak"] },
-];
-
-const VALID_STATUS = ["Cold", "Warm", "Hot", "Closed"];
-
-function autoMap(headers: string[]): Record<string, string> {
-  const map: Record<string, string> = {};
-  for (const f of IMPORT_FIELDS) {
-    const hit = headers.find(h => {
-      const n = h.toLowerCase().trim();
-      return f.keywords.some(k => n === k || n.includes(k));
-    });
-    if (hit) map[f.key] = hit;
-  }
-  return map;
-}
-
-// The Google Maps columns, typed, only when filled; weak spots also go to the
-// lead profile's pain so pitches and the Simulator can use them.
-function mapsFields(r: { address: string; website: string; rating: string; reviewCount: string; mapsUrl: string; weak: string }) {
-  const out: Record<string, unknown> = {};
-  if (r.address) out.address = r.address;
-  if (r.website) out.website = r.website;
-  const rating = parseFloat(r.rating.replace(",", "."));
-  if (rating > 0 && rating <= 5) out.rating = rating;
-  const n = parseInt(r.reviewCount.replace(/\D/g, ""), 10);
-  if (n >= 0) out.reviewCount = n;
-  if (r.mapsUrl) out.mapsUrl = r.mapsUrl;
-  if (r.weak) out.profile = { pain: r.weak.split(/;|\n/).map(x => x.trim()).filter(Boolean).join("; ") };
-  return out;
-}
-
-function normStatus(v: unknown): string {
-  const s = String(v ?? "").toLowerCase();
-  if (/gugur|lost/.test(s)) return "Lost";
-  const hit = VALID_STATUS.find(st => s.includes(st.toLowerCase()));
-  return hit || "Cold";
-}
-
 
 function useIsNarrow(bp = 640) {
   const [narrow, setNarrow] = useState(false);
@@ -276,23 +213,9 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [runList, setRunList] = useState<string[] | null>(null);
   const [openDoc, setOpenDoc] = useState<string | null>(null);   // a quote or invoice opened from a lead's Riwayat
   const wide = !useIsNarrow(1023);
-  const [showAddLead, setShowAddLead] = useState(false);
-  const [addLeadErr, setAddLeadErr] = useState("");
-  const [savingLead, setSavingLead] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [newLead, setNewLead] = useState({ name: "", contact: "", source: "GMaps", status: "Cold", email: "", phone: "", category: "F&B", notes: "", value: "" });
-  const [newPlace, setNewPlace] = useState<PastePlace>({});   // from a pasted Maps link (PRD-018)
-  const [showImport, setShowImport] = useState(false);
-  const [showFinder, setShowFinder] = useState(false);
-  const [importHeaders, setImportHeaders] = useState<string[]>([]);
-  const [importRows, setImportRows] = useState<Record<string, unknown>[]>([]);
-  const [colMap, setColMap] = useState<Record<string, string>>({});
-  const [importFileName, setImportFileName] = useState("");
-  const [importing, setImporting] = useState(false);
-  const [importDone, setImportDone] = useState<number | null>(null);
-  const [importMode, setImportMode] = useState<"file" | "scan">("file");
-  const [scanning, setScanning] = useState(false);
-  const [scanError, setScanError] = useState("");
+  // Tambah lead: one door, opened on the way the button asked for (PRD-022 Q12).
+  const [door, setDoor] = useState<AddWay | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showBell, setShowBell] = useState(false);
   // "Atur target": a small sheet with Batal/Simpan instead of the browser's prompt().
@@ -442,186 +365,6 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     );
     return () => unsubs.forEach(u => u());
   }, [uid, inboundTo]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImportFileName(file.name);
-    setImportDone(null);
-    // Phone contacts exported as vCard (iPhone Contacts / iCloud.com).
-    if (/\.vcf$/i.test(file.name) || file.type === "text/vcard" || file.type === "text/x-vcard") {
-      file.text().then((text) => {
-        const rows = parseVCards(text) as unknown as Record<string, unknown>[];
-        if (!rows.length) { setImportHeaders([]); setImportRows([]); setColMap({}); return; }
-        const headers = IMPORT_FIELDS.map(f => f.key).filter(k => rows.some(r => String(r[k] ?? "").trim()));
-        const map: Record<string, string> = {};
-        headers.forEach(k => { map[k] = k; });
-        setImportHeaders(headers);
-        setImportRows(rows);
-        setColMap(map);
-      }).catch(() => { setImportHeaders([]); setImportRows([]); setColMap({}); });
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = new Uint8Array(ev.target?.result as ArrayBuffer);
-        const wb = XLSX.read(data, { type: "array" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
-        if (!rows.length) { setImportHeaders([]); setImportRows([]); setColMap({}); return; }
-        const headers = Object.keys(rows[0]);
-        setImportHeaders(headers);
-        setImportRows(rows);
-        setColMap(autoMap(headers));
-      } catch {
-        setImportHeaders([]); setImportRows([]); setColMap({});
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  }
-
-  function resetParsed() {
-    setImportHeaders([]); setImportRows([]); setColMap({});
-    setImportFileName(""); setScanError("");
-  }
-
-  async function handleScanImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImportFileName(file.name);
-    setScanError(""); setImportDone(null); setScanning(true);
-    setImportHeaders([]); setImportRows([]); setColMap({});
-    try {
-      const dataUrl = await downscaleImage(file);
-      const res = await authFetch("/api/scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: dataUrl }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Gambar ga kebaca. Coba foto yang lebih terang dan lurus, atau pakai Excel/CSV.");
-      const leads: Record<string, unknown>[] = Array.isArray(json?.rows) ? json.rows : [];
-      const rows = leads.map(l => {
-        const o: Record<string, unknown> = {};
-        IMPORT_FIELDS.forEach(f => { o[f.key] = (l as Record<string, unknown>)[f.key] ?? ""; });
-        return o;
-      });
-      const withData = rows.filter(r => String(r.name ?? "").trim() || String(r.contact ?? "").trim());
-      if (!withData.length) { setScanError("Ga ada lead yang kebaca dari gambar ini. Coba gambar yang lebih jelas."); return; }
-      setImportRows(withData);
-      const headers = IMPORT_FIELDS.map(f => f.key).filter(k => withData.some(r => String(r[k] ?? "").trim()));
-      setImportHeaders(headers);
-      const map: Record<string, string> = {};
-      IMPORT_FIELDS.forEach(f => { if (headers.includes(f.key)) map[f.key] = f.key; });
-      setColMap(map);
-    } catch (err) {
-      setScanError(err instanceof Error ? err.message : "Gambar ga kebaca. Coba foto yang lebih terang dan lurus, atau pakai Excel/CSV.");
-    } finally {
-      setScanning(false);
-    }
-  }
-
-  function mappedPreview(row: Record<string, unknown>) {
-    const out: Record<string, string> = {};
-    for (const f of IMPORT_FIELDS) {
-      const src = colMap[f.key];
-      out[f.key] = src ? String(row[src] ?? "") : "";
-    }
-    return out;
-  }
-
-  const importableCount = colMap.name
-    ? importRows.filter(r => String(r[colMap.name] ?? "").trim()).length
-    : 0;
-
-  async function runImport() {
-    if (!colMap.name) return;
-    setImporting(true);
-    const valid = importRows.filter(r => String(r[colMap.name] ?? "").trim());
-    let written = 0;
-    for (let i = 0; i < valid.length; i += 400) {
-      const batch = writeBatch(db);
-      const slice = valid.slice(i, i + 400);
-      slice.forEach((r, j) => {
-        const id = `imp_${Date.now()}_${i + j}`;
-        const get = (k: string) => (colMap[k] ? String(r[colMap[k]] ?? "").trim() : "");
-        const status = normStatus(colMap.status ? r[colMap.status] : "");
-        batch.set(spaceDoc(space, "leads", id), stamp(space, {
-          name: get("name"),
-          contact: get("contact"),
-          email: get("email"),
-          phone: get("phone"),
-          category: get("category") || "F&B",
-          source: get("source") || "Import",
-          status,
-          value: parseRupiah(colMap.value ? r[colMap.value] : ""),
-          notes: get("notes"),
-          lastContact: firstContact(status, today()),
-          ...mapsFields({ address: get("address"), website: get("website"), rating: get("rating"), reviewCount: get("reviewCount"), mapsUrl: get("mapsUrl"), weak: get("weak") }),
-        }));
-      });
-      await batch.commit();
-      written += slice.length;
-    }
-    setImporting(false);
-    setImportDone(written);
-    setImportRows([]); setImportHeaders([]); setColMap({});
-  }
-
-  // Cari bisnis → Leads (PRD-012). One lead per Google Maps place: the id is
-  // the place's, so finding it again never makes a second lead.
-  async function saveFound(rows: Found[]): Promise<number> {
-    const batch = writeBatch(db);
-    const on = today();
-    rows.forEach(p => {
-      const worst = p.reviews.filter(r => r.rating <= 3 && r.text.trim()).sort((a, b) => a.rating - b.rating)[0];
-      batch.set(spaceDoc(space, "leads", `gm_${p.id.replace(/[^A-Za-z0-9_-]/g, "")}`), stamp(space, {
-        name: p.name, contact: "", email: p.email || "", phone: p.phone, category: p.category || "Lainnya",
-        source: "Google Maps", status: "Cold", value: 0, lastContact: firstContact("Cold", on),
-        notes: [p.weak.length ? `Titik lemah: ${p.weak.map(w => w.label).join("; ")}` : "", worst ? `Ulasan ${worst.rating}★: "${snippet(worst.text, 200)}"` : ""].filter(Boolean).join("\n"),
-        ...(p.address ? { address: p.address } : {}), ...(p.website ? { website: p.website } : {}),
-        ...(p.rating !== null ? { rating: p.rating } : {}), reviewCount: p.reviewCount, ...(p.mapsUrl ? { mapsUrl: p.mapsUrl } : {}), placeId: p.id,
-        ...(typeof p.lat === "number" && typeof p.lng === "number" ? { geo: { lat: p.lat, lng: p.lng, by: "maps" } } : {}),
-        ...(p.weak.length ? { profile: { pain: p.weak.map(w => w.label).join("; ") } } : {}),
-      }));
-    });
-    await batch.commit();
-    return rows.length;
-  }
-
-  function closeImport() {
-    setShowImport(false);
-    setImportHeaders([]); setImportRows([]); setColMap({});
-    setImportFileName(""); setImportDone(null); setImporting(false);
-    setImportMode("file"); setScanning(false); setScanError("");
-  }
-
-  async function addLead() {
-    if (!newLead.name.trim()) {
-      setAddLeadErr("Isi nama bisnisnya dulu.");
-      document.getElementById("nl-name")?.focus();
-      return;
-    }
-    setSavingLead(true); setAddLeadErr("");
-    try {
-      const id = `lead_${Date.now()}`;
-      await setDoc(spaceDoc(space, "leads", id), stamp(space, {
-        ...newLead, name: newLead.name.trim(), lastContact: firstContact(newLead.status, today()),
-        value: parseRupiah(newLead.value),
-        ...(newPlace.address ? { address: newPlace.address } : {}),
-        ...(newPlace.geo ? { geo: newPlace.geo } : {}),
-      }));
-      setNewLead({ name: "", contact: "", source: "GMaps", status: "Cold", email: "", phone: "", category: "F&B", notes: "", value: "" });
-      setNewPlace({});
-      setShowAddLead(false);
-    } catch {
-      setAddLeadErr("Gagal menyimpan. Cek koneksi, lalu coba lagi.");
-    }
-    setSavingLead(false);
-  }
-  function closeAddLead() { if (!savingLead) { setShowAddLead(false); setAddLeadErr(""); } }
-
 
   // Asked first in the lead's own "Hapus lead?" sheet (components/LeadDetail).
   async function deleteLead(id: string) {
@@ -1113,7 +856,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               onSetTarget={setClosingTarget} />}
             learn={<BerandaLearn prospects={prospects} hunts={hunts} rejections={rejections} onGo={tab => { setActiveTab(tab); window.scrollTo({ top: 0 }); }} />}
             onOpenLead={id => { const l = leads.find(x => x.id === id); if (l) openLead(l); }}
-            onImport={() => setShowImport(true)} onFind={() => setShowFinder(true)} onAdd={() => setShowAddLead(true)} onAllLeads={() => setActiveTab("Leads")}
+            onImport={() => setDoor("excel")} onFind={() => setDoor("maps")} onAdd={() => setDoor("tempel")} onAllLeads={() => setActiveTab("Leads")}
             onSetTarget={setClosingTarget}>
             {space.kind === "guild" && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: -16 }}>Ruang guild {space.name} — {showOwner ? "angka seluruh tim" : "angka kamu di guild ini"}.</div>}
             {seedCount > 0 && (
@@ -1142,7 +885,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                 Wide: title left, everything in one row on the right. */}
             <div className="sp-leads-head" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: wide ? 16 : 12 }}>
               <h1 style={{ margin: 0, fontSize: wide ? 34 : 26, lineHeight: 1.1, fontWeight: 600, letterSpacing: "-0.025em" }}>Leads <span className="tabnum" style={{ fontSize: 20, fontWeight: 500, color: "var(--app-muted)", letterSpacing: 0 }}>{leads.length}</span></h1>
-              {!wide && <button onClick={() => setShowAddLead(true)} style={{ display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}><Icon name="plus" stroke={1.8} />Tambah lead</button>}
+              {!wide && <button onClick={() => setDoor("tempel")} style={{ display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}><Icon name="plus" stroke={1.8} />Tambah lead</button>}
               <div style={{ display: "flex", gap: 8, flexWrap: wide ? "nowrap" : "wrap", alignItems: "center", width: wide ? "auto" : "100%" }}>
                 <div style={{ position: "relative", flex: wide ? "0 0 auto" : "1 1 100%" }}>
                   <label htmlFor="lead-search" className="vh">Cari lead</label>
@@ -1155,8 +898,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                     {SORTS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
                   </select>
                 </>}
-                <button onClick={() => setShowImport(true)} aria-label="Import lead dari file" title="Import" style={{ height: 44, minWidth: 44, padding: wide ? "0 18px" : 0, border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Icon name="upload" stroke={1.7} />{wide && "Import"}</button>
-                {wide && <button onClick={() => setShowAddLead(true)} style={{ display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}><Icon name="plus" stroke={1.8} />Tambah lead</button>}
+                <button onClick={() => setDoor("excel")} aria-label="Import lead dari file" title="Import" style={{ height: 44, minWidth: 44, padding: wide ? "0 18px" : 0, border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Icon name="upload" stroke={1.7} />{wide && "Import"}</button>
+                {wide && <button onClick={() => setDoor("tempel")} style={{ display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}><Icon name="plus" stroke={1.8} />Tambah lead</button>}
               </div>
             </div>
 
@@ -1190,8 +933,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
                 <div style={{ fontSize: 13, color: "var(--app-muted)", marginBottom: 20 }}>{leads.length === 0 ? "Mulai dengan import Excel/CSV, atau tambah manual." : "Coba ganti pencarian atau saringannya."}</div>
                 {leads.length === 0 ? (
                   <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-                    <button onClick={() => setShowImport(true)} style={{ height: 44, padding: "0 18px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Import Excel/CSV</button>
-                    <button onClick={() => setShowAddLead(true)} style={{ height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>+ Lead pertama</button>
+                    <button onClick={() => setDoor("excel")} style={{ height: 44, padding: "0 18px", border: "1px solid var(--app-line-strong)", borderRadius: 999, background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Import Excel/CSV</button>
+                    <button onClick={() => setDoor("tempel")} style={{ height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>+ Lead pertama</button>
                   </div>
                 ) : (
                   <button onClick={() => { setLeadView("semua"); setLeadQ(""); }} style={{ height: 44, padding: "0 18px", border: 0, borderRadius: 999, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Reset saringan</button>
@@ -1302,49 +1045,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         )}
       </div>
 
-      {/* Modal Add Lead */}
-      {showAddLead && (
-        <div className="modal-overlay" onClick={closeAddLead}>
-          <form noValidate aria-labelledby="nl-h" onClick={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); addLead(); }}
-            style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 520, maxHeight: "min(88vh, calc(100dvh - 48px))", overflowY: "auto", overscrollBehavior: "contain" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 16 }}>
-              <h2 id="nl-h" style={{ margin: 0, fontSize: 18, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Tambah lead</h2>
-              <button type="button" onClick={closeAddLead} aria-label="Tutup" style={{ flexShrink: 0, width: 44, height: 44, margin: "-10px -10px -10px 0", borderRadius: "50%", background: "transparent", border: "none", color: "var(--app-ink-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={18} stroke={2} /></button>
-            </div>
-            <PasteFill place={newPlace} onFill={p => setNewLead(prev => fillEmpty(prev, p))} onPlace={setNewPlace} />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {([["name", "Nama bisnis", "mis. Kopi Senja", "text", "organization"], ["contact", "Nama kontak", "mis. Dina", "text", "off"], ["email", "Email", "nama@contoh.id", "email", "off"], ["phone", "No. WhatsApp", "mis. 0812 3456 7890", "tel", "off"], ["value", "Nilai deal (Rp)", "mis. 5jt atau 5.000.000", "text", "off"]] as [keyof typeof newLead, string, string, string, string][]).map(([k, label, ph, type, ac]) => (
-                <div key={k} style={{ gridColumn: k === "name" ? "1/-1" : "auto" }}>
-                  <label htmlFor={`nl-${k}`} style={{ fontSize: 13, fontWeight: 600, color: "var(--app-sub)", display: "block", marginBottom: 6 }}>{label}{k === "name" && <span aria-hidden="true" style={{ color: "var(--hot)" }}> *</span>}</label>
-                  <input id={`nl-${k}`} type={type} autoComplete={ac} inputMode={k === "phone" ? "tel" : undefined} required={k === "name"}
-                    aria-invalid={k === "name" && Boolean(addLeadErr) && !newLead.name.trim()} aria-describedby={k === "name" && addLeadErr ? "nl-err" : k === "value" ? "nl-value-is" : undefined}
-                    value={newLead[k]} onChange={e => { setNewLead({ ...newLead, [k]: e.target.value }); if (k === "name") setAddLeadErr(""); }} style={{ ...inputStyle, fontSize: 16, minHeight: 44 }} placeholder={ph} />
-                  {k === "name" && addLeadErr && !newLead.name.trim() && <p id="nl-err" role="alert" style={{ margin: "6px 0 0", fontSize: 13, color: "var(--hot)" }}>{addLeadErr}</p>}
-                  {k === "value" && <p id="nl-value-is" style={{ margin: "6px 0 0", fontSize: 13, color: "var(--app-muted)" }}>{parseRupiah(newLead.value) ? `= ${rupiah(parseRupiah(newLead.value))}` : "Kosong = belum ada nilai"}</p>}
-                </div>
-              ))}
-              {([["source", "Sumber", SOURCES], ["status", "Status", ["Cold", "Warm", "Hot", "Closed"]], ["category", "Kategori", CATEGORIES]] as [keyof typeof newLead, string, string[]][]).map(([k, label, opts]) => (
-                <div key={k} style={{ gridColumn: k === "category" ? "1/-1" : "auto" }}>
-                  <label htmlFor={`nl-${k}`} style={{ fontSize: 13, fontWeight: 600, color: "var(--app-sub)", display: "block", marginBottom: 6 }}>{label}</label>
-                  <select id={`nl-${k}`} value={newLead[k]} onChange={e => setNewLead({ ...newLead, [k]: e.target.value })} style={{ ...inputStyle, fontSize: 16, minHeight: 44 }}>
-                    {opts.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                </div>
-              ))}
-              <div style={{ gridColumn: "1/-1" }}>
-                <label htmlFor="nl-notes" style={{ fontSize: 13, fontWeight: 600, color: "var(--app-sub)", display: "block", marginBottom: 6 }}>Catatan</label>
-                <textarea id="nl-notes" value={newLead.notes} onChange={e => setNewLead({ ...newLead, notes: e.target.value })} style={{ ...inputStyle, fontSize: 16, resize: "vertical", minHeight: 80 }} placeholder="mis. ketemu di GMaps, buka cabang baru bulan depan" />
-              </div>
-            </div>
-            <DupNotice leads={leads} draft={newLead} onOpen={l => { setShowAddLead(false); setAddLeadErr(""); openLead(l); }} />
-            {addLeadErr && newLead.name.trim() && <p role="alert" style={{ margin: "12px 0 0", fontSize: 13, color: "var(--hot)" }}>{addLeadErr}</p>}
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button type="button" onClick={closeAddLead} disabled={savingLead} style={{ ...btnPrimary, flex: 1, minHeight: 44, background: "var(--app-inner)", color: "var(--app-text)" }}>Batal</button>
-              <button type="submit" disabled={savingLead} style={{ ...btnPrimary, flex: 1, minHeight: 44, opacity: savingLead ? 0.7 : 1 }}>{savingLead ? "Menyimpan…" : "Simpan lead"}</button>
-            </div>
-          </form>
-        </div>
-      )}
+      <AddLead way={door} onWay={setDoor} leads={leads} me={{ name: business.name, tagline: business.tagline }}
+        onOpenLead={l => { setDoor(null); openLead(l); }} onClose={() => setDoor(null)} />
 
       {/* A lead's worksheet: over whatever opened it, so closing lands right back there */}
       {liveLead && pageOpen && (
@@ -1433,7 +1135,6 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         <div role="alert" onClick={() => setShareMsg("")} style={{ position: "fixed", left: 16, right: 16, bottom: "calc(100px + env(safe-area-inset-bottom, 0px))", zIndex: 120, maxWidth: 480, margin: "0 auto", background: "var(--app-text)", color: "var(--app-bg)", borderRadius: 12, padding: "12px 14px", fontSize: 13 }}>{shareMsg}</div>
       )}
 
-      {/* Import Leads Modal */}
       {fuRun && (
         <FollowUpRun queue={fuRun} live={id => leads.find(l => l.id === id)}
           onReplied={id => markReplied(id)} onDone={id => doneFollowUp(id)}
@@ -1441,122 +1142,6 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           onOpen={id => { const l = leads.find(x => x.id === id); setFuRun(null); if (l) openLead(l); }}
           onClose={() => setFuRun(null)} />
       )}
-      {showFinder && (
-        <LeadFinder known={leads.map(l => ({ name: l.name, phone: l.phone }))} me={{ name: business.name, tagline: business.tagline }}
-          onSave={saveFound} onImport={() => { setShowFinder(false); setShowImport(true); }} onClose={() => setShowFinder(false)} />
-      )}
-      {showImport && (
-        <div className="modal-overlay" onClick={closeImport}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 640, maxHeight: "85vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Import Leads dari Excel/CSV</div>
-              <button onClick={closeImport} aria-label="Tutup" style={{ flexShrink: 0, width: 44, height: 44, margin: "-10px -10px -10px 0", borderRadius: "50%", background: "transparent", border: "none", color: "var(--app-ink-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={18} stroke={2} /></button>
-            </div>
-            <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 16 }}>Upload Excel/CSV, atau scan gambar (screenshot/foto data) pakai AI. Kolom dipetakan otomatis — bisa diubah sebelum simpan.</div>
-
-            {importDone !== null ? (
-              <div style={{ textAlign: "center", padding: "32px 16px" }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-                <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{importDone} lead masuk</div>
-                <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 20 }}>Lead-nya udah ada di Leads.</div>
-                <button onClick={closeImport} style={btnPrimary}>Selesai</button>
-              </div>
-            ) : (
-              <>
-                {/* Mode switcher */}
-                <div style={{ display: "flex", gap: 4, marginBottom: 18, background: "var(--app-inner)", padding: 4, borderRadius: 10 }}>
-                  {([["file", "📄 Excel / CSV / Kontak"], ["scan", "📷 Scan Gambar"]] as const).map(([m, label]) => (
-                    <button key={m} onClick={() => { setImportMode(m); resetParsed(); }}
-                      style={{ flex: 1, minHeight: 40, padding: "9px 8px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: "inherit",
-                        background: importMode === m ? "var(--app-card)" : "transparent",
-                        color: importMode === m ? "var(--brand-text)" : "var(--app-muted)",
-                        boxShadow: importMode === m ? "0 1px 3px rgba(0,0,0,0.08)" : "none" }}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                {importMode === "file" ? (
-                  <label style={{ display: "block", border: "1.5px dashed var(--app-border)", borderRadius: 12, padding: 24, textAlign: "center", cursor: "pointer", marginBottom: 20, background: "var(--app-inner)" }}>
-                    <input type="file" accept=".xlsx,.xls,.csv,.vcf,text/vcard" onChange={handleImportFile} style={{ display: "none" }} />
-                    <div style={{ fontSize: 24, marginBottom: 8 }}>📄</div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{importFileName || "Pilih file"}</div>
-                    <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>.xlsx, .xls, .csv, atau kontak HP (.vcf)</div>
-                  </label>
-                ) : (
-                  <>
-                    <label style={{ display: "block", border: "1.5px dashed var(--app-border)", borderRadius: 12, padding: 24, textAlign: "center", cursor: scanning ? "wait" : "pointer", marginBottom: 12, background: "var(--app-inner)", opacity: scanning ? 0.7 : 1 }}>
-                      <input type="file" accept="image/*" onChange={handleScanImage} disabled={scanning} style={{ display: "none" }} />
-                      <div style={{ fontSize: 24, marginBottom: 8 }}>{scanning ? "🤖" : "📷"}</div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{scanning ? "Membaca gambar dengan AI..." : (importFileName || "Pilih gambar atau foto data")}</div>
-                      <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 4 }}>Screenshot chat, tabel, atau kartu nama · JPG/PNG</div>
-                    </label>
-                    {scanError && (
-                      <div style={{ fontSize: 12, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", background: "#ff44440d", border: "1px solid #ff444430", borderRadius: 8, padding: "10px 14px", marginBottom: 16 }}>{scanError}</div>
-                    )}
-                  </>
-                )}
-
-                {importHeaders.length > 0 && (
-                  <>
-                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Petakan kolom · {importRows.length} baris ditemukan</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, marginBottom: 20 }}>
-                      {IMPORT_FIELDS.map(f => (
-                        <div key={f.key}>
-                          <label style={{ fontSize: 12, color: "var(--app-muted)", display: "block", marginBottom: 4 }}>
-                            {f.label}{f.required && <span style={{ color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}> *</span>}
-                          </label>
-                          <select value={colMap[f.key] || ""} onChange={e => setColMap({ ...colMap, [f.key]: e.target.value })} style={inputStyle} aria-label={`Kolom untuk ${f.label}`}>
-                            <option value="">— lewati —</option>
-                            {importHeaders.map(h => <option key={h} value={h}>{h}</option>)}
-                          </select>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Preview (3 baris pertama)</div>
-                    <div style={{ overflowX: "auto", border: "1px solid var(--app-border)", borderRadius: 8, marginBottom: 20 }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 480 }}>
-                        <thead>
-                          <tr style={{ background: "var(--app-inner)" }}>
-                            {IMPORT_FIELDS.filter(f => colMap[f.key]).map(f => (
-                              <th key={f.key} style={{ padding: "8px 10px", textAlign: "left", color: "var(--app-muted)", whiteSpace: "nowrap" }}>{f.label}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {importRows.slice(0, 3).map((r, i) => {
-                            const m = mappedPreview(r);
-                            return (
-                              <tr key={i} style={{ borderTop: "1px solid var(--app-inner)" }}>
-                                {IMPORT_FIELDS.filter(f => colMap[f.key]).map(f => (
-                                  <td key={f.key} style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>{m[f.key] || "—"}</td>
-                                ))}
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {!colMap.name && (
-                      <div style={{ fontSize: 12, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", marginBottom: 12 }}>⚠️ Kolom &quot;Nama Perusahaan&quot; wajib dipetakan.</div>
-                    )}
-
-                    <div style={{ display: "flex", gap: 10 }}>
-                      <button onClick={runImport} disabled={!colMap.name || importing} style={{ ...btnPrimary, opacity: (!colMap.name || importing) ? 0.5 : 1, cursor: (!colMap.name || importing) ? "not-allowed" : "pointer" }}>
-                        {importing ? "Mengimport..." : `Import ${importableCount} lead`}
-                      </button>
-                      <button onClick={closeImport} style={{ ...btnPrimary, background: "var(--app-border)", color: "var(--app-text)" }}>Batal</button>
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Global Quick Pitch floating button */}
       {/* Always mounted: it seeds the starter templates Hunting shows too. On
           Hunting the templates are on the page, and the button would sit on Kirim WA. */}

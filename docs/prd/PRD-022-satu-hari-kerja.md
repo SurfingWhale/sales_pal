@@ -1,6 +1,6 @@
 # PRD-022 — Satu hari kerja
 
-- **Status:** Fase 0, 1, dan 4 dibangun, 31 Okt. Keputusan owner sudah masuk (§3).
+- **Status:** Fase 0, 1, dan 4 dibangun, 31 Okt. Fase 2 dibangun, 5 Nov. Keputusan owner sudah masuk (§3).
 - **Peran dokumen ini:** tulang punggung. Fitur baru mengikuti alur di sini, bukan sebaliknya.
 - **Terkait:** PRD-009 (journey), PRD-012 (Cari bisnis), PRD-016 (outreach), PRD-017 (biaya), PRD-018 (tempel, scroll), PRD-019 (lembar kerja, kirim dikonfirmasi), PRD-021 (posisi lead), QA-4 di Notion, `GLOSSARY.md`, `docs/qa-reviews/2026-10-31-audit-satu-hari-kerja.md`.
 - **Desain per komponen:** artifact [Hunting Workspace](https://claude.ai/artifact/FAsiHgRjGGtAu1oMBs222F) (private).
@@ -123,7 +123,7 @@ Rules: koleksi di atas sudah tertutup. `firestore.rules` tetap dites per peran s
 |---|---|---|
 | 0 | Temuan P1 audit: script salah tahap, tiga tombol, Mereka bales, warna; Q2, Q3, Q5, Q7, Q8, Q9; Scan gambar tampil sebagai "belum aktif", arahkan ke tempel teks atau Excel | Flow `sehari kerja` lulus dengan langkah baru |
 | 1 | Pesan + Script Management + konfirmasi kirim (QA-4 Chat) | Intro 12 lead beruntun tanpa balik ke daftar |
-| 2 | Tambah lead satu pintu, Pilih semua, cek dobel di Maps dan Excel (Q12, Q13) | Beda ejaan dengan nomor sama ketahuan |
+| 2 | Tambah lead satu pintu, Pilih semua, cek dobel di Maps dan Excel (Q12, Q13) | Beda ejaan dengan nomor sama ketahuan. **Dibangun 5 Nov:** Excel 20 baris 6 tap, Maps simpan 20 jadi 6 tap (dari 15) |
 | 3 | Biaya alat | Kamera 15 juta menghasilkan margin masuk akal |
 | 4 | Hunting Workspace: Island, tab Leads, cari gabungan (Q11) | Cari nama lead di Hunting ketemu |
 | 5 | Performa ringkas, rekap harian jujur | "Berapa kekirim hari ini" satu angka |
@@ -131,6 +131,13 @@ Rules: koleksi di atas sudah tertutup. `firestore.rules` tetap dites per peran s
 | 7 | Email, tulis ulang PRD-016 | Nunggu budget, di-grill dulu |
 
 Fase 1 sebelum Fase 4 karena Hunting tidak berguna kalau kirimnya belum enak.
+
+### Fase 2: yang dibangun
+
+- **Satu pintu.** Tambah lead punya empat tab: Tempel, Manual, Excel, Cari di Maps (`components/AddLead.tsx`). Tombol Import dan Cari di Maps yang lama tetap ada, tapi membuka pintu yang sama di tab-nya. Tempel dan Manual mengisi satu form, jadi ketikan tidak hilang waktu pindah tab atau ditutup. Hasil Maps dan file Excel tetap ada selama pintu terbuka, jadi pindah tab tidak memakan jatah pencarian.
+- **Cari di Maps.** Tidak ada centang otomatis. "Pilih semua yang belum ada (N)" mengambil semua yang belum ada di Leads. Yang sudah ada dipisah di bawah, di "Udah ada di Leads". Tempat, nomor, email, atau @handle yang sama tidak bisa dipilih. Nama yang sama saja masih bisa dipilih sendiri, karena bisa jadi cabang lain.
+- **Cek dobel** memakai `lib/leadDupes.ts` di Maps dan Excel: `0812…`, `+62 812-…`, dan `62812…` dianggap satu nomor. Excel juga menangkap baris yang muncul dua kali di file yang sama. Yang dobel dilewati, kecuali dicentang "Import juga yang dobel".
+- **Belum:** Member guild hanya membaca lead miliknya, jadi cek dobel tidak melihat lead Member lain.
 
 ## 9. Tes
 

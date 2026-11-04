@@ -46,7 +46,7 @@ export async function POST(req: Request) {
 
   const key = process.env.GOOGLE_PLACES_API_KEY;
   if (!key) {
-    return NextResponse.json({ error: "Cari di Google Maps belum disetel: GOOGLE_PLACES_API_KEY belum diisi di server. Sementara itu pakai Import Excel." }, { status: 503 });
+    return NextResponse.json({ error: "Cari di Google Maps belum disetel: GOOGLE_PLACES_API_KEY belum diisi di server. Sementara itu pakai Excel atau Tempel di Tambah lead." }, { status: 503 });
   }
   if (!query) return NextResponse.json({ error: "Tulis dulu yang dicari, mis. \"coffee shop Jakarta Selatan\"." }, { status: 400 });
 
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
   const quota = await takeQuota(caller.uid, "places", limit);
   if (!quota.ok) return NextResponse.json({ error: `Batas pencarian kamu hari ini (${limit}) udah habis. Coba lagi besok.` }, { status: 429 });
   const month = await takeMonthly("places");
-  if (!month.ok) return NextResponse.json({ error: `Jatah gratis Cari bisnis bulan ini (${month.limit} pencarian buat semua akun) udah habis. Mulai lagi tanggal 1; sementara pakai Import Excel.` }, { status: 429 });
+  if (!month.ok) return NextResponse.json({ error: `Jatah gratis Cari di Maps bulan ini (${month.limit} pencarian buat semua akun) udah habis. Mulai lagi tanggal 1; sementara pakai Excel atau Tempel di Tambah lead.` }, { status: 429 });
 
   let res: Response;
   try {

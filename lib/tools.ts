@@ -6,7 +6,7 @@ import type { Role } from "@/lib/guild";
 export type PaidTool = "places" | "geocode" | "scan";
 export const PAID_TOOLS: PaidTool[] = ["places", "geocode", "scan"];
 
-export const TOOL_LABEL: Record<PaidTool, string> = { places: "Cari bisnis", geocode: "Cari alamat", scan: "Scan gambar (AI)" };
+export const TOOL_LABEL: Record<PaidTool, string> = { places: "Cari di Maps", geocode: "Cari alamat", scan: "Scan gambar (AI)" };
 export const TOOL_HINT: Record<PaidTool, string> = {
   places: "Cari bisnis di Google Maps. Paling boros jatah gratis (900 pencarian sebulan buat semua akun).",
   geocode: "Cari alamat buat titik lead di peta. Tempel link Maps & OpenStreetMap tetap jalan buat semua.",
