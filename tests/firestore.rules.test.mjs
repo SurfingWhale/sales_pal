@@ -80,6 +80,13 @@ await t("nobody reads the applications", assertFails(getDocs(collection(owner, "
 await t("nobody opens the app to everyone", assertFails(setDoc(doc(other, "config", "access"), { open: true })));
 await t("nobody reads usage quotas", assertFails(getDoc(doc(owner, "usage", "owner1_scan_2026-10-08"))));
 await t("nobody resets their quota", assertFails(setDoc(doc(other, "usage", "u9_scan_2026-10-08"), { count: 0 })));
+// The MCP server's records: the owner's own token can't mint or consume an approval.
+for (const c of ["mcpDrafts", "mcpApprovals", "mcpRuns", "mcpAudit", "discordLinks", "linkCodes"]) {
+  await t(`owner cannot read ${c}`, assertFails(getDoc(doc(owner, c, "x1"))));
+  await t(`owner cannot write ${c}`, assertFails(setDoc(doc(owner, c, "x1"), { status: "consumed", ownerUid: "owner1" })));
+}
+await t("owner cannot write a draft version", assertFails(setDoc(doc(owner, "mcpDrafts", "d1", "versions", "1"), { text: "x" })));
+await t("another account cannot list approvals", assertFails(getDocs(collection(other, "mcpApprovals"))));
 
 
 console.log("guilds:");

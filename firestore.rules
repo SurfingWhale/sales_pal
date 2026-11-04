@@ -7,6 +7,9 @@ rules_version = '2';
 //                          Server only: platform tokens, quotas, notification
 //                          subscriptions, and who may come in while the app
 //                          is invite-only (PRD-015).
+//   mcpDrafts/, mcpApprovals/, mcpRuns/, mcpAudit/, discordLinks/, linkCodes/
+//                          Server only: the MCP server's drafts, approvals,
+//                          runs, audit trail and Discord links.
 //   inbound_leads/{id}     Leads sent by the websites (Visufavor, BeUntamed,
 //                          UNTMD Sports). Anyone may ADD one, in exactly the
 //                          shape below; only the owner may read them, mark them
@@ -213,6 +216,28 @@ service cloud.firestore {
     }
     // Web Push subscriptions (lib/pushServer.ts), one per device.
     match /pushSubs/{id} {
+      allow read, write: if false;
+    }
+    // The MCP server and its Discord bot (salespal-mcp, Admin SDK): drafts and
+    // their versions, approvals, runs, the audit trail, and Discord account
+    // links. A browser holding the owner's token must not mint or consume an
+    // approval, so no client may read or write any of it, at any depth.
+    match /mcpDrafts/{document=**} {
+      allow read, write: if false;
+    }
+    match /mcpApprovals/{document=**} {
+      allow read, write: if false;
+    }
+    match /mcpRuns/{document=**} {
+      allow read, write: if false;
+    }
+    match /mcpAudit/{document=**} {
+      allow read, write: if false;
+    }
+    match /discordLinks/{document=**} {
+      allow read, write: if false;
+    }
+    match /linkCodes/{document=**} {
       allow read, write: if false;
     }
 
