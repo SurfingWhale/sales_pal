@@ -92,7 +92,7 @@ const css = `
 .sp-btn.blue { background: #005eb0; color: #fff; }
 .sp-btn.hunt { background: #b93a06; color: #fff; }
 .sp-btn.ghost { background: transparent; color: var(--app-ink-2); font-weight: 500; padding: 0 12px; }
-.sp-sent { display: flex; align-items: center; gap: 4px; padding: 0 4px 0 16px; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
+.sp-sent { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 4px 0 16px; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
 .sp-sent > span { flex: 1; min-width: 0; padding: 12px 0; }
 .sp-sent .is-err { color: var(--hot); }
 
@@ -270,6 +270,10 @@ const css = `
 @media (prefers-reduced-motion: reduce) { .sp-seg-btn > span { transition: none; } }
 `;
 
+function withoutTodo(list: Todo[], key: string): Todo[] {
+  return list.filter(t => t.key !== key);
+}
+
 export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onImport, onFind, onAdd, onAllLeads, onSetTarget, hunting, report, learn, children }: {
   now: string; todo: Todo[]; numbers: Numbers; mapLeads: MapLead[];
   onOpenLead: (id: string) => void; onImport: () => void; onFind?: () => void; onAdd: () => void; onAllLeads: () => void; onSetTarget: () => void;
@@ -280,10 +284,14 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
   const setMode = (m: BerandaMode) => { setModeState(m); try { localStorage.setItem(MODE_KEY, m); } catch { /* private mode */ } };
   const [sheet, setSheet] = useState(false);
   const [chatOf, setChatOf] = useState<Todo | null>(null);
-  // What the last WhatsApp from a card left behind, with Batal.
+  // Cards whose WhatsApp was opened. wa.me can't tell us a message went out, so
+  // a card counts once you say so (PRD-022 §4), and several can wait at a time.
+  const [asking, setAsking] = useState<Todo[]>([]);
+  // What the last one left behind, with Batal.
   const [sent, setSent] = useState<{ say: string; undo?: () => Promise<void>; err?: boolean } | null>(null);
   const [undoing, setUndoing] = useState(false);
   function sendOf(t: Todo) {
+    setAsking(withoutTodo(asking, t.key));
     if (!t.onSent) return;
     Promise.resolve(t.onSent()).then(
       undo => setSent({ say: `✓ ${t.logged || "Dicatat"}`, undo: undo || undefined }),
@@ -348,12 +356,12 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
       </div>
 
       {hunting && (
-        // The day's one main move: today's DMs against the goal, then start.
+        // The day's one main move: today's messages against the goal, then start.
         <section aria-label="Hunting hari ini" className="sp-card sp-today">
           <span className="sp-today-main">
           <span className="sp-today-txt">
             <Icon name="target" size={18} />
-            <span><b className="tabnum">{hunting.sentToday}/{hunting.goal}</b> DM hari ini<span className="sp-today-sep"> · </span><span className="sp-today-q"><b className="tabnum">{hunting.queued}</b> prospek di antrian</span></span>
+            <span><b className="tabnum">{hunting.sentToday}/{hunting.goal}</b> terkirim hari ini<span className="sp-today-sep"> · </span><span className="sp-today-q"><b className="tabnum">{hunting.queued}</b> prospek di antrian</span></span>
           </span>
           <span className="sp-today-bar" aria-hidden="true"><span style={{ width: `${hunting.goal ? Math.min(100, (hunting.sentToday / hunting.goal) * 100) : 0}%` }} /></span>
           </span>
@@ -422,6 +430,13 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
           <h2 id="todo-h" style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em" }}>Perlu ditindak <span className="tabnum" style={{ color: "var(--app-muted)", fontWeight: 500 }}>{due}{todo.length > due ? ` hari ini · ${todo.length - due} nanti` : ""}</span></h2>
           {todo.length > 1 && <button onClick={() => setSheet(true)} className="sp-todo-more" aria-haspopup="dialog">Lihat semua<Icon name="chevronRight" size={14} stroke={1.8} /></button>}
         </div>
+        {asking.map(t => (
+          <div key={t.key} role="group" aria-label={`Konfirmasi kiriman ke ${t.title}`} className="sp-card sp-sent">
+            <span role="status">Pesan ke {t.title} udah kekirim?</span>
+            <button onClick={() => sendOf(t)} className="sp-btn blue" style={{ borderRadius: 999 }}>Udah, catat</button>
+            <button onClick={() => setAsking(withoutTodo(asking, t.key))} className="sp-btn line" style={{ borderRadius: 999 }}>Belum</button>
+          </div>
+        ))}
         {sent && (
           <div role="group" aria-label="Catatan kiriman" className="sp-card sp-sent">
             <span role="status" className={sent.err ? "is-err" : undefined}>{sent.say}</span>
@@ -463,7 +478,7 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
                   })()}
                   <div className="sp-task-acts">
                     {t.wa && t.phone
-                      ? <a href={waLink(t.phone, t.text)} target="_blank" rel="noreferrer" onClick={() => sendOf(t)} className="sp-btn line">{t.action}</a>
+                      ? <a href={waLink(t.phone, t.text)} target="_blank" rel="noreferrer" onClick={() => { if (t.onSent) setAsking([...withoutTodo(asking, t.key), t]); }} className="sp-btn line">{t.action}</a>
                       : <button onClick={t.open} className="sp-btn line">{t.action}</button>}
                     {t.snooze && <button onClick={t.snooze} className="sp-btn ghost">Tunda</button>}
                     {t.wa && t.phone && <button onClick={t.open} className="sp-btn ghost">Buka</button>}

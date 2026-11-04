@@ -1059,6 +1059,24 @@ export const flows = [
           const after = (await views().getByRole("button", { name: /^Belum dikontak/ }).textContent()).trim();
           return `${before} → ${after}`;
         }, 27);
+        // A DM counts once you say it went out (PRD-022 Fase 5), not on Copy.
+        await job("3b. DM satu prospek dari Hunting", async () => {
+          const count = async () => Number((await page.getByRole("button", { name: /^Hari ini \d+ dari \d+ pesan/ }).getAttribute("aria-label")).match(/^Hari ini (\d+)/)[1]);
+          await go(page, "Hunting");
+          await pane(page, "Prospek");
+          await page.locator("#hunt-search").fill("@kopisore");
+          await page.locator("#hunt-search").press("Enter");
+          await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@kopisore");
+          const before = await count();
+          await page.getByRole("button", { name: "Copy", exact: true }).first().click();
+          const ask = page.getByRole("group", { name: "Konfirmasi kiriman" });
+          await ask.waitFor();
+          if (await count() !== before) throw new Error("Copy counted before Udah");
+          await ask.getByRole("button", { name: "Udah, catat" }).click();
+          await page.waitForFunction((n) => /^Hari ini (\d+)/.exec(document.querySelector('[aria-label^="Hari ini "][aria-label*=" pesan"]')?.getAttribute("aria-label") || "")?.[1] === String(n), before + 1);
+          await page.getByRole("button", { name: "Kembali ke daftar" }).click();
+          return `${before} → ${before + 1}`;
+        });
         await job("4. Cari lead di Hunting", async () => {
           await pane(page, "Prospek");
           await page.locator("#hunt-search").fill("Studio Yoga 120");
@@ -1155,17 +1173,98 @@ export const flows = [
           const canAttach = await page.locator("#svc-components, [aria-label*='Komponen paket']").count();
           return `form penyusutan ada: ${per} · paket bisa dipasangi komponen: ${canAttach}`;
         });
+        // One honest number (PRD-022 Fase 5): 1 reply + 12 intros from Leads + 1 DM
+        // from Hunting, the same on Beranda, on Hunting and in Log aktivitas,
+        // and the WhatsApp intros read as Outreach, not Catatan.
         await job("10. Sore: berapa kekirim hari ini", async () => {
+          const want = 14;
+          await go(page, "Beranda");
+          const beranda = Number((await page.getByRole("region", { name: "Hunting hari ini" }).innerText()).match(/(\d+)\/\d+ terkirim hari ini/)[1]);
+          await go(page, "Hunting");
+          const hunting = Number((await page.getByRole("button", { name: /^Hari ini \d+ dari \d+ pesan/ }).getAttribute("aria-label")).match(/^Hari ini (\d+)/)[1]);
           await go(page, "Tim", "Log aktivitas");
-          await page.waitForTimeout(400);
-          const body = await page.locator(".sp-main").innerText();
-          return body.split("\n").filter(Boolean).slice(0, 8).join(" | ").slice(0, 300);
+          const recap = Number((await page.getByLabel("Rekap hari ini").innerText()).match(/(\d+) terkirim/)[1]);
+          const kinds = page.getByRole("group", { name: "Jenis kerjaan" });
+          await kinds.getByRole("button", { name: /^Outreach/ }).click();
+          const day = page.getByRole("region", { name: "Hari ini" });
+          await day.getByText(/^WhatsApp ke Studio Yoga/).first().waitFor();
+          const listed = await day.getByRole("listitem").count();
+          await kinds.getByRole("button", { name: /^Outreach/ }).click();
+          const notes = Number((await kinds.getByRole("button", { name: /^Catatan/ }).textContent()).match(/\d+/)?.[0] || 0);
+          const got = `Beranda ${beranda} · Hunting ${hunting} · Log aktivitas ${recap}, daftar Outreach ${listed} · Catatan ${notes}`;
+          if (![beranda, hunting, recap, listed].every(n => n === want) || notes) throw new Error(`${got}; mestinya ${want} semua dan Catatan 0`);
+          return got;
         });
       });
       const { writeFileSync } = await import("node:fs");
       writeFileSync(new URL(`./out/day-${process.env.DESKTOP ? "desktop" : "phone"}.json`, import.meta.url).pathname, JSON.stringify(out, null, 1));
       const stuck = out.filter(j => j.note.startsWith("BUNTU"));
       if (stuck.length) throw new Error(stuck.map(j => `${j.name}: ${j.note}`).join(" · "));
+    },
+  },
+  {
+    name: "rekap jujur: old rows count, Follow-up beruntun asks, Outreach in the log, Performa first",
+    async run(t) {
+      const { page } = t;
+      await page.context().route(/wa\.me|api\.whatsapp\.com/, r => r.fulfill({ status: 200, contentType: "text/html", body: "ok" }));
+      const island = async () => Number((await page.getByRole("button", { name: /^Hari ini \d+ dari \d+ pesan/ }).getAttribute("aria-label")).match(/^Hari ini (\d+)/)[1]);
+      await t.step("rows from before Fase 5 still count: a DM logged on Copy, a chat since marked Dibalas", async () => {
+        const email = await signup(t);
+        const uid = await uidOf(t.project, email);
+        const u = `users/${uid}`;
+        await seedDocs(t.project, [
+          [`${u}/hunts/hunt_old`, { target: "@kopilama", platform: "IG", templateId: "x", templateTitle: "Intro lama", status: "Terkirim", note: "", date: daysAgo(0), createdAt: Date.now() - 60000 }],
+          [`${u}/outreach/out_old`, { leadName: "Warung Lama", type: "WhatsApp", date: daysAgo(0), subject: "Intro", status: "Replied", opens: 0, clicks: 0 }],
+          [`${u}/leads/fu_rekap`, { name: "Bakso Rekap", contact: "", phone: "081200000009", email: "", category: "F&B", source: "Referral", status: "Warm", notes: "", value: 0, lastContact: daysAgo(4), nextAction: "Tanya jadwal", nextActionDate: daysAgo(0) }],
+        ]);
+        await go(page, "Hunting");
+        await page.waitForFunction(() => document.querySelector('[aria-label^="Hari ini 2 dari"]'));
+      });
+      await t.step("Follow-up beruntun: back from WhatsApp it asks; Belum counts nothing, Udah counts it", async () => {
+        await go(page, "Jualan", "Leads");
+        await page.getByRole("button", { name: /Follow-up beruntun/ }).click();
+        const sheet = page.getByRole("dialog", { name: "Follow-up beruntun" });
+        const chat = async () => { const [pop] = await Promise.all([page.waitForEvent("popup"), sheet.getByRole("link", { name: "Chat WhatsApp" }).click()]); await pop.close(); };
+        await chat();
+        const ask = sheet.getByRole("group", { name: "Konfirmasi kiriman" });
+        await ask.getByText("Pesannya udah kekirim?").waitFor();
+        await t.audit("Follow-up beruntun: udah kekirim?");
+        await ask.getByRole("button", { name: "Belum, balik" }).click();
+        await chat();
+        await ask.getByRole("button", { name: "Udah, catat" }).click();
+        await sheet.getByText("✓ Kecatat kekirim hari ini").waitFor();
+        // No answer yet: put off, and the chat still counts.
+        await sheet.getByRole("button", { name: "Besok" }).click();
+        await sheet.getByRole("button", { name: "Tutup" }).first().click();
+        await sheet.waitFor({ state: "detached" });
+        await go(page, "Beranda");
+        await page.getByRole("region", { name: "Hunting hari ini" }).getByText(/^3\/12 terkirim hari ini/).waitFor();
+      });
+      await t.step("Log aktivitas: the same 3, the chats read as Outreach", async () => {
+        await go(page, "Tim", "Log aktivitas");
+        await page.getByLabel("Rekap hari ini").getByText("3", { exact: true }).waitFor();
+        const kinds = page.getByRole("group", { name: "Jenis kerjaan" });
+        await kinds.getByRole("button", { name: /^Outreach 3/ }).click();
+        const day = page.getByRole("region", { name: "Hari ini" });
+        await day.getByText("WhatsApp ke Bakso Rekap").waitFor();
+        await day.getByText("DM ke @kopilama").waitFor();
+        await t.audit("Log aktivitas: rekap");
+      });
+      await t.step("Performa answers first: the week's numbers, then which message works, then the tools", async () => {
+        await go(page, "Hunting");
+        if (await island() !== 3) throw new Error(`Hunting says ${await island()}`);
+        await pane(page, "Performa");
+        const strip = page.getByRole("definition").first();
+        await page.getByLabel("7 hari terakhir").getByText("Terkirim, 7 hari").waitFor();
+        const order = await page.evaluate(() => {
+          const at = (el) => (el ? el.getBoundingClientRect().top + scrollY : -1);
+          const byText = (re) => [...document.querySelectorAll("#hpane-performa div")].find(d => re.test(d.textContent || "") && d.children.length === 0);
+          return [at(document.querySelector('[aria-label="7 hari terakhir"]')), at(byText(/^Pesan mana yang works\?$/)), at(document.querySelector("#kampanye"))];
+        });
+        if (!(order[0] >= 0 && order[0] < order[1] && order[1] < order[2])) throw new Error(`order ${order.join(" · ")}`);
+        if ((await strip.textContent()).trim() !== "3") throw new Error(`Terkirim 7 hari: ${await strip.textContent()}`);
+        await t.audit("Performa");
+      });
     },
   },
   {
@@ -1967,8 +2066,11 @@ export const flows = [
         const hit = await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find(x => /^(Kirim WA|Copy & )/.test(x.textContent.trim())); b.scrollIntoView({ block: "center" }); const r = b.getBoundingClientRect(); const top = document.elementFromPoint(r.right - 8, r.top + r.height / 2); return b.contains(top) ? "" : (top?.getAttribute("aria-label") || top?.textContent || "?").slice(0, 40); });
         if (hit) throw new Error(`covered by "${hit}"`);
       });
-      await t.step("copy a template: it is logged at once", async () => {
+      await t.step("copy a template: nothing is logged until you say it went out", async () => {
         await page.getByRole("button", { name: "Copy", exact: true }).first().click();
+        await page.getByRole("group", { name: "Konfirmasi kiriman" }).getByText("Pesan ke @kopiflow udah kekirim?").waitFor();
+        if (await page.getByRole("button", { name: "Batal catat" }).count()) throw new Error("logged on the tap, before Udah");
+        await page.getByRole("group", { name: "Konfirmasi kiriman" }).getByRole("button", { name: "Udah, catat" }).click();
         await page.getByRole("button", { name: "Batal catat" }).waitFor();
       });
       await t.step("the person stays on screen after the send, short, with an ID under Detail", async () => {
@@ -1994,6 +2096,7 @@ export const flows = [
         await pane(page, "Kirim");
         await page.locator("#hunt-target").fill("@rotiflow");
         await page.getByRole("button", { name: "Copy", exact: true }).first().click();
+        await page.getByRole("group", { name: "Konfirmasi kiriman" }).getByRole("button", { name: "Udah, catat" }).click();
         await openLog(page);
         await openRow(page, "@rotiflow");
         await page.getByRole("button", { name: "Hapus DM ke @rotiflow" }).click();
@@ -2035,6 +2138,7 @@ export const flows = [
         const [pop] = await Promise.all([page.waitForEvent("popup"), page.getByRole("button", { name: "Copy & DM (via IG)" }).first().click()]);
         if (!pop.url().startsWith("https://ig.me/m/dmflow")) throw new Error(`opened ${pop.url()}`);
         await pop.close();
+        await page.getByRole("group", { name: "Konfirmasi kiriman" }).getByRole("button", { name: "Udah, catat" }).click();
         await page.getByRole("button", { name: "Batal catat" }).waitFor();
       });
       await t.step("a field the post didn't fill uses the default, set once", async () => {
@@ -2052,7 +2156,7 @@ export const flows = [
       });
       await t.step("change the daily goal to 25 in a sheet with Batal", async () => {
         await page.getByRole("button", { name: /Ubah target harian/ }).click();
-        const sheet = page.getByRole("dialog", { name: /Target DM per hari/ });
+        const sheet = page.getByRole("dialog", { name: /Target pesan per hari/ });
         await sheet.getByRole("button", { name: "Batal" }).click();
         await sheet.waitFor({ state: "detached" });
         await page.getByRole("button", { name: /Ubah target harian/ }).click();
@@ -2175,8 +2279,9 @@ export const flows = [
         await page.getByRole("button", { name: "Mulai hunting" }).click();
         await page.getByRole("region", { name: "Sesi hunting" }).getByText(/0 intro/).waitFor();
       });
-      await t.step("Copy logs the intro at once; Batal takes it back", async () => {
+      await t.step("Copy, then Udah, logs the intro; Batal takes it back", async () => {
         await page.getByRole("button", { name: "Copy", exact: true }).first().click();
+        await page.getByRole("group", { name: "Konfirmasi kiriman" }).getByRole("button", { name: "Udah, catat" }).click();
         await expectText(page, "Tercatat: balasan di post ke @tokokue");
         // The undo bar sits pinned on screen, wherever the page is scrolled.
         const bar = page.locator(".sp-toast");
@@ -2194,6 +2299,11 @@ export const flows = [
         await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@tokokue");
         await page.getByRole("button", { name: "✓ Tersalin" }).waitFor({ state: "detached" });
         await page.getByRole("button", { name: "Copy", exact: true }).first().click();
+        // Belum: still nothing counted; Udah counts it.
+        await page.getByRole("group", { name: "Konfirmasi kiriman" }).getByRole("button", { name: "Belum" }).click();
+        await page.getByRole("region", { name: "Sesi hunting" }).getByText(/0 intro/).waitFor();
+        await page.getByRole("button", { name: "Copy", exact: true }).first().click();
+        await page.getByRole("group", { name: "Konfirmasi kiriman" }).getByRole("button", { name: "Udah, catat" }).click();
         await page.getByRole("region", { name: "Sesi hunting" }).getByText(/1 intro/).waitFor();
       });
       await t.step("they answer: the reply goes in the history, then Tertarik", async () => {
@@ -2240,6 +2350,7 @@ export const flows = [
         const camp = page.getByRole("region", { name: "Kampanye buat dia" });
         await camp.getByText("Promo foto menu Oktober").waitFor();
         await camp.getByRole("button", { name: "Copy", exact: true }).click();
+        await page.getByRole("group", { name: "Konfirmasi kiriman" }).getByRole("button", { name: "Udah, catat" }).click();
         await expectText(page, "Tercatat: DM ke @tokokue");
         await camp.waitFor({ state: "detached" });
         // Escape is a way back too.
@@ -2278,6 +2389,8 @@ export const flows = [
         await th.getByRole("radiogroup", { name: "Tahap" }).getByRole("radio", { name: /Penawaran/ }).click();
         await th.locator("#th-text").fill("Halo kak, ini pricelist paket katalog ya");
         await th.getByRole("button", { name: "Copy", exact: true }).click();
+        if (await th.getByText("Tercatat terkirim.").count()) throw new Error("logged on the tap, before Udah");
+        await th.getByRole("group", { name: "Konfirmasi kiriman" }).getByRole("button", { name: "Udah, catat" }).click();
         await th.getByText("Tercatat terkirim.").waitFor();
         await chat.getByText("Halo kak, ini pricelist paket katalog ya").waitFor();
         // Logged once: the box empties, and someone who answered stays answered.
@@ -2381,7 +2494,7 @@ export const flows = [
     },
   },
   {
-    name: "perlu ditindak: the most money due on top, WhatsApp from a card is logged, Batal",
+    name: "perlu ditindak: the most money due on top, WhatsApp from a card counts once you say so, Batal",
     async run(t) {
       const { page } = t;
       const card = (name) => page.locator(".sp-task", { hasText: name });
@@ -2412,6 +2525,15 @@ export const flows = [
         const [pop] = await Promise.all([page.waitForEvent("popup"), card("Resto Besar").getByRole("link", { name: "Chat", exact: true }).click()]);
         if (!pop.url().startsWith("https://wa.me/6281200000002")) throw new Error(`opened ${pop.url()}`);
         await pop.close();
+        // wa.me can't say it went out: the card asks, and Belum leaves it be.
+        const ask = page.getByRole("group", { name: "Konfirmasi kiriman ke Resto Besar" });
+        await ask.getByRole("button", { name: "Belum" }).click();
+        await ask.waitFor({ state: "detached" });
+        await page.getByRole("region", { name: "Hunting hari ini" }).getByText(/^0\/12 terkirim hari ini/).waitFor();
+        const [pop2] = await Promise.all([page.waitForEvent("popup"), card("Resto Besar").getByRole("link", { name: "Chat", exact: true }).click()]);
+        await pop2.close();
+        await ask.getByRole("button", { name: "Udah, catat" }).click();
+        await page.getByRole("region", { name: "Hunting hari ini" }).getByText(/^1\/12 terkirim hari ini/).waitFor();
         await note().getByText(/^✓ Follow-up ke Resto Besar dicatat · berikutnya /).waitFor();
         await page.waitForFunction(() => document.querySelector(".sp-task h3")?.textContent === "Toko Tagih", null, { timeout: 8000 });
       });
@@ -2424,6 +2546,7 @@ export const flows = [
         const [pop] = await Promise.all([page.waitForEvent("popup"), card("Toko Tagih").getByRole("link", { name: "Kirim pengingat" }).click()]);
         if (!pop.url().startsWith("https://wa.me/6281200000003")) throw new Error(`opened ${pop.url()}`);
         await pop.close();
+        await page.getByRole("group", { name: "Konfirmasi kiriman ke Toko Tagih" }).getByRole("button", { name: "Udah, catat" }).click();
         await note().getByText(/^✓ Pengingat INV-TELAT-001 dicatat/).waitFor();
         await card("Toko Tagih").first().waitFor({ state: "detached", timeout: 8000 });
       });
@@ -2437,7 +2560,7 @@ export const flows = [
       await t.step("sign up: Beranda opens on Jualan", async () => {
         await signup(t);
         await tab("Jualan").and(page.locator('[aria-selected="true"]')).waitFor();
-        await page.getByRole("region", { name: "Hunting hari ini" }).getByText(/DM hari ini/).waitFor();
+        await page.getByRole("region", { name: "Hunting hari ini" }).getByText(/terkirim hari ini/).waitFor();
       });
       await t.step("Report & closing: the month, both funnels, and the full reports", async () => {
         await tab("Report & closing").click();

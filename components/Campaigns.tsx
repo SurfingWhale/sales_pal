@@ -13,7 +13,7 @@ import { useConfirm } from "@/components/ConfirmSheet";
 
 // A campaign is one message for a group of prospects (docs/prd/PRD-009 §7).
 // There is no sending in bulk — the platforms have no API for it — so it runs
-// as a queue: copy, send it yourself, next.
+// as a queue: copy, send it yourself, say it went out, next.
 
 type Draft = { name: string; templateId: string; segment: Segment | "all"; groups: Group[] };
 
@@ -31,6 +31,7 @@ export default function Campaigns({ prospects, templates, strategy, sessionId, d
   const [draft, setDraft] = useState<Draft | null>(null);
   const [running, setRunning] = useState<{ id: string; skipped: string[] } | null>(null);
   const [undo, setUndo] = useState<{ label: string; run: () => Promise<void> } | null>(null);
+  const [asking, setAsking] = useState<{ c: Campaign; p: Prospect; t: PitchTemplate; text: string; copied: boolean } | null>(null);
   const [msg, setMsg] = useState("");
   const on = today();
 
@@ -43,13 +44,22 @@ export default function Campaigns({ prospects, templates, strategy, sessionId, d
 
   async function send(c: Campaign, p: Prospect, t: PitchTemplate) {
     const text = textFor(t, p);
-    setMsg("");
+    setMsg(""); setUndo(null);
     const copied = await (navigator.clipboard ? navigator.clipboard.writeText(text).then(() => true, () => false) : Promise.resolve(false));
+    setAsking({ c, p, t, text, copied });
+  }
+
+  // It counts once they say it went out, like every other send (PRD-022 §4).
+  async function confirmSent() {
+    if (!asking) return;
+    const { c, p, t, text, copied } = asking;
+    setMsg("");
     try {
       const back = await recordSend(space, {
         target: p.handle, platform: p.platform, url: p.url, templateId: t.id, templateTitle: t.title, text,
         channel: "dm", campaignId: c.id, campaignName: c.name,
       }, p, sessionId, strategy);
+      setAsking(null);
       const label = `${copied ? "Tersalin & tercatat" : "Tercatat (salin manual)"}: ${p.handle}`;
       setUndo({ label, run: back });
       setTimeout(() => setUndo(u => (u?.run === back ? null : u)), 5000);
@@ -104,10 +114,16 @@ export default function Campaigns({ prospects, templates, strategy, sessionId, d
                     <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 6 }}>{reached.length + 1} dari {reached.length + queue.length}</div>
                     <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{cur.name ? `${cur.name} (${cur.handle})` : cur.handle} · {cur.platform}</div>
                     <div style={{ fontSize: 12.5, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: 10 }}>{textFor(t, cur)}</div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button onClick={() => send(c, cur, t)} style={{ ...btnPrimary, padding: "8px 14px" }}>Copy & catat</button>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                      {asking?.p.id === cur.id ? <>
+                        <span role="status" style={{ flex: "1 1 100%", fontSize: 13, fontWeight: 600 }}>Pesannya udah kekirim?</span>
+                        <button onClick={confirmSent} style={{ ...btnPrimary, minHeight: 44, padding: "8px 14px" }}>Udah, lanjut</button>
+                        <button onClick={() => setAsking(null)} style={{ ...chip, minHeight: 44, fontWeight: 700 }}>Belum</button>
+                      </> : <>
+                        <button onClick={() => send(c, cur, t)} style={{ ...btnPrimary, padding: "8px 14px" }}>Copy pesan</button>
+                        <button onClick={() => setRunning({ id: c.id, skipped: [...(running?.skipped || []), cur.id] })} style={{ ...chip, minHeight: 36 }}>Lewati</button>
+                      </>}
                       {cur.url && <a href={cur.url} target="_blank" rel="noreferrer" className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>Buka profil ↗</a>}
-                      <button onClick={() => setRunning({ id: c.id, skipped: [...(running?.skipped || []), cur.id] })} style={{ ...chip, minHeight: 36 }}>Lewati</button>
                     </div>
                   </>
                 )}

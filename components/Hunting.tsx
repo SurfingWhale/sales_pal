@@ -19,7 +19,8 @@ import ProspectThread, { type SendHow, type SendOut } from "@/components/Prospec
 import Campaigns from "@/components/Campaigns";
 import HunterStats from "@/components/HunterStats";
 import CustomerContext from "@/components/CustomerContext";
-import ActivityIsland, { ownRows } from "@/components/ActivityIsland";
+import ActivityIsland from "@/components/ActivityIsland";
+import { ownRows, sentIn } from "@/lib/activity";
 import HuntLeads, { HuntLead } from "@/components/HuntLeads";
 import ScriptManager from "@/components/ScriptManager";
 import TemplateBoard from "@/components/TemplateBoard";
@@ -47,6 +48,19 @@ const PANES: [Pane, string][] = [["kirim", "Prospek"], ["leads", "Leads"], ["per
 const inlineEditor: CSSProperties = { marginTop: 10, padding: 12, borderRadius: 10, background: "var(--app-inner)", border: "1px solid var(--app-border)" };
 const editorButtons: CSSProperties = { display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap", marginTop: 10 };
 const PAGE = 30;
+const SCORES = 5;   // scripts shown under "Pesan mana yang works?" before Lihat semua
+
+// A message handed over (copied, or WhatsApp or Instagram opened) until the
+// seller says it went out. Nothing is written before that (PRD-022 §4).
+interface Waiting {
+  who: string; id: string; t: PitchTemplate; text: string; how: SendHow; camp?: Campaign;
+  platform: Platform; url: string; source: Prospect["source"]; channel: Channel;
+}
+
+function nextIn(ids: string[], prospects: Prospect[]): Prospect | undefined {
+  for (const id of ids) for (const p of prospects) if (p.id === id) return p;
+  return undefined;
+}
 
 export interface HuntingSession {
   prospects: Prospect[];
@@ -76,6 +90,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
   const [source, setSource] = useState<Prospect["source"]>({ kind: "manual" });
   const [blocked, setBlocked] = useState<string | null>(null);
   const [undo, setUndo] = useState<{ label: string; run: () => Promise<void> } | null>(null);
+  const [waiting, setWaiting] = useState<Waiting | null>(null);
   const [prospectFilter, setProspectFilter] = useState<ProspectFilter>("Antrian");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [noting, setNoting] = useState<{ id: string; note: string } | null>(null);
@@ -84,6 +99,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
   const [copyFail, setCopyFail] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("Semua");
   const [limit, setLimit] = useState(PAGE);
+  const [allScores, setAllScores] = useState(false);
   const [url, setUrl] = useState("");
   const [pasteMsg, setPasteMsg] = useState("");
   const [referring, setReferring] = useState<{ id: string; who: string } | null>(null);
@@ -301,9 +317,9 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
   const engaged = !!cur && !isBlocked && cur.contact === "terhubung" && cur.result !== "tolak";
   const weekAgo = addDays(now, -6);
   const sorted = hunts.slice().sort((a, b) => b.createdAt - a.createdAt);
-  // DMs from here and chats from a lead's Pesan: one number for the day.
-  const sentToday = hunts.filter(h => h.date === now).length + ownRows(outreach, space).filter(o => o.date === now && o.status === "Sent").length;
-  const week = hunts.filter(h => h.date >= weekAgo);
+  const sentToday = sentIn(hunts, outreach, space, now);
+  const sentWeek = sentIn(hunts, outreach, space, weekAgo, now);
+  const week = ownRows(hunts, space).filter(h => h.date >= weekAgo);
   const weekReplied = week.filter(responded).length;
   const weekInterested = week.filter(h => h.status === "Tertarik").length;
   const stale = sorted.filter(h => isStale(h, now));
@@ -322,8 +338,9 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
     );
   }
 
-  // Copy or Kirim WA is the send (PRD-009 D1): it goes in the log and the
-  // person's journey at once, with five seconds to take it back.
+  // Copy or Kirim WA only hands the message over: nothing here can tell it went
+  // out, so the log and the person's journey wait until the seller says so
+  // (PRD-022 §4, replacing PRD-009 D1).
   // Where the second button goes (QA 15 Okt: "link Threads langsung ke DM"):
   // a reply goes to the post; a DM to Instagram's own DM link (ig.me/m/…).
   // Threads has no public DM link, and its accounts are Instagram usernames.
@@ -354,24 +371,28 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
       targetRef.current?.focus();
       return;
     }
-    logSent(t, text, how, camp);
+    setUndo(null);
+    setWaiting({ who: target.trim(), id: curId, t, text, how, camp, platform, url, source, channel: curPost || source.kind === "post" ? channel : "dm" });
   }
 
-  async function logSent(t: PitchTemplate, text: string, how: "copy" | "wa" | "open", camp?: Campaign) {
-    const who = target.trim();
-    const ch: Channel = curPost || source.kind === "post" ? channel : "dm";
+  // They said it went out: the log, the journey and the session count it now.
+  // If that fails the question stays, so the send isn't lost.
+  async function confirmSent(w: Waiting, thenNext: boolean) {
+    setWaiting(null);
+    const had = prospects.find(p => p.id === w.id);
     try {
       const back = await recordSend(space, {
-        target: who, platform, url: url || undefined, templateId: t.id, templateTitle: t.title, text, channel: ch,
-        source: cur ? undefined : source, campaignId: camp?.id, campaignName: camp?.name,
-      }, cur, live?.id, strategy);
+        target: w.who, platform: w.platform, url: w.url || undefined, templateId: w.t.id, templateTitle: w.t.title, text: w.text, channel: w.channel,
+        source: had ? undefined : w.source, campaignId: w.camp?.id, campaignName: w.camp?.name,
+      }, had, live?.id, strategy);
+      if (thenNext) takeNext();
       // The person stays on screen: their post and context are still the guide
       // for the next message (QA 11 Okt). "Target lain" clears it.
-      const entry = { label: `Tercatat: ${how === "wa" ? "WA" : ch === "post" ? "balasan di post" : "DM"} ke ${who}`, run: back };
-      setUndo(entry);
+      setUndo({ label: `Tercatat: ${w.how === "wa" ? "WA" : w.channel === "post" ? "balasan di post" : "DM"} ke ${w.who}`, run: back });
       setTimeout(() => setUndo(u => (u?.run === back ? null : u)), 10000);
     } catch {
-      setPasteMsg("Pesan tersalin, tapi gagal dicatat. Cek koneksi lalu kirim ulang.");
+      setWaiting(w);
+      setPasteMsg("Pesan belum kecatat. Cek koneksi lalu tap Udah lagi.");
     }
   }
 
@@ -386,11 +407,15 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
     return { how: "wa", label: "Buka WA" };
   }
 
-  async function sendTo(p: Prospect, t: PitchTemplate | null, text: string, how: SendHow): Promise<(() => Promise<void>) | null> {
+  function handOver(p: Prospect, text: string, how: SendHow) {
     const out = sendFor(p);
     if (how === "copy") copy(text, `th_${p.id}`, setCopiedId);
     else if (how === "open" && out.url) { copy(text, `th_${p.id}`, setCopiedId); window.open(out.url, "_blank", "noopener"); }
     else window.open(waLinkFor(p.handle, text), "_blank");
+  }
+
+  async function logTo(p: Prospect, t: PitchTemplate | null, text: string): Promise<(() => Promise<void>) | null> {
+    const out = sendFor(p);
     try {
       return await recordSend(space, {
         target: p.handle, platform: p.platform, url: p.url || undefined, templateId: t?.id || "manual", templateTitle: t?.title || "Pesan sendiri",
@@ -402,8 +427,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
   // "Berikutnya" walks the rest of the list the person was picked from.
   function takeNext() {
     if (!queued) return;
-    const rest = queued.ids.map(id => prospects.find(x => x.id === id)).filter((x): x is Prospect => !!x);
-    const next = rest[0];
+    const next = nextIn(queued.ids, prospects);
     if (!next) { setQueued(null); return; }
     setQueued({ label: queued.label, ids: queued.ids.slice(queued.ids.indexOf(next.id) + 1) });
     setUndo(null);
@@ -556,7 +580,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
   }
   async function saveGoal() {
     const n = parseInt(goalDraft || "", 10);
-    if (!(n > 0)) { setGoalError("Isi jumlah DM, minimal 1."); return; }
+    if (!(n > 0)) { setGoalError("Isi jumlah pesan, minimal 1."); return; }
     setSavingGoal(true);
     try {
       await setDoc(spaceDoc(space, "settings", "hunting"), { dailyGoal: n }, { merge: true });
@@ -569,6 +593,9 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
   }
 
   const lastSession = journey.sessions.find(x => x.endedAt) || null;
+  // Offered only while their page is still the one on screen.
+  const nextUp = queued && waiting?.id === curId ? nextIn(queued.ids, prospects) : undefined;
+  const shownScores = allScores ? scores : scores.slice(0, SCORES);
   // Names first: "120" also sits in most phone numbers.
   const asName = q.trim().toLowerCase();
   const leadHits = asName ? leads.filter(l => matches(l, q)).sort((a, b) => Number(b.name.toLowerCase().includes(asName)) - Number(a.name.toLowerCase().includes(asName))) : [];
@@ -593,6 +620,17 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
   return (
     <div className="sp-hunt">
       {askSheet}
+      {/* Up wherever they land in Hunting after WhatsApp or Instagram. Mounted
+          before its text, so screen readers announce the question. */}
+      <div role="status">
+        {waiting && (
+          <div role="group" aria-label="Konfirmasi kiriman" className="sp-toast sp-ask">
+            <div className="sp-ask-q">Pesan ke {waiting.who} udah kekirim?</div>
+            <button onClick={() => setWaiting(null)} style={{ ...btnMuted, minHeight: 44, padding: "8px 16px", background: "#fff", color: "#141414" }}>Belum</button>
+            <button onClick={() => confirmSent(waiting, !!nextUp)} style={{ ...btnMuted, minHeight: 44, padding: "8px 16px", background: "#005eb0", color: "#fff" }}>{nextUp ? `Udah, lanjut ke ${nextUp.handle}` : "Udah, catat"}</button>
+          </div>
+        )}
+      </div>
       <div className="sp-page-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
         <div style={{ minWidth: 0, flex: "1 1 240px" }}>
           <div style={heading}>Hunting</div>
@@ -637,7 +675,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
         const p = prospects.find(x => x.id === threadId);
         if (!p) return null;
         return <ProspectThread key={p.id} p={p} strategy={strategy} templates={templates} fill={dataFor(p.handle, p, business.name, defaults)}
-          sendOut={sendFor(p)} sessionId={live?.id} onSend={sendTo} onClose={() => setThreadId(null)} />;
+          sendOut={sendFor(p)} sessionId={live?.id} onHandOver={handOver} onLog={logTo} onClose={() => setThreadId(null)} />;
       })()}
       <div id="hpane-kirim" role="tabpanel" aria-labelledby="hp-kirim" hidden={pane !== "kirim"}>
       {addMenu && (
@@ -855,9 +893,51 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
       )}
 
       <div id="hpane-performa" role="tabpanel" aria-labelledby="hp-performa" hidden={pane !== "performa"}>
-      <p className="tabnum" style={{ margin: "0 0 12px", fontSize: "var(--fs-meta)", color: "var(--app-sub)" }}>
-        Dibales 7 hr <b style={{ color: "var(--app-text)" }}>{week.length ? pct(weekReplied / week.length) : "—"}</b> · Tertarik 7 hr <b style={{ color: "var(--app-text)" }}>{weekInterested}</b>
-      </p>
+      {/* How it's going comes first; the tools sit under the answer. */}
+      <dl aria-label="7 hari terakhir" className="sp-strip three" style={{ margin: "0 0 var(--sp-5)" }}>
+        {([
+          [String(sentWeek), "Terkirim, 7 hari"],
+          [week.length ? pct(weekReplied / week.length) : "—", `Dibales, dari ${week.length} DM`],
+          [String(weekInterested), "Tertarik, 7 hari"],
+        ] as [string, string][]).map(([v, k]) => (
+          <div key={k} style={{ display: "flex", flexDirection: "column-reverse", justifyContent: "flex-end" }}>
+            <dt style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)", marginTop: "var(--sp-1)" }}>{k}</dt>
+            <dd className="num" style={{ margin: 0, fontSize: "var(--fs-num)", fontWeight: 600, lineHeight: 1.15 }}>{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {/* Which message works */}
+      <div style={{ ...card, padding: 20, marginBottom: 20 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font, marginBottom: 4 }}>Pesan mana yang works?</div>
+        <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 14 }}>Dibales = dijawab apa pun, termasuk ditolak. Tertarik = mau lanjut. Angka mulai bisa dipercaya setelah {MIN_SAMPLE} DM per template.</div>
+        {advice && <div style={{ fontSize: 12, padding: 12, borderRadius: 10, background: "#f59e0b14", border: "1px solid #f59e0b50", marginBottom: 14 }}>💡 {advice}</div>}
+        {scores.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Belum ada data. Catat beberapa DM dulu.</div>}
+        {shownScores.map(s => (
+          <div key={s.templateId} style={{ padding: "10px 0", borderTop: "1px solid var(--app-inner)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</div>
+              <div style={{ fontSize: 12, color: "var(--app-muted)", flexShrink: 0 }}>{s.sent} DM{s.sent < MIN_SAMPLE ? " · sampel kecil" : ""}</div>
+            </div>
+            {([["Dibales", s.responseRate, "#f59e0b"], ["Tertarik", s.winRate, "#00a862"]] as [string, number, string][]).map(([k, r, c]) => (
+              <div key={k} style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", width: 56 }}>{k}</div>
+                <div style={{ flex: 1, height: 6, background: "var(--app-inner)", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ width: `${r * 100}%`, height: "100%", background: c }} />
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 700, width: 36, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{pct(r)}</div>
+              </div>
+            ))}
+          </div>
+        ))}
+        {scores.length > SCORES && <button onClick={() => setAllScores(!allScores)} aria-expanded={allScores} style={{ ...chip, width: "100%", marginTop: 8, minHeight: 44 }}>{allScores ? "Tampilkan lebih sedikit" : `Lihat semua ${scores.length} pesan`}</button>}
+        {reasons.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Alasan ditolak terakhir</div>
+            {reasons.map(h => <div key={h.id} style={{ fontSize: 12, color: "var(--app-sub)", padding: "3px 0" }}>“{h.note}” <span style={{ color: "var(--app-muted)" }}>· {h.templateTitle}</span></div>)}
+          </div>
+        )}
+      </div>
+
       <Campaigns prospects={prospects} templates={templates} strategy={strategy} sessionId={live?.id} defaults={defaults} />
       {/* The old per-message log, folded: every send is in its conversation now. */}
       <details style={{ ...card, padding: "4px 20px", marginBottom: 20 }}>
@@ -877,7 +957,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
         {filter === "Follow-up" && stale.length > 0 && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>Terkirim {STALE_DAYS}+ hari tanpa balasan. Follow-up sekali, kalau tetap diam tandai 👻.</div>}
         {shown.length === 0 && (
           <div style={{ fontSize: 12, color: "var(--app-muted)", padding: "16px 0" }}>
-            {filter === "Semua" ? "Belum ada DM. Isi target, pilih pesan, lalu Copy — langsung kecatat." : filter === "Follow-up" ? "Ga ada yang nunggu follow-up." : "Belum ada yang tertarik. Terus kirim 💪"}
+            {filter === "Semua" ? "Belum ada DM. Isi target, pilih pesan, kirim, lalu tandai Udah." : filter === "Follow-up" ? "Ga ada yang nunggu follow-up." : "Belum ada yang tertarik. Terus kirim 💪"}
           </div>
         )}
         {shown.slice(0, limit).map(h => {
@@ -1004,37 +1084,6 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
       </div>
       </details>
 
-      {/* Which message works */}
-      <div style={{ ...card, padding: 20, marginBottom: 20 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: font, marginBottom: 4 }}>Pesan mana yang works?</div>
-        <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 14 }}>Dibales = dijawab apa pun, termasuk ditolak. Tertarik = mau lanjut. Angka mulai bisa dipercaya setelah {MIN_SAMPLE} DM per template.</div>
-        {advice && <div style={{ fontSize: 12, padding: 12, borderRadius: 10, background: "#f59e0b14", border: "1px solid #f59e0b50", marginBottom: 14 }}>💡 {advice}</div>}
-        {scores.length === 0 && <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Belum ada data. Catat beberapa DM dulu.</div>}
-        {scores.map(s => (
-          <div key={s.templateId} style={{ padding: "10px 0", borderTop: "1px solid var(--app-inner)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</div>
-              <div style={{ fontSize: 12, color: "var(--app-muted)", flexShrink: 0 }}>{s.sent} DM{s.sent < MIN_SAMPLE ? " · sampel kecil" : ""}</div>
-            </div>
-            {([["Dibales", s.responseRate, "#f59e0b"], ["Tertarik", s.winRate, "#00a862"]] as [string, number, string][]).map(([k, r, c]) => (
-              <div key={k} style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
-                <div style={{ fontSize: 12, color: "var(--app-muted)", width: 56 }}>{k}</div>
-                <div style={{ flex: 1, height: 6, background: "var(--app-inner)", borderRadius: 3, overflow: "hidden" }}>
-                  <div style={{ width: `${r * 100}%`, height: "100%", background: c }} />
-                </div>
-                <div style={{ fontSize: 12, fontWeight: 700, width: 36, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{pct(r)}</div>
-              </div>
-            ))}
-          </div>
-        ))}
-        {reasons.length > 0 && (
-          <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Alasan ditolak terakhir</div>
-            {reasons.map(h => <div key={h.id} style={{ fontSize: 12, color: "var(--app-sub)", padding: "3px 0" }}>“{h.note}” <span style={{ color: "var(--app-muted)" }}>· {h.templateTitle}</span></div>)}
-          </div>
-        )}
-      </div>
-
       <HunterStats prospects={prospects} sessions={journey.sessions} />
       </div>
 
@@ -1043,11 +1092,11 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
       {goalDraft !== null && (
         <div className="modal-overlay" onClick={() => { if (!savingGoal) setGoalDraft(null); }}>
           <form noValidate aria-labelledby="goal-h" onClick={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); saveGoal(); }} style={{ ...modalBox, maxWidth: 400 }}>
-            <div id="goal-h" style={{ fontSize: 17, fontWeight: 700, fontFamily: font }}>Target DM per hari</div>
-            <p style={{ margin: "4px 0 16px", fontSize: 13, color: "var(--app-muted)" }}>Berapa DM yang mau kamu kirim tiap hari? Progresnya keliatan di kartu DM hari ini dan di bar sesi.</p>
-            <label htmlFor="goal-n" style={label}>Jumlah DM</label>
+            <div id="goal-h" style={{ fontSize: 17, fontWeight: 700, fontFamily: font }}>Target pesan per hari</div>
+            <p style={{ margin: "4px 0 16px", fontSize: 13, color: "var(--app-muted)" }}>Berapa pesan yang mau kamu kirim tiap hari? Progresnya keliatan di Beranda, di Hunting, dan di bar sesi.</p>
+            <label htmlFor="goal-n" style={label}>Jumlah pesan</label>
             <input id="goal-n" type="number" inputMode="numeric" min={1} step={1} autoFocus value={goalDraft}
-              onChange={e => { setGoalDraft(e.target.value); setGoalError(""); }} placeholder="Contoh: 20"
+              onChange={e => { setGoalDraft(e.target.value); setGoalError(""); }} placeholder="Contoh: 12"
               aria-invalid={Boolean(goalError)} aria-describedby={goalError ? "goal-err" : undefined}
               style={{ ...inputStyle, fontSize: 16, minHeight: 48 }} />
             {goalError && <p id="goal-err" role="alert" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--hot)" }}>{goalError}</p>}

@@ -37,7 +37,7 @@ Singkatan kolom "Tutup":
 | `AvatarPicker`, `AccessAdmin` | `ProfileSheet.tsx`, `AccessAdmin.tsx` | Dari dalam ProfileSheet | Batal/Tutup; scrim/Escape/Back hanya menutup dirinya (diperbaiki di PR #87) | `setDoc` profil; `/api/access/admin` |
 | `LeadFinder` | `components/LeadFinder.tsx` | `setShowFinder(true)` | guard; Tutup | `/api/places`; `saveFound` → `writeBatch` leads |
 | `FollowUpRun` (`fuRun`) | `components/FollowUpRun.tsx` | `setFuRun(dueLeads)` | STD; Tutup | `updateDoc` leads |
-| Target DM harian (`goalDraft`) | `components/Hunting.tsx` | `changeGoal`, sel Outreach di `ActivityIsland` | STD + guard | `setDoc` settings/hunting |
+| Target pesan harian (`goalDraft`) | `components/Hunting.tsx` | `changeGoal`, sel Terkirim di `ActivityIsland` | STD + guard | `setDoc` settings/hunting |
 | `ScriptManager` (`scripts`), layar penuh | `components/ScriptManager.tsx` | Menu "Tambah" Hunting, Kelola di Pesan | × "Tutup"; editor: Batal/Simpan | `setDoc`/`updateDoc`/`deleteDoc` pitchTemplates; `canEditCatalog` |
 | Editor template (`editing`) | `components/TemplateBoard.tsx` | Tombol edit di kartu pesan Hunting | STD; Batal | `setDoc`/`deleteDoc` pitchTemplates |
 | `DefaultsSheet` | `components/DefaultsSheet.tsx` | Menu "Tambah" | STD; Batal | `saveFillDefaults` |
@@ -83,7 +83,13 @@ Tidak ada komponen tooltip. Hanya atribut `title=` bawaan browser, misalnya "Pro
 | Komponen | File | Pemicu | Hilang | Data |
 |---|---|---|---|---|
 | "Tercatat" + Batal / Berikutnya | `Hunting.tsx` (`.sp-toast`) | `logSent` | 10 dtk; Batal → `takeBack` | undo `recordSend` |
-| Undo kampanye | `Campaigns.tsx` | `send` | 5 dtk | undo `recordSend` |
+| Undo kampanye | `Campaigns.tsx` | `confirmSent` (setelah Udah) | 5 dtk | undo `recordSend` |
+| Udah kekirim? (Hunting) | `components/Hunting.tsx` (`waiting`, `.sp-ask`) | Copy / Kirim WA / Copy & DM, juga Kampanye buat dia | Belum | `recordSend` hanya setelah Udah |
+| Udah kekirim? (percakapan) | `components/ProspectThread.tsx` (`asking`) | Copy / kirim di kotak pesan | Belum | `onLog` → `recordSend` |
+| Udah kekirim? (kampanye) | `components/Campaigns.tsx` (`asking`) | Copy pesan di antrian | Belum | `recordSend` |
+| Udah kekirim? (Perlu ditindak) | `components/Beranda.tsx` (`asking`, bisa beberapa) | Chat / Follow up via WA / Kirim pengingat | Belum | `onSent` kartu |
+| Udah kekirim? (Follow-up beruntun) | `components/FollowUpRun.tsx` (`waOpen`) | Chat WhatsApp | Belum, balik | `onSent` → `logContact` |
+| Rekap hari ini | `components/SalesTracker.tsx` (baris atas Log aktivitas) | Tab Log aktivitas | – | `sentIn`, baca saja |
 | Undo kirim di thread | `ProspectThread.tsx` | `send` | 10 dtk | undo kirim |
 | ChatNote "Dicatat: chat hari ini" | `LeadDetail.tsx` | "Udah" di `ChatPicker`, atau Tandai udah dikontak | × / Batal; di HP halaman memberi ruang setinggi catatan (PR #88) | `logContact` |
 | Error share (`shareMsg`) | `SalesTracker.tsx` | `?share` gagal | Tap | – |
