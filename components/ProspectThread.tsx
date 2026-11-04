@@ -29,9 +29,10 @@ const dayOf = (ms: number) => {
   return same(d, now) ? "Hari ini" : same(d, y) ? "Kemarin" : d.toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
 };
 
-export default function ProspectThread({ p, strategy, templates, fill, sendOut, sessionId, onSend, onClose }: {
+export default function ProspectThread({ p, strategy, templates, fill, sendOut, sessionId, onHandOver, onLog, onClose }: {
   p: Prospect; strategy: Strategy; templates: PitchTemplate[]; fill: FillData; sendOut: SendOut; sessionId?: string;
-  onSend: (p: Prospect, t: PitchTemplate | null, text: string, how: SendHow) => Promise<(() => Promise<void>) | null>;
+  onHandOver: (p: Prospect, text: string, how: SendHow) => void;   // copy it, or open WhatsApp or Instagram
+  onLog: (p: Prospect, t: PitchTemplate | null, text: string) => Promise<(() => Promise<void>) | null>;   // they said it went out
   onClose: () => void;
 }) {
   const space = useSpace();
@@ -47,6 +48,7 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
   const [msg, setMsg] = useState("");
   const [note, setNote] = useState("");
   const [undo, setUndo] = useState<(() => Promise<void>) | null>(null);
+  const [asking, setAsking] = useState<{ text: string; tpl: PitchTemplate | null } | null>(null);
   const [askDnc, setAskDnc] = useState(false);
   const [converting, setConverting] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
@@ -55,14 +57,22 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
 
   function choose(t: PitchTemplate) { setTpl(t); setText(fillTemplate(t.body, fill)); }
 
-  async function send(how: SendHow) {
+  // The message stays in the box until they say it went out (PRD-022 §4).
+  function send(how: SendHow) {
     if (!text.trim() || dnc || busy) return;
+    setMsg(""); setUndo(null);
+    onHandOver(p, text, how);
+    setAsking({ text, tpl });
+  }
+
+  async function confirmSent() {
+    if (!asking || busy) return;
     setMsg(""); setBusy(true);
-    const back = await onSend(p, tpl, text, how);
+    const back = await onLog(p, asking.tpl, asking.text);
     setBusy(false);
     // Logged once: the box empties, so a second tap can't log it twice.
-    if (back) { setText(""); setTpl(null); setUndo(() => back); setTimeout(() => setUndo(u => (u === back ? null : u)), 10000); }
-    else setMsg("Pesan tersalin, tapi gagal dicatat. Cek koneksi lalu coba lagi.");
+    if (back) { setAsking(null); setText(""); setTpl(null); setUndo(() => back); setTimeout(() => setUndo(u => (u === back ? null : u)), 10000); }
+    else setMsg("Pesan belum kecatat. Cek koneksi lalu coba lagi.");
   }
 
   async function act(patch: Partial<Prospect>) {
@@ -174,6 +184,13 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
         )}
 
         <footer className="sp-thread-foot">
+          {asking && (
+            <div role="group" aria-label="Konfirmasi kiriman" className="sp-thread-note">
+              <span role="status" style={{ flex: 1 }}>Pesannya udah kekirim?</span>
+              <button onClick={() => setAsking(null)} style={{ ...chip, minHeight: 44, fontWeight: 700 }}>Belum</button>
+              <button onClick={confirmSent} disabled={busy} style={{ ...btnPrimary, minHeight: 44 }}>Udah, catat</button>
+            </div>
+          )}
           {undo && (
             <div role="status" className="sp-thread-note">
               <span style={{ flex: 1 }}>Tercatat terkirim.</span>

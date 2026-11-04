@@ -43,7 +43,8 @@ export const inRange = (a: Activity, r: Range) => a.day >= r.from && a.day <= r.
 export interface Stats {
   activities: number;
   prospects: number;   // new prospects (a post saved, or typed in)
-  dms: number;         // intros and follow-ups sent
+  sent: number;        // every message out: DMs and chats (GLOSSARY.md, Outreach)
+  dms: number;         // the DMs among them, what a reply rate is measured against
   replies: number;
   etb: number;         // gave their data: NTB → ETB
   quotesSent: number;
@@ -53,13 +54,14 @@ export interface Stats {
 }
 
 export function stats(acts: Activity[], r?: Range): Stats {
-  const s: Stats = { activities: 0, prospects: 0, dms: 0, replies: 0, etb: 0, quotesSent: 0, won: 0, paid: 0, lastAt: 0 };
+  const s: Stats = { activities: 0, prospects: 0, sent: 0, dms: 0, replies: 0, etb: 0, quotesSent: 0, won: 0, paid: 0, lastAt: 0 };
   for (const a of acts) {
     if (a.at > s.lastAt) s.lastAt = a.at;
     if (r && !inRange(a, r)) continue;
     s.activities++;
     if (a.type === "post") s.prospects++;
-    else if (a.type === "dm") s.dms++;
+    else if (a.type === "dm") { s.dms++; s.sent++; }
+    else if (a.type === "outreach") s.sent++;
     else if (a.type === "reply") s.replies++;
     else if (a.type === "etb") s.etb++;
     else if (a.type === "quoteSent") s.quotesSent++;
@@ -133,7 +135,7 @@ export function dashboardDoc(o: {
       { title: "Angka utama", table: { head: ["Metrik", "Periode ini", "Sebelumnya", "Perubahan"], widths: [3.2, 2, 2, 2], bold: [1], rows: [
         kpi("Aktivitas", String(s.activities), String(p.activities), change(s.activities, p.activities)),
         kpi("Prospek baru", String(s.prospects), String(p.prospects), change(s.prospects, p.prospects)),
-        kpi("DM terkirim", String(s.dms), String(p.dms), change(s.dms, p.dms)),
+        kpi("Terkirim", String(s.sent), String(p.sent), change(s.sent, p.sent)),
         kpi("Dibales", pct(rate(s)), pct(rate(p)), rateChange(rate(s), rate(p))),
         kpi("Jadi ETB (kasih data)", String(s.etb), String(p.etb), change(s.etb, p.etb)),
         kpi("Penawaran dikirim", String(s.quotesSent), String(p.quotesSent), change(s.quotesSent, p.quotesSent)),
@@ -146,8 +148,8 @@ export function dashboardDoc(o: {
         rows: funnel.map(([l, v], i) => [l, String(v), i ? pct(rateOf(v, funnel[i - 1][1])) : "—"]) },
         note: "Dihitung dari kejadian di periode ini, bukan per orang yang sama (cohort ada di Report Klien)." },
       ...(o.team && o.rows.length ? [{ title: "Per sales", table: {
-        head: ["Sales", "Aktivitas", "DM", "Dibales", "ETB", "Penawaran", "Closing", "Uang masuk"], widths: [3, 1.4, 1, 1.4, 1, 1.6, 1.3, 2.4], bold: [0, 7],
-        rows: o.rows.map(r => [r.name, String(r.s.activities), String(r.s.dms), pct(rate(r.s)), String(r.s.etb), String(r.s.quotesSent), String(r.s.won), rupiah(r.s.paid)]),
+        head: ["Sales", "Aktivitas", "Terkirim", "Dibales", "ETB", "Penawaran", "Closing", "Uang masuk"], widths: [3, 1.4, 1, 1.4, 1, 1.6, 1.3, 2.4], bold: [0, 7],
+        rows: o.rows.map(r => [r.name, String(r.s.activities), String(r.s.sent), pct(rate(r.s)), String(r.s.etb), String(r.s.quotesSent), String(r.s.won), rupiah(r.s.paid)]),
       } }] : []),
       ...(o.team ? [{ title: "Sorotan", lines: [
         busy.length ? `Paling aktif: ${busy.map(r => `${r.name} (${r.s.activities})`).join(", ")}.` : "Belum ada yang aktif di periode ini.",

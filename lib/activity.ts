@@ -7,10 +7,13 @@ import type { HuntSession, Prospect } from "@/lib/prospects";
 import type { Hunt } from "@/lib/hunting";
 import type { Invoice, Quote } from "@/lib/billing";
 import { rupiah } from "@/lib/billing";
+import type { Space } from "@/lib/space";
 
-export type ActKind = "hunt" | "reply" | "sell" | "note";
+// Outreach is one message to a Prospek or a Lead (GLOSSARY.md), so a DM and a
+// WhatsApp read the same; Hunting is the finding around them.
+export type ActKind = "hunt" | "outreach" | "reply" | "sell" | "note";
 export const ACT_KINDS: { id: ActKind; label: string }[] = [
-  { id: "hunt", label: "Hunting" }, { id: "reply", label: "Respon" },
+  { id: "hunt", label: "Hunting" }, { id: "outreach", label: "Outreach" }, { id: "reply", label: "Respon" },
   { id: "sell", label: "Jualan" }, { id: "note", label: "Catatan" },
 ];
 export const kindLabel = (k: ActKind) => ACT_KINDS.find(x => x.id === k)!.label;
@@ -57,8 +60,8 @@ const clip = (s: string | undefined, n = 120) => {
 };
 
 const KIND: Record<ActType, ActKind> = {
-  post: "hunt", dm: "hunt", session: "hunt", reply: "reply", status: "reply", etb: "reply", rejection: "reply",
-  quote: "sell", quoteSent: "sell", won: "sell", invoice: "sell", payment: "sell", note: "note", outreach: "note",
+  post: "hunt", session: "hunt", dm: "outreach", outreach: "outreach", reply: "reply", status: "reply", etb: "reply", rejection: "reply",
+  quote: "sell", quoteSent: "sell", won: "sell", invoice: "sell", payment: "sell", note: "note",
 };
 // Old DM log statuses that mean they answered.
 const ANSWERED = ["Dibales", "Tertarik", "Ditolak"];
@@ -74,11 +77,18 @@ export function activities(src: {
     out.push({ id, ...w, kind: KIND[type], type, title, tab, ...(detail ? { detail } : {}), ...(row.ownerUid ? { owner: row.ownerUid } : {}), ...(amount ? { amount } : {}) });
   };
 
+  // A send counts once, the same as sentIn: its row in the DM log is the record,
+  // and the journey only says it in more words. A row deleted from the log is
+  // gone from here too, and a journey that isn't loaded (closed, on Hunting)
+  // doesn't lose its DMs. DNC keeps the sends but drops their huntId.
+  const logged = new Set(src.hunts.map(h => h.id));
+  const journeys = new Set(src.prospects.map(p => p.id));
   const fromJourney = new Set<string>();
   for (const p of src.prospects) {
     const who = p.name ? `${p.name} (${p.handle})` : p.handle;
     (p.history || []).forEach((e, i) => {
       const id = `p_${p.id}_${i}`;
+      if (e.kind === "sent" && e.huntId && !logged.has(e.huntId)) return;
       if (e.huntId) fromJourney.add(e.huntId);
       if (e.kind === "post") add(id, e.at, "post", `Simpan post ${who}`, "Hunting", p, clip(e.text));
       else if (e.kind === "sent") add(id, e.at, "dm", `${e.channel === "post" ? "Balas di post" : "DM"} ke ${who}`, "Hunting", p,
@@ -94,7 +104,7 @@ export function activities(src: {
 
   // DM log rows that aren't part of a journey (older ones, or typed by hand).
   for (const h of src.hunts) {
-    if (h.prospectId || fromJourney.has(h.id)) continue;
+    if (fromJourney.has(h.id) || (h.prospectId && journeys.has(h.prospectId))) continue;
     add(`h_${h.id}`, h.createdAt || h.date, "dm", `DM ke ${h.target}`, "Hunting", h, h.templateTitle ? `Pesan: ${h.templateTitle}` : undefined);
     if (h.status !== "Terkirim" && h.statusAt) add(`hs_${h.id}`, h.statusAt, ANSWERED.includes(h.status) ? "reply" : "status", `${h.target}: ${h.status}`, "Hunting", h, clip(h.note));
   }
@@ -124,6 +134,26 @@ export function activities(src: {
   for (const r of src.rejections) add(`r_${r.id}`, r.date, "rejection", `${r.leadName} nolak`, "Rejection Log", r, clip(r.reason));
 
   return out.sort((a, b) => b.at - a.at);
+}
+
+// In a guild the number is your own day, even for a Leader who reads everyone's rows.
+export function ownRows<T>(rows: T[], space: Space): T[] {
+  if (space.kind !== "guild") return rows;
+  return rows.filter(r => ((r as { ownerUid?: string }).ownerUid || space.me.uid) === space.me.uid);
+}
+
+function datedIn(rows: { date: string }[], from: string, to: string): number {
+  let n = 0;
+  for (const r of rows) if (r.date >= from && r.date <= to) n++;
+  return n;
+}
+
+// "Berapa kekirim hari ini" (PRD-022 §2): every message the seller said went
+// out, DMs and chats alike, one number wherever it shows. A row is only written
+// after they say so, so every row counts, and marking one Dibalas later doesn't
+// take it off the day it was sent.
+export function sentIn(hunts: { date: string }[], outreach: { date: string }[], space: Space, from: string, to = from): number {
+  return datedIn(ownRows(hunts, space), from, to) + datedIn(ownRows(outreach, space), from, to);
 }
 
 export function countByDay(acts: Activity[]): Map<string, number> {

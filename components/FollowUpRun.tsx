@@ -7,15 +7,19 @@ import { btnMuted, btnPrimary, chip, font } from "@/components/ui";
 
 // Follow-up, one lead after another (QA 15 Okt: "harus maju mundur buat follow
 // up"). Each lead shows why it's due and how to reach them; every answer saves
-// and moves to the next, so the list never has to be reopened.
+// and moves to the next, so the list never has to be reopened. WhatsApp can't
+// tell us a message went out, so back from it the run asks, like Pesan does
+// (PRD-022 §4): a chat that got no answer yet still counts, and a reply alone
+// doesn't count as a chat you sent.
 
 type Outcome = "dibales" | "selesai" | "tunda" | "lewati";
 
-export default function FollowUpRun<T extends QueryLead>({ queue, live, onReplied, onDone, onSchedule, onOpen, onClose }: {
+export default function FollowUpRun<T extends QueryLead>({ queue, live, onSent, onReplied, onDone, onSchedule, onOpen, onClose }: {
   queue: T[];                                   // fixed when the run starts
   live: (id: string) => T | undefined;          // the latest copy, as it saves
+  onSent: (id: string) => Promise<void>;        // they said the WhatsApp went out
   onReplied: (id: string) => Promise<void>;
-  onDone: (id: string) => Promise<void>;
+  onDone: (id: string, sent: boolean) => Promise<void>;   // sent: this also says a message went out
   onSchedule: (id: string, action: string, date: string) => Promise<void>;
   onOpen: (id: string) => void;                 // the full lead, when one line isn't enough
   onClose: () => void;
@@ -24,6 +28,8 @@ export default function FollowUpRun<T extends QueryLead>({ queue, live, onReplie
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [log, setLog] = useState<Outcome[]>([]);
+  const [waOpen, setWaOpen] = useState(false);   // back from WhatsApp, not answered yet
+  const [counted, setCounted] = useState(false);
   const on = today();
   const done = i >= queue.length;
   const l = done ? undefined : live(queue[i].id) || queue[i];
@@ -35,6 +41,19 @@ export default function FollowUpRun<T extends QueryLead>({ queue, live, onReplie
       if (run) await run();
       setLog(x => [...x, o]);
       setI(i + 1);
+      setWaOpen(false); setCounted(false);
+    } catch {
+      setErr("Gagal nyimpen. Cek koneksi lalu coba lagi.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function confirmSent() {
+    if (!l) return;
+    setBusy(true); setErr("");
+    try {
+      await onSent(l.id);
+      setWaOpen(false); setCounted(true);
     } catch {
       setErr("Gagal nyimpen. Cek koneksi lalu coba lagi.");
     } finally {
@@ -87,23 +106,34 @@ export default function FollowUpRun<T extends QueryLead>({ queue, live, onReplie
                 {(l.profile?.need || l.notes) && <div style={{ color: "var(--app-sub)", marginTop: 6 }}>{l.profile?.need ? `Butuh: ${l.profile.need}` : l.notes.slice(0, 160)}</div>}
               </div>
 
+              {waOpen ? (
+                <div role="group" aria-label="Konfirmasi kiriman" style={{ display: "grid", gap: 8, marginTop: 16 }}>
+                  <p role="status" style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Pesannya udah kekirim?</p>
+                  <p style={{ margin: 0, fontSize: 14, color: "var(--app-muted)" }}>WhatsApp ga ngasih tahu kami, jadi yang kecatat cuma yang kamu tandai.</p>
+                  <button disabled={busy} onClick={confirmSent} style={{ ...btnPrimary, minHeight: 48 }}>Udah, catat</button>
+                  <button disabled={busy} onClick={() => setWaOpen(false)} style={{ ...btnMuted, minHeight: 48 }}>Belum, balik</button>
+                  <div role="alert" style={{ fontSize: 13, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))" }}>{err}</div>
+                </div>
+              ) : <>
+              {counted && <p role="status" style={{ margin: "16px 0 0", fontSize: 14, fontWeight: 600, color: "var(--ok)" }}>✓ Kecatat kekirim hari ini</p>}
               <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
                 {hasPhone
-                  ? <a href={waLink(l.phone, greet)} target="_blank" rel="noreferrer" style={{ ...btnPrimary, flex: 1, minHeight: 48, display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none", background: "#25D366", color: "#0b141a" }}>Chat WhatsApp</a>
+                  ? <a href={waLink(l.phone, greet)} target="_blank" rel="noreferrer" onClick={() => setWaOpen(true)} style={{ ...btnPrimary, flex: 1, minHeight: 48, display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none", background: "#25D366", color: "#0b141a" }}>Chat WhatsApp</a>
                   : <button onClick={() => onOpen(l.id)} style={{ ...btnMuted, flex: 1, minHeight: 48 }}>Belum ada nomor · buka lead</button>}
                 {hasPhone && <a href={`tel:${l.phone.replace(/[^\d+]/g, "")}`} style={{ ...btnMuted, minHeight: 48, display: "inline-flex", alignItems: "center", textDecoration: "none" }}>Telepon</a>}
               </div>
 
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-sub)", margin: "20px 0 8px" }}>Hasilnya?</div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button disabled={busy} onClick={() => act("dibales", async () => { await onReplied(l.id); await onDone(l.id); })} style={{ ...btnPrimary, flex: 1, minHeight: 48 }}>💬 Dibales</button>
-                <button disabled={busy} onClick={() => act("selesai", () => onDone(l.id))} style={{ ...btnMuted, flex: 1, minHeight: 48 }}>✓ Udah, selesai</button>
+                <button disabled={busy} onClick={() => act("dibales", async () => { await onReplied(l.id); await onDone(l.id, false); })} style={{ ...btnPrimary, flex: 1, minHeight: 48 }}>💬 Dibales</button>
+                <button disabled={busy} onClick={() => act("selesai", () => onDone(l.id, true))} style={{ ...btnMuted, flex: 1, minHeight: 48 }}>✓ Udah, selesai</button>
               </div>
               <div style={{ fontSize: 13, color: "var(--app-muted)", margin: "12px 0 6px" }}>Belum dibales? Tunda ke</div>
               <div style={{ display: "flex", gap: 8 }}>
                 {later(1, "Besok")}{later(3, "3 hari")}{later(7, "Minggu depan")}
               </div>
               <div role="status" style={{ fontSize: 13, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", marginTop: err ? 10 : 0 }}>{err}</div>
+              </>}
             </>
           )}
         </div>

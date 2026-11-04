@@ -110,8 +110,8 @@ export default function TeamDashboard({ hunts, quotes, invoices, outreach, rejec
     { key: "won", label: "Closing", value: String(s.won), ch: change(s.won, p.won), sub: "penawaran diterima" },
     { key: "activities", label: "Aktivitas", value: String(s.activities), ch: change(s.activities, p.activities) },
     { key: "prospects", label: "Prospek baru", value: String(s.prospects), ch: change(s.prospects, p.prospects) },
-    { key: "dms", label: "DM terkirim", value: String(s.dms), ch: change(s.dms, p.dms) },
-    { key: "replies", label: "Dibales", value: pct(rateOf(s.replies, s.dms)), ch: rateChange(rateOf(s.replies, s.dms), rateOf(p.replies, p.dms)), sub: `${s.replies} balasan` },
+    { key: "sent", label: "Terkirim", value: String(s.sent), ch: change(s.sent, p.sent) },
+    { key: "replies", label: "Dibales", value: pct(rateOf(s.replies, s.dms)), ch: rateChange(rateOf(s.replies, s.dms), rateOf(p.replies, p.dms)), sub: `${s.replies} dari ${s.dms} DM` },
     { key: "etb", label: "Jadi ETB", value: String(s.etb), ch: change(s.etb, p.etb), sub: `${pct(rateOf(s.etb, s.dms))} dari DM` },
     { key: "quotes", label: "Penawaran dikirim", value: String(s.quotesSent), ch: change(s.quotesSent, p.quotesSent) },
   ];
@@ -204,7 +204,7 @@ export default function TeamDashboard({ hunts, quotes, invoices, outreach, rejec
           <h3 id="dash-people">Per sales</h3>
           <div style={{ fontSize: "var(--fs-meta)", color: "var(--app-muted)", marginBottom: "var(--sp-3)" }}>Tap satu orang buat liat dashboard, heat map, dan log-nya.</div>
           <div className="sp-dash-row sp-dash-head" aria-hidden="true" style={{ fontSize: "var(--fs-micro)", color: "var(--app-muted)", padding: "0 var(--sp-2) var(--sp-2)", borderBottom: "1px solid var(--app-line-strong)" }}>
-            <span>Sales</span><span>Aktivitas</span><span>DM</span><span>Dibales</span><span>ETB</span><span>Penawaran</span><span>Closing</span><span>Uang masuk</span><span>Terakhir aktif</span>
+            <span>Sales</span><span>Aktivitas</span><span>Terkirim</span><span>Dibales</span><span>ETB</span><span>Penawaran</span><span>Closing</span><span>Uang masuk</span><span>Terakhir aktif</span>
           </div>
           <div>
             {rows.map(({ x, s: r }) => {
@@ -212,7 +212,7 @@ export default function TeamDashboard({ hunts, quotes, invoices, outreach, rejec
               const late = daysSince(r.lastAt) >= 3;
               return (
                 <button key={x.uid} onClick={() => open(x.uid)} aria-pressed={sel}
-                  aria-label={`${x.name}: ${r.activities} aktivitas, ${r.dms} DM, ${r.won} closing, ${rupiah(r.paid)}, terakhir aktif ${ago(r.lastAt)}`}
+                  aria-label={`${x.name}: ${r.activities} aktivitas, ${r.sent} terkirim, ${r.won} closing, ${rupiah(r.paid)}, terakhir aktif ${ago(r.lastAt)}`}
                   className="sp-dash-row" style={{ width: "100%", textAlign: "left", padding: "var(--sp-3) var(--sp-2)", border: 0, borderBottom: "1px solid var(--app-border)", borderRadius: 0, cursor: "pointer", fontFamily: "inherit", color: "var(--app-text)",
                     background: sel ? "var(--brand-tint)" : "transparent", boxShadow: sel ? "inset 3px 0 0 var(--brand-text)" : "none" }}>
                   <span style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", minWidth: 0 }}>
@@ -220,7 +220,7 @@ export default function TeamDashboard({ hunts, quotes, invoices, outreach, rejec
                     <span style={{ fontWeight: 600, fontSize: "var(--fs-body)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.name}{x.uid === me ? " (kamu)" : ""}</span>
                   </span>
                   <Cell l="Aktivitas" v={r.activities} />
-                  <Cell l="DM" v={r.dms} />
+                  <Cell l="Terkirim" v={r.sent} />
                   <Cell l="Dibales" v={pct(rateOf(r.replies, r.dms))} />
                   <Cell l="ETB" v={r.etb} />
                   <Cell l="Penawaran" v={r.quotesSent} />

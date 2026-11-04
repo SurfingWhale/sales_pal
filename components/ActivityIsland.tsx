@@ -5,8 +5,8 @@ import type { HuntSession, Prospect } from "@/lib/prospects";
 import type { Hunt } from "@/lib/hunting";
 import type { Invoice, Quote } from "@/lib/billing";
 import { today } from "@/lib/billing";
-import { Space, useSpace } from "@/lib/space";
-import { OUTREACH_TYPES, activities, countByDay, heatLevel, streak, weekColumns, weekOf } from "@/lib/activity";
+import { useSpace } from "@/lib/space";
+import { OUTREACH_TYPES, activities, countByDay, heatLevel, ownRows, streak, weekColumns, weekOf } from "@/lib/activity";
 import type { Outreach, Rejection } from "@/components/TeamLogs";
 import Icon from "@/components/Icon";
 import OccupancyCalendar from "@/components/OccupancyCalendar";
@@ -23,12 +23,6 @@ const LOOK = 12;   // rows shown for a day
 function heatFill(lv: number) { return lv ? `var(--heat-${lv})` : "var(--app-inner)"; }
 function shortDate(day: string) { return new Date(day + "T12:00:00").toLocaleDateString("id-ID", { day: "numeric", month: "short" }); }
 function longDay(day: string) { return new Date(day + "T12:00:00").toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long" }); }
-
-// In a guild the island is your own day, even for a Leader who reads everyone's rows.
-export function ownRows<T>(rows: T[], space: Space): T[] {
-  if (space.kind !== "guild") return rows;
-  return rows.filter(r => ((r as { ownerUid?: string }).ownerUid || space.me.uid) === space.me.uid);
-}
 
 export default function ActivityIsland({ sent, goal, replies, rate, due, canEdit, onGoal, onReplies, onDue, onLog, schedule, prospects, hunts, sessions, quotes, invoices, outreach, rejections }: {
   sent: number; goal: number; replies: number; rate: string; due: number; canEdit: boolean;
@@ -81,7 +75,7 @@ export default function ActivityIsland({ sent, goal, replies, rate, due, canEdit
               const on = day === d;
               return (
                 <button key={d} type="button" onClick={() => setDay(on ? null : d)} aria-pressed={on} aria-current={d === now ? "date" : undefined}
-                  aria-label={`${DOW[i]} ${shortDate(d)}: ${n} outreach${s ? `, ${s} dijadwalkan` : ""}`}
+                  aria-label={`${DOW[i]} ${shortDate(d)}: ${n} outreach dan penawaran${s ? `, ${s} dijadwalkan` : ""}`}
                   style={{ minWidth: 0, minHeight: 64, padding: "6px 0", borderRadius: 12, border: `1px solid ${on ? "#005eb0" : "transparent"}`, background: d === now ? "var(--brand-tint)" : "transparent", color: "var(--app-text)", cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
                   <span style={{ fontSize: 11, color: "var(--app-muted)" }}>{DOW[i]}</span>
                   <span className="tabnum" style={{ fontSize: 15, fontWeight: d === now ? 700 : 600 }}>{Number(d.slice(8))}</span>
@@ -119,7 +113,7 @@ export default function ActivityIsland({ sent, goal, replies, rate, due, canEdit
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", borderTop: "1px solid var(--app-border)" }}>
         <button type="button" onClick={onGoal} disabled={!canEdit} aria-label={`Hari ini ${sent} dari ${goal} pesan. ${canEdit ? "Ubah target harian" : "Target harian diatur Leader atau Officer"}`} style={{ ...cell, cursor: canEdit ? "pointer" : "default" }}>
-          <span style={word}>Outreach</span>
+          <span style={word}>Terkirim</span>
           <span className="tabnum" style={{ ...num, color: sent >= goal ? "var(--ok)" : "var(--brand-text)" }}>{sent}</span>
           <span className="tabnum" style={hint}>Target {goal}</span>
         </button>

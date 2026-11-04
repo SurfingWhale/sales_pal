@@ -986,6 +986,10 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 @media (max-width: 767px) {
   .sp-toast { bottom: calc(env(safe-area-inset-bottom, 0px) + 96px); }
 }
+/* "Udah kekirim?": the question on its own line, its two answers under it. */
+.sp-ask { flex-wrap: wrap; padding: 12px; }
+.sp-ask-q { flex: 1 1 100%; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.sp-ask button { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Hunting's parts (Kirim / Journey / Log DM / Performa) stay in reach under
    the header while a pane scrolls. */

@@ -7,6 +7,7 @@ import { STALL_DAYS, stalledWhat, useStalledDeals } from "@/lib/stalled";
 import { inPlay, isHigh, scoreLead } from "@/lib/score";
 import Beranda from "@/components/Beranda";
 import BerandaReport from "@/components/BerandaReport";
+import { sentIn } from "@/lib/activity";
 import BerandaLearn from "@/components/BerandaLearn";
 import { DetailActions, LeadPage, LeadPatch, LostNote } from "@/components/LeadDetail";
 import { CATEGORIES, SOURCES, channelOf, firstContact, parseRupiah } from "@/lib/leadEdit";
@@ -742,10 +743,11 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
     await updateDoc(spaceDoc(space, "leads", id), { nextAction: fu.action.trim(), nextActionDate: fu.date });
   }
 
-  // Done: log today as the last contact and clear the reminder.
-  async function doneFollowUp(id: string) {
+  // Done: log today as the last contact and clear the reminder. `sent` false:
+  // they answered, which doesn't say a message went out today.
+  async function doneFollowUp(id: string, sent = true) {
     const l = leads.find(x => x.id === id);
-    if (l) await logContact(l, `Follow-up: ${l.nextAction || "selesai"}`);
+    if (l && sent) await logContact(l, `Follow-up: ${l.nextAction || "selesai"}`);
     await updateDoc(spaceDoc(space, "leads", id), { nextAction: "", nextActionDate: "", lastContact: today() });
     setFu({ action: "", date: "" });
   }
@@ -821,6 +823,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   // Everything that needs a move today: reminders due, quotes left hanging,
   // invoices late or nearly due. Upcoming reminders show three days ahead.
   const now = today();
+  const sentToday = sentIn(hunts, outreach, space, now);
   const soon = addDays(now, 3);
   // A prospect's line and the chat so far, for its card on Beranda.
   const journeyOf = (p: Prospect) => {
@@ -1026,7 +1029,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         {/* The hunting session's bar over every tab (PRD-009 §4) */}
         {huntSession.live && (
           <HuntBar session={huntSession.live} queued={queue(prospects, now, strategy).length}
-            sentToday={hunts.filter(h => h.date === now).length} goal={huntGoal}
+            sentToday={sentToday} goal={huntGoal}
             onOpen={gotoHunting} onEnd={huntSession.end} />
         )}
         <div className="pb t" aria-hidden="true" style={{ top: 0, height: 96 }}><span /><span /><span /><span /><span /><span /></div>
@@ -1099,17 +1102,19 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       </header>
       {/* The hint scrolls away with the page, so the sticky header stays short. */}
       {TAB_HINT[activeTab] && <p className="sp-subhint">{TAB_HINT[activeTab]}</p>}
+      {/* The same number as Beranda and Hunting (PRD-022 §2). */}
+      {activeTab === "Log aktivitas" && <p className="sp-subhint" aria-label="Rekap hari ini"><b className="tabnum" style={{ color: "var(--app-text)" }}>{sentToday}</b> terkirim hari ini, target {huntGoal}</p>}
 
       <div className="sp-main" style={{ padding: "32px 32px 96px", maxWidth: 1200, margin: "0 auto" }}>
 
         {/* DASHBOARD */}
         {activeTab === "Dashboard" && (
           <Beranda now={now} todo={todo} numbers={numbers} mapLeads={mapLeads}
-            hunting={{ live: Boolean(huntSession.live), sentToday: hunts.filter(h => h.date === now).length, goal: huntGoal, queued: queue(prospects, now, strategy).length,
+            hunting={{ live: Boolean(huntSession.live), sentToday, goal: huntGoal, queued: queue(prospects, now, strategy).length,
               onStart: async () => { await huntSession.start(); setActiveTab("Hunting"); }, onOpen: gotoHunting }}
             report={<BerandaReport now={now} numbers={numbers} paid={paidThisMonth} receivable={invoices.reduce((a, i) => a + owed(i), 0)}
               leadsByStatus={leads.reduce((m, l) => ({ ...m, [l.status]: (m[l.status] || 0) + 1 }), {} as Record<string, number>)}
-              prospects={prospects} hunts={hunts} sessions={huntSession.sessions} onGo={tab => { setActiveTab(tab); window.scrollTo({ top: 0 }); }}
+              prospects={prospects} hunts={hunts} outreach={outreach} sessions={huntSession.sessions} onGo={tab => { setActiveTab(tab); window.scrollTo({ top: 0 }); }}
               onSetTarget={setClosingTarget} />}
             learn={<BerandaLearn prospects={prospects} hunts={hunts} rejections={rejections} onGo={tab => { setActiveTab(tab); window.scrollTo({ top: 0 }); }} />}
             onOpenLead={id => { const l = leads.find(x => x.id === id); if (l) openLead(l); }}
@@ -1436,7 +1441,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       {/* Import Leads Modal */}
       {fuRun && (
         <FollowUpRun queue={fuRun} live={id => leads.find(l => l.id === id)}
-          onReplied={id => markReplied(id)} onDone={id => doneFollowUp(id)}
+          onSent={async id => { const l = leads.find(x => x.id === id); if (l) await logContact(l, `Follow-up: ${l.nextAction || "Follow-up"}`); }}
+          onReplied={id => markReplied(id)} onDone={(id, sent) => doneFollowUp(id, sent)}
           onSchedule={(id, action, date) => updateDoc(spaceDoc(space, "leads", id), { nextAction: action, nextActionDate: date })}
           onOpen={id => { const l = leads.find(x => x.id === id); setFuRun(null); if (l) openLead(l); }}
           onClose={() => setFuRun(null)} />

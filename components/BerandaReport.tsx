@@ -38,9 +38,9 @@ function Funnel({ id, title, rows }: { id: string; title: string; rows: { label:
   );
 }
 
-export default function BerandaReport({ now, numbers, paid, receivable, leadsByStatus, prospects, hunts, sessions, onGo, onSetTarget }: {
+export default function BerandaReport({ now, numbers, paid, receivable, leadsByStatus, prospects, hunts, outreach, sessions, onGo, onSetTarget }: {
   now: string; numbers: Numbers; paid: number; receivable: number; leadsByStatus: Record<string, number>;
-  prospects: Prospect[]; hunts: Hunt[]; sessions: HuntSession[];
+  prospects: Prospect[]; hunts: Hunt[]; outreach: { date: string }[]; sessions: HuntSession[];
   onGo: (tab: string) => void; onSetTarget: () => void;
 }) {
   const monthLabel = new Date(now + "T00:00:00").toLocaleDateString("id-ID", { month: "long" });
@@ -65,7 +65,7 @@ export default function BerandaReport({ now, numbers, paid, receivable, leadsByS
   const strip: { k: string; v: string; money?: boolean; sub: string }[] = [
     { k: "Uang masuk", v: jt(paid), money: true, sub: "bulan ini" },
     { k: "Belum tertagih", v: jt(receivable), money: true, sub: "sisa invoice" },
-    { k: "DM terkirim", v: String(week.length), sub: "7 hari" },
+    { k: "Terkirim", v: String(week.length + outreach.filter(o => o.date >= weekAgo).length), sub: "7 hari" },
     { k: "Dibales", v: rate(weekReplied, week.length), sub: "dari DM 7 hari" },
     { k: "Tertarik", v: String(weekInterested), sub: "7 hari" },
     { k: "Jam hunting", v: weekHours.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 }), sub: "7 hari" },

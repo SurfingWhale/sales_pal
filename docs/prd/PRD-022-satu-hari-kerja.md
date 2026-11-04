@@ -1,6 +1,6 @@
 # PRD-022 — Satu hari kerja
 
-- **Status:** Fase 0, 1, dan 4 dibangun, 31 Okt. Keputusan owner sudah masuk (§3).
+- **Status:** Fase 0, 1, dan 4 dibangun, 31 Okt. Fase 5 dibangun, 5 Nov. Keputusan owner sudah masuk (§3).
 - **Peran dokumen ini:** tulang punggung. Fitur baru mengikuti alur di sini, bukan sebaliknya.
 - **Terkait:** PRD-009 (journey), PRD-012 (Cari bisnis), PRD-016 (outreach), PRD-017 (biaya), PRD-018 (tempel, scroll), PRD-019 (lembar kerja, kirim dikonfirmasi), PRD-021 (posisi lead), QA-4 di Notion, `GLOSSARY.md`, `docs/qa-reviews/2026-10-31-audit-satu-hari-kerja.md`.
 - **Desain per komponen:** artifact [Hunting Workspace](https://claude.ai/artifact/FAsiHgRjGGtAu1oMBs222F) (private).
@@ -56,7 +56,9 @@ Mengikuti desain owner, dengan tiga perubahan yang dijelaskan di artifact: edito
 - **Tab Prospek · Leads · Performa:** kartu Leads memakai pola kartu Prospek dan tombol langkah berikutnya. Kolom cari membaca Prospek dan Leads. Hasil di daftar lain ditawarkan, bukan malah membuat prospek baru.
 - **Pesan:** satu panel menggantikan lembar kerja, tanpa modal di atas modal. Di laptop script dan pesan berdampingan. Di HP langsung ke pesan dengan script yang paling cocok, dan **Ganti script** membuka daftarnya.
 - **Script Management:** halaman sendiri. `pitchTemplates` mendapat `workflow` dan `brand`. Script lama dibaca Semua, kecuali isinya menyebut DM atau post, yang dibaca Hunting. Brand script lama dibaca dari nama brand di judul atau isinya.
-- **Konfirmasi kirim:** app tidak bisa tahu pesan terkirim, karena `wa.me` hanya membuka WhatsApp. Setelah balik, penjual konfirmasi, lalu lanjut ke orang berikutnya. Ini menggantikan PRD-009 D1 dan menjalankan PRD-019 §3.5. Kartu Beranda dan Follow-up beruntun belum ikut: masih mencatat saat dipencet, dengan Batal.
+- **Konfirmasi kirim:** app tidak bisa tahu pesan terkirim, karena `wa.me` hanya membuka WhatsApp. Setelah balik, penjual konfirmasi, lalu lanjut ke orang berikutnya. Ini menggantikan PRD-009 D1 dan menjalankan PRD-019 §3.5. Sejak Fase 5 aturan ini berlaku di semua tempat kirim: kartu Perlu ditindak, Follow-up beruntun, Copy dan Kirim WA di Hunting, percakapan prospek, dan antrian kampanye. Yang belum dijawab Udah tidak tercatat. Di Follow-up beruntun, Dibales saja tidak lagi dihitung sebagai pesan terkirim.
+- **Rekap harian (Fase 5):** "berapa kekirim hari ini" dihitung satu fungsi, `sentIn` di `lib/activity.ts`: baris `hunts` ditambah baris `outreach` hari itu, punya sendiri di guild. Angkanya sama di Beranda, Hunting, bar sesi, dan baris atas Log aktivitas. Di Log aktivitas, DM dan WhatsApp masuk jenis **Outreach**, bukan Hunting atau Catatan. Dashboard tim menghitung Terkirim dari keduanya, sementara rasio Dibales tetap dari DM.
+- **Performa ringkas (Fase 5):** angka 7 hari di atas (Terkirim, Dibales dari DM, Tertarik), lalu Pesan mana yang works, Kampanye, Log kiriman, Performa hunter.
 
 Lembar kerja prospek (PRD-019 §3.4) dan lembar kerja lead memakai pola yang sama.
 
@@ -112,7 +114,7 @@ Tidak ada koleksi baru.
 | `leads` | `contactedAt` | Q2, Q3: bukti kontak yang sama bagi semua orang di guild |
 | `pitchTemplates` | `workflow`, `brand`, `archived`, `isDefault` | Script Management |
 | `outreach` | Tanpa field baru: baris hanya ditulis setelah konfirmasi | Log dan heatmap jujur |
-| `hunts` | status kirim dikonfirmasi (Fase 5) | Log dan heatmap jujur |
+| `hunts` | Tanpa field baru: baris hanya ditulis setelah konfirmasi (Fase 5). Baris lama tetap dihitung | Log dan heatmap jujur |
 | `services` | `parts` (komponen dan jumlahnya) | Biaya alat |
 
 Rules: koleksi di atas sudah tertutup. `firestore.rules` tetap dites per peran sebelum deploy.
