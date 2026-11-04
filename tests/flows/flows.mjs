@@ -179,6 +179,8 @@ export async function go(page, place, tab) {
 }
 
 const modal = (page) => page.locator(".modal-overlay").last();
+// Tambah lead is one door with four ways in (PRD-022 Q12): Tempel, Manual, Excel, Cari di Maps.
+const way = (page, name) => modal(page).getByRole("tablist", { name: "Cara nambah lead" }).getByRole("tab", { name, exact: true }).click();
 
 // The server opens Threads links (/api/hunt/unfurl); flows answer for it, so
 // nothing here reaches threads.com.
@@ -199,7 +201,8 @@ const expectText = async (page, text, ms = 8000) => page.getByText(text).first()
 async function addLead(page, name, { value } = {}) {
   await go(page, "Jualan", "Leads");
   await page.getByRole("button", { name: /tambah lead/i }).click();
-  await modal(page).locator("input").first().fill(name);
+  await way(page, "Manual");
+  await modal(page).locator("#nl-name").fill(name);
   if (value) await modal(page).locator("#nl-value").fill(value);
   await modal(page).getByRole("button", { name: "Simpan lead" }).click();
   // The dialog closes once the write is confirmed; the row can show up before that.
@@ -277,16 +280,17 @@ export const flows = [
         places: [place("p01", "Kopi Uji Satu"), place("p02", "Kopi Uji Dua", { website: "https://kopiujidua.id", rating: 4.7, reviewCount: 320, reviews: [] })], nextPageToken: "" }) }));
       await t.step("sign up", () => signup(t));
       await t.step("Beranda opens Cari bisnis", async () => {
-        await page.getByRole("region", { name: "Cari calon klien" }).getByRole("button", { name: "Cari bisnis" }).click();
-        await page.getByRole("dialog", { name: "Cari bisnis" }).waitFor();
+        await page.getByRole("region", { name: "Cari calon klien" }).getByRole("button", { name: "Cari di Maps" }).click();
+        await page.getByRole("dialog", { name: "Tambah lead" }).getByRole("tab", { name: "Cari di Maps", selected: true }).waitFor();
       });
-      const sheet = page.getByRole("dialog", { name: "Cari bisnis" });
+      const sheet = page.getByRole("dialog", { name: "Tambah lead" });
       await t.step("a search shows each business with its weak spots", async () => {
         await sheet.locator("#lf-q").fill("coffee shop Jakarta Selatan");
         await sheet.getByRole("button", { name: "Cari", exact: true }).click();
         const one = sheet.getByRole("article", { name: "Kopi Uji Satu" });
         for (const w of ["Belum punya website", "Rating 4 dari 12 ulasan", "Ulasan masih sedikit (12)", "Keluhan soal lama nunggu"]) await one.getByText(w).waitFor();
-        await sheet.getByText("2 bisnis · 1 dipilih").waitFor();
+        // Nothing is ticked for you (PRD-022 Q13).
+        await sheet.getByText("2 bisnis · 0 dipilih").waitFor();
       });
       await t.step("the opening message names them and their weak spot", async () => {
         await sheet.getByRole("article", { name: "Kopi Uji Satu" }).getByRole("button", { name: "Salin pesan" }).click();
@@ -294,15 +298,18 @@ export const flows = [
         if (!text.includes("Kopi Uji Satu") || !text.includes("belum ada website")) throw new Error(`message: ${text}`);
       });
       await t.step("save as leads, once", async () => {
-        await sheet.getByRole("checkbox", { name: "Pilih Kopi Uji Dua" }).check();
+        await sheet.getByRole("button", { name: "Pilih semua yang belum ada (2)" }).click();
         await sheet.getByRole("button", { name: "Simpan 2 jadi lead" }).click();
         await sheet.getByText("2 bisnis masuk Leads.").waitFor();
         await sheet.getByRole("button", { name: "Cari", exact: true }).click();
         await sheet.getByText(/Kopi Uji Satu|udah ada di Leads/).first().waitFor();
         await sheet.getByRole("article", { name: "Kopi Uji Satu" }).getByText(/udah ada di Leads/).waitFor();
         await sheet.getByText("2 bisnis · 0 dipilih").waitFor();
+        await sheet.getByRole("region", { name: "Udah ada di Leads" }).getByRole("article", { name: "Kopi Uji Dua" }).waitFor();
+        if (await sheet.getByRole("button", { name: /pilih semua/i }).count()) throw new Error("Pilih semua offered with nothing new");
       });
       await t.step("the Excel template downloads with its columns", async () => {
+        await way(page, "Excel");
         const [dl] = await Promise.all([page.waitForEvent("download"), sheet.getByRole("button", { name: "Download template Excel" }).click()]);
         if (dl.suggestedFilename() !== "SalesPal-template-leads.xlsx") throw new Error(dl.suggestedFilename());
         const XLSX = (await import("xlsx")).default;
@@ -312,7 +319,6 @@ export const flows = [
         await dl.saveAs(new URL("./out/template.xlsx", import.meta.url).pathname);
       });
       await t.step("the filled template imports itself", async () => {
-        await sheet.getByRole("button", { name: "Import Excel" }).click();
         await page.locator('input[type="file"][accept*=".xlsx"]').setInputFiles(new URL("./out/template.xlsx", import.meta.url).pathname);
         await page.getByRole("button", { name: "Import 1 lead" }).click();
         await page.getByRole("button", { name: "Selesai" }).click();
@@ -432,6 +438,7 @@ export const flows = [
       await t.step("Simpan with no name says what is missing, Batal closes", async () => {
         await go(t.page, "Jualan", "Leads");
         await t.page.getByRole("button", { name: /tambah lead/i }).click();
+        await way(t.page, "Manual");
         await modal(t.page).getByRole("button", { name: "Simpan lead" }).click();
         await modal(t.page).getByRole("alert").filter({ hasText: "Isi nama bisnisnya dulu." }).waitFor();
         await modal(t.page).getByRole("button", { name: "Batal" }).click();
@@ -933,7 +940,10 @@ export const flows = [
       await t.step("a website fills only what's empty; the typed name stays", async () => {
         await closeAll(page);
         await openForm();
+        // Typed in Manual, then pasted in Tempel: one form, so the typing stays.
+        await way(page, "Manual");
         await modal(page).locator("#nl-name").fill("Nama Ketik Sendiri");
+        await way(page, "Tempel");
         await paste("kopisitus.id");
         await modal(page).getByRole("status").filter({ hasText: /Dari website: .*Email ✓/ }).waitFor();
         if (await modal(page).locator("#nl-name").inputValue() !== "Nama Ketik Sendiri") throw new Error("a typed name was overwritten");
@@ -944,11 +954,153 @@ export const flows = [
       });
       await t.step("the same WhatsApp number offers the lead that's already there", async () => {
         await openForm();
+        await way(page, "Manual");
         await modal(page).locator("#nl-phone").fill("+62 812-1111-2222");
         await modal(page).getByText(/Mirip lead yang udah ada: Kopi Tempel Flow \(no HP sama\)/).waitFor();
         await modal(page).getByRole("button", { name: "Buka yang udah ada" }).click();
         await page.locator("#nl-paste").waitFor({ state: "detached" });
         await page.getByRole("dialog", { name: /^Profil Kopi Tempel Flow/ }).waitFor();
+      });
+    },
+  },
+  {
+    // PRD-022 Q12–Q13: one door with four ways in, at the owner's size
+    // (185 leads, 20 Maps results), and nothing comes in twice.
+    name: "tambah lead: one door, four ways, nothing twice",
+    async run(t) {
+      const { page, project } = t;
+      const dialog = () => page.getByRole("dialog", { name: "Tambah lead" });
+      const open = async () => { await go(page, "Jualan", "Leads"); await page.getByRole("button", { name: /tambah lead/i }).click(); await dialog().waitFor(); };
+      const num = (i) => `0816${String(i).padStart(7, "0")}`;
+      let searches = 0;
+      const place = (i, name, phone) => ({ id: `door${i}`, name, category: "Cafe", address: `Jl. Contoh ${i}`, lat: -6.2, lng: 106.81, phone, website: "", rating: 4.5, reviewCount: 40, mapsUrl: "", reviews: [] });
+      await page.route("**/api/places", r => {
+        searches++;
+        const more = JSON.parse(r.request().postData() || "{}").pageToken;
+        const places = more
+          ? [place(20, "Cafe Pintu 20", "081777000020"), place(21, "Cafe Pintu 21", "081777000021")]
+          : Array.from({ length: 20 }, (_, i) => place(i, `Cafe Pintu ${i}`, `0817770000${String(i).padStart(2, "0")}`));
+        if (!more) {
+          places[18] = place(18, "USAHA PINTU 7 (cabang)", "+62 816-000-0007");   // a lead already, number spelled differently
+          places[19] = place(19, "Kopi Cabang", "081777000019");                   // same name as a lead: maybe a branch
+        }
+        return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ places, nextPageToken: more ? "" : "next" }) });
+      });
+      await t.step("sign up with 185 leads", async () => {
+        const email = await signup(t);
+        const uid = await uidOf(project, email);
+        const docs = Array.from({ length: 184 }, (_, i) => [`users/${uid}/leads/door_${i}`, { name: `Usaha Pintu ${i}`, contact: "", source: "Google Maps", status: "Cold", email: "", phone: num(i), category: "F&B", notes: "", lastContact: "", value: 0 }]);
+        docs.push([`users/${uid}/leads/door_cabang`, { name: "Kopi Cabang", contact: "", source: "Instagram", status: "Cold", email: "", phone: "", category: "F&B", notes: "", lastContact: "", value: 0 }]);
+        await seedDocs(project, docs);
+        await page.reload();
+        await page.waitForURL("**/dashboard");
+      });
+      await t.step("Tambah lead opens one door: Tempel first, then Manual, Excel, Cari di Maps", async () => {
+        await open();
+        const tabs = await dialog().getByRole("tablist", { name: "Cara nambah lead" }).getByRole("tab").allTextContents();
+        if (tabs.join("|") !== "Tempel|Manual|Excel|Cari di Maps") throw new Error(`ways: ${tabs.join("|")}`);
+        await dialog().getByRole("tab", { name: "Tempel", selected: true }).waitFor();
+        await dialog().locator("#nl-paste").waitFor();
+        if (await dialog().locator("#nl-name").count()) throw new Error("Tempel shows the empty form before anything is read");
+        await t.audit("Tambah lead: Tempel");
+      });
+      await t.step("Manual: what's typed stays across the ways and a close", async () => {
+        await way(page, "Manual");
+        await dialog().locator("#nl-name").fill("Kopi Ketik Pintu");
+        await way(page, "Excel");
+        await way(page, "Manual");
+        if (await dialog().locator("#nl-name").inputValue() !== "Kopi Ketik Pintu") throw new Error("lost the typing on a way change");
+        await t.audit("Tambah lead: Manual");
+        await page.keyboard.press("Escape");
+        await dialog().waitFor({ state: "detached" });
+        await open();
+        if (await dialog().locator("#nl-name").inputValue() !== "Kopi Ketik Pintu") throw new Error("lost the typing on close");
+        await dialog().locator("#nl-phone").fill("+62 816 0000 005");
+        await dialog().getByText(/Mirip lead yang udah ada: Usaha Pintu 5 \(no HP sama\)/).waitFor();
+        await dialog().locator("#nl-phone").fill("081899990001");
+        await dialog().getByRole("button", { name: "Simpan lead" }).click();
+        await dialog().waitFor({ state: "detached", timeout: 10000 });
+        await page.locator("#lead-search").fill("Kopi Ketik Pintu");
+        await page.locator(".lead-row", { hasText: "Kopi Ketik Pintu" }).first().waitFor();
+        await page.locator("#lead-search").fill("");
+      });
+      await t.step("Excel: a number already in Leads and a row the file repeats are dobel and stay out", async () => {
+        const XLSX = (await import("xlsx")).default;
+        const rows = [["Nama Bisnis", "No. HP"], ["Resto Pintu A", "081900000001"], ["Resto Pintu B", "081900000002"], ["Pintu Tiga Lama", "+62 816-000-0003"], ["Resto Pintu A lagi", "0819 0000 0001"], ["Resto Pintu E", "081900000005"]];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Leads");
+        const file = new URL("./out/door.xlsx", import.meta.url).pathname;
+        XLSX.writeFile(wb, file);
+        await open();
+        await way(page, "Excel");
+        await page.locator('input[type="file"][accept*=".xlsx"]').setInputFiles(file);
+        const box = dialog().getByRole("region", { name: "Baris dobel" });
+        await box.getByText("2 dari 5 baris dobel, jadi dilewati.").waitFor();
+        await box.getByText("Pintu Tiga Lama: udah ada di Leads sebagai Usaha Pintu 3 (no HP sama)").waitFor();
+        await box.getByText("Resto Pintu A lagi: muncul lagi di file ini (no HP sama)").waitFor();
+        await dialog().getByRole("button", { name: "Import 3 lead" }).waitFor();
+        await t.audit("Tambah lead: Excel with dobel rows");
+        await box.getByRole("checkbox", { name: "Import juga yang dobel" }).check();
+        await dialog().getByRole("button", { name: "Import 5 lead" }).waitFor();
+        await box.getByRole("checkbox", { name: "Import juga yang dobel" }).uncheck();
+        await dialog().getByRole("button", { name: "Import 3 lead" }).click();
+        await dialog().getByText("2 baris dobel dilewati.", { exact: false }).waitFor();
+        await dialog().getByRole("button", { name: "Selesai" }).click();
+        await dialog().waitFor({ state: "detached" });
+        await page.locator("#lead-search").fill("Resto Pintu");
+        await page.locator(".lead-row", { hasText: "Resto Pintu E" }).first().waitFor();
+        if (await page.locator(".lead-row", { hasText: "Resto Pintu A lagi" }).count()) throw new Error("a repeated row came in");
+        await page.locator("#lead-search").fill("");
+      });
+      await t.step("Cari di Maps: nothing ticked, what's held set apart, Pilih semua takes the rest", async () => {
+        await open();
+        await way(page, "Cari di Maps");
+        await dialog().locator("#lf-q").fill("cafe bintaro");
+        await dialog().getByRole("button", { name: "Cari", exact: true }).click();
+        await dialog().getByRole("article", { name: "Cafe Pintu 0" }).waitFor();
+        await dialog().getByText("20 bisnis · 0 dipilih").waitFor();
+        const apart = dialog().getByRole("region", { name: "Udah ada di Leads" });
+        await apart.getByRole("heading", { name: "Udah ada di Leads · 2" }).waitFor();
+        await apart.getByRole("article", { name: "USAHA PINTU 7 (cabang)" }).getByText("udah ada di Leads: Usaha Pintu 7 (no HP sama)").waitFor();
+        if (!(await apart.getByRole("checkbox", { name: "Pilih USAHA PINTU 7 (cabang)" }).isDisabled())) throw new Error("a lead already there can be picked");
+        await apart.getByRole("article", { name: "Kopi Cabang" }).getByText(/nama sama dengan Kopi Cabang di Leads/).waitFor();
+        await t.audit("Tambah lead: Cari di Maps results");
+        await dialog().getByRole("button", { name: "Pilih semua yang belum ada (18)" }).click();
+        await dialog().getByText("20 bisnis · 18 dipilih").waitFor();
+        await apart.getByRole("checkbox", { name: "Pilih Kopi Cabang" }).check();
+        await dialog().getByText("20 bisnis · 19 dipilih").waitFor();
+      });
+      await t.step("results and picks survive a trip to another way; no second paid search", async () => {
+        await way(page, "Excel");
+        await way(page, "Cari di Maps");
+        await dialog().getByText("20 bisnis · 19 dipilih").waitFor();
+        await dialog().getByRole("button", { name: "Cari", exact: true }).click();
+        await dialog().getByText("20 bisnis · 19 dipilih").waitFor();
+        if (searches !== 1) throw new Error(`${searches} searches for one`);
+      });
+      await t.step("Muat 20 lagi adds unticked results; Pilih semua takes them too", async () => {
+        await dialog().getByRole("button", { name: "Muat 20 lagi" }).click();
+        await dialog().getByText("22 bisnis · 19 dipilih").waitFor();
+        await dialog().getByRole("button", { name: "Pilih semua yang belum ada (20)" }).click();
+        await dialog().getByText("22 bisnis · 21 dipilih").waitFor();
+        await dialog().getByRole("button", { name: "Simpan 21 jadi lead" }).click();
+        await dialog().getByText("21 bisnis masuk Leads.").waitFor();
+        await dialog().getByRole("region", { name: "Udah ada di Leads" }).getByRole("heading", { name: "Udah ada di Leads · 22" }).waitFor();
+        if (await dialog().getByRole("button", { name: /pilih semua/i }).count()) throw new Error("Pilih semua offered with nothing new");
+        await t.audit("Tambah lead: Cari di Maps saved");
+      });
+      await t.step("at 320 px the four ways fit without sideways scroll", async () => {
+        const size = page.viewportSize();
+        await page.setViewportSize({ width: 320, height: 640 });
+        await page.waitForTimeout(300);
+        const bad = await page.evaluate(() => {
+          const out = [];
+          if (document.documentElement.scrollWidth > 321) out.push(`page ${document.documentElement.scrollWidth}px wide`);
+          for (const s of document.querySelectorAll('[aria-label="Cara nambah lead"] [role=tab] > span')) if (s.scrollWidth > s.clientWidth + 1) out.push(`"${s.textContent}" cut off`);
+          return out;
+        });
+        await page.setViewportSize(size);
+        if (bad.length) throw new Error(bad.join("; "));
       });
     },
   },
@@ -1111,39 +1263,49 @@ export const flows = [
         }, 3);
         await job("5. Import 20 dari Excel", async () => {
           const XLSX = (await import("xlsx")).default;
-          const rows = [["Nama Bisnis", "No. HP", "Kategori"], ...Array.from({ length: 20 }, (_, i) => [`Resto Excel ${i}`, `08140000${String(i).padStart(4, "0")}`, "F&B"])];
+          // 20 new, and one already a lead under another name, its number spelled differently.
+          const rows = [["Nama Bisnis", "No. HP", "Kategori"], ...Array.from({ length: 20 }, (_, i) => [`Resto Excel ${i}`, `08140000${String(i).padStart(4, "0")}`, "F&B"]), ["Yoga Dua Lama", "+62 812-0000-0002", "Health"]];
           const wb = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Leads");
           const file = new URL("./out/day.xlsx", import.meta.url).pathname;
           XLSX.writeFile(wb, file);
           await go(page, "Jualan", "Leads");
-          await page.getByRole("button", { name: "Import lead dari file" }).click();
+          await page.getByRole("button", { name: /tambah lead/i }).click();
+          await way(page, "Excel");
           await page.locator('input[type="file"][accept*=".xlsx"]').setInputFiles(file);
-          await page.getByRole("button", { name: "Import 20 lead" }).click();
+          const flagged = modal(page).getByText(/Yoga Dua Lama: udah ada di Leads sebagai Studio Yoga 2 \(no HP sama\)/);
+          await flagged.waitFor();
+          await modal(page).getByRole("button", { name: "Import 20 lead" }).click();
+          const said = (await modal(page).getByText(/baris dobel dilewati/).textContent()).trim();
           await page.getByRole("button", { name: "Selesai" }).click();
-        });
+          return `nomor sama beda ejaan ditandai dobel: 1 · ${said}`;
+        }, 6);
         await job("6. Cari di Maps, simpan 20", async () => {
           const place = (i, name, phone) => ({ id: `p${i}`, name, category: "Cafe", address: `Jl. Contoh ${i}`, lat: -6.2, lng: 106.81, phone, website: i % 2 ? `https://cafe${i}.id` : "", rating: 4.6, reviewCount: 200, mapsUrl: "", reviews: [] });
           const places = Array.from({ length: 20 }, (_, i) => place(i, `Cafe Maps ${i}`, `08150000${String(i).padStart(4, "0")}`));
           places[19] = place(19, "STUDIO YOGA 1 Bintaro", "0812 0000 0001");   // already a lead, spelled differently
           await page.route("**/api/places", r => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ places, nextPageToken: "" }) }));
           await go(page, "Beranda");
-          await page.getByRole("region", { name: "Cari calon klien" }).getByRole("button", { name: "Cari bisnis" }).click();
-          const sheet = page.getByRole("dialog", { name: "Cari bisnis" });
+          await page.getByRole("region", { name: "Cari calon klien" }).getByRole("button", { name: "Cari di Maps" }).click();
+          const sheet = page.getByRole("dialog", { name: "Tambah lead" });
           await sheet.locator("#lf-q").fill("cafe bintaro");
           await sheet.getByRole("button", { name: "Cari", exact: true }).click();
           await sheet.getByRole("article", { name: "Cafe Maps 0" }).waitFor();
           const boxes = sheet.getByRole("checkbox", { name: /^Pilih / });
           const n = await boxes.count();
+          let ticked = 0;
+          for (let i = 0; i < n; i++) if (await boxes.nth(i).isChecked()) ticked++;
+          if (ticked) throw new Error(`${ticked} dicentang otomatis`);
           const selectAll = await sheet.getByRole("button", { name: /pilih semua/i }).count();
-          const dupMarked = await sheet.getByRole("article", { name: "STUDIO YOGA 1 Bintaro" }).getByText(/udah ada di Leads/).count();
-          let picked = 0;
-          for (let i = 0; i < n; i++) if (!(await boxes.nth(i).isChecked())) { await boxes.nth(i).click(); picked++; }
-          await sheet.getByRole("button", { name: /^Simpan \d+ jadi lead/ }).click();
-          await sheet.getByText(/bisnis masuk Leads/).waitFor();
+          if (!selectAll) throw new Error("tidak ada tombol pilih semua");
+          const dupMarked = await sheet.getByRole("region", { name: "Udah ada di Leads" }).getByRole("article", { name: "STUDIO YOGA 1 Bintaro" }).getByText(/udah ada di Leads: Studio Yoga 1 \(no HP sama\)/).count();
+          if (!dupMarked) throw new Error("nomor sama beda ejaan tidak ditandai dobel");
+          await sheet.getByRole("button", { name: "Pilih semua yang belum ada (19)" }).click();
+          await sheet.getByRole("button", { name: "Simpan 19 jadi lead" }).click();
+          await sheet.getByText("19 bisnis masuk Leads.").waitFor();
           await closeAll(page);
-          return `tombol pilih semua: ${selectAll} · centang manual: ${picked} · nomor sama beda ejaan ditandai dobel: ${dupMarked}`;
-        });
+          return `tombol pilih semua: ${selectAll} · centang manual: 0 · nomor sama beda ejaan ditandai dobel: ${dupMarked}`;
+        }, 6);
         await job("7. Catat: dia bales", async () => {
           await go(page, "Jualan", "Leads");
           await views().getByRole("button", { name: /^Dikontak/ }).click();
@@ -2017,7 +2179,7 @@ export const flows = [
         });
       }
       await t.step("sign up", () => signup(t));
-      await check("Tambah lead", async () => { await go(page, "Jualan", "Leads"); await page.getByRole("button", { name: /tambah lead/i }).click(); }, { last: "Simpan lead" });
+      await check("Tambah lead", async () => { await go(page, "Jualan", "Leads"); await page.getByRole("button", { name: /tambah lead/i }).click(); await way(page, "Manual"); }, { last: "Simpan lead" });
       // A lead's sheets: above the lead page, each with its own way out.
       const leadDlg = () => page.getByRole("dialog", { name: /^Profil Kopi Dialog/ });
       await check("Jadwal lead", async () => { await addLead(page, "Kopi Dialog"); await openLeadRow(page, "Kopi Dialog"); await fullProfile(page); await leadDlg().getByRole("button", { name: /^Jadwal/ }).first().click(); }, { last: "Simpan jadwal" });
@@ -2848,7 +3010,7 @@ export const flows = [
         await t.step("the Leader opens Cari bisnis to members, and the member may search", async () => {
           await page.getByRole("button", { name: "Atur lambang & nama guild" }).click();
           const sheet = modal(page);
-          await sheet.getByRole("checkbox", { name: "Cari bisnis buat Member" }).check();
+          await sheet.getByRole("checkbox", { name: "Cari di Maps buat Member" }).check();
           await sheet.getByRole("button", { name: "Simpan" }).click();
           await sheet.waitFor({ state: "detached" });
           const st = await places(stranger);

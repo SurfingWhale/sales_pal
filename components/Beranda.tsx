@@ -378,14 +378,14 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
       </div>
 
       {onFind && (
-        // Cari bisnis (PRD-012): new prospects from Google Maps or an Excel list.
+        // Cari di Maps (PRD-012): new prospects from Google Maps; opens Tambah lead on that way.
         <section aria-label="Cari calon klien" className="sp-card sp-find">
           <span aria-hidden="true" className="sp-find-ic"><Icon name="search" size={18} stroke={1.8} /></span>
           <span style={{ flex: 1, minWidth: 0 }}>
             <span className="sp-find-ttl" style={{ display: "block", fontSize: 15, fontWeight: 700 }}>Cari calon klien</span>
             <span className="sp-find-sub">Bisnis dari Google Maps, titik lemahnya, dan pesan pembuka. Atau import daftar Excel.</span>
           </span>
-          <button onClick={onFind} className="sp-btn blue sp-find-go" style={{ flexShrink: 0 }}>Cari bisnis</button>
+          <button onClick={onFind} className="sp-btn blue sp-find-go" style={{ flexShrink: 0 }}>Cari di Maps</button>
         </section>
       )}
 
