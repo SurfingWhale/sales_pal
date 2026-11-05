@@ -2615,60 +2615,60 @@ export const flows = [
         for (let i = 1; i <= 6; i++) docs.push([`${u}/hunts/pill_h${i}`, { target: `@contoh${i}`, date: daysAgo(i), status: "Terkirim", channel: "DM", createdAt: Date.now() - i * 864e5 }]);
         for (let i = 1; i <= 3; i++) docs.push([`${u}/rejections/pill_r${i}`, { leadName: `Kopi Contoh ${i}`, date: daysAgo(i), reason: "Budget belum ada" }]);
         for (let i = 1; i <= 4; i++) docs.push([`${u}/quotes/pill_q${i}`, { number: `Q-PILL-${i}`, leadId: "", leadName: `Usaha Contoh ${i}`, contact: "", phone: "", items: [{ name: "Paket foto", qty: 1, price: 1_000_000 }], discount: 0, dpPercent: 50, notes: "", date: daysAgo(i), validUntil: daysAgo(i - 14), status: "Draft" }]);
-        notes = [1, 2].map(i => [`${u}/outreach/pill_o${i}`, { leadName: `Studio Contoh ${i}`, type: "Email", date: daysAgo(i), subject: "Halo" }]);
+        notes = [1, 2].map(i => [`${u}/huntSessions/pill_s${i}`, { startedAt: Date.now() - i * 864e5, endedAt: Date.now() - i * 864e5 + 18e5, counts: { prospects: 0, intros: 0, replies: 0, converted: 0 } }]);
         await seedDocs(t.project, docs);
         await go(page, "Tim", "Log aktivitas");
-        await pill("Catatan").waitFor();
-        if (!(await pill("Catatan").isDisabled())) throw new Error("an empty kind can be picked");
+        await pill("Hunting").waitFor();
+        if (!(await pill("Hunting").isDisabled())) throw new Error("an empty kind can be picked");
         await t.audit("pills 0 empty kind");
       });
       await t.step("when one arrives, its pill opens up where it stands", async () => {
         await seedDocs(t.project, notes);
-        await group.getByRole("button", { name: "Catatan 2" }).waitFor();
-        if (await pill("Catatan").isDisabled()) throw new Error("still disabled");
+        await group.getByRole("button", { name: "Hunting 2" }).waitFor();
+        if (await pill("Hunting").isDisabled()) throw new Error("still disabled");
       });
       await t.step("default: neutral pills, no ×, the total", async () => {
-        await atRest("Hunting Respon Jualan Catatan");
+        await atRest("Hunting Outreach Respon Jualan Catatan");
         await status.getByText("15 aktivitas", { exact: true }).waitFor();
         await heading.getByText("DM ke @contoh1").waitFor();
         await t.audit("pills 1 default");
       });
       await t.step("one picked: it becomes a bar with ×, the others stay in reach", async () => {
         await tapMidShot(pill("Jualan"), "pills-2-mid-merge");
-        await atRest("× *Jualan Hunting Respon Catatan");
+        await atRest("× *Jualan Hunting Outreach Respon Catatan");
         await status.getByText("4 dari 15 aktivitas").waitFor();
         await heading.getByText("Bikin penawaran Q-PILL-1 · Usaha Contoh 1").waitFor();
         await heading.getByText("DM ke @contoh1").waitFor({ state: "detached" });
         await t.audit("pills 2 one");
       });
       await t.step("a second one joins the same bar, and the first stays", async () => {
-        await tapFirstFrame(pill("Hunting"));
-        await atRest("× *Jualan *Hunting Respon Catatan");
+        await tapFirstFrame(pill("Outreach"));
+        await atRest("× *Jualan *Outreach Hunting Respon Catatan");
         await status.getByText("10 dari 15 aktivitas").waitFor();
         await heading.getByText("DM ke @contoh1").waitFor();
         // One shape: × and both pills touch, and the next pill stands apart.
         const gaps = await group.evaluate(row => [...row.children].filter(c => getComputedStyle(c).visibility !== "hidden").map(c => c.getBoundingClientRect())
           .map((r, i, all) => i ? Math.round(r.left - all[i - 1].right) : 0).slice(1));
-        if (gaps.join() !== "0,0,8,8") throw new Error(`gaps ${gaps.join()}`);
+        if (gaps.join() !== "0,0,8,8,8") throw new Error(`gaps ${gaps.join()}`);
         await t.audit("pills 3 two");
       });
       await t.step("tapping an active one sends it home; the other stays active", async () => {
         await tapMidShot(pill("Jualan"), "pills-4-mid-reverse");
-        await atRest("× *Hunting Respon Jualan Catatan");
+        await atRest("× *Outreach Hunting Respon Jualan Catatan");
         await status.getByText("6 dari 15 aktivitas").waitFor();
         await heading.getByText("Bikin penawaran Q-PILL-1 · Usaha Contoh 1").waitFor({ state: "detached" });
         await t.audit("pills 4 reversed");
       });
       await t.step("the keyboard keeps its place while pills move", async () => {
         const focused = () => page.evaluate(() => document.activeElement?.textContent?.trim() || document.activeElement?.tagName);
-        await pill("Catatan").focus();
+        await pill("Hunting").focus();
         await page.keyboard.press("Space");
-        await atRest("× *Hunting *Catatan Respon Jualan");
-        if (!/^Catatan/.test(await focused())) throw new Error(`picking lost focus: ${await focused()}`);
+        await atRest("× *Outreach *Hunting Respon Jualan Catatan");
+        if (!/^Hunting/.test(await focused())) throw new Error(`picking lost focus: ${await focused()}`);
         await t.audit("pills focus in the bar");
         await page.keyboard.press("Space");
-        await atRest("× *Hunting Respon Jualan Catatan");
-        if (!/^Catatan/.test(await focused())) throw new Error(`going home lost focus: ${await focused()}`);
+        await atRest("× *Outreach Hunting Respon Jualan Catatan");
+        if (!/^Hunting/.test(await focused())) throw new Error(`going home lost focus: ${await focused()}`);
         await t.audit("pills focus neutral");
       });
       await t.step("× clears everything, and focus lands on a pill, not the page", async () => {
@@ -2679,39 +2679,39 @@ export const flows = [
         await group.evaluate(row => row.getAnimations({ subtree: true }).forEach(a => { a.pause(); a.currentTime = 70; }));
         // Still there on frame one: it closes into the pill, it doesn't vanish.
         if (!(await tapFirstFrame(clear)).clearShown) throw new Error("× vanished instead of closing");
-        await atRest("Hunting Respon Jualan Catatan");
+        await atRest("Hunting Outreach Respon Jualan Catatan");
         await clear.waitFor({ state: "hidden" });
         await status.getByText("15 aktivitas", { exact: true }).waitFor();
         const on = await page.evaluate(() => document.activeElement?.textContent?.trim());
         if (!/^Hunting/.test(on)) throw new Error(`focus went to "${on}"`);
         // The same with a finger, and with no ring left behind by a tap.
         await press(pill("Respon"));
-        await atRest("× *Respon Hunting Jualan Catatan");
+        await atRest("× *Respon Hunting Outreach Jualan Catatan");
         await press(clear);
-        await atRest("Hunting Respon Jualan Catatan");
+        await atRest("Hunting Outreach Respon Jualan Catatan");
         const after = await page.evaluate(() => ({ on: document.activeElement?.textContent?.trim(), ring: document.activeElement?.matches(":focus-visible") }));
         if (!/^Hunting/.test(after.on)) throw new Error(`after a tap focus went to "${after.on}"`);
         if (t.touch && after.ring) throw new Error("a tap left a focus ring");
       });
       await t.step("a double tap mid-slide leaves nothing stuck", async () => {
-        await pill("Catatan").evaluate(async (b) => {
+        await pill("Hunting").evaluate(async (b) => {
           b.click();
           await new Promise(r => setTimeout(r, 60));
           b.click();
         });
-        await atRest("Hunting Respon Jualan Catatan");
+        await atRest("Hunting Outreach Respon Jualan Catatan");
         await pill("Jualan").dblclick();
-        await atRest("Hunting Respon Jualan Catatan");
+        await atRest("Hunting Outreach Respon Jualan Catatan");
         // A third tap landing on the way back, and two pills in a row.
         await pill("Respon").evaluate(async (b) => {
-          for (const at of [b, b, b, b.parentElement.querySelector("[data-key=note]")]) {
+          for (const at of [b, b, b, b.parentElement.querySelector("[data-key=hunt]")]) {
             at.click();
             await new Promise(r => setTimeout(r, 50));
           }
         });
-        await atRest("× *Respon *Catatan Hunting Jualan");
+        await atRest("× *Respon *Hunting Outreach Jualan Catatan");
         await press(clear);
-        await atRest("Hunting Respon Jualan Catatan");
+        await atRest("Hunting Outreach Respon Jualan Catatan");
       });
       await t.step("320px: the page stays put, the last pill is reachable, a tap while scrolled doesn't jump", async () => {
         const size = page.viewportSize();
@@ -2721,23 +2721,23 @@ export const flows = [
         if (over > 0) throw new Error(`page is ${over}px wider than the screen`);
         const scrolled = await group.evaluate((row) => { row.scrollLeft = row.scrollWidth; return row.scrollLeft; });
         if (!scrolled) throw new Error("the row doesn't scroll at 320px");
-        await tapFirstFrame(pill("Catatan"));
-        await atRest("× *Catatan Hunting Respon Jualan");
-        if (await group.evaluate(row => row.scrollLeft) || !(await inView(pill("Catatan")))) throw new Error("the bar isn't in view");
+        await tapFirstFrame(pill("Hunting"));
+        await atRest("× *Hunting Outreach Respon Jualan Catatan");
+        if (await group.evaluate(row => row.scrollLeft) || !(await inView(pill("Hunting")))) throw new Error("the bar isn't in view");
         await t.audit("pills 5 320");
         // Going home past the edge of the row: the row follows it.
-        await press(pill("Catatan"));
-        await atRest("Hunting Respon Jualan Catatan");
-        if (!(await inView(pill("Catatan")))) throw new Error("the pill went home out of view");
+        await press(pill("Hunting"));
+        await atRest("Hunting Outreach Respon Jualan Catatan");
+        if (!(await inView(pill("Hunting")))) throw new Error("the pill went home out of view");
         // All four: wider than the screen, and the last one in is still in view.
-        for (const name of ["Hunting", "Respon", "Jualan", "Catatan"]) await press(pill(name));
-        await atRest("× *Hunting *Respon *Jualan *Catatan");
-        if (!(await inView(pill("Catatan")))) throw new Error("the last pill picked is out of view");
+        for (const name of ["Outreach", "Respon", "Jualan", "Hunting"]) await press(pill(name));
+        await atRest("× *Outreach *Respon *Jualan *Hunting Catatan");
+        if (!(await inView(pill("Hunting")))) throw new Error("the last pill picked is out of view");
         if (await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)) throw new Error("page scrolls sideways");
         await t.audit("pills 5b 320 all four");
         await group.evaluate((row) => { row.scrollLeft = 0; });
         await press(clear);
-        await atRest("Hunting Respon Jualan Catatan");
+        await atRest("Hunting Outreach Respon Jualan Catatan");
         await page.setViewportSize(size);
       });
       await t.step("a vertical swipe that starts on the row scrolls the page", async () => {
@@ -2768,16 +2768,16 @@ export const flows = [
           return document.querySelector(".sp-main").getAnimations({ subtree: true }).filter(a => a.constructor === Animation).length;
         });
         if (flying) throw new Error(`${flying} animation(s) ran`);
-        await atRest("× *Respon Hunting Jualan Catatan");
+        await atRest("× *Respon Hunting Outreach Jualan Catatan");
         await clear.click();
-        await atRest("Hunting Respon Jualan Catatan");
+        await atRest("Hunting Outreach Respon Jualan Catatan");
         await page.emulateMedia({ reducedMotion: null });
       });
       await t.step("dark: the bar's edge clears 3:1 against the page", async () => {
         await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
-        await pill("Hunting").click();
+        await pill("Outreach").click();
         await pill("Jualan").click();
-        await atRest("× *Hunting *Jualan Respon Catatan");
+        await atRest("× *Outreach *Jualan Hunting Respon Catatan");
         // The list under the pills follows the theme too: an opacity animation on
         // its wrapper once left it on the old one, and the audit only caught that
         // on some runs (PRD-023 §5).
@@ -2791,7 +2791,7 @@ export const flows = [
           return getComputedStyle(h3).color === want ? null : getComputedStyle(h3).color;
         });
         if (stale) throw new Error(`the list kept the old theme: ${stale}`);
-        const ratio = await pill("Hunting").evaluate((b) => {
+        const ratio = await pill("Outreach").evaluate((b) => {
           const lum = (rgb) => { const [r, g, b] = rgb.match(/[\d.]+/g).map(Number).map(c => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
           const edge = lum(getComputedStyle(b.querySelector(".sp-fp-fill")).borderTopColor);
           const probe = document.createElement("i");
