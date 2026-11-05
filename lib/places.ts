@@ -47,6 +47,10 @@ export function weaknesses(p: Pick<Place, "website" | "rating" | "reviewCount" |
   return out;
 }
 
+// A Maps place's lead id: one lead per place, so saving it again never makes a
+// second lead, and Cari di Maps can tell it's already there.
+export const placeLeadId = (placeId: string) => `gm_${placeId.replace(/[^A-Za-z0-9_-]/g, "")}`;
+
 export const snippet = (s: string, n = 160) => { const t = s.replace(/\s+/g, " ").trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 
 export const DEFAULT_OPENER = "Halo {nama}! Aku dari {bisnis}. Tadi lihat {nama} di Google Maps, {kelemahan}. Aku biasa bantu bisnis kayak gini lewat {jasa}. Boleh aku kirim contoh hasilnya?";
