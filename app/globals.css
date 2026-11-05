@@ -741,7 +741,14 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .sp-scripts { display: grid; gap: 16px; }
 @media (min-width: 1024px) {
   .sp-scripts { grid-template-columns: 200px minmax(0, 1fr); align-items: start; }
-  .sp-scripts-rail { flex-direction: column; flex-wrap: nowrap !important; }
+  .sp-scripts-rail { flex-direction: column; flex-wrap: nowrap !important; position: sticky; top: 76px; }
+  /* The whole width: scripts side by side, not one long column. */
+  .sp-scripts-list { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px !important; }
+}
+.sp-script-edit { max-width: 640px; }
+/* Editor on a laptop: what it is on the left, the message and its preview on the right. */
+@media (min-width: 1024px) {
+  .sp-script-edit { max-width: 1280px; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); column-gap: 32px; align-items: start; }
 }
 /* The four quick actions on a lead: two by two on the narrowest phones. */
 @media (max-width: 359px) { .sp-quick { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }

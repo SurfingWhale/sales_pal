@@ -186,7 +186,7 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
                     {open ? "Ringkas ▴" : "Lihat selengkapnya ▾"}
                   </button>
                 )}
-                {missing.length > 0 && sampleName && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>Kosong buat orang ini: {missing.map(k => `{${k}}`).join(", ")}, bagiannya dilewati.</div>}
+                {missing.length > 0 && sampleName && <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>Belum tahu {missing.map(k => `{${k}}`).join(", ")} orang ini, kalimatnya dilewati.</div>}
                 <div className="sp-tpl-acts" style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => onPick(t, "copy")} disabled={blocked} style={{ ...chip, flex: 1, minHeight: 40, fontSize: 12, fontWeight: 700, color: copiedId === t.id ? "var(--ok)" : "var(--app-text)", border: `1px solid ${copiedId === t.id ? "var(--ok)" : "var(--app-border)"}` }}>
                     {copiedId === t.id ? "✓ Tersalin" : "Copy"}

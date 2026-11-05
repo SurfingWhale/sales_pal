@@ -19,7 +19,7 @@ import re
 
 from .match import CATEGORY_WORDS, FEATURES, category_of, _has
 
-FALLBACK = {"nama": "kak", "kebutuhan": "kebutuhannya"}
+FALLBACK = {"nama": "kak"}
 
 LABEL = {
     "price": "Kedengarannya budget-nya lagi dijaga ketat ya.",
@@ -51,6 +51,12 @@ def fill(body: str, data: dict) -> str:
         if nxt == out:
             break
         out = nxt
+    # Outside brackets, a sentence whose word is empty is left out whole
+    # (same as lib/templates.ts fillTemplate).
+    def keep(sen):
+        return not any(not val(k) and not FALLBACK.get(k.lower()) for k in re.findall(r"\{(\w+)\}", sen))
+    out = "".join(line if re.fullmatch(r"\n+", line) else " ".join(x for x in re.split(r"(?<=[.!?…])\s+", line) if keep(x))
+                  for line in re.split(r"(\n+)", out))
     out = out.replace("\u0001", "[").replace("\u0002", "]")
     out = re.sub(r"\{(\w+)\}", lambda m: val(m.group(1)) or FALLBACK.get(m.group(1).lower(), ""), out)
     return re.sub(r" +([,.!?])", r"\1", re.sub(r"[ \t]{2,}", " ", out)).strip()

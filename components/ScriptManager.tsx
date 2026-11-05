@@ -101,7 +101,7 @@ export default function ScriptManager({ onClose, startNew, stage, data }: {
   }
 
   return (
-    <Sheet full title={editing ? (editing.id ? "Ubah script" : "Script baru") : "Script pesan"} onClose={shut} onBack={back}>
+    <Sheet full wide title={editing ? (editing.id ? "Ubah script" : "Script baru") : "Script pesan"} onClose={shut} onBack={back}>
       {askSheet}
       {asking && (
         <ConfirmSheet title="Buang perubahan?" action="Buang" busyLabel="Membuang…" onConfirm={async () => { const then = asking; setAsking(null); dirty.current = false; afterBack(then); }} onClose={() => setAsking(null)}>
@@ -149,7 +149,7 @@ export default function ScriptManager({ onClose, startNew, stage, data }: {
                 )}
               </div>
             ) : (
-              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+              <ul className="sp-scripts-list" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
                 {list.map(t => (
                   <li key={t.id} style={{ padding: "12px 14px", border: "1px solid var(--app-border)", borderRadius: 16, background: "var(--app-card)" }}>
                     <p style={{ margin: 0, display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 600 }}>
@@ -158,7 +158,6 @@ export default function ScriptManager({ onClose, startNew, stage, data }: {
                     </p>
                     <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--app-muted)" }}>{[STAGES[stageIndex(t)]?.label, useName(workflowOf(t)), brandName(brandOf(t))].join(" · ")}</p>
                     <p style={{ margin: "6px 0 0", fontSize: 13, lineHeight: 1.45, color: "var(--app-ink-2)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{fillTemplate(t.body, sample)}</p>
-                    {bareNeed(t.body) && <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--app-muted)" }}>Isi ini butuh kebutuhan orangnya. Kalau dia belum bilang, kebacanya “kebutuhannya”.</p>}
                     {canEdit && (
                       <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
                         <button type="button" aria-label={`Ubah ${t.title}`} onClick={() => open(t)} style={{ ...chip, minHeight: 44 }}>Ubah</button>
@@ -227,7 +226,8 @@ function ScriptEditor({ start, sample, onDone, onCancel, onDirty }: { start: Pit
 
   const picked = (on: boolean): React.CSSProperties => ({ ...chip, minHeight: 44, fontWeight: 700, ...(on ? { background: "#005eb0", color: "#fff", border: "1px solid #005eb0" } : {}) });
   return (
-    <div style={{ display: "grid", gap: 12, maxWidth: 640, margin: "0 auto" }}>
+    <div className="sp-script-edit" style={{ display: "grid", gap: 12, margin: "0 auto" }}>
+      <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
       <div>
         <label htmlFor="tpl-title" style={label}>Nama script</label>
         <input id="tpl-title" value={t.title} onChange={e => setT({ ...t, title: e.target.value })} placeholder="mis. Intro restoran" style={select} />
@@ -265,16 +265,18 @@ function ScriptEditor({ start, sample, onDone, onCancel, onDirty }: { start: Pit
           {t.categories?.length ? `Dipilih otomatis duluan buat lead ${t.categories.join(", ")}, dan ga ditawarin ke tipe lain.` : "Kosong = buat semua tipe bisnis."}
         </p>
       </div>
+      </div>
+      <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
       <div>
         <label htmlFor="tpl-body" style={label}>Isi pesan</label>
         <div role="group" aria-label="Sisipkan" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
           {VARIABLES.map(v => <button key={v.key} type="button" onClick={() => insert(v.key)} title={v.desc} aria-label={`Sisipkan {${v.key}}: ${v.desc}`} style={{ ...chip, minHeight: 44 }}>{`{${v.key}}`}</button>)}
         </div>
-        <textarea ref={body} id="tpl-body" value={t.body} onChange={e => setT({ ...t, body: e.target.value })} rows={7} placeholder="Halo {nama}, …" style={{ ...inputStyle, fontSize: 16, lineHeight: 1.5, resize: "vertical" }} />
+        <textarea ref={body} id="tpl-body" value={t.body} onChange={e => setT({ ...t, body: e.target.value })} rows={9} placeholder="Halo {nama}, …" style={{ ...inputStyle, fontSize: 16, lineHeight: 1.5, resize: "vertical" }} />
       </div>
       {bareNeed(t.body) && (
         <p role="note" style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: "var(--app-muted)" }}>
-          <code>{"{kebutuhan}"}</code> cuma keisi kalau orangnya sendiri bilang butuh apa. Bungkus pakai <code>[ ]</code> biar dilewati kalau kosong, atau pakai <code>{"{tawaran}"}</code> buat yang kamu tawarkan.
+          <code>{"{kebutuhan}"}</code> diisi dari yang orangnya bilang (post atau data lead). Kalau belum ada, kalimatnya dilewati. Buat yang kamu tawarkan, pakai <code>{"{tawaran}"}</code>.
         </p>
       )}
       {t.body.trim() && (
@@ -287,6 +289,7 @@ function ScriptEditor({ start, sample, onDone, onCancel, onDirty }: { start: Pit
       <div style={{ display: "flex", gap: 8 }}>
         <button type="button" onClick={onCancel} style={{ ...btnMuted, flex: 1, minHeight: 48 }}>Batal</button>
         <button type="button" disabled={!ready || saving} onClick={save} style={{ ...btnPrimary, flex: 1, minHeight: 48, opacity: ready ? 1 : 0.5 }}>{saving ? "Menyimpan…" : "Simpan"}</button>
+      </div>
       </div>
     </div>
   );
