@@ -2856,6 +2856,49 @@ export const flows = [
     },
   },
   {
+    // PRD-023: paste a chat, see where it stands, the script that fits and why,
+    // a reply adjusted to it; history private to the seller, deletable.
+    name: "analisis chat: stage, script match and an adjusted reply, kept and deleted",
+    async run(t) {
+      const { page } = t;
+      await t.step("sign up and open Analisis Chat", async () => { await signup(t); await go(page, "Belajar", "Analisis Chat"); await page.locator("#ca-text").waitFor(); });
+      await t.step("two names and no seller: it asks who you are instead of guessing", async () => {
+        await page.locator("#ca-text").fill("Raka: Halo kak, aku fotografer makanan. Boleh aku kirim portfolio?\nDita: Kami sudah punya fotografer langganan kak");
+        await page.getByRole("button", { name: "Analisis", exact: true }).click();
+        const who = page.getByRole("region", { name: "Siapa kamu" });
+        await who.getByRole("button", { name: "Raka" }).click();
+        await who.waitFor({ state: "detached" });
+      });
+      await t.step("an existing provider is an objection: acknowledge and ask, no pitch", async () => {
+        await page.getByRole("region", { name: "Ringkasan" }).getByText("Posisinya: Objection handling").waitFor();
+        const reply = await page.locator("#ca-reply").inputValue();
+        if (!reply.startsWith("Wajar kalau udah ada yang biasa pegang.")) throw new Error(`the reply doesn't acknowledge first: ${reply}`);
+        if (/paket|portfolio|harga/i.test(reply)) throw new Error(`the reply still pitches: ${reply}`);
+        await page.getByRole("list", { name: "Dasar teori" }).getByText("Objections").waitFor();
+        await page.getByText(/^Analisis lengkap/).click();
+        await page.getByText(/gugur: keberatannya perlu diklarifikasi dulu/).first().waitFor();
+        await t.audit("Analisis Chat result");
+      });
+      await t.step("a price question can't go out without a real price", async () => {
+        await page.locator("#ca-seller").fill("");
+        await page.locator("#ca-text").fill("Aku: Halo kak Dita!\nDita: Halo, buat foto menu 20 item berapa ya harganya?");
+        await page.getByRole("button", { name: "Analisis", exact: true }).click();
+        await page.getByRole("region", { name: "Ringkasan" }).getByText("Posisinya: Proposal").waitFor();
+        // From a script or a new reply, the price is the seller's to fill in, never made up.
+        await page.getByRole("list", { name: "Wajib kamu isi" }).getByText(/harga/i).first().waitFor();
+      });
+      await t.step("history: both kept, one opened again, all deleted", async () => {
+        const hist = page.getByRole("region", { name: "Riwayat analisis" });
+        await hist.getByText("Riwayat (2)").waitFor();
+        await hist.getByRole("button", { name: /^Objection handling/ }).click();
+        await page.getByRole("region", { name: "Ringkasan" }).getByText("Posisinya: Objection handling").waitFor();
+        await hist.getByRole("button", { name: "Hapus semua" }).click();
+        await page.getByRole("dialog", { name: "Hapus semua riwayat analisis?" }).getByRole("button", { name: "Hapus", exact: true }).click();
+        await hist.getByText("Riwayat (0)").waitFor();
+      });
+    },
+  },
+  {
     name: "script library and quick pitch",
     async run(t) {
       const { page } = t;
