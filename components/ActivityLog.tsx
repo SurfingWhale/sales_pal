@@ -2,7 +2,7 @@
 
 // Log aktivitas (Tim & Report): a heat map of the last 17 weeks and every
 // action, newest first, read from what the app already keeps (lib/activity.ts).
-// Tap a day to see only that day; the chips narrow it to one kind of work.
+// Tap a day to see only that day; the pills narrow it to the kinds of work picked.
 
 import { useMemo, useRef, useState } from "react";
 import type { HuntSession, Prospect } from "@/lib/prospects";
@@ -12,6 +12,7 @@ import { today, useSpaceCollection } from "@/lib/billing";
 import { useSpace } from "@/lib/space";
 import { ACT_KINDS, ActKind, activities, addDay, countByDay, heatLevel, kindLabel, streak, weekColumns } from "@/lib/activity";
 import type { Outreach, Rejection } from "@/components/TeamLogs";
+import FilterPills from "@/components/FilterPills";
 import { card, chip, font, heading, subheading } from "@/components/ui";
 
 const WEEKS = 17;
@@ -72,7 +73,6 @@ export default function ActivityLog({ hunts, sessions, quotes, invoices, outreac
     setPages(1);
     requestAnimationFrame(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
-  const toggleKind = (k: ActKind) => { setKinds(kinds.includes(k) ? kinds.filter(x => x !== k) : [...kinds, k]); setPages(1); };
   const readout = hover ?? day;
 
   if (!acts.length) {
@@ -97,22 +97,13 @@ export default function ActivityLog({ hunts, sessions, quotes, invoices, outreac
       <div style={{ ...subheading, marginBottom: 16 }}>Semua yang kamu kerjain, per hari: DM, balasan, penawaran, pembayaran.</div>
 
       <section aria-label={`Heat map aktivitas ${WEEKS} minggu`} className="sp-sec" style={{ marginTop: 0, paddingTop: "var(--sp-4)", marginBottom: "var(--sp-6)" }}>
-        <div role="group" aria-label="Jenis kerjaan" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-          <button aria-pressed={!kinds.length} onClick={() => { setKinds([]); setPages(1); }}
-            style={{ ...chip, minHeight: 36, fontWeight: !kinds.length ? 700 : 500, color: !kinds.length ? "var(--app-text)" : "var(--app-muted)", borderColor: !kinds.length ? "var(--app-line-strong)" : "var(--app-border)" }}>
-            Semua <span className="tabnum">{acts.length}</span>
-          </button>
-          {ACT_KINDS.map(k => {
-            const on = kinds.includes(k.id);
+        <FilterPills label="Jenis kerjaan" value={kinds}
+          pills={ACT_KINDS.map(k => {
             const n = acts.filter(a => a.kind === k.id).length;
-            return (
-              <button key={k.id} aria-pressed={on} onClick={() => toggleKind(k.id)} disabled={!n}
-                style={{ ...chip, minHeight: 36, fontWeight: on ? 700 : 500, color: on ? "var(--app-text)" : "var(--app-muted)", borderColor: on ? "var(--app-line-strong)" : "var(--app-border)", opacity: n ? 1 : 0.5 }}>
-                {k.label} <span className="tabnum">{n}</span>
-              </button>
-            );
+            return { id: k.id, label: k.label, count: n, disabled: !n };
           })}
-        </div>
+          onChange={next => { setKinds(next); setPages(1); }}
+          status={kinds.length ? `${shown.length} dari ${acts.length} aktivitas` : `${acts.length} aktivitas`} />
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start" }}>
         <div style={{ flex: "1 1 280px", maxWidth: 520 }}>
