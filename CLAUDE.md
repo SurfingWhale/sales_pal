@@ -1,5 +1,21 @@
 # SalesPal — working notes
 
+## How to work here
+
+Every feature or UI change follows [docs/product/protocol.md](docs/product/protocol.md):
+understand → investigate → challenge → design the states → implement → verify
+with evidence → update the docs. Read before changing:
+
+- [docs/product/product-context.md](docs/product/product-context.md): who uses SalesPal, where, and on what budget.
+- [docs/product/interaction-model.md](docs/product/interaction-model.md): rules that hold everywhere (one primary action, layers, WhatsApp confirm, separate concepts, data honesty).
+- [docs/product/conversation-lifecycle.md](docs/product/conversation-lifecycle.md): funnel steps and where each is read from.
+- [docs/product/feature-specs/](docs/product/feature-specs/): states and decisions per feature. Update the spec you touch.
+- [docs/prd/ROADMAP.md](docs/prd/ROADMAP.md): priorities. It beats PRD numbering.
+- [docs/standards/design.md](docs/standards/design.md) and [native.md](docs/standards/native.md): visual and native quality bars.
+
+Done means the rubric in the protocol is met with evidence (screenshots at 390,
+375 and 1440, flow steps, tap counts), not that it compiles.
+
 SalesPal is where every site's leads land. The contract for that — the
 `inbound_leads` shape, `firestore.rules`, the import into Leads — is the leads
 standard in the private `SurfingWhale/creative-hub` repository
