@@ -1,5 +1,7 @@
 # PRD SalesPal — indeks
 
+**Prioritas dan keputusan terbaru ada di [ROADMAP.md](ROADMAP.md).** Urutan di sana mengalahkan urutan nomor PRD.
+
 SalesPal: PWA buat freelancer & tim sales kecil di Indonesia — cari lead, ngobrol lewat WhatsApp, kirim penawaran & invoice, dan bikin report bulanan buat klien. Live di https://salespal-alpha.vercel.app.
 
 | PRD | Isi | Status | PR |
