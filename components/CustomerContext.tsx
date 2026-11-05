@@ -53,7 +53,8 @@ export default function CustomerContext({ p, v, strategy, stage, now, jobs, defa
   }
 
   // What the message will say when the post didn't: the workspace's default.
-  const fallback: Record<string, string | undefined> = { Butuh: defaults.kebutuhan, Kapan: defaults.waktu, "Di mana": defaults.lokasi };
+  // Not for Butuh: that default is what you offer ({tawaran}), not their need.
+  const fallback: Record<string, string | undefined> = { Kapan: defaults.waktu, "Di mana": defaults.lokasi };
   const facts = rows.filter(([k]) => k !== "Bisnis");
 
   return (
@@ -88,7 +89,7 @@ export default function CustomerContext({ p, v, strategy, stage, now, jobs, defa
             })}
           </div>
           {date && <JobCalendar date={date} jobs={jobs} today={now} />}
-          {!c.need && !defaults.kebutuhan && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Kebutuhannya belum kebaca. Isi konteks, atau atur Default kosong biar <code>{"{kebutuhan}"}</code> tetap kepakai.</div>}
+          {!c.need && <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 6 }}>Kebutuhannya belum kebaca. Isi konteks kalau dia nyebut; pesan ga bakal nebak, bagian <code>{"[… {kebutuhan} …]"}</code> dilewati.</div>}
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <button onClick={() => setOpen(!open)} aria-expanded={open} style={{ ...chip, minHeight: 34, flex: 1, fontWeight: 600, color: "var(--app-text)" }}>{open ? "Ringkas ▴" : "Detail ▾"}</button>
             <button onClick={() => setDraft({ need: c.need || "", when: c.when || "", date: date || "", where: c.where || "", budget: c.budget || "" })} style={{ ...chip, minHeight: 34, flex: 1 }}>✎ Ubah konteks</button>

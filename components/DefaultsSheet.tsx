@@ -34,9 +34,9 @@ export default function DefaultsSheet({ value, tagline, onClose }: { value: Fill
       <div onClick={e => e.stopPropagation()} aria-label="Default kalau kosong" style={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 460 }}>
         <div style={{ fontSize: 17, fontWeight: 700, fontFamily: font }}>Default kalau kosong</div>
         <p style={{ fontSize: 13, color: "var(--app-sub)", margin: "4px 0 18px", lineHeight: 1.5 }}>
-          Dipakai di pesan kalau post orangnya ga nyebut. Dikosongin = bagian kalimatnya dilewati.
+          Dipakai di pesan kalau post orangnya ga nyebut. Dikosongin = bagian kalimatnya dilewati. Kebutuhan orangnya ga pernah ditebak: yang kamu tawarkan masuk ke <code>{"{tawaran}"}</code>.
         </p>
-        {field("kebutuhan", "Kebutuhan {kebutuhan}", tagline ? tagline.toLowerCase() : "mis. foto & video acaranya", tagline ? `Kosong = pakai "Jasa apa" di Kop: ${tagline.toLowerCase()}.` : "mis. dokumentasi acaranya")}
+        {field("kebutuhan", "Yang kamu tawarkan {tawaran}", tagline ? tagline.toLowerCase() : "mis. foto & video acaranya", tagline ? `Kosong = pakai "Jasa apa" di Kop: ${tagline.toLowerCase()}.` : "mis. dokumentasi acaranya")}
         {field("waktu", "Kapan {waktu}", "mis. acaranya nanti", "Kosong = \"buat {waktu}\" ga ditulis.")}
         {field("lokasi", "Di mana {lokasi}", "mis. Jabodetabek", "Kosong = \"di {lokasi}\" ga ditulis.")}
         {!canEdit && <div style={{ fontSize: 13, color: "var(--app-sub)", marginBottom: 12 }}>Default tim diatur Leader atau Officer guild.</div>}

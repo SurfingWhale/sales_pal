@@ -74,7 +74,8 @@ export function brandOf(t: { brand?: string; title: string; body: string }): str
 
 export const VARIABLES = [
   { key: "nama", desc: "Nama atau username orangnya", example: "Rina" },
-  { key: "kebutuhan", desc: "Yang dia cari, dibaca dari post-nya", example: "foto katalog F&B" },
+  { key: "kebutuhan", desc: "Yang dia sendiri bilang dia cari (post atau data lead). Kosong kalau dia belum bilang", example: "foto katalog F&B" },
+  { key: "tawaran", desc: "Yang kamu tawarkan (Default kalau kosong, atau Jasa apa di Kop)", example: "foto & video produk" },
   { key: "waktu", desc: "Kapan dia butuh", example: "besok jam 1-5 sore" },
   { key: "lokasi", desc: "Di mana", example: "Sentul" },
   { key: "post", desc: "Kutipan pendek post-nya", example: "“ada yang open jasa foto katalog?”" },
@@ -84,7 +85,7 @@ export type VarKey = (typeof VARIABLES)[number]["key"];
 export type FillData = Partial<Record<VarKey, string>>;
 
 // What a variable says when there's nothing to put in it.
-const FALLBACK: Record<VarKey, string> = { nama: "kak", kebutuhan: "kebutuhannya", waktu: "", lokasi: "", post: "", bisnis: "" };
+const FALLBACK: Record<VarKey, string> = { nama: "kak", kebutuhan: "kebutuhannya", tawaran: "", waktu: "", lokasi: "", post: "", bisnis: "" };
 
 export const SAMPLE: FillData = Object.fromEntries(VARIABLES.map(v => [v.key, v.example])) as FillData;
 
@@ -111,6 +112,14 @@ export function fillTemplate(body: string, data: FillData): string {
   return out.replace(/[ \t]{2,}/g, " ").replace(/ +([,.!?])/g, "$1").trim();
 }
 
+// {kebutuhan} outside [brackets]: with nothing they said, it reads "kebutuhannya".
+// Script Management marks these instead of changing them (PRD-024 §5).
+export function bareNeed(body: string): boolean {
+  let out = body;
+  for (let i = 0; i < 6; i++) { const next = out.replace(/\[[^[\]]*\]/g, ""); if (next === out) break; out = next; }
+  return /\{kebutuhan\}/i.test(out);
+}
+
 export function missingIn(body: string, data: FillData): VarKey[] {
   const used = Array.from(body.matchAll(/\{(\w+)\}/g), m => m[1].toLowerCase());
   return VARIABLES.map(v => v.key).filter(k => used.includes(k) && !(data[k] || "").trim()) as VarKey[];
@@ -125,7 +134,9 @@ function nameOf(target: string, p?: Prospect): string {
 
 // What to say when a post didn't tell (QA 15 Okt: "field kosong dikasih default,
 // jadi jawabannya general"). Set in Hunting → Default kosong; the business's
-// "Jasa apa" stands in for an unset need.
+// "Jasa apa" stands in for it. The default `kebutuhan` is what *you* offer, so it
+// fills {tawaran}, never {kebutuhan}: a message must not say someone is looking
+// for something they never said (PRD-024 §5, decided 5 Nov).
 export interface FillDefaults { kebutuhan?: string; waktu?: string; lokasi?: string }
 
 export function defaultsWith(d: FillDefaults | undefined, tagline?: string): FillDefaults {
@@ -137,7 +148,8 @@ export function dataFor(target: string, p: (Prospect & { context?: PostContext }
   const c = p?.context;
   return {
     nama: nameOf(target, p),
-    kebutuhan: c?.need || defaults.kebutuhan || "",
+    kebutuhan: c?.need || "",
+    tawaran: defaults.kebutuhan || "",
     waktu: c?.when || defaults.waktu || "",
     lokasi: c?.where || defaults.lokasi || "",
     post: post ? `“${post.length > 80 ? post.slice(0, 77).trimEnd() + "…" : post}”` : "",
@@ -145,11 +157,16 @@ export function dataFor(target: string, p: (Prospect & { context?: PostContext }
   };
 }
 
+// A lead's words: what they said they need, and what you offer.
+export function leadData(lead: { name: string; contact?: string; need?: string }, business: { name?: string; tagline?: string }): FillData {
+  return { nama: (lead.contact || lead.name || "").trim(), kebutuhan: (lead.need || "").trim(), tawaran: (business.tagline || "").trim().toLowerCase(), bisnis: (business.name || "").trim() };
+}
+
 // One example per stage, for an empty column. Freelance photographer voice,
 // like the starter DMs; every word stays editable.
 export const STARTERS: Record<Stage, { title: string; body: string }> = {
-  intro: { title: "Intro — sebut kebutuhannya", body: "Halo {nama}![ Aku liat kamu lagi nyari {kebutuhan}[ buat {waktu}][ di {lokasi}].] Aku[ dari {bisnis}] biasa pegang yang kayak gini. Boleh aku kirim contoh hasil + kisaran harganya?" },
-  followup: { title: "Follow-up — ga maksa", body: "Hai {nama}, nyambung soal {kebutuhan} kemarin. Masih nyari? Kalau udah dapet juga gapapa, semoga lancar ya 🙌" },
+  intro: { title: "Intro — sebut kebutuhannya", body: "Halo {nama}![ Aku liat kamu lagi nyari {kebutuhan}[ buat {waktu}][ di {lokasi}].][ Aku[ dari {bisnis}] biasa pegang {tawaran}.] Boleh aku kirim contoh hasil + kisaran harganya?" },
+  followup: { title: "Follow-up — ga maksa", body: "Hai {nama}, nyambung soal pesanku kemarin[ soal {kebutuhan}]. Masih nyari? Kalau udah dapet juga gapapa, semoga lancar ya 🙌" },
   gali: { title: "Gali kebutuhan", body: "Makasih udah bales, {nama}! Biar aku siapin yang pas:[ {kebutuhan}-nya] buat apa, kira-kira berapa banyak, dan budget-nya di kisaran berapa?[ Jadwalnya masih {waktu}?]" },
   offering: { title: "Penawaran — dua pilihan", body: "Siap {nama}! Aku ada dua pilihan paket[ buat {kebutuhan}][ {waktu}], aku kirim detail + contoh hasilnya ya. Tinggal pilih yang paling cocok." },
   closing: { title: "Closing — ingetin slot", body: "Hai {nama}, slot[ {waktu}] tinggal sedikit. Kalau masih kepikiran[ {kebutuhan}], aku bisa tahan jadwalnya sampai besok ya." },

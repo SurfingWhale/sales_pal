@@ -623,6 +623,29 @@ export const flows = [
         await manager().getByRole("listitem").filter({ hasText: "Intro biasa" }).getByText(/Intro · Leads · Semua brand/).waitFor();
         await t.audit("Script Management");
       });
+      await t.step("Back in the editor goes to the list, and asks before dropping typing", async () => {
+        await manager().getByRole("button", { name: "Ubah Intro biasa" }).click();
+        const edit = page.getByRole("dialog", { name: "Ubah script" });
+        await page.locator("#tpl-body").fill("Halo {nama}, ketikan yang belum disimpan.");
+        await page.goBack();
+        const sure = page.getByRole("dialog", { name: "Buang perubahan?" });
+        await sure.waitFor();
+        await t.audit("Script: buang perubahan?");
+        await sure.getByRole("button", { name: "Batal" }).click();
+        await sure.waitFor({ state: "detached" });
+        if ((await page.locator("#tpl-body").inputValue()) !== "Halo {nama}, ketikan yang belum disimpan.") throw new Error("the typing was lost");
+        await page.keyboard.press("Escape");
+        await sure.waitFor();
+        await sure.getByRole("button", { name: "Buang", exact: true }).click();
+        // One step back: the list, not out of Script pesan.
+        await edit.waitFor({ state: "detached" });
+        await manager().getByRole("listitem").filter({ hasText: "Intro biasa" }).getByText("kenalan dulu ya").waitFor();
+        // Untouched, Back goes straight to the list.
+        await manager().getByRole("button", { name: "Ubah Intro biasa" }).click();
+        await edit.waitFor();
+        await page.goBack();
+        await manager().getByRole("button", { name: "Buat script" }).waitFor();
+      });
       await t.step("the default comes first, and it's what Pesan puts in", async () => {
         await manager().getByRole("button", { name: "Lainnya: Intro andalan" }).click();
         await manager().getByRole("button", { name: "Jadikan default" }).click();
@@ -2146,18 +2169,20 @@ export const flows = [
         await page.getByRole("group", { name: "Konfirmasi kiriman" }).getByRole("button", { name: "Udah, catat" }).click();
         await page.getByRole("button", { name: "Batal catat" }).waitFor();
       });
-      await t.step("a field the post didn't fill uses the default, set once", async () => {
+      await t.step("what you offer comes from the default; their need is never guessed", async () => {
         await page.getByRole("tablist", { name: "Tahap pesan" }).getByRole("tab", { name: /^1\. Intro/ }).click();
         await page.getByRole("button", { name: "+ Pakai contoh personal" }).click();
         const panel = page.getByRole("tabpanel", { name: /Tahap 1: Intro/ });
-        await panel.getByText(/Halo dmflow! Aku biasa pegang/).waitFor();
+        await panel.getByText(/Halo dmflow! (Aku biasa pegang [^.]+\. )?Boleh aku kirim contoh/).waitFor();
         await page.getByRole("button", { name: "Template & script" }).click();
         await page.getByRole("dialog", { name: "Tambah" }).getByRole("button", { name: "Default kalau kosong" }).click();
         const sheet = page.getByRole("dialog", { name: "Default kalau kosong" });
         await sheet.locator("#def-kebutuhan").fill("dokumentasi acara");
         await sheet.getByRole("button", { name: "Simpan default" }).click();
         await sheet.waitFor({ state: "detached" });
-        await panel.getByText(/Halo dmflow! Aku liat kamu lagi nyari dokumentasi acara\. Aku biasa/).waitFor();
+        // PRD-024 (decided 5 Nov): the default is what you offer, {tawaran}.
+        await panel.getByText(/Halo dmflow! Aku biasa pegang dokumentasi acara\. Boleh/).waitFor();
+        if (await panel.getByText(/lagi nyari dokumentasi acara/).count()) throw new Error("the default was said to be their need");
       });
       await t.step("change the daily goal to 25 in a sheet with Batal", async () => {
         await page.getByRole("button", { name: /Ubah target harian/ }).click();
@@ -2294,6 +2319,10 @@ export const flows = [
         await dlg.getByRole("button", { name: /Sisipkan \{kebutuhan\}/ }).click();
         await dlg.getByText("Halo Toko Kue! Butuh foto katalog").waitFor();
         await dlg.getByRole("button", { name: "Batal", exact: true }).click();
+        // Typed and not saved: asked first (PRD-024 §7), then back to Hunting.
+        const sure = page.getByRole("dialog", { name: "Buang perubahan?" });
+        await sure.getByRole("button", { name: "Buang", exact: true }).click();
+        await dlg.waitFor({ state: "detached" });
       });
       // After the share's page load: a write still in flight when a page reloads is lost.
       await t.step("start a session: the bar shows over the page", async () => {

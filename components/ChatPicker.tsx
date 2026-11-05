@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { PitchTemplate } from "@/lib/hunting";
 import { useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
 import { useSpace } from "@/lib/space";
-import { STAGES, Stage, brandOf, fillTemplate, stageOf, workflowOf } from "@/lib/templates";
+import { STAGES, Stage, brandOf, fillTemplate, stageOf, workflowOf, leadData } from "@/lib/templates";
 import { rankScripts } from "@/lib/scriptPick";
 import { SITES } from "@/lib/sites";
 import Icon from "@/components/Icon";
@@ -43,7 +43,7 @@ function useScripts(lead: ChatLead, stage: Stage, brand: string) {
   const usable = all.filter(t => !t.archived && workflowOf(t) !== "hunting" && (!brand || !brandOf(t) || brandOf(t) === brand));
   const ranked = rankScripts(usable.filter(t => stageOf(t) === stage), lead).filter(r => !r.out)
     .sort((a, b) => Number(!!b.t.isDefault) - Number(!!a.t.isDefault));
-  const fill = (t: PitchTemplate) => fillTemplate(t.body, { nama: lead.contact || lead.name, bisnis: business.name, kebutuhan: lead.need });
+  const fill = (t: PitchTemplate) => fillTemplate(t.body, leadData(lead, business));
   return { all, usable, ranked, fill, businessName: business.name };
 }
 
