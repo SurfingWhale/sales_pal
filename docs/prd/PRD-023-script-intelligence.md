@@ -112,4 +112,4 @@ Bagian kecil dari ide yang sama juga sudah jalan di Hunting: **Saran** (`lib/scr
 - Aturan dan kata kunci bahasa Indonesia chat. Kalimat yang tidak lazim, sarkasme, atau konteks panjang bisa terlewat.
 - Bobot dan ambang adalah heuristik awal.
 - Penyesuaian hanya menambah, membuang, atau merapikan kalimat; belum menulis ulang gaya bahasa (itu Fase 3).
-- Python Function di Vercel belum dicek di preview deploy saat dokumen ini ditulis **[cek]**. Kalau Vercel menolak campuran Next.js + Python di project ini, rencana B adalah host FastAPI terpisah (D2) dengan rewrite ke URL-nya.
+- Python Function di Vercel sudah dicek di preview deploy (5 Nov): `GET /api/script-intelligence/health` → `{"ok":true,"engine":"rules-v1"}`, dilayani `/api` (Next.js + Python di project yang sama). Kalau suatu saat perlu dipindah, rencana B adalah host FastAPI terpisah dengan `SCRIPT_INTEL_ORIGIN` mengarah ke URL-nya.
