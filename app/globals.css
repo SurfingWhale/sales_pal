@@ -737,19 +737,116 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 /* A full sheet is a step of its own: nothing of what opened it shows. */
 .sp-sheet-full { padding: 0 !important; justify-content: center; }
 .sp-sheet-full .sp-sheet { max-height: 100dvh; }
-/* Script Management: the stages beside the list on a laptop, above it on a phone. */
-.sp-scripts { display: grid; gap: 16px; }
-@media (min-width: 1024px) {
-  .sp-scripts { grid-template-columns: 200px minmax(0, 1fr); align-items: start; }
-  .sp-scripts-rail { flex-direction: column; flex-wrap: nowrap !important; position: sticky; top: 76px; }
-  /* The whole width: scripts side by side, not one long column. */
-  .sp-scripts-list { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px !important; }
-}
+/* Script pesan (docs/qa-reviews/2026-11-05-script-pesan-ux.md): rows, not cards;
+   the six stages as one lifecycle; actions in a sheet; list + editor side by side
+   on a laptop. Tokens only (design.md). */
+:root { --state-press: rgba(21,24,28,0.05); --state-on: var(--brand-tint); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --state-press: rgba(255,255,255,0.06); } }
+:root[data-theme="dark"] { --state-press: rgba(255,255,255,0.06); }
+
+.sp-sm { display: block; }
+.sp-sm.is-editing .sp-sm-list { display: none; }
+.sp-sm-list { min-width: 0; }
 .sp-script-edit { max-width: 640px; }
-/* Editor on a laptop: what it is on the left, the message and its preview on the right. */
+
+/* Lifecycle: Semua, then 1 → 6 joined by a line. A row that scrolls on a phone. */
+.sp-life { display: flex; align-items: stretch; gap: var(--sp-2); margin: 0 -18px var(--sp-4); padding: 2px 18px; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; scroll-padding-inline: 18px; }
+.sp-life::-webkit-scrollbar { display: none; }
+.sp-life button { display: inline-flex; align-items: center; gap: var(--sp-2); min-height: 44px; border: 0; background: none; color: var(--app-ink-2); font: 500 var(--fs-meta) 'Plus Jakarta Sans', sans-serif; cursor: pointer; white-space: nowrap; scroll-snap-align: start; }
+.sp-life-all { flex-shrink: 0; padding: 0 var(--sp-3); border-radius: 999px !important; background: var(--app-inner) !important; font-weight: 600 !important; }
+.sp-life-all[aria-pressed="true"] { background: var(--app-text) !important; color: var(--app-card) !important; }
+.sp-life-all .tabnum { opacity: 0.7; }
+.sp-life-steps { flex-shrink: 0; display: flex; list-style: none; margin: 0; padding: 0; }
+.sp-life-steps li { display: flex; align-items: center; }
+.sp-life-steps li + li::before { content: ""; width: 14px; height: 1px; background: var(--app-line-strong); margin: 0 2px; }
+.sp-life-steps button { padding: 0 var(--sp-2) 0 2px; border-radius: 999px; }
+.sp-life-dot { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font: 700 var(--fs-micro)/1 'Plus Jakarta Sans', sans-serif; border: 1px solid var(--app-line-strong); color: var(--app-muted); background: var(--app-card); }
+.sp-life-n { color: var(--app-muted); font-size: var(--fs-micro); }
+.sp-life-steps button[aria-pressed="true"] { color: var(--app-text); font-weight: 700; }
+.sp-life-steps button[aria-pressed="true"] .sp-life-dot, .sp-life-dot.is-on { background: var(--brand-blue); border-color: var(--brand-blue); color: #fff; }
+.sp-life button:active { background: var(--state-press); }
+
+/* Search, Filter, Baru */
+.sp-sm-tools { display: flex; gap: var(--sp-2); align-items: center; }
+.sp-sm-tools .sp-ksearch input { flex: 1; min-width: 0; height: 44px; border: 0; outline: 0; background: transparent; color: var(--app-text); font: 16px 'Plus Jakarta Sans', sans-serif; }
+.sp-sm-tool, .sp-sm-new { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 var(--sp-3); border-radius: var(--r-m); border: 0; cursor: pointer; font: 600 var(--fs-meta) 'Plus Jakarta Sans', sans-serif; }
+.sp-sm-tool { background: var(--app-inner); color: var(--app-ink-2); }
+.sp-sm-new { background: var(--brand-blue); color: #fff; font-weight: 700; }
+.sp-sm-new:active { background: var(--brand-blue-600); }
+.sp-sm-badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--brand-blue); color: #fff; font-size: var(--fs-micro); display: inline-flex; align-items: center; justify-content: center; }
+@media (max-width: 380px) { .sp-sm-tool-word { display: none; } }
+.sp-sm-active { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
+.sp-sm-active button { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 var(--sp-3); border-radius: 999px; border: 0; background: var(--state-on); color: var(--brand-text); font: 600 var(--fs-meta) 'Plus Jakarta Sans', sans-serif; cursor: pointer; }
+.sp-sm-err { margin: var(--sp-2) 0 0; font-size: var(--fs-meta); color: var(--hot); }
+.sp-sm-when { margin: var(--sp-4) 0 0; font-size: var(--fs-meta); line-height: 1.5; color: var(--app-muted); }
+.sp-sm-when b { color: var(--app-text); font-weight: 600; }
+
+/* Groups and rows: hairlines, the whole row opens it, ⋯ holds the rest. */
+.sp-sm-group { margin-top: var(--sp-5); }
+.sp-sm-group-h { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin: 0 0 var(--sp-1); font-size: var(--fs-body); font-weight: 700; }
+.sp-sm-group-when { flex-basis: 100%; padding-left: 30px; font-size: var(--fs-meta); font-weight: 400; color: var(--app-muted); }
+.sp-sm-rows { list-style: none; margin: 0; padding: 0; }
+.sp-sm-row { display: flex; align-items: flex-start; border-bottom: 1px solid var(--app-border); }
+.sp-sm-row:first-child { border-top: 1px solid var(--app-border); }
+.sp-sm-row.is-on { background: var(--state-on); box-shadow: inset 3px 0 0 var(--brand-blue); }
+.sp-sm-main { flex: 1; min-width: 0; display: grid; gap: 2px; padding: var(--sp-3) var(--sp-2) var(--sp-3) 0; border: 0; background: none; color: inherit; text-align: start; cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; }
+.sp-sm-row.is-on .sp-sm-main { padding-left: var(--sp-3); }
+.sp-sm-main:active { background: var(--state-press); }
+.sp-sm-title { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; font-size: var(--fs-body); font-weight: 600; color: var(--app-text); }
+.sp-sm-title > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-sm-pill { flex-shrink: 0; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-micro); font-weight: 700; background: var(--state-on); color: var(--brand-text); }
+.sp-sm-meta { font-size: var(--fs-meta); color: var(--app-muted); }
+.sp-sm-preview { margin-top: 2px; font-size: var(--fs-meta); line-height: 1.45; color: var(--app-ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sp-sm-more { flex-shrink: 0; width: 44px; height: 44px; margin-top: var(--sp-2); border: 0; border-radius: var(--r-s); background: none; color: var(--app-muted); font-size: 20px; line-height: 1; cursor: pointer; }
+.sp-sm-more:active, .sp-sm-more:hover { background: var(--state-press); color: var(--app-text); }
+.sp-sm-empty { padding: var(--sp-4) 0; border-top: 1px solid var(--app-border); }
+.sp-sm-group .sp-sm-empty { border-top: 0; padding-top: var(--sp-2); }
+.sp-sm-empty-h { margin: 0; font-size: var(--fs-body); font-weight: 600; color: var(--app-text); }
+.sp-sm-empty p:not(.sp-sm-empty-h) { margin: var(--sp-1) 0 0; font-size: var(--fs-meta); color: var(--app-muted); line-height: 1.5; max-width: 52ch; }
+.sp-sm-empty-acts { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-3); }
+.sp-sm-skel { display: grid; gap: 8px; padding: var(--sp-3) 0; border-bottom: 1px solid var(--app-border); }
+.sp-sm-skel span { height: 12px; border-radius: 6px; background: var(--app-inner); }
+.sp-sm-skel span:nth-child(1) { width: 40%; height: 14px; } .sp-sm-skel span:nth-child(2) { width: 25%; } .sp-sm-skel span:nth-child(3) { width: 85%; }
+@media (prefers-reduced-motion: no-preference) { .sp-sm-skel span { animation: sp-pulse 1.4s ease-in-out infinite; } }
+@keyframes sp-pulse { 50% { opacity: 0.5; } }
+
+/* Action sheet and radio lists */
+.sp-acts { display: grid; }
+.sp-acts button { display: flex; align-items: center; gap: var(--sp-3); min-height: 52px; padding: 0 var(--sp-1); border: 0; border-bottom: 1px solid var(--app-border); background: none; color: var(--app-text); font: 500 var(--fs-body) 'Plus Jakarta Sans', sans-serif; text-align: start; cursor: pointer; }
+.sp-acts button:active { background: var(--state-press); }
+.sp-acts button.is-danger { color: var(--hot); }
+.sp-acts-hint { margin-left: auto; font-size: var(--fs-meta); color: var(--app-muted); font-weight: 400; }
+.sp-radios { border: 0; margin: 0 0 var(--sp-4); padding: 0; min-width: 0; }
+.sp-radios legend { padding: 0; margin-bottom: var(--sp-1); font-size: var(--fs-meta); font-weight: 600; color: var(--app-muted); }
+.sp-radios label { display: flex; align-items: center; gap: var(--sp-3); min-height: 48px; border-bottom: 1px solid var(--app-border); font-size: var(--fs-body); cursor: pointer; }
+.sp-radios input { width: 20px; height: 20px; min-height: 0 !important; margin: 0; accent-color: var(--brand-blue); }
+
+/* Laptop: the lifecycle as a rail beside the list; editing keeps the list beside the editor. */
 @media (min-width: 1024px) {
-  .sp-script-edit { max-width: 1280px; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); column-gap: 32px; align-items: start; }
+  .sp-sm-list { display: grid; grid-template-columns: 220px minmax(0, 1fr); column-gap: var(--sp-6); align-content: start; }
+  .sp-sm-list > * { grid-column: 2; }
+  .sp-sm-list > .sp-life { grid-column: 1; grid-row: 1 / span 40; align-self: start; position: sticky; top: 76px; flex-direction: column; gap: 0; margin: 0; padding: 0; overflow: visible; }
+  .sp-life-all { margin-bottom: var(--sp-3); justify-content: space-between; }
+  .sp-life-steps { flex-direction: column; }
+  .sp-life-steps li { position: relative; }
+  .sp-life-steps li + li::before { position: absolute; left: 12px; top: -8px; width: 1px; height: 16px; margin: 0; }
+  .sp-life-steps button { width: 100%; padding: 0 var(--sp-2) 0 2px; border-radius: var(--r-s); }
+  .sp-life-steps li { margin-top: 8px; }
+  .sp-life-n { margin-left: auto; }
+  .sp-sm-list > .sp-sm-tools { max-width: 760px; }
+  .sp-sm-list > .sp-sm-group, .sp-sm-list > .sp-sm-empty, .sp-sm-list > .sp-sm-when, .sp-sm-list > .sp-sm-rows { max-width: 760px; }
+  .sp-sm.is-editing { display: grid; grid-template-columns: minmax(320px, 400px) minmax(0, 1fr); column-gap: var(--sp-6); align-items: start; }
+  .sp-sm.is-editing .sp-sm-list { display: block; position: sticky; top: 76px; max-height: calc(100dvh - 96px); overflow-y: auto; padding-right: var(--sp-2); }
+  /* Beside the editor the list is narrow: the lifecycle goes back to one row. */
+  .sp-sm.is-editing .sp-life { position: static; flex-direction: row; gap: var(--sp-2); margin: 0 0 var(--sp-3); padding: 2px 0; overflow-x: auto; }
+  .sp-sm.is-editing .sp-life-all { margin-bottom: 0; }
+  .sp-sm.is-editing .sp-life-steps { flex-direction: row; }
+  .sp-sm.is-editing .sp-life-steps li { margin-top: 0; }
+  .sp-sm.is-editing .sp-life-steps li + li::before { position: static; width: 14px; height: 1px; margin: 0 2px; }
+  .sp-sm.is-editing .sp-life-n { margin-left: 0; }
+  .sp-sm-detail .sp-script-edit { grid-template-columns: 1fr; max-width: 720px; margin: 0; }
 }
+@media (min-width: 1360px) { .sp-sm-detail .sp-script-edit { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); max-width: none; } }
 /* The four quick actions on a lead: two by two on the narrowest phones. */
 @media (max-width: 359px) { .sp-quick { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
 /* Potensi chips: one row that scrolls sideways on a phone, not a pile. */
@@ -1070,9 +1167,9 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .sp-icon44 { width: 44px; height: 44px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--app-ink-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 /* The blue split button: + adds, ▾ opens the other ways in. Drawn 32px in 44px taps. */
 .sp-split { display: inline-flex; }
-.sp-split > button { height: 44px; min-width: 40px; padding: 0 10px; border: 0 solid transparent; border-block-width: 6px; background: #005eb0; background-clip: padding-box; color: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.sp-split > button { height: 44px; min-width: 44px; padding: 0 10px; border: 0 solid transparent; border-block-width: 6px; background: #005eb0; background-clip: padding-box; color: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .sp-split > button:first-child { border-radius: 10px 0 0 10px; padding-inline: 12px; }
-.sp-split > button:last-child { border-radius: 0 10px 10px 0; box-shadow: inset 1px 0 0 rgba(255,255,255,0.3); min-width: 36px; padding-inline: 8px; }
+.sp-split > button:last-child { border-radius: 0 10px 10px 0; box-shadow: inset 1px 0 0 rgba(255,255,255,0.3); min-width: 44px; padding-inline: 8px; }
 .sp-ksearch { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 4px 0 12px; border-radius: var(--r-m, 12px); background: var(--app-inner); color: var(--app-muted); }
 .sp-ksearch:focus-within { box-shadow: 0 0 0 2px #005eb0; }
 .sp-ksearch input { flex: 1; min-width: 0; height: 44px; border: 0; background: transparent; color: var(--app-text); font: 400 16px 'Plus Jakarta Sans', sans-serif; outline: none; }
