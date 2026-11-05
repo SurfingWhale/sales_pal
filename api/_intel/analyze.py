@@ -65,6 +65,9 @@ def run(conversation_text: str, scripts: list[dict], seller_name: str | None = N
         if jolt_skip:
             why = (f"“{jolt_skip['script_name']}” ({jolt_skip['relevance_score']}%) nggak bantu mereka mutusin; mereka butuh satu rekomendasi (JOLT). "
                    "Ini respons baru dari aturan yang sama. Bisa disimpan jadi script baru.")
+        elif not usable and matches:
+            why = (f"Semua script gugur: {matches[0]['critical'][0]}. "
+                   "Ini respons baru dari aturan yang sama. Bisa disimpan jadi script baru.")
         else:
             why = ("Nggak ada script yang cocok" + (f" (tertinggi {usable[0]['relevance_score']}%, di bawah {MIN_SCORE}%)" if usable else "") +
                    "; ini respons baru dari aturan yang sama. Bisa disimpan jadi script baru.")

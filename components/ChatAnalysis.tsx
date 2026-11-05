@@ -96,6 +96,8 @@ export default function ChatAnalysis() {
       const j = await res.json().catch(() => null);
       if (!res.ok || !j) throw new Error(j?.detail || "Analisis gagal. Coba lagi.");
       setResult(j); setDraft(j.recommended_adjustment.text);
+      // On a phone the result sits below the form: bring it up.
+      requestAnimationFrame(() => document.getElementById("ca-result")?.scrollIntoView({ block: "start", behavior: "smooth" }));
       // Not while it still has to ask who you are: that reading isn't the one you'll use.
       const unsure = j.conversation_summary?.ambiguous_speakers && (j.conversation_summary?.speakers?.length || 0) >= 2;
       if (keep && !unsure) {
@@ -175,7 +177,7 @@ export default function ChatAnalysis() {
       </section>
 
       {r && rec && (
-        <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+        <div id="ca-result" style={{ display: "grid", gap: 12, marginTop: 12, scrollMarginTop: 120 }}>
           {needsSeller && (
             <section aria-label="Siapa kamu" style={{ ...box, borderColor: "#005eb0" }}>
               <p style={{ margin: "0 0 8px", fontSize: 14 }}>Siapa kamu di chat ini? Biar yang dibaca omongan prospeknya, bukan omongan kamu.</p>
