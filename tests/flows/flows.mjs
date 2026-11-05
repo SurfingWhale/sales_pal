@@ -1365,9 +1365,14 @@ export const flows = [
       await t.step("raise the DP invoice: one term, as a draft", async () => {
         await go(page, "Jualan", "Penawaran");
         await page.getByRole("button", { name: "Buat invoice DP 50% →" }).click();
-        await page.getByRole("button", { name: "Buat invoice Pelunasan 50% →" }).waitFor();
+        // Raising it moves you to Invoice: the next term shows on the quote only
+        // for a moment before that, so it's checked once you're back.
         await go(page, "Jualan", "Invoice");
         await expectText(page, "DP 50%");
+        await page.getByRole("button", { name: "Terbitkan" }).waitFor();
+        await go(page, "Jualan", "Penawaran");
+        await page.getByRole("button", { name: "Buat invoice Pelunasan 50% →" }).waitFor();
+        await go(page, "Jualan", "Invoice");
         await page.getByRole("button", { name: "Terbitkan" }).waitFor();
       });
       await t.step("Tagih via WA: words and PDF through your WhatsApp; sending issues it, Batal takes it back", async () => {
