@@ -1,0 +1,4 @@
+# Python Function for the Script Intelligence API (api/index.py, PRD-023).
+fastapi==0.115.6
+pydantic>=2.9,<3
+firebase-admin==6.6.0

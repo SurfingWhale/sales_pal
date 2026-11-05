@@ -166,6 +166,16 @@ service cloud.firestore {
         allow delete: if (ownedData(coll) && (manager(g) || (seller(g) && resource.data.ownerUid == request.auth.uid)))
           || (catalog(coll) && !onRecord(coll) && manager(g) && notToolsUnlessLeader(g, coll, id) && sitesKeptOnDelete(coll));
       }
+      // Script Intelligence history (PRD-023): a seller's pasted chats and their
+      // analysis. Private to the seller who made it, even from Leader and
+      // Officer; it carries its own expiry (90 days at most) and can be deleted.
+      match /analyses/{id} {
+        allow read, delete: if seller(g) && resource.data.ownerUid == request.auth.uid;
+        allow create: if seller(g) && request.resource.data.ownerUid == request.auth.uid
+          && request.resource.data.createdAt is number && request.resource.data.expiresAt is number
+          && request.resource.data.expiresAt <= request.resource.data.createdAt + 7776000000
+          && request.resource.data.conversation is string && request.resource.data.conversation.size() <= 20000;
+      }
       // A client's chats, content and reports go with the client's owner.
       match /clients/{c}/{sub}/{id} {
         allow read, write: if sub in ['deals', 'posts', 'reports']

@@ -6,6 +6,8 @@ import { spaceDoc, useSpace } from "@/lib/space";
 import { PitchTemplate, TemplateScore, pct } from "@/lib/hunting";
 import { FillData, SAMPLE, STAGES, STARTERS, Stage, VARIABLES, fillTemplate, missingIn, stageOf } from "@/lib/templates";
 import { CATEGORIES } from "@/lib/leadEdit";
+import { KIND_HINT, KIND_LABEL, type PostContext } from "@/lib/postContext";
+import { suggestForPost } from "@/lib/scriptFit";
 import Icon from "@/components/Icon";
 import { btnMuted, btnPrimary, btnWA, chip, font, inputStyle, label, modalBox } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmSheet";
@@ -14,9 +16,11 @@ import { useConfirm } from "@/components/ConfirmSheet";
 // stage that fits this person picked, and every template filled in with what
 // their post said (or the workspace's defaults when it didn't say).
 
-export default function TemplateBoard({ templates, scores, data, stage, blocked, copiedId, copyFail, onPick, canEdit, sampleName, send = { how: "wa", label: "Kirim WA" }, extra }: {
+export default function TemplateBoard({ templates, scores, data, stage, blocked, copiedId, copyFail, onPick, canEdit, sampleName, send = { how: "wa", label: "Kirim WA" }, extra, post }: {
   templates: PitchTemplate[]; scores: TemplateScore[]; data: FillData; stage: Stage; blocked: boolean;
-  copiedId: string | null; copyFail: string | null; onPick: (t: PitchTemplate, how: "copy" | "wa" | "open") => void;
+  // text: what goes out instead of the plain fill (the Saran, corrected and edited).
+  copiedId: string | null; copyFail: string | null; onPick: (t: PitchTemplate, how: "copy" | "wa" | "open", text?: string) => void;
+  post?: { ctx: PostContext; text: string };  // what their post said (Hunting): the Saran fits a script to it
   // The second button: WhatsApp, or copy and open the DM / post (Hunting decides by platform).
   send?: { how: "wa" | "open"; label: string };
   canEdit: boolean; sampleName: string;
@@ -74,6 +78,17 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
   const list = templates.filter(t => stageOf(t) === s.id);
   const si = STAGES.findIndex(x => x.id === s.id);
 
+  // The Saran (lib/scriptFit): the script that answers their post best at this
+  // stage, corrected for it. It stays editable; what you edit is what goes out.
+  const ctx = post?.ctx || {};
+  const known = ([["Butuh", ctx.need], ["Kapan", ctx.when], ["Di", ctx.where], ["Budget", ctx.budget], ["Bisnis", ctx.business]] as [string, string | undefined][]).filter(([, v]) => v?.trim());
+  // Shown only when it changed something: otherwise it'd repeat a card below.
+  const fitted = post && (known.length || post.text.trim()) ? suggestForPost(list, s.id, data, ctx, post.text) : null;
+  const saran = fitted && fitted.fit.changes.length ? fitted : null;
+  const saranKey = saran ? `${saran.t.id}|${saran.fit.text}` : "";
+  const [draft, setDraft] = useState("");
+  useEffect(() => { setDraft(saran?.fit.text || ""); }, [saranKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <>
       {askSheet}
@@ -105,6 +120,38 @@ export default function TemplateBoard({ templates, scores, data, stage, blocked,
         <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 10 }}>
           {s.id === stage ? <b style={{ color: "var(--brand-text)" }}>Cocok sekarang · </b> : null}{s.when}
         </div>
+        {saran && (
+          <section aria-label={`Saran buat ${sampleName || "orang ini"}`} style={{ marginBottom: 12, padding: 12, borderRadius: 14, border: "1px solid #005eb0", background: "color-mix(in srgb, #005eb0 6%, var(--app-card))", filter: blocked ? "grayscale(1)" : undefined }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+              <b style={{ fontSize: 14 }}>Saran buat {sampleName || "orang ini"}</b>
+              <span style={{ fontSize: 12, color: "var(--app-muted)" }}>dari “{saran.t.title}”{saran.why.length ? ` · ${saran.why.join(" · ")}` : ""}</span>
+            </div>
+            {/* What their post told us: the words the script is fitted to. */}
+            {(known.length > 0 || ctx.kind) && (
+              <ul aria-label="Yang kebaca dari post-nya" style={{ listStyle: "none", margin: "0 0 6px", padding: 0, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {ctx.kind && <li style={{ fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: "var(--app-inner)" }}>{KIND_LABEL[ctx.kind]}</li>}
+                {known.map(([k, v]) => <li key={k} style={{ fontSize: 12, padding: "3px 10px", borderRadius: 999, background: "var(--app-inner)" }}><span style={{ color: "var(--app-muted)" }}>{k}: </span>{v}</li>)}
+              </ul>
+            )}
+            {ctx.kind && <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--app-muted)" }}>{KIND_HINT[ctx.kind]}</p>}
+            <label htmlFor="saran-text" className="vh">Pesan saran</label>
+            <textarea id="saran-text" value={draft} onChange={e => setDraft(e.target.value)} rows={4}
+              style={{ ...inputStyle, fontSize: 16, width: "100%", boxSizing: "border-box", resize: "vertical", lineHeight: 1.5, marginBottom: 6 }} />
+            {saran.fit.changes.length > 0 && (
+              <ul aria-label="Yang disesuaiin" style={{ margin: "0 0 8px", paddingLeft: 18, fontSize: 12, color: "var(--app-sub)", lineHeight: 1.6 }}>
+                {saran.fit.changes.map((c, i) => <li key={i}>{c.kind === "add" ? "Ditambah: " : c.kind === "edit" ? "Dirapihin: " : "Dibuang: "}{c.note}</li>)}
+              </ul>
+            )}
+            <div className="sp-tpl-acts" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button onClick={() => onPick(saran.t, "copy", draft)} disabled={blocked || !draft.trim()} style={{ ...chip, flex: 1, minHeight: 44, fontSize: 13, fontWeight: 700, color: copiedId === saran.t.id ? "var(--ok)" : "var(--app-text)" }}>
+                {copiedId === saran.t.id ? "✓ Tersalin" : "Copy"}
+              </button>
+              <button onClick={() => onPick(saran.t, send.how, draft)} disabled={blocked || !draft.trim()}
+                style={{ ...(send.how === "wa" ? btnWA : { ...btnWA, background: "#005eb0", color: "#fff" }), flex: 1, minHeight: 44, padding: "8px", fontSize: 13 }}>{send.label}</button>
+              {draft !== saran.fit.text && <button onClick={() => setDraft(saran.fit.text)} style={{ ...chip, minHeight: 44, fontSize: 13 }}>Balikin saran</button>}
+            </div>
+          </section>
+        )}
         {list.length === 0 && (
           <div style={{ fontSize: 13, color: "var(--app-muted)", padding: 12, borderRadius: 12, border: "1px dashed var(--app-border)" }}>
             Belum ada template buat tahap ini.

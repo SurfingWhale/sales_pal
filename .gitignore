@@ -48,3 +48,7 @@ firebase-debug.log
 
 # flow runs with FLOW_PORT_OFFSET write their own emulator config
 /.firebase-flows-*.json
+
+# Python (api/, PRD-023)
+__pycache__/
+.pytest_cache/

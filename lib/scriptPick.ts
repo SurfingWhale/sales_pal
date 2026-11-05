@@ -16,7 +16,8 @@ export const CATEGORY_WORDS: Record<string, string[]> = {
   Retail: ["retail", "toko", "produk", "katalog", "fashion", "baju", "butik", "olshop", "online shop", "e-commerce", "brand", "marketplace"],
   Health: ["health", "klinik", "dokter", "gigi", "kesehatan", "apotek", "salon", "beauty", "kecantikan", "spa", "skincare", "gym", "fitness"],
   Property: ["property", "properti", "rumah", "villa", "apartemen", "kost", "perumahan", "interior", "real estate"],
-  Service: ["service", "jasa", "layanan", "bengkel", "laundry", "travel", "event", "wedding", "agency"],
+  // Not "jasa" or "layanan": nearly every post asks for a "jasa".
+  Service: ["service", "bengkel", "laundry", "travel", "event", "acara", "wedding", "nikahan", "pernikahan", "prewed", "prewedding", "lamaran", "ulang tahun", "ultah", "wisuda", "seminar", "konser", "gathering", "agency"],
   Tech: ["tech", "aplikasi", "app", "software", "startup", "saas", "digital", "it"],
   Education: ["education", "sekolah", "kursus", "les", "bimbel", "kampus", "pelatihan", "training", "akademi"],
 };
@@ -37,7 +38,8 @@ export function categoryOf(...texts: (string | undefined)[]): string | null {
   return best;
 }
 
-const STOP = new Set(["yang", "dan", "atau", "buat", "untuk", "dengan", "belum", "sudah", "udah", "punya", "soal", "lagi", "kami", "kamu", "mereka", "ini", "itu", "ada", "bisa", "mau", "jadi", "dari", "pakai", "pake", "kak", "halo"]);
+// "jasa" and "open" are in nearly every ask ("open jasa foto …"): they tell scripts apart from nothing.
+const STOP = new Set(["yang", "dan", "atau", "buat", "untuk", "dengan", "belum", "sudah", "udah", "punya", "soal", "lagi", "kami", "kamu", "mereka", "ini", "itu", "ada", "bisa", "mau", "jadi", "dari", "pakai", "pake", "kak", "halo", "jasa", "open"]);
 const words = (s = "") => Array.from(new Set(norm(s).trim().split(" ").filter(w => w.length >= 4 && !STOP.has(w))));
 
 export interface ScriptFit<T> { t: T; score: number; why: string[]; out: boolean }

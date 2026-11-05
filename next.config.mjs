@@ -31,8 +31,13 @@ const nextConfig = {
       ],
     }];
   },
+  // Script Intelligence (PRD-023) is a Python Function (api/index.py, FastAPI).
+  // On Vercel /api/ reaches it; in dev and in the flow tests a local uvicorn
+  // does (SCRIPT_INTEL_ORIGIN, set by tests/flows/run.mjs).
   async rewrites() {
+    const intel = process.env.SCRIPT_INTEL_ORIGIN || (process.env.NODE_ENV === "development" ? "http://127.0.0.1:8000" : "");
     return [
+      { source: "/api/script-intelligence/:path*", destination: intel ? `${intel}/api/script-intelligence/:path*` : "/api/" },
       { source: "/__/auth/:path*", destination: "https://sales-pal.firebaseapp.com/__/auth/:path*" },
       { source: "/__/firebase/:path*", destination: "https://sales-pal.firebaseapp.com/__/firebase/:path*" },
     ];

@@ -623,6 +623,29 @@ export const flows = [
         await manager().getByRole("listitem").filter({ hasText: "Intro biasa" }).getByText(/Intro · Leads · Semua brand/).waitFor();
         await t.audit("Script Management");
       });
+      await t.step("Back in the editor goes to the list, and asks before dropping typing", async () => {
+        await manager().getByRole("button", { name: "Ubah Intro biasa" }).click();
+        const edit = page.getByRole("dialog", { name: "Ubah script" });
+        await page.locator("#tpl-body").fill("Halo {nama}, ketikan yang belum disimpan.");
+        await page.goBack();
+        const sure = page.getByRole("dialog", { name: "Buang perubahan?" });
+        await sure.waitFor();
+        await t.audit("Script: buang perubahan?");
+        await sure.getByRole("button", { name: "Batal" }).click();
+        await sure.waitFor({ state: "detached" });
+        if ((await page.locator("#tpl-body").inputValue()) !== "Halo {nama}, ketikan yang belum disimpan.") throw new Error("the typing was lost");
+        await page.keyboard.press("Escape");
+        await sure.waitFor();
+        await sure.getByRole("button", { name: "Buang", exact: true }).click();
+        // One step back: the list, not out of Script pesan.
+        await edit.waitFor({ state: "detached" });
+        await manager().getByRole("listitem").filter({ hasText: "Intro biasa" }).getByText("kenalan dulu ya").waitFor();
+        // Untouched, Back goes straight to the list.
+        await manager().getByRole("button", { name: "Ubah Intro biasa" }).click();
+        await edit.waitFor();
+        await page.goBack();
+        await manager().getByRole("button", { name: "Buat script" }).waitFor();
+      });
       await t.step("the default comes first, and it's what Pesan puts in", async () => {
         await manager().getByRole("button", { name: "Lainnya: Intro andalan" }).click();
         await manager().getByRole("button", { name: "Jadikan default" }).click();
@@ -1365,9 +1388,14 @@ export const flows = [
       await t.step("raise the DP invoice: one term, as a draft", async () => {
         await go(page, "Jualan", "Penawaran");
         await page.getByRole("button", { name: "Buat invoice DP 50% →" }).click();
-        await page.getByRole("button", { name: "Buat invoice Pelunasan 50% →" }).waitFor();
+        // Raising it moves you to Invoice: the next term shows on the quote only
+        // for a moment before that, so it's checked once you're back.
         await go(page, "Jualan", "Invoice");
         await expectText(page, "DP 50%");
+        await page.getByRole("button", { name: "Terbitkan" }).waitFor();
+        await go(page, "Jualan", "Penawaran");
+        await page.getByRole("button", { name: "Buat invoice Pelunasan 50% →" }).waitFor();
+        await go(page, "Jualan", "Invoice");
         await page.getByRole("button", { name: "Terbitkan" }).waitFor();
       });
       await t.step("Tagih via WA: words and PDF through your WhatsApp; sending issues it, Batal takes it back", async () => {
@@ -2141,18 +2169,20 @@ export const flows = [
         await page.getByRole("group", { name: "Konfirmasi kiriman" }).getByRole("button", { name: "Udah, catat" }).click();
         await page.getByRole("button", { name: "Batal catat" }).waitFor();
       });
-      await t.step("a field the post didn't fill uses the default, set once", async () => {
+      await t.step("what you offer comes from the default; their need is never guessed", async () => {
         await page.getByRole("tablist", { name: "Tahap pesan" }).getByRole("tab", { name: /^1\. Intro/ }).click();
         await page.getByRole("button", { name: "+ Pakai contoh personal" }).click();
         const panel = page.getByRole("tabpanel", { name: /Tahap 1: Intro/ });
-        await panel.getByText(/Halo dmflow! Aku biasa pegang/).waitFor();
+        await panel.getByText(/Halo dmflow! (Aku biasa pegang [^.]+\. )?Boleh aku kirim contoh/).waitFor();
         await page.getByRole("button", { name: "Template & script" }).click();
         await page.getByRole("dialog", { name: "Tambah" }).getByRole("button", { name: "Default kalau kosong" }).click();
         const sheet = page.getByRole("dialog", { name: "Default kalau kosong" });
         await sheet.locator("#def-kebutuhan").fill("dokumentasi acara");
         await sheet.getByRole("button", { name: "Simpan default" }).click();
         await sheet.waitFor({ state: "detached" });
-        await panel.getByText(/Halo dmflow! Aku liat kamu lagi nyari dokumentasi acara\. Aku biasa/).waitFor();
+        // PRD-024 (decided 5 Nov): the default is what you offer, {tawaran}.
+        await panel.getByText(/Halo dmflow! Aku biasa pegang dokumentasi acara\. Boleh/).waitFor();
+        if (await panel.getByText(/lagi nyari dokumentasi acara/).count()) throw new Error("the default was said to be their need");
       });
       await t.step("change the daily goal to 25 in a sheet with Batal", async () => {
         await page.getByRole("button", { name: /Ubah target harian/ }).click();
@@ -2257,6 +2287,22 @@ export const flows = [
         await card.getByRole("grid", { name: "Kalender job" }).getByRole("gridcell", { name: /tanggal yang diminta/ }).waitFor();
         await card.getByRole("button", { name: "Tutup kalender" }).click();
       });
+      await t.step("Saran: the script fitted to their post, every change said, still editable", async () => {
+        const saran = page.getByRole("region", { name: /^Saran buat / });
+        const read = saran.getByRole("list", { name: "Yang kebaca dari post-nya" });
+        await read.getByText("foto katalog").waitFor();
+        await read.getByText("besok jam 1-5 sore").waitFor();
+        const text = await saran.locator("#saran-text").inputValue();
+        // Their need and their date are in; the starter's food lines aren't, for a catalogue for UMKM.
+        if (!text.includes("foto katalog") || !text.includes("besok jam 1-5 sore")) throw new Error(`the Saran misses their need or date: ${text}`);
+        if (/makanan|menu/i.test(text)) throw new Error(`the Saran still talks about food: ${text}`);
+        await saran.getByRole("list", { name: "Yang disesuaiin" }).getByText(/^Dibuang: /).first().waitFor();
+        await t.audit("Saran fitted to the post");
+        // What you edit is what goes out; Balikin saran puts the fitted text back.
+        await saran.locator("#saran-text").fill(`${text} 🙏`);
+        await saran.getByRole("button", { name: "Balikin saran" }).click();
+        if ((await saran.locator("#saran-text").inputValue()) !== text) throw new Error("Balikin saran did not restore the fitted text");
+      });
       await t.step("an empty stage takes an example, filled in with their need", async () => {
         await page.getByRole("tablist", { name: "Tahap pesan" }).getByRole("tab", { name: /^4\. Penawaran/ }).click();
         const offer = page.getByRole("tabpanel", { name: /Tahap 4: Penawaran/ });
@@ -2273,6 +2319,10 @@ export const flows = [
         await dlg.getByRole("button", { name: /Sisipkan \{kebutuhan\}/ }).click();
         await dlg.getByText("Halo Toko Kue! Butuh foto katalog").waitFor();
         await dlg.getByRole("button", { name: "Batal", exact: true }).click();
+        // Typed and not saved: asked first (PRD-024 §7), then back to Hunting.
+        const sure = page.getByRole("dialog", { name: "Buang perubahan?" });
+        await sure.getByRole("button", { name: "Buang", exact: true }).click();
+        await dlg.waitFor({ state: "detached" });
       });
       // After the share's page load: a write still in flight when a page reloads is lost.
       await t.step("start a session: the bar shows over the page", async () => {
@@ -2836,6 +2886,49 @@ export const flows = [
         const inside = await page.evaluate(() => !!document.activeElement?.closest("[role=dialog]"));
         if (!inside) throw new Error("Tab left the dialog");
         await page.keyboard.press("Escape");
+      });
+    },
+  },
+  {
+    // PRD-023: paste a chat, see where it stands, the script that fits and why,
+    // a reply adjusted to it; history private to the seller, deletable.
+    name: "analisis chat: stage, script match and an adjusted reply, kept and deleted",
+    async run(t) {
+      const { page } = t;
+      await t.step("sign up and open Analisis Chat", async () => { await signup(t); await go(page, "Belajar", "Analisis Chat"); await page.locator("#ca-text").waitFor(); });
+      await t.step("two names and no seller: it asks who you are instead of guessing", async () => {
+        await page.locator("#ca-text").fill("Raka: Halo kak, aku fotografer makanan. Boleh aku kirim portfolio?\nDita: Kami sudah punya fotografer langganan kak");
+        await page.getByRole("button", { name: "Analisis", exact: true }).click();
+        const who = page.getByRole("region", { name: "Siapa kamu" });
+        await who.getByRole("button", { name: "Raka" }).click();
+        await who.waitFor({ state: "detached" });
+      });
+      await t.step("an existing provider is an objection: acknowledge and ask, no pitch", async () => {
+        await page.getByRole("region", { name: "Ringkasan" }).getByText("Posisinya: Objection handling").waitFor();
+        const reply = await page.locator("#ca-reply").inputValue();
+        if (!reply.startsWith("Wajar kalau udah ada yang biasa pegang.")) throw new Error(`the reply doesn't acknowledge first: ${reply}`);
+        if (/paket|portfolio|harga/i.test(reply)) throw new Error(`the reply still pitches: ${reply}`);
+        await page.getByRole("list", { name: "Dasar teori" }).getByText("Objections").waitFor();
+        await page.getByText(/^Analisis lengkap/).click();
+        await page.getByText(/gugur: keberatannya perlu diklarifikasi dulu/).first().waitFor();
+        await t.audit("Analisis Chat result");
+      });
+      await t.step("a price question can't go out without a real price", async () => {
+        await page.locator("#ca-seller").fill("");
+        await page.locator("#ca-text").fill("Aku: Halo kak Dita!\nDita: Halo, buat foto menu 20 item berapa ya harganya?");
+        await page.getByRole("button", { name: "Analisis", exact: true }).click();
+        await page.getByRole("region", { name: "Ringkasan" }).getByText("Posisinya: Proposal").waitFor();
+        // From a script or a new reply, the price is the seller's to fill in, never made up.
+        await page.getByRole("list", { name: "Wajib kamu isi" }).getByText(/harga/i).first().waitFor();
+      });
+      await t.step("history: both kept, one opened again, all deleted", async () => {
+        const hist = page.getByRole("region", { name: "Riwayat analisis" });
+        await hist.getByText("Riwayat (2)").waitFor();
+        await hist.getByRole("button", { name: /^Objection handling/ }).click();
+        await page.getByRole("region", { name: "Ringkasan" }).getByText("Posisinya: Objection handling").waitFor();
+        await hist.getByRole("button", { name: "Hapus semua" }).click();
+        await page.getByRole("dialog", { name: "Hapus semua riwayat analisis?" }).getByRole("button", { name: "Hapus", exact: true }).click();
+        await hist.getByText("Riwayat (0)").waitFor();
       });
     },
   },

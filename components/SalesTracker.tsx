@@ -33,6 +33,7 @@ import * as XLSX from "xlsx";
 import { auth, db } from "@/lib/firebase";
 import { clearCacheAndReload as resetAppCache } from "@/lib/appCache";
 import SalesSimulator from "@/components/SalesSimulator";
+import ChatAnalysis from "@/components/ChatAnalysis";
 import ScriptLibrary from "@/components/ScriptLibrary";
 import QuickPitch from "@/components/QuickPitch";
 import Services from "@/components/Services";
@@ -70,7 +71,7 @@ const SECTIONS: { id: string; label: string; short: string; icon: string; tabs: 
   { id: "hunt", label: "Hunting", short: "Hunting", icon: "target" as IconName, tabs: ["Hunting"] },
   { id: "sell", label: "Jualan", short: "Jualan", icon: "briefcase" as IconName, tabs: ["Leads", "Penawaran", "Invoice", "Paket"] },
   { id: "team", label: "Tim & Report", short: "Tim", icon: "shield" as IconName, tabs: ["Dashboard tim", "Guild", "Report Klien", "Log aktivitas", "Outreach", "Rejection Log"] },
-  { id: "learn", label: "Belajar", short: "Belajar", icon: "book" as IconName, tabs: ["Script Library", "Simulator", "AI Playbook"] },
+  { id: "learn", label: "Belajar", short: "Belajar", icon: "book" as IconName, tabs: ["Script Library", "Analisis Chat", "Simulator", "AI Playbook"] },
 ];
 // Only tabs without a heading of their own get a line here; the others say
 // what they're for under their own title, and saying it twice read as clutter.
@@ -1254,6 +1255,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         {activeTab === "Rejection Log" && <RejectionTab rejections={rejections} />}
 
         {/* SIMULATOR */}
+        {activeTab === "Analisis Chat" && <ChatAnalysis />}
         {activeTab === "Simulator" && <SalesSimulator />}
 
         {/* SCRIPT LIBRARY */}

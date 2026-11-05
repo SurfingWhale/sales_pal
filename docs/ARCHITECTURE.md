@@ -24,12 +24,14 @@ Browser / PWA
                                    ├─ komponen layar (components/*.tsx)
                                    ├─ lib/*.ts (logika + akses data)
                                    │     └─ Firestore (langsung dari browser, dijaga firestore.rules)
-                                   └─ app/api/*/route.ts (server: kunci rahasia, Google, Threads, push)
+                                   ├─ app/api/*/route.ts (server: kunci rahasia, Google, Threads, push)
+                                   └─ /api/script-intelligence/* → api/index.py (FastAPI, Python; PRD-023)
 ```
 
 - **Frontend:** React 18 + Next.js 14. Hampir semua layar adalah *client component* (`"use client"` di baris pertama), artinya jalan di browser, bukan di server. [cek]
 - **Data:** Firebase. Browser baca dan tulis Firestore langsung (`lib/firebase.ts`). Yang boleh dan nggak boleh diatur di `firestore.rules`. [cek]
 - **Server:** cuma buat yang butuh rahasia atau kuota: `app/api/*` (Google Places, geocode, scan gambar, Threads, push, pricelist untuk situs, baca website yang ditempel). [cek]
+- **Server Python (PRD-023):** `api/index.py` (FastAPI) + `api/_intel/` membaca chat yang ditempel dan mencocokkan script, pakai aturan tanpa AI. Di Vercel jalan sebagai Python Function di project yang sama; saat dev/tes, `next.config.mjs` me-rewrite ke uvicorn (`SCRIPT_INTEL_ORIGIN` atau `127.0.0.1:8000`). [cek]
 - **Tidak ada router per layar di dalam app.** Semua layar setelah login ada di satu halaman (`/dashboard`), dan pindah layar = ganti state `activeTab`. [cek]
 
 ---
@@ -184,11 +186,14 @@ Pola yang sama dipakai buat data lain lewat hook `useSpaceCollection(space, "quo
 | `components/LeadDetail.tsx` | `LeadPage`: lembar kerja lead di semua layar | `Sheet`, `PlaceEditor`, `ChatPicker`, `LeadHistory`, `WaImport` |
 | `components/ChatPicker.tsx` | Chat ke lead lewat script kamu: pilih tahap (Intro, Follow-up, …), script paling cocok terpilih otomatis, edit, kirim di WhatsApp | `pitchTemplates`, `lib/templates`, `lib/scriptPick`, `useBusiness` |
 | `lib/scriptPick.ts` | Memilih script yang cocok buat lead: tag "Buat tipe bisnis" di template, kata khas tipe bisnis (`CATEGORY_WORDS`), dan kebutuhan/pain point; `categoryOf` membaca tipe bisnis dari teks | `lib/leadEdit` |
+| `lib/scriptFit.ts` | **Saran** di Hunting: script terpilih disesuaikan ke post Threads (tambah kebutuhan/jadwal/budget, buang kalimat soal bisnis lain), tiap perubahan dicatat | `lib/scriptPick`, `lib/templates` |
+| `components/ChatAnalysis.tsx` | Belajar → **Analisis Chat**: tempel chat → tahap, skor script, balasan yang disesuaikan, riwayat (`analyses`, ≤ 90 hari) | `/api/script-intelligence/analyze`, `pitchTemplates`, `lib/space` |
+| `api/index.py`, `api/_intel/*.py` | (server, Python) endpoint Script Intelligence: parse → understand → stage → frameworks → match → adjust → analyze | FastAPI, `firebase_admin` (cek token); tes `tests/intel/` |
 | `components/Quotes.tsx`, `Invoices.tsx` | Daftar dan alur penawaran/invoice | `DocEditor`, `PrintSheet`, `WaSendSheet` |
 | `components/DocEditor.tsx` | Form penawaran/invoice | `lib/billing`, `Sheet`, `PlaceEditor`, `ConfirmSheet` |
 | `components/Services.tsx`, `ComponentCatalog.tsx` | Paket, komponen (termasuk aset dan penyusutan), harga situs | `lib/billing`, `SitePricing` |
 | `firestore.rules` | Siapa boleh baca/tulis apa (dideploy utuh saat merge ke main) | – |
-| `tests/flows/flows.mjs`, `run.mjs` | Tes klik-semua-alur di emulator + audit HIG | Playwright, Firebase emulator |
+| `tests/flows/flows.mjs`, `run.mjs` | Tes klik-semua-alur di emulator + audit HIG (run.mjs juga menyalakan uvicorn untuk `api/`) | Playwright, Firebase emulator, Python |
 | `docs/prd/*.md` | Keputusan produk per fitur | – |
 
 ---
@@ -242,6 +247,9 @@ Inventaris dari pencarian statis (29 Okt). Detail lengkap per baris ada di `docs
   - tombol Chat di halaman lead membuka script kamu dulu (`ChatPicker`);
   - script yang cocok dengan tipe bisnis lead terpilih otomatis (`lib/scriptPick`), dan template bisa ditandai "Buat tipe bisnis" buat tuning;
   - kartu catatan chat nggak lagi nutupin baris Kontak.
+- **Baru (5 Nov, PRD-023):**
+  - **Saran** di Hunting: script disesuaikan ke post yang di-scrape, perubahannya kelihatan dan bisa dibalikin;
+  - **Analisis Chat** di Belajar: mesin aturan Python (SPIN, Mom Test, Gap Selling, Objections, Voss, JOLT, …), skor script 30/25/20/15/10 + mismatch kritis, balasan yang wajib dicek penjual, riwayat pribadi 90 hari.
 - **Catatan terbuka:** tidak ada issue GitHub yang terbuka per 29 Okt. Keputusan owner yang masih menunggu ada di PRD masing-masing (mis. PRD-017 §8).
 - **Cara tes:** `npm run test:flows` (dan `DESKTOP=1`), lihat `CLAUDE.md`. CI `native` menjalankan 4 browser sebelum merge.
 

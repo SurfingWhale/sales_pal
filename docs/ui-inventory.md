@@ -105,6 +105,8 @@ Tidak ada komponen tooltip. Hanya atribut `title=` bawaan browser, misalnya "Pro
 | `ActivityIsland` | `components/ActivityIsland.tsx` ← `Hunting.tsx` | Selalu tampil di atas tab Hunting; tombol buka: heatmap (HP) dan kalender job | Tombol yang sama | `lib/activity.ts`, baca saja |
 | `HuntLeads` + `LeadRow` (tab Leads di Hunting) | `components/HuntLeads.tsx`, `components/LeadCard.tsx` | Tab Leads, angka Perlu dibales dan Follow-up di island | – | Baca `leads`; buka `LeadPage` |
 | `ChatPicker` (panel "Pesan ke …", `Sheet full`) | `components/ChatPicker.tsx` ← `useChatLog().picker` di `LeadDetail.tsx` | Tulis pesan, tombol kartu lead, script tipe customer, Balas | × "Tutup", Belum, Udah | `pitchTemplates` (baca), `logContact` setelah Udah |
+| Kartu "Saran buat …" (di `TemplateBoard`) | `components/TemplateBoard.tsx` ← `Hunting.tsx` (`post`) | Halaman kirim Hunting, kalau prospek punya post dan script perlu disesuaikan | – (bagian halaman); "Balikin saran" | `lib/scriptFit` (`suggestForPost`); kirim lewat `pick(…, fitted)` |
+| Analisis Chat (tab, bukan overlay) | `components/ChatAnalysis.tsx` ← `SalesTracker.tsx` (Belajar) | Tab "Analisis Chat" | Ganti tab; "Kosongin"; riwayat: hapus pakai `useConfirm` | `POST /api/script-intelligence/analyze`; `analyses` (tulis/baca/hapus), `pitchTemplates` (baca, tambah script baru) |
 | `PlaceEditor` (isi sheet) | `components/PlaceEditor.tsx` | Di dalam Sheet | Pilih hasil / "Pakai titik ini" / GPS → simpan dan tutup | `/api/geocode`, geolocation, `GeoPicker` |
 | `WaImport` | `components/WaImport.tsx` | LeadDetail, atau langsung terbuka dari file share | guard; × | `parseWaExport`, `/api/scan` |
 | Menu "Tambah" Hunting | `Hunting.tsx` (`addMenu`) | Tombol + | STD; × | ke template / paste / radar / script |

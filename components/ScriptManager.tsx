@@ -1,16 +1,16 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { deleteDoc, deleteField, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useSpaceCollection } from "@/lib/billing";
 import { canEditCatalog, spaceDoc, useSpace } from "@/lib/space";
 import type { PitchTemplate } from "@/lib/hunting";
-import { FillData, SAMPLE, STAGES, STARTERS, Stage, VARIABLES, WORKFLOWS, Workflow, brandOf, fillTemplate, stageOf, workflowOf } from "@/lib/templates";
+import { FillData, SAMPLE, STAGES, STARTERS, Stage, VARIABLES, WORKFLOWS, Workflow, bareNeed, brandOf, fillTemplate, stageOf, workflowOf } from "@/lib/templates";
 import { CATEGORIES } from "@/lib/leadEdit";
 import { SITES } from "@/lib/sites";
 import Sheet from "@/components/Sheet";
-import { useConfirm } from "@/components/ConfirmSheet";
+import ConfirmSheet, { useConfirm } from "@/components/ConfirmSheet";
 import { btnMuted, btnPrimary, chip, inputStyle, label } from "@/components/ui";
 
 // Script Management (PRD-022 §4, QA-4 Chat): every script of the workspace in
@@ -44,7 +44,33 @@ export default function ScriptManager({ onClose, startNew, stage, data }: {
   const [err, setErr] = useState("");
   const [ask, askSheet] = useConfirm();
 
-  const leave = () => { if (startNew) onClose(); else setEditing(null); };
+  // List and editor are two steps (PRD-024 §7): Back or Batal in the editor goes
+  // back to the list where it was, or to where it was opened from; ✕ leaves Script
+  // pesan. Unsaved typing is never thrown away without asking.
+  const dirty = useRef(false);
+  const top = useRef<HTMLDivElement>(null);
+  const scrollAt = useRef(0);
+  const [asking, setAsking] = useState<null | (() => void)>(null);
+  const scroller = () => top.current?.closest<HTMLElement>(".sp-sheet") || null;
+  const open = (t: PitchTemplate) => { scrollAt.current = scroller()?.scrollTop || 0; dirty.current = false; setEditing(t); };
+  const leave = () => {
+    dirty.current = false;
+    if (startNew) { onClose(); return; }
+    setEditing(null);
+    requestAnimationFrame(() => { const el = scroller(); if (el) el.scrollTop = scrollAt.current; });
+  };
+  const guard = (then: () => void) => { if (dirty.current) setAsking(() => then); else then(); };
+  // The question closes first and takes its history entry with it; the editor
+  // (or the whole sheet) closes once that step back has landed, one step at a
+  // time, so WebKit never gets two dialogs' entries dropped at once.
+  const afterBack = (then: () => void) => {
+    let done = false;
+    const go = () => { if (done) return; done = true; window.removeEventListener("popstate", go); requestAnimationFrame(then); };
+    window.addEventListener("popstate", go);
+    setTimeout(go, 600);
+  };
+  const back = () => (editing ? guard(leave) : onClose());
+  const shut = () => (editing ? guard(onClose) : onClose());
   const ref = (id: string) => spaceDoc(space, "pitchTemplates", id);
   async function run(fn: () => Promise<unknown>) {
     setErr("");
@@ -75,9 +101,16 @@ export default function ScriptManager({ onClose, startNew, stage, data }: {
   }
 
   return (
-    <Sheet full title={editing ? (editing.id ? "Ubah script" : "Script baru") : "Script pesan"} onClose={onClose}>
+    <Sheet full title={editing ? (editing.id ? "Ubah script" : "Script baru") : "Script pesan"} onClose={shut} onBack={back}>
       {askSheet}
-      {editing ? <ScriptEditor start={editing} sample={sample} onDone={leave} /> : (
+      {asking && (
+        <ConfirmSheet title="Buang perubahan?" action="Buang" busyLabel="Membuang…" onConfirm={async () => { const then = asking; setAsking(null); dirty.current = false; afterBack(then); }} onClose={() => setAsking(null)}>
+          Script ini belum disimpan. Kalau dibuang, hilang.
+        </ConfirmSheet>
+      )}
+      <div ref={top} />
+      {editing && <ScriptEditor start={editing} sample={sample} onDone={leave} onCancel={back} onDirty={d => { dirty.current = d; }} />}
+      {!editing && (
         <div className="sp-scripts">
           <div role="group" aria-label="Tahap" className="sp-chiprow sp-scripts-rail" style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {rail.map(r => (
@@ -104,7 +137,7 @@ export default function ScriptManager({ onClose, startNew, stage, data }: {
             <div style={{ display: "flex", gap: 8 }}>
               <label className="vh" htmlFor="sm-q">Cari script</label>
               <input id="sm-q" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Cari script" style={{ ...select, flex: 1, minWidth: 0 }} />
-              {canEdit && <button type="button" onClick={() => setEditing(blank(view === "semua" || view === "arsip" ? undefined : view))} style={{ ...btnPrimary, minHeight: 44, flexShrink: 0 }}>Buat script</button>}
+              {canEdit && <button type="button" onClick={() => open(blank(view === "semua" || view === "arsip" ? undefined : view))} style={{ ...btnPrimary, minHeight: 44, flexShrink: 0 }}>Buat script</button>}
             </div>
             {err && <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--hot)" }}>{err}</p>}
 
@@ -125,9 +158,10 @@ export default function ScriptManager({ onClose, startNew, stage, data }: {
                     </p>
                     <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--app-muted)" }}>{[STAGES[stageIndex(t)]?.label, useName(workflowOf(t)), brandName(brandOf(t))].join(" · ")}</p>
                     <p style={{ margin: "6px 0 0", fontSize: 13, lineHeight: 1.45, color: "var(--app-ink-2)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{fillTemplate(t.body, sample)}</p>
+                    {bareNeed(t.body) && <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--app-muted)" }}>Isi ini butuh kebutuhan orangnya. Kalau dia belum bilang, kebacanya “kebutuhannya”.</p>}
                     {canEdit && (
                       <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        <button type="button" aria-label={`Ubah ${t.title}`} onClick={() => setEditing(t)} style={{ ...chip, minHeight: 44 }}>Ubah</button>
+                        <button type="button" aria-label={`Ubah ${t.title}`} onClick={() => open(t)} style={{ ...chip, minHeight: 44 }}>Ubah</button>
                         <button type="button" aria-label={`Lainnya: ${t.title}`} aria-expanded={more === t.id} onClick={() => setMore(more === t.id ? null : t.id)} style={{ ...chip, minHeight: 44 }}>Lainnya</button>
                         {more === t.id && (t.archived ? (
                           <>
@@ -157,7 +191,7 @@ export default function ScriptManager({ onClose, startNew, stage, data }: {
   );
 }
 
-function ScriptEditor({ start, sample, onDone }: { start: PitchTemplate; sample: FillData; onDone: () => void }) {
+function ScriptEditor({ start, sample, onDone, onCancel, onDirty }: { start: PitchTemplate; sample: FillData; onDone: () => void; onCancel: () => void; onDirty: (dirty: boolean) => void }) {
   const space = useSpace();
   // Until it's set here, "Dipakai di" follows what the message says (workflowOf).
   const [t, setT] = useState(start);
@@ -165,6 +199,7 @@ function ScriptEditor({ start, sample, onDone }: { start: PitchTemplate; sample:
   const [err, setErr] = useState("");
   const body = useRef<HTMLTextAreaElement>(null);
   const ready = !!t.title.trim() && !!t.body.trim();
+  useEffect(() => { onDirty(JSON.stringify(t) !== JSON.stringify(start)); }, [t, start, onDirty]);
 
   function insert(key: string) {
     const el = body.current;
@@ -237,6 +272,11 @@ function ScriptEditor({ start, sample, onDone }: { start: PitchTemplate; sample:
         </div>
         <textarea ref={body} id="tpl-body" value={t.body} onChange={e => setT({ ...t, body: e.target.value })} rows={7} placeholder="Halo {nama}, …" style={{ ...inputStyle, fontSize: 16, lineHeight: 1.5, resize: "vertical" }} />
       </div>
+      {bareNeed(t.body) && (
+        <p role="note" style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: "var(--app-muted)" }}>
+          <code>{"{kebutuhan}"}</code> cuma keisi kalau orangnya sendiri bilang butuh apa. Bungkus pakai <code>[ ]</code> biar dilewati kalau kosong, atau pakai <code>{"{tawaran}"}</code> buat yang kamu tawarkan.
+        </p>
+      )}
       {t.body.trim() && (
         <div>
           <div style={label}>Pratinjau</div>
@@ -245,7 +285,7 @@ function ScriptEditor({ start, sample, onDone }: { start: PitchTemplate; sample:
       )}
       {err && <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--hot)" }}>{err}</p>}
       <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" onClick={onDone} style={{ ...btnMuted, flex: 1, minHeight: 48 }}>Batal</button>
+        <button type="button" onClick={onCancel} style={{ ...btnMuted, flex: 1, minHeight: 48 }}>Batal</button>
         <button type="button" disabled={!ready || saving} onClick={save} style={{ ...btnPrimary, flex: 1, minHeight: 48, opacity: ready ? 1 : 0.5 }}>{saving ? "Menyimpan…" : "Simpan"}</button>
       </div>
     </div>

@@ -353,9 +353,10 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
     : url ? { how: "open", label: "Copy & buka profil", url }
     : { how: "wa", label: "Kirim WA" };
 
-  function pick(t: PitchTemplate, how: "copy" | "wa" | "open", camp?: Campaign) {
+  // fitted: the Saran's text (TemplateBoard), corrected for their post and maybe edited.
+  function pick(t: PitchTemplate, how: "copy" | "wa" | "open", camp?: Campaign, fitted?: string) {
     if (isBlocked) return;
-    const text = fillTemplate(t.body, fillData);
+    const text = fitted?.trim() ? fitted.trim() : fillTemplate(t.body, fillData);
     const key = camp ? `cmp_${camp.id}` : t.id;
     if (how === "copy") {
       copy(text, key, setCopiedId);
@@ -802,7 +803,8 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
         )}
 
         <TemplateBoard templates={templates} scores={scores} data={fillData} stage={stageFor(cur, cur ? view(cur, now, strategy) : undefined)}
-          blocked={isBlocked} copiedId={copiedId} copyFail={copyFail} onPick={pick} canEdit={canEdit} send={sendOut}
+          blocked={isBlocked} copiedId={copiedId} copyFail={copyFail} onPick={(t, how, text) => pick(t, how, undefined, text)} canEdit={canEdit} send={sendOut}
+          post={cur ? { ctx: cur.context || {}, text: [...(cur.history || [])].reverse().find(e => e.kind === "post")?.text || "" } : undefined}
           sampleName={target.trim() ? (cur?.name || target.trim()) : ""}
           extra={<button onClick={() => setAddMenu(true)} aria-haspopup="dialog" style={{ ...chip, display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="plus" size={15} stroke={2} />Template & script</button>} />
 

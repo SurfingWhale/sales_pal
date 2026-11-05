@@ -165,6 +165,15 @@ await t("member cannot read another's entry", assertFails(getDoc(doc(M2, "guilds
 await t("viewer cannot read the log", assertFails(getDocs(collection(V, "guilds", G, "activities"))));
 // Guild as a workspace (PRD-007 §2.5)
 const lead = (owner, extra = {}) => ({ name: "Warung Uji", status: "Warm", ownerUid: owner, ownerName: owner, ...extra });
+// Script Intelligence history (PRD-023): only its seller, even in a guild.
+const an = (owner, extra = {}) => ({ ownerUid: owner, ownerName: owner, conversation: "Dita: halo", createdAt: 1000, expiresAt: 1000 + 86400000, ...extra });
+await t("member keeps an analysis of their own", assertSucceeds(setDoc(doc(M, "guilds", G, "analyses", "a1"), an("memb"))));
+await t("an analysis can't be kept past 90 days", assertFails(setDoc(doc(M, "guilds", G, "analyses", "a2"), an("memb", { expiresAt: 1000 + 91 * 86400000 }))));
+await t("an analysis can't be filed for someone else", assertFails(setDoc(doc(M, "guilds", G, "analyses", "a3"), an("memb2"))));
+await t("leader cannot read a member's analysis", assertFails(getDoc(doc(L, "guilds", G, "analyses", "a1"))));
+await t("another member cannot read it", assertFails(getDoc(doc(M2, "guilds", G, "analyses", "a1"))));
+await t("member reads and deletes their own", assertSucceeds(getDoc(doc(M, "guilds", G, "analyses", "a1"))));
+await t("member deletes their own analysis", assertSucceeds(deleteDoc(doc(M, "guilds", G, "analyses", "a1"))));
 await t("member logs a lead of their own in the guild", assertSucceeds(setDoc(doc(M, "guilds", G, "leads", "l1"), lead("memb"))));
 await t("member cannot log a lead for someone else", assertFails(setDoc(doc(M, "guilds", G, "leads", "l2"), lead("memb2"))));
 await t("a guild lead needs an owner", assertFails(setDoc(doc(M, "guilds", G, "leads", "l3"), { name: "x" })));
