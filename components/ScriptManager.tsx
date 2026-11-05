@@ -60,6 +60,15 @@ export default function ScriptManager({ onClose, startNew, stage, data }: {
     requestAnimationFrame(() => { const el = scroller(); if (el) el.scrollTop = scrollAt.current; });
   };
   const guard = (then: () => void) => { if (dirty.current) setAsking(() => then); else then(); };
+  // The question closes first and takes its history entry with it; the editor
+  // (or the whole sheet) closes once that step back has landed, one step at a
+  // time, so WebKit never gets two dialogs' entries dropped at once.
+  const afterBack = (then: () => void) => {
+    let done = false;
+    const go = () => { if (done) return; done = true; window.removeEventListener("popstate", go); requestAnimationFrame(then); };
+    window.addEventListener("popstate", go);
+    setTimeout(go, 600);
+  };
   const back = () => (editing ? guard(leave) : onClose());
   const shut = () => (editing ? guard(onClose) : onClose());
   const ref = (id: string) => spaceDoc(space, "pitchTemplates", id);
@@ -95,7 +104,7 @@ export default function ScriptManager({ onClose, startNew, stage, data }: {
     <Sheet full title={editing ? (editing.id ? "Ubah script" : "Script baru") : "Script pesan"} onClose={shut} onBack={back}>
       {askSheet}
       {asking && (
-        <ConfirmSheet title="Buang perubahan?" action="Buang" busyLabel="Membuang…" onConfirm={async () => { const then = asking; setAsking(null); dirty.current = false; then(); }} onClose={() => setAsking(null)}>
+        <ConfirmSheet title="Buang perubahan?" action="Buang" busyLabel="Membuang…" onConfirm={async () => { const then = asking; setAsking(null); dirty.current = false; afterBack(then); }} onClose={() => setAsking(null)}>
           Script ini belum disimpan. Kalau dibuang, hilang.
         </ConfirmSheet>
       )}
