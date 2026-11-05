@@ -1965,6 +1965,8 @@ export const flows = [
       });
       await t.step("Leads scrolled far: the header is solid, the funnel stays, tapping the tab goes back up", async () => {
         await go(page, "Jualan", "Leads");
+        // The funnel row shows once the leads are in; on WebKit that can take a couple of seconds.
+        await page.locator(".sp-leads-bar").waitFor();
         await page.evaluate(() => window.scrollTo(0, 1800));
         await page.waitForTimeout(150);
         const { bg, gap } = await page.evaluate(() => ({
