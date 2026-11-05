@@ -2924,7 +2924,10 @@ export const flows = [
         if (!t.touch || t.device) return;   // WebKit's driver has no touch gestures
         const size = page.viewportSize();
         await page.setViewportSize({ width: size.width, height: 480 });
+        // The gesture lands at the row's spot on screen, so the row has to be on screen.
+        await group.evaluate(row => row.scrollIntoView({ block: "center" }));
         const box = await group.boundingBox();
+        if (!box || box.y < 0 || box.y + box.height > 480) throw new Error(`the row is off screen (y=${box?.y})`);
         const cdp = await page.context().newCDPSession(page);
         // Swipe toward whichever way the page still has room: on a short page it may already sit at the bottom.
         const [from, room] = await page.evaluate(() => [scrollY, document.documentElement.scrollHeight - innerHeight - scrollY]);
