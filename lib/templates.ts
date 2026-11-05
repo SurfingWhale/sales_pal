@@ -84,20 +84,26 @@ export const VARIABLES = [
 export type VarKey = (typeof VARIABLES)[number]["key"];
 export type FillData = Partial<Record<VarKey, string>>;
 
-// What a variable says when there's nothing to put in it.
-const FALLBACK: Record<VarKey, string> = { nama: "kak", kebutuhan: "kebutuhannya", tawaran: "", waktu: "", lokasi: "", post: "", bisnis: "" };
+// What a variable says when there's nothing to put in it: only a name has a
+// stand-in ("kak"). Any other empty word takes its sentence with it, so a
+// message never reads "postingan kakak yang ini “kebutuhannya”" (owner, 5 Nov).
+const FALLBACK: Record<VarKey, string> = { nama: "kak", kebutuhan: "", tawaran: "", waktu: "", lokasi: "", post: "", bisnis: "" };
 
 export const SAMPLE: FillData = Object.fromEntries(VARIABLES.map(v => [v.key, v.example])) as FillData;
 
 // {var} fills in; a part in [square brackets] that holds a {var} disappears
 // when that var is empty: "Halo {nama}![ Butuh {kebutuhan}[ {waktu}]?]".
 // Brackets nest, innermost first; brackets around no {var} stay as typed.
+// Outside brackets, a sentence whose word is empty is left out whole.
 export function fillTemplate(body: string, data: FillData): string {
   const val = (k: string) => (data[k as VarKey] || "").trim();
   const known = (k: string) => (VARIABLES as readonly { key: string }[]).some(v => v.key === k.toLowerCase());
   const OPEN = "\u0001", CLOSE = "\u0002";
   // "kak{nama}" reads "kakLa Alcienda" otherwise (QA-4).
   let out = body.replace(/([a-zà-ÿ])\{nama\}/gi, "$1 {nama}");
+  // "yang ini “{kebutuhan}”" quotes them: with no need read yet, their post's
+  // own words are that quote. Outside quotes {kebutuhan} stays the need only.
+  if (!val("kebutuhan") && val("post")) out = out.replace(/["“]\{kebutuhan\}["”]/gi, "{post}");
   for (let i = 0; i < 6; i++) {
     const next = out.replace(/\[([^[\]]*)\]/g, (_, inner: string) => {
       const keys = Array.from(inner.matchAll(/\{(\w+)\}/g), m => m[1].toLowerCase()).filter(known);
@@ -107,13 +113,14 @@ export function fillTemplate(body: string, data: FillData): string {
     if (next === out) break;
     out = next;
   }
+  const empty = (k: string) => known(k) && !val(k.toLowerCase()) && !FALLBACK[k.toLowerCase() as VarKey];
+  out = out.split(/(\n+)/).map(line => /^\n+$/.test(line) ? line
+    : line.split(/(?<=[.!?…])\s+/).filter(sen => !Array.from(sen.matchAll(/\{(\w+)\}/g)).some(m => empty(m[1]))).join(" ")).join("");
   out = out.split(OPEN).join("[").split(CLOSE).join("]");
   out = out.replace(/\{(\w+)\}/g, (whole, k: string) => (known(k) ? val(k.toLowerCase()) || FALLBACK[k.toLowerCase() as VarKey] : whole));
-  return out.replace(/[ \t]{2,}/g, " ").replace(/ +([,.!?])/g, "$1").trim();
+  return out.replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ").replace(/ +([,.!?])/g, "$1").trim();
 }
 
-// {kebutuhan} outside [brackets]: with nothing they said, it reads "kebutuhannya".
-// Script Management marks these instead of changing them (PRD-024 §5).
 export function bareNeed(body: string): boolean {
   let out = body;
   for (let i = 0; i < 6; i++) { const next = out.replace(/\[[^[\]]*\]/g, ""); if (next === out) break; out = next; }

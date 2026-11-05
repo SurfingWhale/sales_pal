@@ -606,6 +606,7 @@ export const flows = [
         await page.locator("#tpl-body").fill(body);
         if (use) await page.locator("#tpl-use").selectOption({ label: use });
         await editor().getByRole("button", { name: "Simpan", exact: true }).click();
+        await editor().waitFor({ state: "detached" });
         await manager().getByRole("listitem").filter({ hasText: title }).waitFor();
       };
       await t.step("sign up, add a lead, and write three scripts", async () => {
@@ -619,8 +620,9 @@ export const flows = [
         await write("Intro post", "Halo {nama}, aku liat postingan kamu.");
         await write("Intro andalan", "Halo {nama}, ini yang paling sering jalan.", "Leads");
         // Nothing said where it's used, and it talks about their post: a DM script.
-        await manager().getByRole("listitem").filter({ hasText: "Intro post" }).getByText(/Intro · Hunting \(DM\) · Semua brand/).waitFor();
-        await manager().getByRole("listitem").filter({ hasText: "Intro biasa" }).getByText(/Intro · Leads · Semua brand/).waitFor();
+        // Rows sit under their stage; a row says where it's used and for which brand.
+        await manager().getByRole("region", { name: "1. Intro" }).getByRole("listitem").filter({ hasText: "Intro post" }).getByText("Hunting (DM) · Semua brand").waitFor();
+        await manager().getByRole("listitem").filter({ hasText: "Intro biasa" }).getByText("Leads · Semua brand").waitFor();
         await t.audit("Script Management");
       });
       await t.step("Back in the editor goes to the list, and asks before dropping typing", async () => {
@@ -647,11 +649,13 @@ export const flows = [
         await manager().getByRole("button", { name: "Buat script" }).waitFor();
       });
       await t.step("the default comes first, and it's what Pesan puts in", async () => {
+        // ⋯ opens the script's actions in a sheet.
         await manager().getByRole("button", { name: "Lainnya: Intro andalan" }).click();
-        await manager().getByRole("button", { name: "Jadikan default" }).click();
+        await page.getByRole("dialog", { name: "Intro andalan" }).getByRole("button", { name: /^Jadikan default/ }).click();
+        await page.getByRole("dialog", { name: "Intro andalan" }).waitFor({ state: "detached" });
         await manager().getByRole("listitem").filter({ hasText: "Intro andalan" }).getByText("Default", { exact: true }).waitFor();
         await manager().getByRole("button", { name: "Lainnya: Intro post" }).click();
-        await manager().getByRole("button", { name: "Duplikat" }).click();
+        await page.getByRole("dialog", { name: "Intro post" }).getByRole("button", { name: "Duplikat" }).click();
         await manager().getByRole("listitem").filter({ hasText: "Intro post (salinan)" }).waitFor();
         // The list is longer than the screen: Tutup stays in view while it scrolls.
         await manager().evaluate(el => { el.scrollTop = el.scrollHeight; });
@@ -674,10 +678,22 @@ export const flows = [
       await t.step("archived from Pesan, it's gone from there, and comes back from Arsip", async () => {
         await picker().getByRole("button", { name: "Kelola", exact: true }).click();
         await manager().getByRole("button", { name: "Lainnya: Intro andalan" }).click();
-        await manager().getByRole("button", { name: "Arsipkan" }).click();
+        await page.getByRole("dialog", { name: "Intro andalan" }).getByRole("button", { name: /^Arsipkan/ }).click();
         await manager().getByRole("listitem").filter({ hasText: "Intro andalan" }).waitFor({ state: "detached" });
-        await manager().getByRole("button", { name: /^Arsip/ }).click();
+        // Archived, with Batal: it comes back, then goes again.
+        await page.getByRole("status").filter({ hasText: "Diarsipkan: Intro andalan" }).getByRole("button", { name: "Batal" }).click();
         await manager().getByRole("listitem").filter({ hasText: "Intro andalan" }).waitFor();
+        await manager().getByRole("button", { name: "Lainnya: Intro andalan" }).click();
+        await page.getByRole("dialog", { name: "Intro andalan" }).getByRole("button", { name: /^Arsipkan/ }).click();
+        await manager().getByRole("listitem").filter({ hasText: "Intro andalan" }).waitFor({ state: "detached" });
+        // Arsip is a filter: shown as a chip that takes you back.
+        await manager().getByRole("button", { name: /^Filter/ }).click();
+        const filter = page.getByRole("dialog", { name: "Filter script" });
+        await filter.getByRole("radio", { name: /^Arsip/ }).check();
+        await filter.getByRole("button", { name: /^Lihat \d+ script$/ }).click();
+        await filter.waitFor({ state: "detached" });
+        await manager().getByRole("listitem").filter({ hasText: "Intro andalan" }).waitFor();
+        await manager().getByRole("button", { name: "Hapus filter Arsip" }).waitFor();
         await manager().getByRole("button", { name: "Tutup" }).click();
         await manager().waitFor({ state: "detached" });
         await picker().getByRole("button", { name: /^Intro andalan/ }).waitFor({ state: "detached" });
@@ -3332,6 +3348,90 @@ export const flows = [
         await go(page, "Beranda");
         await expectText(page, "Bu Lama");
         await expectText(page, "10 hari ga gerak");
+      });
+    },
+  },
+  {
+    name: "script pesan: lifecycle, rows, actions in a sheet, filter, keyboard, three screen sizes",
+    async run(t) {
+      const { page, project } = t;
+      await t.step("seeded scripts sit under their stage, at 390, 375 and 1440 wide", async () => {
+        const email = await signup(t);
+        const uid = await uidOf(project, email);
+        const u = `users/${uid}`;
+        const rows = [
+          ["intro", "Cold DM — Kuliner", "Halo {nama}! Aku liat postingan kamu \"{kebutuhan}\". Aku biasa foto menu buat kedai dan kafe. Boleh aku kirim contoh hasil + kisaran harganya?", "visufavor", "hunting", true],
+          ["intro", "Cold DM — Olahraga", "Halo {nama}! Aku fotografer olahraga di Jakarta Selatan. Aku liat kamu lagi cari {kebutuhan}. Mau aku kirim contoh hasil turnamen sebelumnya?", "untmd", "hunting"],
+          ["intro", "Intro WA lead Maps", "Halo kak {nama}, aku dari {bisnis}. Kami bantu foto produk dan menu biar jualan online lebih menarik. Boleh aku kirim portofolionya?", "", "leads"],
+          ["followup", "Follow-up ringan", "Hai {nama}, nyambung soal pesanku kemarin. Masih nyari? Kalau udah dapet juga gapapa ya.", "", "semua", true],
+          ["followup", "Follow-up kedua", "Hai {nama}, aku kirim satu contoh lagi yang mirip kebutuhan kamu. Kalau belum sekarang, kabarin aja ya.", "", "semua"],
+          ["gali", "Tanya kebutuhan", "Makasih udah bales, {nama}! Biar aku siapin yang pas: buat apa, kira-kira berapa foto, dan tanggalnya kapan?", "", "semua", true],
+          ["offering", "Dua pilihan paket", "Siap {nama}! Aku ada dua pilihan paket, aku kirim detail + contoh hasilnya ya. Tinggal pilih yang paling cocok.", "", "semua", true],
+          ["closing", "Konfirmasi DP", "Hai {nama}, buat ngunci jadwalnya cukup DP 50% ya. Habis itu aku kirim konfirmasi tanggalnya.", "", "semua"],
+          ["etb", "Pelanggan lama", "Halo {nama}! Makasih udah order kemarin. Bulan ini ada harga khusus buat pelanggan lama, mau aku kirim detailnya?", "", "semua"],
+        ];
+        await seedDocs(project, rows.map(([stage, title, body, brand, workflow, isDefault], i) => [`${u}/pitchTemplates/tpl_s${i}`, { stage, title, body, brand, workflow, ...(isDefault ? { isDefault: true } : {}) }]));
+        await go(page, "Hunting");
+        await page.getByRole("button", { name: "Menu tambah: target, template, script" }).click();
+        await page.getByRole("dialog", { name: "Tambah" }).getByRole("button", { name: "Kelola script pesan" }).click();
+        const m = page.getByRole("dialog", { name: "Script pesan" });
+        await m.getByText("Pelanggan lama").first().waitFor();
+        const tag = process.env.SHOT_TAG || "after", dir = process.env.SHOT_DIR;
+        for (const [w, h] of [[390, 844], [375, 667], [1440, 900]]) {
+          await page.setViewportSize({ width: w, height: h });
+          await page.waitForTimeout(300);
+          const ov = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
+          if (ov.sw > ov.cw) throw new Error(`${w}x${h}: scrolls sideways (${ov.sw} > ${ov.cw})`);
+          // Every row's ⋯ is on screen horizontally; nothing is clipped at the edge.
+          const out = await m.evaluate(el => [...el.querySelectorAll(".sp-sm-more, .sp-sm-new, .sp-sm-tool")].filter(b => { const r = b.getBoundingClientRect(); return r.width && (r.left < 0 || r.right > innerWidth); }).length);
+          if (out) throw new Error(`${w}x${h}: ${out} actions sit off screen`);
+          await t.audit(`Script pesan ${w}×${h}`);
+          if (dir) await page.screenshot({ path: `${dir}/${tag}-${w}.png` });
+          if (dir && w === 390) { const was = await page.evaluate(() => { const v = document.documentElement.dataset.theme; document.documentElement.dataset.theme = "dark"; return v || ""; }); await page.waitForTimeout(200); await page.screenshot({ path: `${dir}/${tag}-${w}-dark.png` }); await page.evaluate(v => { document.documentElement.dataset.theme = v; }, was); }
+        }
+        {
+          await page.setViewportSize({ width: 390, height: 844 });
+          await m.getByRole("button", { name: "Lainnya: Cold DM — Kuliner" }).click();
+          await page.getByRole("dialog", { name: "Cold DM — Kuliner" }).waitFor();
+          await page.waitForTimeout(300);
+          if (dir) await page.screenshot({ path: `${dir}/after-menu.png` });
+          await page.keyboard.press("Escape");
+          await m.getByRole("button", { name: /^Filter/ }).click();
+          await page.getByRole("dialog", { name: "Filter script" }).waitFor();
+          await page.waitForTimeout(300);
+          if (dir) await page.screenshot({ path: `${dir}/after-filter.png` });
+          await page.getByRole("dialog", { name: "Filter script" }).getByText("Visufavor").click();
+          await page.getByRole("dialog", { name: "Filter script" }).getByRole("button", { name: /^Lihat/ }).click();
+          await m.getByRole("listitem").filter({ hasText: "Cold DM — Olahraga" }).waitFor({ state: "detached" });
+          await page.waitForTimeout(300);
+          if (dir) await page.screenshot({ path: `${dir}/after-filtered.png` });
+          await m.getByRole("button", { name: "Hapus filter Visufavor" }).click();
+          await m.getByRole("button", { name: /^2\. Follow-up/ }).click();
+          await m.getByText("Udah di-intro, belum bales.").waitFor();
+          if (await m.getByRole("listitem").filter({ hasText: "Pelanggan lama" }).count()) throw new Error("another stage shows under Follow-up");
+          if (dir) await page.screenshot({ path: `${dir}/after-stage.png` });
+          await page.setViewportSize({ width: 1440, height: 900 });
+          await m.getByRole("button", { name: "Semua" }).click();
+          // Keyboard: a row opens with Enter, Escape steps back to the list.
+          await m.getByRole("button", { name: "Ubah Konfirmasi DP" }).focus();
+          await page.keyboard.press("Enter");
+          await page.getByRole("dialog", { name: "Ubah script" }).waitFor();
+          await page.keyboard.press("Escape");
+          await page.getByRole("dialog", { name: "Script pesan" }).waitFor();
+          await m.getByRole("button", { name: "Ubah Tanya kebutuhan" }).click();
+          await page.getByRole("dialog", { name: "Ubah script" }).waitFor();
+          // Laptop: the list stays beside the editor, the open one marked.
+          await page.locator(".sp-sm-row.is-on").filter({ hasText: "Tanya kebutuhan" }).waitFor();
+          await page.waitForTimeout(300);
+          if (dir) await page.screenshot({ path: `${dir}/after-1440-edit.png` });
+          await page.setViewportSize({ width: 375, height: 667 });
+          await page.waitForTimeout(300);
+          if (dir) await page.screenshot({ path: `${dir}/after-375-edit.png` });
+          // A phone shows the editor alone; Batal goes back to the list.
+          if (await page.locator(".sp-sm-list").isVisible()) throw new Error("the list shows beside the editor on a phone");
+          await page.getByRole("button", { name: "Batal", exact: true }).click();
+          await page.getByRole("dialog", { name: "Script pesan" }).getByRole("button", { name: "Ubah Tanya kebutuhan" }).waitFor();
+        }
       });
     },
   },

@@ -524,6 +524,21 @@ export function useBusiness(space: Space): Business {
 }
 
 // A collection in the current workspace — in a guild, a Member's own rows.
+// The same, and whether it has loaded yet: a list says "loading", not "empty",
+// until the first snapshot (or an error) comes in.
+export function useSpaceCollectionLive<T extends { id: string }>(space: Space, name: SpaceCollection): [T[], "loading" | "ready" | "error"] {
+  const [state, setState] = useState<[T[], "loading" | "ready" | "error"]>([[], "loading"]);
+  const key = `${space.kind}:${space.id}:${space.role || ""}:${name}`;
+  useEffect(() => {
+    setState([[], "loading"]);
+    return onSnapshot(spaceQuery(space, name), snap => {
+      setState([snap.docs.map(d => ({ id: d.id, ...d.data() } as T)), "ready"]);
+    }, () => setState([[], "error"]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return state;
+}
+
 export function useSpaceCollection<T extends { id: string }>(space: Space, name: SpaceCollection): T[] {
   const [rows, setRows] = useState<T[]>([]);
   const key = `${space.kind}:${space.id}:${space.role || ""}:${name}`;

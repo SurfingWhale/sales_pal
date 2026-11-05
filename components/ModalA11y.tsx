@@ -87,7 +87,7 @@ export default function ModalA11y() {
       if (!box.hasAttribute("aria-label") && title) box.setAttribute("aria-label", title);
       openers.push(document.activeElement as HTMLElement | null);
       if (!box.contains(document.activeElement)) {
-        const first = box.querySelector<HTMLElement>("[autofocus]") || focusables(box).find(e => e.tagName !== "BUTTON") || focusables(box)[0];
+        const first = box.querySelector<HTMLElement>("[autofocus], [data-autofocus]") || focusables(box).find(e => e.tagName !== "BUTTON") || focusables(box)[0];
         first?.focus({ preventScroll: true });
       }
     }
