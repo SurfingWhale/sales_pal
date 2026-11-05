@@ -2257,6 +2257,22 @@ export const flows = [
         await card.getByRole("grid", { name: "Kalender job" }).getByRole("gridcell", { name: /tanggal yang diminta/ }).waitFor();
         await card.getByRole("button", { name: "Tutup kalender" }).click();
       });
+      await t.step("Saran: the script fitted to their post, every change said, still editable", async () => {
+        const saran = page.getByRole("region", { name: /^Saran buat / });
+        const read = saran.getByRole("list", { name: "Yang kebaca dari post-nya" });
+        await read.getByText("foto katalog").waitFor();
+        await read.getByText("besok jam 1-5 sore").waitFor();
+        const text = await saran.locator("#saran-text").inputValue();
+        // Their need and their date are in; the starter's food lines aren't, for a catalogue for UMKM.
+        if (!text.includes("foto katalog") || !text.includes("besok jam 1-5 sore")) throw new Error(`the Saran misses their need or date: ${text}`);
+        if (/makanan|menu/i.test(text)) throw new Error(`the Saran still talks about food: ${text}`);
+        await saran.getByRole("list", { name: "Yang disesuaiin" }).getByText(/^Dibuang: /).first().waitFor();
+        await t.audit("Saran fitted to the post");
+        // What you edit is what goes out; Balikin saran puts the fitted text back.
+        await saran.locator("#saran-text").fill(`${text} 🙏`);
+        await saran.getByRole("button", { name: "Balikin saran" }).click();
+        if ((await saran.locator("#saran-text").inputValue()) !== text) throw new Error("Balikin saran did not restore the fitted text");
+      });
       await t.step("an empty stage takes an example, filled in with their need", async () => {
         await page.getByRole("tablist", { name: "Tahap pesan" }).getByRole("tab", { name: /^4\. Penawaran/ }).click();
         const offer = page.getByRole("tabpanel", { name: /Tahap 4: Penawaran/ });
