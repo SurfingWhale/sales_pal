@@ -11,13 +11,14 @@ import Icon from "@/components/Icon";
 // `full` takes the whole height and covers what opened it: a step of its own, not a layer on top.
 // `onBack` (optional): what Back, Escape and the scrim do when that differs from
 // ✕, e.g. one step back inside the sheet instead of closing it.
-// `wide`: a full sheet that uses the whole width of a laptop screen.
+// `wide`: a full sheet with room for a side rail on a laptop, still one centred
+// column, so the title, ✕ and content stay together on a wide screen.
 export default function Sheet({ title, onClose, onBack, full, wide, children }: { title: string; onClose: () => void; onBack?: () => void; full?: boolean; wide?: boolean; children: React.ReactNode }) {
   if (typeof document === "undefined") return null;
   return createPortal(
     <div className={`modal-overlay sp-sheet-overlay${full ? " sp-sheet-full" : ""}`} onClick={e => { e.stopPropagation(); (onBack || onClose)(); }} style={{ alignItems: full ? "stretch" : "flex-end", background: full ? "var(--app-bg)" : "var(--scrim)", zIndex: 130 }}>
       <section role="dialog" aria-modal="true" aria-label={title} onClick={e => e.stopPropagation()} className="sp-sheet sp-leads"
-        style={{ width: "100%", maxWidth: full ? (wide ? "none" : 960) : 480, height: full ? "100%" : undefined, overflowY: "auto", borderRadius: full ? 0 : 32, padding: full ? (wide ? "0 clamp(18px, 3vw, 40px) calc(22px + env(safe-area-inset-bottom, 0px))" : "0 18px calc(22px + env(safe-area-inset-bottom, 0px))") : "10px 18px 22px", background: "var(--app-card)", color: "var(--app-text)", boxShadow: full ? "none" : "0 -10px 40px rgba(0,0,0,0.18)", fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}>
+        style={{ width: "100%", maxWidth: full ? (wide ? 1120 : 960) : 480, height: full ? "100%" : undefined, overflowY: "auto", borderRadius: full ? 0 : 32, padding: full ? (wide ? "0 clamp(18px, 3vw, 40px) calc(22px + env(safe-area-inset-bottom, 0px))" : "0 18px calc(22px + env(safe-area-inset-bottom, 0px))") : "10px 18px 22px", background: "var(--app-card)", color: "var(--app-text)", boxShadow: full ? "none" : "0 -10px 40px rgba(0,0,0,0.18)", fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}>
         {!full && <div aria-hidden="true" style={{ width: 38, height: 5, borderRadius: 999, background: "var(--app-line-strong)", margin: "0 auto 12px" }} />}
         {/* A long full sheet scrolls under its title, so the way out stays in reach. */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12, ...(full ? { position: "sticky" as const, top: 0, zIndex: 2, paddingTop: "calc(12px + env(safe-area-inset-top, 0px))", paddingBottom: 8, background: "var(--app-card)" } : {}) }}>
