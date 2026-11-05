@@ -186,7 +186,15 @@ async function main() {
   }
   procs.push(spawn("firebase", ["emulators:start", "--only", "auth,firestore", "--project", project, ...config], { cwd: ROOT, detached: true, stdio: "ignore" }));
   // Open to every signed-in test account; the access flow closes it itself (config/access).
-  const appEnv = { ...process.env, NEXT_PUBLIC_FIREBASE_EMULATORS: "1", ACCESS_OPEN: "1", NEXT_PUBLIC_EMU_AUTH_PORT: String(AUTH_PORT), NEXT_PUBLIC_EMU_FS_PORT: String(FS_PORT) };
+  // Script Intelligence (PRD-023): the FastAPI app on its own port, its tokens
+  // checked by the auth emulator; the app reaches it through a rewrite.
+  const INTEL_PORT = 8300 + OFFSET;
+  const python = process.env.PYTHON || "python3";
+  procs.push(spawn(python, ["-m", "uvicorn", "index:app", "--app-dir", "api", "--port", String(INTEL_PORT), "--log-level", "warning"], {
+    cwd: ROOT, detached: true, stdio: "ignore",
+    env: { ...process.env, FIREBASE_AUTH_EMULATOR_HOST: `127.0.0.1:${AUTH_PORT}`, FIREBASE_PROJECT_ID: project },
+  }));
+  const appEnv = { ...process.env, NEXT_PUBLIC_FIREBASE_EMULATORS: "1", ACCESS_OPEN: "1", NEXT_PUBLIC_EMU_AUTH_PORT: String(AUTH_PORT), NEXT_PUBLIC_EMU_FS_PORT: String(FS_PORT), SCRIPT_INTEL_ORIGIN: `http://127.0.0.1:${INTEL_PORT}` };
   if (PROD) {
     console.log("… next build (PROD=1)");
     execSync("npx next build", { cwd: ROOT, env: appEnv, stdio: "ignore" });
