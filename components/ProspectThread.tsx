@@ -18,6 +18,7 @@ import { FillData, STAGES, Stage, fillTemplate, stageFor, stageOf } from "@/lib/
 import { btnMuted, btnPrimary, chip, ink, inputStyle } from "@/components/ui";
 import Icon, { MoreDots } from "@/components/Icon";
 import ConvertSheet from "@/components/ConvertSheet";
+import { release, removePending } from "@/lib/pendingSend";
 
 export type SendHow = "copy" | "wa" | "open";
 export interface SendOut { how: "wa" | "open"; label: string; url?: string }
@@ -30,9 +31,11 @@ const dayOf = (ms: number) => {
   return same(d, now) ? "Hari ini" : same(d, y) ? "Kemarin" : d.toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
 };
 
-export default function ProspectThread({ p, strategy, templates, fill, sendOut, sessionId, onHandOver, onLog, onClose }: {
+export default function ProspectThread({ p, strategy, templates, fill, sendOut, sessionId, onHandOver, onLog, onQueue, onClose, onOpenLead }: {
   p: Prospect; strategy: Strategy; templates: PitchTemplate[]; fill: FillData; sendOut: SendOut; sessionId?: string;
   onHandOver: (p: Prospect, text: string, how: SendHow) => void;   // copy it, or open WhatsApp or Instagram
+  onOpenLead?: (leadId: string) => void;
+  onQueue?: (p: Prospect, t: PitchTemplate | null, text: string) => string;   // keeps the question app-wide (AMB-06)
   onLog: (p: Prospect, t: PitchTemplate | null, text: string) => Promise<(() => Promise<void>) | null>;   // they said it went out
   onClose: () => void;
 }) {
@@ -49,7 +52,11 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
   const [msg, setMsg] = useState("");
   const [note, setNote] = useState("");
   const [undo, setUndo] = useState<(() => Promise<void>) | null>(null);
-  const [asking, setAsking] = useState<{ text: string; tpl: PitchTemplate | null } | null>(null);
+  const [asking, setAsking] = useState<{ text: string; tpl: PitchTemplate | null; pendingId?: string } | null>(null);
+  // Closed with the question open: the app asks it instead (AMB-06).
+  const askingNow = useRef(asking);
+  askingNow.current = asking;
+  useEffect(() => () => release(askingNow.current?.pendingId), []);
   const [askDnc, setAskDnc] = useState(false);
   const [converting, setConverting] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
@@ -63,7 +70,8 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
     if (!text.trim() || dnc || busy) return;
     setMsg(""); setUndo(null);
     onHandOver(p, text, how);
-    setAsking({ text, tpl });
+    release(asking?.pendingId);
+    setAsking({ text, tpl, pendingId: onQueue?.(p, tpl, text) });
   }
 
   async function confirmSent() {
@@ -72,7 +80,7 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
     const back = await onLog(p, asking.tpl, asking.text);
     setBusy(false);
     // Logged once: the box empties, so a second tap can't log it twice.
-    if (back) { setAsking(null); setText(""); setTpl(null); setUndo(() => back); setTimeout(() => setUndo(u => (u === back ? null : u)), 10000); }
+    if (back) { removePending(asking.pendingId); setAsking(null); setText(""); setTpl(null); setUndo(() => back); setTimeout(() => setUndo(u => (u === back ? null : u)), 10000); }
     else setMsg("Pesan belum kecatat. Cek koneksi lalu coba lagi.");
   }
 
@@ -191,7 +199,7 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
           {asking && (
             <div role="group" aria-label="Konfirmasi kiriman" className="sp-thread-note">
               <span role="status" style={{ flex: 1 }}>Pesannya udah kekirim?</span>
-              <button onClick={() => setAsking(null)} style={{ ...chip, minHeight: 44, fontWeight: 700 }}>Belum</button>
+              <button onClick={() => { removePending(asking.pendingId); setAsking(null); }} style={{ ...chip, minHeight: 44, fontWeight: 700 }}>Belum</button>
               <button onClick={confirmSent} disabled={busy} style={{ ...btnPrimary, minHeight: 44 }}>Udah, catat</button>
             </div>
           )}
@@ -234,7 +242,7 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
       {converting && (
         // Its backdrop tap closes only itself, not the conversation under it.
         <div style={{ display: "contents" }} onClick={e => e.stopPropagation()}><ConvertSheet p={p} sessionId={sessionId} onClose={() => setConverting(false)}
-          onDone={m => { setConverting(false); setMsg(""); setUndo(null); setNote(m); }} /></div>
+          onDone={m => { setConverting(false); setMsg(""); setUndo(null); setNote(m); }} onOpenLead={onOpenLead} /></div>
       )}
     </div>,
     document.body

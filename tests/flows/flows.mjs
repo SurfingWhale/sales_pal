@@ -2526,7 +2526,7 @@ export const flows = [
       });
       await t.step("send it for real from the journey; the bar counts it", async () => {
         await expand("Toko Kue (@tokokue)");
-        await page.getByRole("button", { name: "✉ Kirim intro" }).click();
+        await page.getByRole("dialog", { name: /^Kontak / }).getByRole("button", { name: "Kirim intro", exact: true }).click();
         await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@tokokue");
         await page.getByRole("button", { name: "✓ Tersalin" }).waitFor({ state: "detached" });
         await page.getByRole("button", { name: "Copy", exact: true }).first().click();
@@ -2541,26 +2541,42 @@ export const flows = [
         await pick("Nunggu");
         await row("Toko Kue (@tokokue)").locator(".sp-pbadge").getByText("Intro terkirim").waitFor();
         await expand("Toko Kue (@tokokue)");
-        await tap(page, page.getByRole("button", { name: "💬 Dibales" }), "Dibales");
+        // One way in for every answer: "Dia jawab…", a sheet with what each one does next.
+        await tap(page, page.getByRole("dialog", { name: /^Kontak / }).getByRole("button", { name: "Dia jawab…" }), "Dia jawab");
+        const answers = page.getByRole("dialog", { name: "Toko Kue jawab apa?" });
+        await tap(page, answers.getByRole("button", { name: /^Cuma bales/ }), "Cuma bales");
         await page.getByLabel("Tempel balasannya (opsional)").fill("boleh kak, pricelist-nya berapa?");
-        await tap(page, page.getByRole("button", { name: "Simpan", exact: true }), "Simpan balasan");
+        await tap(page, page.getByRole("dialog", { name: "Dia bales" }).getByRole("button", { name: "Simpan", exact: true }), "Simpan balasan");
+        // It says so, with a way back.
+        await page.locator(".sp-toast").getByText("Balasan Toko Kue dicatat").waitFor();
         await pick("Terhubung");
         // Their card says what they last said; opening it shows the whole chat.
         await row("Toko Kue (@tokokue)").getByText(/boleh kak, pricelist-nya berapa\?/).waitFor();
         await expand("Toko Kue (@tokokue)");
         await page.getByRole("region", { name: /Riwayat Toko Kue/ }).getByText("boleh kak, pricelist-nya berapa?").first().waitFor();
-        await tap(page, page.getByRole("group", { name: /Hasil untuk/ }).getByRole("button", { name: "✅ Tertarik" }), "Tertarik");
+        await tap(page, page.getByRole("dialog", { name: /^Kontak / }).getByRole("button", { name: "Dia jawab…" }), "Dia jawab");
+        await tap(page, page.getByRole("dialog", { name: "Toko Kue jawab apa?" }).getByRole("button", { name: /^Tertarik/ }), "Tertarik");
+        await row("Toko Kue (@tokokue)").locator(".sp-pbadge").getByText("Tertarik").waitFor();
+        // A wrong tap is taken back with Batal, then marked again.
+        await page.locator(".sp-toast").getByRole("button", { name: "Batal" }).click();
+        await page.locator(".sp-toast").getByText("Dibatalin").waitFor();
+        await row("Toko Kue (@tokokue)").locator(".sp-pbadge").getByText("Tertarik").waitFor({ state: "detached" });
+        await page.getByRole("dialog", { name: /^Kontak / }).getByRole("button", { name: "Dia jawab…" }).click();
+        await page.getByRole("dialog", { name: "Toko Kue jawab apa?" }).getByRole("button", { name: /^Tertarik/ }).click();
         await row("Toko Kue (@tokokue)").locator(".sp-pbadge").getByText("Tertarik").waitFor();
       });
       await t.step("their page: the answer is marked there, Back returns to their card", async () => {
         // A follow-up opened for someone who had answered meanwhile (owner, 23 Okt).
-        await page.getByRole("button", { name: "✉ Kirim pesan" }).click();
+        await page.getByRole("dialog", { name: /^Kontak / }).getByRole("button", { name: "Kirim pesan", exact: true }).click();
         await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@tokokue");
-        const result = page.getByRole("group", { name: "Hasil untuk Toko Kue" });
-        await result.getByRole("button", { name: "🤔 Pikir-pikir" }).click();
-        await result.getByRole("button", { name: "🤔 Pikir-pikir", pressed: true }).waitFor();
-        await result.getByRole("button", { name: "✅ Tertarik" }).click();
-        await result.getByRole("button", { name: "✅ Tertarik", pressed: true }).waitFor();
+        const answers = page.getByRole("dialog", { name: "Toko Kue jawab apa?" });
+        await page.getByRole("button", { name: "Dia jawab…" }).click();
+        await answers.getByRole("button", { name: /^Pikir-pikir/ }).click();
+        await answers.waitFor({ state: "detached" });
+        await page.getByRole("button", { name: "Dia jawab…" }).click();
+        await answers.getByRole("button", { name: /^Pikir-pikir/, pressed: true }).waitFor();
+        await answers.getByRole("button", { name: /^Tertarik/ }).click();
+        await answers.waitFor({ state: "detached" });
         // The browser's Back leaves their page for the list, not the app, with their card open.
         await page.goBack();
         await page.locator("#hunt-target").waitFor({ state: "detached" });
@@ -2570,7 +2586,7 @@ export const flows = [
         await row("Toko Kue (@tokokue)").locator(".sp-pbadge").getByText("Tertarik").waitFor();
       });
       await t.step("this month's promo: a campaign made from their page and sent from it", async () => {
-        await page.getByRole("button", { name: "✉ Kirim pesan" }).click();
+        await page.getByRole("dialog", { name: /^Kontak / }).getByRole("button", { name: "Kirim pesan", exact: true }).click();
         await page.getByText(/^Ada promo bulan ini\?/).waitFor();
         await page.getByRole("button", { name: "Bikin kampanye" }).click();
         await page.getByRole("button", { name: "+ Kampanye" }).click();
@@ -2590,10 +2606,23 @@ export const flows = [
         await page.getByRole("region", { name: /Riwayat Toko Kue/ }).getByText("Kampanye yang udah diterima: Promo foto menu Oktober").waitFor();
       });
       await t.step("Kasih data makes them ETB and a Hot lead", async () => {
-        await page.getByRole("button", { name: "Kasih data →" }).click();
+        await page.getByRole("dialog", { name: /^Kontak / }).getByRole("button", { name: "Dia jawab…" }).click();
+        await page.getByRole("dialog", { name: "Toko Kue jawab apa?" }).getByRole("button", { name: /Kasih data$/ }).click();
         await page.locator("#cv-phone").fill("081234567890");
         await page.getByRole("button", { name: "Simpan jadi Lead" }).click();
-        await expectText(page, "masuk Leads sebagai Hot");
+        // The sheet says what happened and offers the next step (AMB-15).
+        const sheet = page.getByRole("dialog", { name: /^Kasih data: / });
+        await sheet.getByText(/masuk Leads sebagai Hot/).waitFor();
+        await sheet.getByRole("button", { name: "Buka lead" }).click();
+        const leadPage = page.getByRole("dialog", { name: /^Profil Toko Kue/ });
+        await leadPage.waitFor();
+        await leadPage.getByRole("button", { name: /^Kembali ke / }).first().click();
+        await leadPage.waitFor({ state: "detached" });
+        // Back on their contact page, which the lead's page opened over.
+        const contact = page.getByRole("dialog", { name: "Kontak Toko Kue (@tokokue)" });
+        await contact.waitFor();
+        await contact.getByRole("button", { name: /^Tutup kontak/ }).click();
+        await contact.waitFor({ state: "detached" });
         await pick("ETB");
         await row("Toko Kue (@tokokue)").waitFor();
         await page.getByRole("region", { name: "Sesi hunting" }).getByText(/1 data/).waitFor();
@@ -2610,7 +2639,7 @@ export const flows = [
         const card = row("Toko Kue (@tokokue)");
         await card.getByRole("list", { name: /^Tahap Data, 5 dari 5/ }).waitFor();
         await expand("Toko Kue (@tokokue)");
-        await page.getByRole("button", { name: "💬 Percakapan" }).first().click();
+        await page.getByRole("button", { name: "Percakapan", exact: true }).first().click();
         // The chat opens over their contact page, which stays under it (PRD-026).
         const th = page.locator(".sp-thread");
         const chat = th.getByRole("log", { name: "Percakapan dengan Toko Kue (@tokokue)" });
@@ -2653,7 +2682,7 @@ export const flows = [
         // A card's Kirim intro opens their page; the rest of the list follows with Berikutnya.
         await pick("Baru");
         await expand("@kopibaru");
-        await page.getByRole("dialog", { name: "Kontak @kopibaru" }).getByRole("button", { name: "✉ Kirim intro" }).click();
+        await page.getByRole("dialog", { name: "Kontak @kopibaru" }).getByRole("button", { name: "Kirim intro", exact: true }).click();
         await page.waitForFunction(() => document.querySelector("#hunt-target")?.value === "@kopibaru", null, { timeout: 10000 });
         await page.getByText(/^Dari antrian/).waitFor();
         await page.getByRole("button", { name: "Berhenti ambil dari antrian" }).click();
@@ -2674,8 +2703,12 @@ export const flows = [
         await page.getByLabel("Prospek @rotikeju").waitFor();
         await pick("Baru");
         await expand("@rotikeju");
-        await page.getByRole("button", { name: "🚫 Menolak dihubungi" }).click();
-        await page.getByRole("button", { name: "Kunci" }).click();
+        // Rare and final: in ⋯, red, and it says what goes before it locks.
+        await page.getByRole("button", { name: "Lainnya untuk @rotikeju" }).click();
+        await page.getByRole("dialog", { name: "Lainnya" }).getByRole("button", { name: /^Dia minta jangan dihubungi/ }).click();
+        const dnc = page.getByRole("dialog", { name: "Menolak dihubungi?" });
+        await dnc.getByText("Ini ga bisa dibatalin.").waitFor();
+        await dnc.getByRole("button", { name: "Kunci" }).click();
         await row("@rotikeju").waitFor({ state: "detached" });
         await pane(page, "Kirim");
         await page.getByRole("alert").getByText("minta ga dihubungi").waitFor();
@@ -2875,6 +2908,9 @@ export const flows = [
         await modal(page).locator("#gd-name").fill("Tim Pindah");
         await modal(page).getByRole("button", { name: "Bikin guild" }).click();
         await expectText(page, "Undang orang");
+        // The guild page can show before its dialog has gone; the step ends at rest,
+        // so the audit doesn't read a closing dialog (CI WebKit, 6 Nov).
+        await page.locator("#gd-name").waitFor({ state: "detached" });
       });
       await t.step("with the workspace picker, the header still fits a 320px phone", async () => {
         const size = page.viewportSize();
@@ -3190,6 +3226,9 @@ export const flows = [
         await modal(page).locator("#gd-name").fill("Tim Uji");
         await modal(page).getByRole("button", { name: "Bikin guild" }).click();
         await expectText(page, "Undang orang");
+        // The guild page can show before its dialog has gone; the step ends at rest,
+        // so the audit doesn't read a closing dialog (CI WebKit, 6 Nov).
+        await page.locator("#gd-name").waitFor({ state: "detached" });
       });
       await t.step("the crest: colour and symbol, then a PNG logo, from the banner", async () => {
         await page.getByRole("button", { name: "Atur lambang & nama guild" }).click();
@@ -3463,12 +3502,16 @@ export const flows = [
       });
       await t.step("the report joins them: baseline month, source, unknown row", async () => {
         await page.getByRole("tab", { name: "Report", exact: true }).click();
+        // In a month's first week the report opens on last month. Pick this one,
+        // and again if the report re-mounted under the pick (data arriving).
         await page.locator("#rp-month").selectOption(month);
+        await page.waitForFunction((m) => { const el = document.querySelector("#rp-month"); if (el && el.value !== m) { el.value = m; el.dispatchEvent(new Event("change", { bubbles: true })); } return el?.value === m; }, month);
         await expectText(page, "Rp 18,5 Jt");
         await expectText(page, "— bulan dasar");
         await expectText(page, "Belum ketahuan sumbernya · 1 deal");
-        const v = await page.locator("#rp-text").inputValue();
-        if (!/Sumber omzet terbesar: TikTok/.test(v)) throw new Error(`narrative: ${v.slice(0, 160)}`);
+        // The narrative is written once the month's numbers are in.
+        await page.waitForFunction(() => /Sumber omzet terbesar: TikTok/.test(document.querySelector("#rp-text")?.value || ""), null, { timeout: 8000 })
+          .catch(async () => { throw new Error(`narrative: ${(await page.locator("#rp-text").inputValue()).slice(0, 160)}`); });
       });
       await t.step("freeze it and get a WhatsApp link", async () => {
         await page.getByRole("button", { name: "Bekukan report" }).click();
@@ -3621,7 +3664,7 @@ export const flows = [
         await go(page, "Hunting");
         await page.getByRole("button", { name: "Journey @contoh_060", exact: true }).click();
         await page.getByRole("dialog", { name: "Kontak @contoh_060" }).waitFor();
-        await contact().getByRole("button", { name: "💬 Percakapan" }).click();
+        await contact().getByRole("button", { name: "Percakapan", exact: true }).click();
         const chat = page.locator(".sp-thread");
         await chat.waitFor();
         await t.audit("Percakapan over the contact page");
@@ -3629,7 +3672,7 @@ export const flows = [
         await chat.waitFor({ state: "detached" });
         await page.getByRole("dialog", { name: "Kontak @contoh_060" }).waitFor();
         // And with the phone's Back.
-        await contact().getByRole("button", { name: "💬 Percakapan" }).click();
+        await contact().getByRole("button", { name: "Percakapan", exact: true }).click();
         await chat.waitFor();
         await page.goBack();
         await chat.waitFor({ state: "detached" });
@@ -3682,6 +3725,62 @@ export const flows = [
         await ret.click();
         await lead().waitFor();
         await page.locator(".sp-sub-btn.is-on", { hasText: "Leads" }).waitFor();
+      });
+    },
+  },
+  {
+    name: "kiriman tertunda: a send whose screen is gone is asked app-wide, also after a reload",
+    async run(t) {
+      const { page, project } = t;
+      const count = async () => Number((await page.getByRole("button", { name: /^Hari ini \d+ dari \d+ pesan/ }).getAttribute("aria-label")).match(/^Hari ini (\d+)/)[1]);
+      const ask = () => page.getByRole("dialog", { name: /^(Pesannya udah kekirim\?|\d+ pesan belum dikonfirmasi)$/ });
+      const openTarget = async (who) => {
+        await go(page, "Hunting");
+        await page.locator("#hunt-search").fill(who);
+        await page.locator("#hunt-search").press("Enter");
+        await page.waitForFunction((w) => document.querySelector("#hunt-target")?.value === w, who);
+      };
+      let before = 0;
+      await t.step("a script to send", async () => {
+        const email = await signup(t);
+        const uid = await uidOf(project, email);
+        await seedDocs(project, [[`users/${uid}/pitchTemplates/tpl_t1`, { title: "Intro tertunda", body: "Halo {nama}, aku liat postingan kamu.", stage: "intro", workflow: "hunting" }]]);
+        await page.reload(); await page.waitForURL("**/dashboard");
+        await go(page, "Hunting");
+        before = await count();
+      });
+      await t.step("copied, then left Hunting before answering: the app asks, and Udah records it", async () => {
+        await openTarget("@tertunda");
+        await page.getByRole("button", { name: "Copy", exact: true }).first().click();
+        await page.getByRole("group", { name: "Konfirmasi kiriman" }).getByText("Pesan ke @tertunda udah kekirim?").waitFor();
+        await go(page, "Beranda");
+        await ask().waitFor();
+        await ask().getByText("Pesan ke @tertunda").waitFor();
+        await t.audit("Kiriman tertunda");
+        await ask().getByRole("button", { name: "Udah, catat" }).click();
+        await ask().waitFor({ state: "detached" });
+        await page.getByRole("status").getByText(/Tercatat: pesan ke @tertunda/).waitFor();
+        await go(page, "Hunting");
+        await page.waitForFunction((n) => /^Hari ini (\d+)/.exec(document.querySelector('[aria-label^="Hari ini "][aria-label*=" pesan"]')?.getAttribute("aria-label") || "")?.[1] === String(n), before + 1);
+      });
+      await t.step("copied, then the app reloads (iOS does that in WhatsApp): asked again, Belum records nothing", async () => {
+        await openTarget("@reload");
+        await page.getByRole("button", { name: "Copy", exact: true }).first().click();
+        await page.getByRole("group", { name: "Konfirmasi kiriman" }).waitFor();
+        await page.reload(); await page.waitForURL("**/dashboard");
+        await ask().getByText("Pesan ke @reload").waitFor();
+        await ask().getByRole("button", { name: "Belum" }).click();
+        await ask().waitFor({ state: "detached" });
+        await go(page, "Hunting");
+        if (await count() !== before + 1) throw new Error("Belum recorded a send");
+      });
+      await t.step("answered on its own screen: never asked twice", async () => {
+        await openTarget("@langsung");
+        await page.getByRole("button", { name: "Copy", exact: true }).first().click();
+        await page.getByRole("group", { name: "Konfirmasi kiriman" }).getByRole("button", { name: "Udah, catat" }).click();
+        await go(page, "Beranda");
+        await page.waitForTimeout(800);
+        if (await ask().count()) throw new Error("an answered send was asked again");
       });
     },
   },

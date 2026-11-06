@@ -41,6 +41,7 @@ const P: Record<string, React.ReactNode> = {
   moon: <path d="M20 14.5A8 8 0 1 1 9.5 4 6.5 6.5 0 0 0 20 14.5z" />,
   trash: <><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13" /></>,
   pencil: <><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></>,
+  more: <><circle cx="5.5" cy="12" r="1.2" /><circle cx="12" cy="12" r="1.2" /><circle cx="18.5" cy="12" r="1.2" /></>,
   link: <><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></>,
   // A link broken in two: a site price that stands on its own.
   unlink: <><path d="M10 14a4 4 0 0 0 5.7 0l1.3-1.3" /><path d="m19 11 .3-.3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-1.3 1.3" /><path d="m5 13-.3.3a4 4 0 0 0 5.7 5.7l1-1" /><path d="M4 4l16 16" /></>,

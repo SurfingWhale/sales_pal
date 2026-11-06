@@ -119,14 +119,18 @@ export default function ChatAnalysis() {
     setCopied(ok ? "ok" : "fail"); setTimeout(() => setCopied(""), 2000);
   }
 
+  // One tap, one script (AMB-11): busy until the write lands.
+  const [savingScript, setSavingScript] = useState(false);
   async function saveScript() {
-    if (!saving?.title.trim() || !draft.trim() || !result) return;
+    if (!saving?.title.trim() || !draft.trim() || !result || savingScript) return;
     const id = `tpl_${Date.now()}`;
+    setSavingScript(true);
     try {
       // Always a new script: an existing one is never overwritten from here.
       await setDoc(spaceDoc(space, "pitchTemplates", id), { title: saving.title.trim(), body: draft.trim(), stage: SCRIPT_STAGE[result.detected_stage.id] || "intro" });
       setSaving(null); setSavedNote(`Tersimpan jadi script “${saving.title.trim()}”.`);
     } catch { setSavedNote("Script gagal disimpan. Cek koneksi lalu coba lagi."); }
+    finally { setSavingScript(false); }
   }
 
   const r = result;
@@ -258,7 +262,7 @@ export default function ChatAnalysis() {
                 <label htmlFor="ca-script-title" className="vh">Nama script</label>
                 <input id="ca-script-title" value={saving.title} onChange={e => setSaving({ title: e.target.value })} placeholder="mis. Udah punya fotografer" autoFocus
                   style={{ ...inputStyle, fontSize: 16, flex: "1 1 200px", width: "auto" }} />
-                <button onClick={saveScript} disabled={!saving.title.trim()} style={{ ...btnPrimary, minHeight: 44, opacity: saving.title.trim() ? 1 : 0.5 }}>Simpan script</button>
+                <button onClick={saveScript} disabled={!saving.title.trim() || savingScript} style={{ ...btnPrimary, minHeight: 44, opacity: saving.title.trim() ? 1 : 0.5 }}>{savingScript ? "Menyimpan…" : "Simpan script"}</button>
                 <button onClick={() => setSaving(null)} style={{ ...btnMuted, minHeight: 44 }}>Batal</button>
               </div>
             ) : (

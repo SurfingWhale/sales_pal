@@ -50,7 +50,9 @@ import ModalA11y from "@/components/ModalA11y";
 import { Hunt, useClosingTarget, useHuntGoal } from "@/lib/hunting";
 import { JOURNEY_STEPS, Prospect, journeyStep, queue, statusColor as prospectColor, statusLabel, view } from "@/lib/prospects";
 import { profileUrl } from "@/lib/threads";
-import { useHuntSession, useProspects, useStrategy } from "@/lib/prospectStore";
+import { recordSend, useHuntSession, useProspects, useStrategy } from "@/lib/prospectStore";
+import PendingSends from "@/components/PendingSends";
+import type { PendingSend } from "@/lib/pendingSend";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { Component, Invoice, PriceChange, Quote, QuoteTemplate, Service, addDays, balance, daysBetween, invoiceState, owed, longDate, rupiah, today, total, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
 import { useConfirm } from "@/components/ConfirmSheet";
@@ -218,6 +220,15 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   // brings you back there, by its name, instead of leaving you on another tab.
   const [cameFrom, setCameFrom] = useState<{ tab: string; label: string; leadId?: string } | null>(null);
   const [huntFocus, setHuntFocus] = useState<string | null>(null);   // a prospect opened from Beranda
+  // Offline: say so once, at the top, instead of buttons that spin (AMB-07).
+  // Changes wait on this phone (Firestore persistence) and go out when the signal is back.
+  const [offline, setOffline] = useState(false);
+  useEffect(() => {
+    const sync = () => setOffline(!navigator.onLine);
+    sync();
+    window.addEventListener("online", sync); window.addEventListener("offline", sync);
+    return () => { window.removeEventListener("online", sync); window.removeEventListener("offline", sync); };
+  }, []);
   const wide = !useIsNarrow(1023);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   // Tambah lead: one door, opened on the way the button asked for (PRD-022 Q12).
@@ -869,6 +880,9 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       {activeTab === "Log aktivitas" && <p className="sp-subhint" aria-label="Rekap hari ini"><b className="tabnum" style={{ color: "var(--app-text)" }}>{sentToday}</b> terkirim hari ini, target {huntGoal}</p>}
 
       <div className="sp-main" style={{ padding: "32px 32px 96px", maxWidth: 1200, margin: "0 auto" }}>
+        {offline && (
+          <p role="status" className="sp-offline">Offline. Perubahan disimpan di HP ini dan dikirim begitu ada sinyal.</p>
+        )}
         {/* You jumped here from somewhere: one tap back to it, by its name (PRD-026). */}
         {cameFrom && cameFrom.tab !== activeTab && (
           <button type="button" className="sp-return" onClick={goBack}><Icon name="chevronLeft" size={18} stroke={2} />Kembali ke {cameFrom.label}</button>
@@ -1088,6 +1102,18 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           backLabel={`Kembali ke ${TAB_WORD[activeTab] || activeTab}`}
           onClose={() => { setPageOpen(false); setSelectedLead(null); }} shareFile={shareFor?.leadId === liveLead.id ? shareFor.file : null} />
       )}
+
+      {/* "Udah kekirim?" for sends whose screen is gone (AMB-06): recorded the same way. */}
+      <PendingSends space={`${space.kind}:${space.id}`} record={async (p: PendingSend) => {
+        if (p.kind === "hunt") {
+          await recordSend(space, p.send, prospects.find(x => x.id === p.prospectId), p.sessionId, strategy);
+          return true;
+        }
+        const l = leads.find(x => x.id === p.leadId);
+        if (!l) return false;
+        await logContact(l, p.what);
+        return true;
+      }} />
 
       {/* Profile & Settings Modal */}
       {showProfile && (

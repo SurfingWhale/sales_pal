@@ -134,6 +134,12 @@ export default function Quotes({ quotes, invoices, leads, services, components, 
       ...(old?.sentAt ? { sentAt: old.sentAt } : {}), ...(old?.invoiceId ? { invoiceId: old.invoiceId } : {}),
       ...(old?.acceptedAt ? { acceptedAt: old.acceptedAt } : {}), ...(old?.supersedes ? { supersedes: old.supersedes } : {}),
       ...(base ? { supersedes: base.id } : {}),
+      // What was locked when it went out stays on it (AMB-10): only a Draft is
+      // edited in place, and a save never drops these.
+      ...(old?.issuer ? { issuer: old.issuer } : {}), ...(old?.terms ? { terms: old.terms } : {}),
+      ...(old?.spk ? { spk: old.spk } : {}), ...(old?.nda ? { nda: old.nda } : {}),
+      ...(old?.followUpAt ? { followUpAt: old.followUpAt } : {}), ...(old?.invoiceIds ? { invoiceIds: old.invoiceIds } : {}),
+      ...(old?.supersededBy ? { supersededBy: old.supersededBy } : {}),
       ...briefOf(d),
       ...(cleanCosts(d.production).length ? { production: cleanCosts(d.production) } : {}),
     };
@@ -146,6 +152,8 @@ export default function Quotes({ quotes, invoices, leads, services, components, 
   async function setStatus(q: Quote, status: QuoteStatus) {
     const patch: Partial<Quote> = { status };
     if (status === "Terkirim" && !q.sentAt) patch.sentAt = today();
+    // Every way to "Terkirim" locks the letterhead and terms, as Kirim penawaran does (AMB-10).
+    if (status === "Terkirim") { patch.issuer = q.issuer || issuerOf(business); patch.terms = q.terms || termsOf(business); }
     if (status === "Disetujui") patch.acceptedAt = today();
     await updateDoc(spaceDoc(space, "quotes", q.id), patch);
     // An accepted revision takes over from the quote it revises.
@@ -174,7 +182,14 @@ export default function Quotes({ quotes, invoices, leads, services, components, 
   }
 
   // One invoice per schedule row, made as a draft: issuing it is its own step.
+  // One tap, one invoice (AMB-11): a second tap while it saves does nothing.
+  const [making, setMaking] = useState<string | null>(null);
   async function makeInvoice(q: Quote, index: number) {
+    if (making) return;
+    setMaking(q.id);
+    try { await raiseInvoice(q, index); } finally { setMaking(null); }
+  }
+  async function raiseInvoice(q: Quote, index: number) {
     const id = `inv_${Date.now()}`;
     const d = today();
     const terms = scheduleOf(q, q.terms || termsOf(business));
@@ -309,7 +324,7 @@ export default function Quotes({ quotes, invoices, leads, services, components, 
                       const m = money(q);
                       if (m.next < 0) return <span style={{ ...chip, cursor: "default", color: "var(--ok)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>✓ Semua termin ditagih</span>;
                       const t = m.terms[m.next];
-                      return <button onClick={() => makeInvoice(q, m.next)} style={{ ...chip, background: "#005eb0", color: "#fff", border: "none", fontWeight: 700 }}>
+                      return <button onClick={() => makeInvoice(q, m.next)} disabled={making === q.id} aria-busy={making === q.id || undefined} style={{ ...chip, background: "#005eb0", color: "#fff", border: "none", fontWeight: 700, opacity: making === q.id ? 0.6 : 1 }}>
                         {m.terms.length === 1 ? "Buat invoice →" : `Buat invoice ${t.label} ${t.percent}% →`}
                       </button>;
                     })()}
@@ -317,9 +332,11 @@ export default function Quotes({ quotes, invoices, leads, services, components, 
                   <div className="sp-doc-tools">
                     <button onClick={() => copy(q)} style={{ ...chip, color: copied === q.id ? "var(--ok)" : "var(--app-text)" }}>{copied === q.id ? "✓ Tersalin" : "Copy teks"}</button>
                     <button onClick={() => setPrinting(q)} style={{ ...chip, color: "var(--app-text)" }}>PDF</button>
-                    {q.status === "Disetujui"
-                      ? <button onClick={() => { setRevising(q); setEditing({ ...draftOf(q), id: "", number: "" }); }} title="Yang disetujui tetap tersimpan; revisi berlaku setelah disetujui" style={{ ...chip, color: "var(--app-text)" }}>Revisi</button>
-                      : q.status !== "Digantikan" && <button onClick={() => { setRevising(null); setEditing(draftOf(q)); }} style={{ ...chip, color: "var(--app-text)" }}>Edit</button>}
+                    {/* Only a Draft is edited in place. Once it went out, what the client
+                        holds never changes: a change is a revision (AMB-10, PRD-011 §4). */}
+                    {q.status === "Draft"
+                      ? <button onClick={() => { setRevising(null); setEditing(draftOf(q)); }} style={{ ...chip, color: "var(--app-text)" }}>Edit</button>
+                      : q.status !== "Digantikan" && <button onClick={() => { setRevising(q); setEditing({ ...draftOf(q), id: "", number: "" }); }} title="Yang udah dikirim tetap tersimpan; revisi berlaku setelah disetujui" style={{ ...chip, color: "var(--app-text)" }}>Revisi</button>}
                     <button className="sp-del" onClick={() => setDeleting(q)} aria-label={`Hapus ${q.number}`} title="Hapus" style={{ ...chip, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440" }}><Icon name="trash" size={16} /></button>
                   </div>
                 </div>

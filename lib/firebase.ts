@@ -8,7 +8,7 @@ import {
   GoogleAuthProvider,
   connectAuthEmulator,
 } from "firebase/auth";
-import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator } from "firebase/firestore";
 
 // On the production host, sign-in runs through this site's own /__/auth proxy
 // (next.config.mjs) instead of firebaseapp.com. Only on the host named in
@@ -55,8 +55,20 @@ function getFirebaseAuth(): any {
 }
 
 export const auth = getFirebaseAuth();
+// Writes made offline wait in IndexedDB and survive a reload of the PWA (AMB-07):
+// in the field the signal drops, and iOS reloads a backgrounded PWA. Where
+// IndexedDB isn't available (private browsing) Firestore falls back to memory.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const db = app ? getFirestore(app) : (null as any);
+function getDb(): any {
+  if (!app) return null;
+  try {
+    return initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+  } catch {
+    return getFirestore(app);   // already initialized (Fast Refresh)
+  }
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const db = getDb();
 
 // Local flow tests (npm run test:flows) run against the Firebase emulators.
 // Only when NEXT_PUBLIC_FIREBASE_EMULATORS is set at build time, so a
