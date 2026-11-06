@@ -93,7 +93,7 @@ function Summary({ p, on }: { p: Prospect; on: string }) {
   );
 }
 
-export default function ProspectList({ prospects, ready, hunts, strategy, sessionId, filter, setFilter, onCompose, onOpen, query, embedded, focusId }: {
+export default function ProspectList({ prospects, ready, hunts, strategy, sessionId, filter, setFilter, onCompose, onOpen, query, embedded, focusId, leaveTo }: {
   prospects: Prospect[]; ready: boolean; hunts: Hunt[]; strategy: Strategy; sessionId?: string;
   filter: ProspectFilter; setFilter: (f: ProspectFilter) => void;
   onCompose: (p: Prospect, next: string[], from: ProspectFilter) => void;   // their page; next = who follows them in this list
@@ -101,6 +101,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   query?: string;                   // a search box the page owns
   embedded?: boolean;               // inside Prospek: no box, title or search of its own
   focusId?: string | null;          // back from their page: their card open, in view, even if they left the filter
+  leaveTo?: { id: string; label: string; go: () => void };   // opened from another place: closing their page goes back there
 }) {
   const [ask, askSheet] = useConfirm();
   const space = useSpace();
@@ -238,7 +239,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
     let done = false;
     const go = () => { if (done) return; done = true; window.removeEventListener("popstate", go); setTimeout(fn, 0); };
     window.addEventListener("popstate", go);
-    setTimeout(go, 400);
+    setTimeout(go, 1500);
   };
 
   // A card opens as the person's own page (owner, 23 Okt: "bukan berbentuk pop
@@ -251,12 +252,14 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
     const { p, v } = r;
     const who = p.name ? `${p.name} (${p.handle})` : p.handle;
     const post = [...(p.history || [])].reverse().find(e => e.kind === "post");
-    const close = () => { setOpenId(null); o.stop(); };
+    // Opened from another place (Beranda): closing goes back there, and says so.
+    const away = leaveTo && leaveTo.id === p.id ? leaveTo : null;
+    const close = () => { setOpenId(null); o.stop(); if (away) away.go(); };
     return (
       <div className="modal-overlay" onClick={close}>
         <div role="dialog" aria-modal="true" aria-label={`Kontak ${who}`} data-own-layout className="sp-pcontact" onClick={e => e.stopPropagation()}>
           <div className="sp-pcontact-bar">
-            <button className="sp-pcontact-back" onClick={close} aria-label="Tutup kontak"><Icon name="chevronLeft" size={18} stroke={2} />Prospek</button>
+            <button className="sp-pcontact-back" onClick={close} aria-label={away ? `Tutup kontak, kembali ke ${away.label}` : "Tutup kontak"}><Icon name="chevronLeft" size={18} stroke={2} />{away ? away.label : "Prospek"}</button>
             {profileOf(p) && <a className="sp-pcontact-profile" href={profileOf(p)} target="_blank" rel="noreferrer">Profil {p.platform}<Icon name="arrowUpRight" size={16} /></a>}
           </div>
           <div className="sp-pcontact-id">
@@ -282,7 +285,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
                     <span style={{ fontSize: 12, color: "var(--app-sub)" }}>Dibuang {longDate(p.archivedAt)}{p.archiveReason ? ` · ${p.archiveReason}` : ""}.</span>
                     <button onClick={() => restore(p)} disabled={busy} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)" }}>↩ Balikin</button>
-                    {onOpen && <button onClick={() => { setOpenId(null); onOpen(p); }} style={{ ...chip, minHeight: 36 }}>💬 Percakapan</button>}
+                    {onOpen && <button onClick={() => onOpen(p)} style={{ ...chip, minHeight: 36 }}>💬 Percakapan</button>}
                   </div>
                 ) : v.status === "dnc" ? (
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
@@ -292,7 +295,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                 ) : (
                   <>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-                      {onOpen && <button onClick={() => { setOpenId(null); onOpen(p); }} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Percakapan</button>}
+                      {onOpen && <button onClick={() => onOpen(p)} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Percakapan</button>}
                       {dropReady(p, on, strategy) && <button onClick={() => ask(`Buang ${who}?`, "Pindah ke Arsip, riwayat tetap ada, bisa dibalikin.", () => drop([p]), "Buang", "Membuang…")} style={{ ...chip, minHeight: 36 }}>🗑 Buang</button>}
                       <button onClick={() => { const ids = shown.map(r => r.p.id); afterClose(() => onCompose(p, ids.slice(ids.indexOf(p.id) + 1), filter)); }} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>{v.status === "baru" ? "✉ Kirim intro" : v.status === "belum" ? "↻ Follow-up" : "✉ Kirim pesan"}</button>
                       <button onClick={() => o.edit(p, "reply")} aria-pressed={o.editing?.id === p.id && o.editing.kind === "reply"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Dibales</button>

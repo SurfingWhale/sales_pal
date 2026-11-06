@@ -72,12 +72,15 @@ export interface HuntingSession {
   end: () => Promise<void>;
 }
 
-export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, outreach, rejections, quotes, invoices, score, onOpenLead, onGo }: {
+export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, outreach, rejections, quotes, invoices, score, onOpenLead, onGo, focus }: {
   hunts: Hunt[]; goal: number; onOpenScripts?: () => void; journey: HuntingSession;
   leads: HuntLead[]; outreach: Outreach[]; rejections: Rejection[]; quotes: Quote[]; invoices: Invoice[];
   score: (l: HuntLead) => number;
   onOpenLead: (id: string, start: "chat" | "edit" | null, list: string[]) => void;
   onGo: (tab: string) => void;
+  // Opened for one person from elsewhere (Beranda): their contact page opens,
+  // and closing it goes back there (PRD-026).
+  focus?: { id: string; label: string; back: () => void } | null;
 }) {
   const [ask, askSheet] = useConfirm();
   const space = useSpace();
@@ -115,7 +118,9 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
   // is picked, their page: the message for them (owner, 23 Okt).
   const [open, setOpen] = useState(false);
   // Who the page was about, so the list comes back with their card open.
-  const [backTo, setBackTo] = useState<string | null>(null);
+  const [backTo, setBackTo] = useState<string | null>(focus?.id || null);
+  // The send page reopens the contact page on the way back only if it was opened from there.
+  const fromContact = useRef(false);
   const [outcomeMsg, setOutcomeMsg] = useState("");
   const [q, setQ] = useState("");
   const [addMenu, setAddMenu] = useState(false);
@@ -437,7 +442,8 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
 
   // Back from a person's page to the list, their card open; their page stays one tap away.
   function backToList() {
-    setBackTo(curId || null);
+    setBackTo(fromContact.current ? curId || null : null);
+    fromContact.current = false;
     setOpen(false); setUndo(null); setOutcomeMsg("");
     outcome.stop();
   }
@@ -881,7 +887,8 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
         )}
         <ProspectList prospects={prospects} ready={journey.ready} hunts={hunts} strategy={strategy} sessionId={live?.id} embedded query={q}
           filter={prospectFilter} setFilter={setProspectFilter} onOpen={p => setThreadId(p.id)} focusId={backTo}
-          onCompose={(p, next, from) => { setQ(""); setQueued({ label: from, ids: next }); compose(p); }} />
+          onCompose={(p, next, from) => { setQ(""); setQueued({ label: from, ids: next }); fromContact.current = true; compose(p); }}
+          leaveTo={focus ? { id: focus.id, label: focus.label, go: focus.back } : undefined} />
       </section>
           <div id="radar-threads"><ThreadsRadar uid={space.me.uid} hunts={hunts} onTarget={targetFromRadar} /></div>
         </>

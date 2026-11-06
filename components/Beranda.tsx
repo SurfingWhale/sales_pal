@@ -36,6 +36,7 @@ export interface Todo {
   amount: number;      // rupiah at stake; due tasks with more go first
   snooze?: () => void; // "Tunda": push it to tomorrow
   open: () => void;
+  inPlace?: boolean;   // opens over Beranda (a lead's page), so a sheet it came from stays open under it
   // A prospect from Hunting: how far along, the chat so far, their profile.
   journey?: { steps: readonly string[]; at: number; color: string; chat: { who: "kamu" | "dia" | "info"; text: string; at: number }[]; profile?: string };
 }
@@ -516,7 +517,7 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
               </ul>
               <div className="sp-chat-acts">
                 {chatOf.journey.profile && <a href={chatOf.journey.profile} target="_blank" rel="noreferrer" className="sp-btn line"><Icon name="arrowUpRight" size={16} />Buka profil</a>}
-                <button onClick={() => { const t = chatOf; setChatOf(null); t.open(); }} className="sp-btn blue">{chatOf.action}</button>
+                <button onClick={() => { const t = chatOf; if (!t.inPlace) setChatOf(null); t.open(); }} className="sp-btn blue">{chatOf.action}</button>
               </div>
             </div>
           </div>
@@ -532,7 +533,7 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
               <ul className="sp-todo-list">
                 {todo.map(t => (
                   <li key={t.key} style={{ "--k": kindColor(t.kind) } as React.CSSProperties}>
-                    <button onClick={() => { setSheet(false); t.open(); }}>
+                    <button onClick={() => { if (!t.inPlace) setSheet(false); t.open(); }}>
                       <span className="sp-task-tile" aria-hidden="true"><Icon name={t.icon} size={16} /></span>
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <span className="sp-row-title">{t.title}</span>

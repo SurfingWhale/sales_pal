@@ -6,6 +6,7 @@
 // from what they wrote, sent through WhatsApp / Instagram by you, and logged.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { PitchTemplate } from "@/lib/hunting";
 import { today } from "@/lib/billing";
 import { useSpace } from "@/lib/space";
@@ -104,7 +105,10 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
       style={{ fontWeight: o.strong ? 700 : 500, color: o.danger ? "var(--hot)" : undefined }}>{label}</button>
   );
 
-  return (
+  // Portaled to <body>: it opens on top of the person's contact page, which
+  // stays open under it, so closing the conversation lands back there (owner, 6 Nov).
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby="th-h" data-own-layout="" className="sp-thread" onClick={e => e.stopPropagation()}
         // Escape closes the open panel first, then the conversation.
@@ -232,7 +236,8 @@ export default function ProspectThread({ p, strategy, templates, fill, sendOut, 
         <div style={{ display: "contents" }} onClick={e => e.stopPropagation()}><ConvertSheet p={p} sessionId={sessionId} onClose={() => setConverting(false)}
           onDone={m => { setConverting(false); setMsg(""); setUndo(null); setNote(m); }} /></div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
 
