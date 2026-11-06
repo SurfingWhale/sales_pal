@@ -784,13 +784,11 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
         {/* Already answered (a no, a later, their number): mark it here, no message needed. */}
         {cur && !isBlocked && cur.contact !== "baru" && cur.contact !== "dnc" && (
           <section aria-labelledby="k-result-h" style={{ marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
-              <h3 id="k-result-h" style={{ margin: "0 auto 0 0", fontSize: "var(--fs-meta)", fontWeight: 600, color: "var(--app-muted)" }}>Udah dijawab? Tandai tanpa kirim pesan</h3>
-              <button onClick={() => outcome.edit(cur, "reply")} aria-pressed={outcome.editing?.kind === "reply"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Dibales</button>
-              <button onClick={() => outcome.edit(cur, "note")} aria-pressed={outcome.editing?.kind === "note"} style={{ ...chip, minHeight: 36 }}>📝 Catatan</button>
+            <h3 id="k-result-h" style={{ margin: "0 0 6px", fontSize: "var(--fs-meta)", fontWeight: 600, color: "var(--app-muted)" }}>Udah dijawab? Tandai tanpa kirim pesan</h3>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" onClick={() => outcome.ask(cur)} style={{ ...btnPrimary, flex: 1.4, minHeight: 44 }}>Dia jawab…</button>
+              <button type="button" onClick={() => outcome.edit(cur, "note")} style={{ ...btnMuted, flex: 1, minHeight: 44 }}>Catatan</button>
             </div>
-            {outcome.results(cur, cur.name || cur.handle)}
-            {outcome.editor(cur)}
             <div role="status" style={{ fontSize: 12, color: "var(--app-sub)", marginTop: outcomeMsg ? 8 : 0 }}>{outcomeMsg}</div>
           </section>
         )}

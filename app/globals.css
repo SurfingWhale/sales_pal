@@ -1208,6 +1208,20 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .sp-pcontact-id h2 { margin: 6px 0 0; font-size: var(--fs-title); font-weight: 700; }
 .sp-pcontact-id .sp-psteps { width: 100%; margin-top: 10px; }
 .sp-pini-l { width: 64px; height: 64px; font-size: var(--fs-section); }
+/* Their page (peta tombol, 6 Nov): one row of quiet links, rare and risky in ⋯,
+   and the two things you came to do pinned where the thumb is. */
+.sp-pcontact-links { display: flex; align-items: center; gap: 4px; margin: 14px -8px 0; }
+.sp-pcontact-links > button, .sp-pcontact-links > a { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border: 0; border-radius: 10px; background: none; color: var(--brand-text); font: 600 var(--fs-meta) 'Plus Jakarta Sans', sans-serif; text-decoration: none; cursor: pointer; }
+.sp-pcontact-links > button:active, .sp-pcontact-links > a:active { background: var(--state-press); }
+.sp-pcontact-dock { position: sticky; bottom: -24px; z-index: 2; display: flex; gap: 8px; margin: 12px -20px -24px; padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--app-bg) 94%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: inset 0 1px 0 var(--app-border); }
+/* A list of answers in a sheet: a row each, what it is and what happens next. */
+.sp-answers { display: grid; border-top: 1px solid var(--app-border); }
+.sp-answer { min-height: 56px; display: grid; gap: 2px; justify-items: start; text-align: left; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--app-border); background: none; color: var(--app-text); cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; }
+.sp-answer:active { background: var(--state-press); }
+.sp-answer[aria-pressed="true"] .sp-answer-t::after { content: " · sekarang"; font-weight: 500; color: var(--app-muted); }
+.sp-answer-t { font-size: var(--fs-body); font-weight: 600; }
+.sp-answer-s { font-size: var(--fs-meta); color: var(--app-muted); }
+.sp-answer-bad .sp-answer-t { color: var(--hot); }
 @media (max-width: 640px) { .sp-pcontact { max-height: none; height: 100dvh; border-radius: 0; padding-top: env(safe-area-inset-top, 0px); } .sp-pcontact-bar { top: calc(-1 * env(safe-area-inset-top, 0px)); } }
 .sp-pcard-top { display: flex; align-items: flex-start; }
 .sp-pcard-main { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 12px; padding: 12px 4px; border: 0; background: none; color: var(--app-text); text-align: start; font-family: inherit; cursor: pointer; }

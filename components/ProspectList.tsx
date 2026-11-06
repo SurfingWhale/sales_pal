@@ -11,7 +11,8 @@ import {
   restorePatch, silentDays, statusColor, statusLabel, view,
 } from "@/lib/prospects";
 import { clean, ctx, loadClosed, removeProspect, saveProspect } from "@/lib/prospectStore";
-import { btnPrimary, card, chip, font, inputStyle, ink } from "@/components/ui";
+import { btnMuted, btnPrimary, card, chip, font, inputStyle, ink } from "@/components/ui";
+import Sheet from "@/components/Sheet";
 import { useConfirm } from "@/components/ConfirmSheet";
 import { useOutcome } from "@/components/ProspectOutcome";
 import Icon from "@/components/Icon";
@@ -107,6 +108,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   const [ask, askSheet] = useConfirm();
   const space = useSpace();
   const [openId, setOpenId] = useState<string | null>(null);
+  const [more, setMore] = useState<string | null>(null);   // ⋯ Lainnya on their page
   const [closed, setClosed] = useState<Prospect[] | null>(null);
   const [limit, setLimit] = useState(PAGE);
   const [busy, setBusy] = useState(false);
@@ -286,7 +288,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
                     <span style={{ fontSize: 12, color: "var(--app-sub)" }}>Dibuang {longDate(p.archivedAt)}{p.archiveReason ? ` · ${p.archiveReason}` : ""}.</span>
                     <button onClick={() => restore(p)} disabled={busy} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)" }}>↩ Balikin</button>
-                    {onOpen && <button onClick={() => onOpen(p)} style={{ ...chip, minHeight: 36 }}>💬 Percakapan</button>}
+                    {onOpen && <button onClick={() => onOpen(p)} style={{ ...chip, minHeight: 44 }}>Percakapan</button>}
                   </div>
                 ) : v.status === "dnc" ? (
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
@@ -295,21 +297,29 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
                   </div>
                 ) : (
                   <>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-                      {onOpen && <button onClick={() => onOpen(p)} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Percakapan</button>}
-                      {dropReady(p, on, strategy) && <button onClick={() => ask(`Buang ${who}?`, "Pindah ke Arsip, riwayat tetap ada, bisa dibalikin.", () => drop([p]), "Buang", "Membuang…")} style={{ ...chip, minHeight: 36 }}>🗑 Buang</button>}
-                      <button onClick={() => { const ids = shown.map(r => r.p.id); afterClose(() => onCompose(p, ids.slice(ids.indexOf(p.id) + 1), filter)); }} style={{ ...chip, minHeight: 36, fontWeight: 700, color: "var(--brand-text)", border: "1px solid #005eb060" }}>{v.status === "baru" ? "✉ Kirim intro" : v.status === "belum" ? "↻ Follow-up" : "✉ Kirim pesan"}</button>
-                      <button onClick={() => o.edit(p, "reply")} aria-pressed={o.editing?.id === p.id && o.editing.kind === "reply"} style={{ ...chip, minHeight: 36, fontWeight: 700 }}>💬 Dibales</button>
-                      {(post?.url || p.url) && <a href={post?.url || p.url} target="_blank" rel="noreferrer" className="sp-tap" style={{ ...chip, minHeight: 36, display: "inline-flex", alignItems: "center", textDecoration: "none", color: "var(--app-text)" }}>{post?.url ? "Buka post ↗" : "Buka profil ↗"}</a>}
-                      <button onClick={() => o.edit(p, "note")} style={{ ...chip, minHeight: 36 }}>📝 Catatan</button>
-                      <button onClick={() => ask(`Hapus journey ${who}?`, "Log DM-nya tetap ada.", () => removeProspect(space, p))} aria-label={`Hapus journey ${who}`} style={{ ...chip, minHeight: 36, marginLeft: "auto", color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", border: "1px solid #ff444440" }}>🗑 Hapus</button>
+                    {/* The other ways in: secondary, one row. Anything rare or risky waits in ⋯. */}
+                    <div className="sp-pcontact-links">
+                      {onOpen && <button type="button" onClick={() => onOpen(p)}><Icon name="chat" size={16} />Percakapan</button>}
+                      {(post?.url || p.url) && <a href={post?.url || p.url} target="_blank" rel="noreferrer">{post?.url ? "Buka post" : "Buka profil"}<Icon name="arrowUpRight" size={14} /></a>}
+                      <button type="button" onClick={() => setMore(p.id)} aria-label={`Lainnya untuk ${who}`} aria-haspopup="dialog" style={{ marginLeft: "auto" }}><Icon name="more" size={20} />Lainnya</button>
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--app-muted)", margin: "10px 0 6px" }}>Hasil (otomatis dihitung dibales)</div>
-                    {o.results(p, who)}
+                    {/* What to do next, where the thumb is: answer, or send. */}
+                    <div className="sp-pcontact-dock">
+                      <button type="button" onClick={() => o.ask(p)} style={{ ...btnMuted, flex: 1, minHeight: 48 }}>Dia jawab…</button>
+                      <button type="button" onClick={() => { const ids = shown.map(r => r.p.id); afterClose(() => onCompose(p, ids.slice(ids.indexOf(p.id) + 1), filter)); }} style={{ ...btnPrimary, flex: 1.4, minHeight: 48 }}>{v.status === "baru" ? "Kirim intro" : v.status === "belum" ? "Kirim follow-up" : "Kirim pesan"}</button>
+                    </div>
+                    {more === p.id && (
+                      <Sheet title="Lainnya" onClose={() => setMore(null)}>
+                        <div className="sp-answers">
+                          <button type="button" className="sp-answer" onClick={() => { setMore(null); o.edit(p, "note"); }}><span className="sp-answer-t">Tambah catatan</span><span className="sp-answer-s">Buat diri sendiri, ga kekirim ke dia</span></button>
+                          {dropReady(p, on, strategy) && <button type="button" className="sp-answer" onClick={() => { setMore(null); ask(`Buang ${who}?`, "Pindah ke Arsip, riwayat tetap ada, bisa dibalikin.", () => drop([p]), "Buang", "Membuang…"); }}><span className="sp-answer-t">Buang ke Arsip</span><span className="sp-answer-s">Udah lama ga respon. Bisa dibalikin</span></button>}
+                          <button type="button" className="sp-answer sp-answer-bad" onClick={() => { setMore(null); ask(`Hapus journey ${who}?`, "Log DM-nya tetap ada.", () => removeProspect(space, p)); }}><span className="sp-answer-t">Hapus journey</span><span className="sp-answer-s">Log DM-nya tetap ada</span></button>
+                          <button type="button" className="sp-answer sp-answer-bad" onClick={() => { setMore(null); o.edit(p, "dnc"); }}><span className="sp-answer-t">Dia minta jangan dihubungi…</span><span className="sp-answer-s">Dikunci selamanya, riwayatnya dihapus</span></button>
+                        </div>
+                      </Sheet>
+                    )}
                   </>
                 )}
-
-                {o.editor(p)}
               </div>
         </div>
       </div>

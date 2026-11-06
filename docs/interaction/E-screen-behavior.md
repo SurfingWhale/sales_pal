@@ -40,11 +40,12 @@ Setiap layar penting ditulis dengan format yang sama.
 |---|---|
 | Tujuan | Seluruh cerita satu orang, dan satu langkah berikutnya |
 | Masuk | Kartu daftar, kembali dari halaman Kirim (hanya kalau datang dari sini ¹), Beranda ¹ |
-| Keluar | ✉ Kirim (halaman Kirim), 💬 Percakapan (overlay di atasnya ¹), Kasih data (sheet), Profil (eksternal) |
-| Aksi utama | Kirim intro / Follow-up / Kirim pesan, sesuai status |
-| Aksi sekunder | Dibales, Catatan, hasil (Tertarik … Tidak tertarik), Kasih data, Jangan dihubungi, Hapus |
+| Keluar | Kirim (halaman Kirim), Percakapan (overlay di atasnya ¹), Kasih data (sheet), Profil / post (eksternal) |
+| Aksi utama | Dok bawah: **Kirim intro / Kirim follow-up / Kirim pesan** sesuai status, di sebelahnya **Dia jawab…** |
+| Aksi sekunder | Satu baris tautan: Percakapan, Buka post, ⋯ Lainnya (Tambah catatan, Buang ke Arsip, Hapus journey, Dia minta jangan dihubungi…) |
+| Hasil | Sheet "{nama} jawab apa?": Tertarik, Pikir-pikir, Hubungi nanti…, Tidak tertarik…, Cuma bales…, lalu "Dia kasih nomor → Kasih data". Editor alasan/tanggal muncul di dalam sheet; Back kembali ke daftar hasil |
 | State yang ditampilkan | Status, langkah journey, riwayat, konteks post |
-| Feedback | Teks di tempat (`role=status`). ⚠ Hasil tidak punya undo (AMB-09) |
+| Feedback | Toast "✓ {nama}: Tertarik · follow-up Kam 7 Nov" + Batal 10 detik. Jangan dihubungi tidak bisa dibatalkan, jadi ditanya dulu dalam merah |
 | Back / tutup | "‹ Prospek" → daftar. Kalau dibuka dari Beranda: "‹ Beranda" ¹ |
 | Konteks dijaga | Ya (overlay) |
 

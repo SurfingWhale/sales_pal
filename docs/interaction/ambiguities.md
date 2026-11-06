@@ -108,6 +108,7 @@ Saran: **(a)**, karena sejalan dengan aturan "pilihan sadar menghapus jejak" dan
 2. Hasil yang bisa dibalik mendapat undo 10 detik.
 3. Jangan dihubungi dan Hapus selalu lewat ConfirmSheet.
 **IMPACT:** `ProspectOutcome`, `ProspectThread`, flow `journey`.
+**Dibangun (6 Nov, peta tombol):** Kontak prospek dan halaman Kirim memakai satu sheet "{nama} jawab apa?" (`useOutcome().ask`). Setiap hasil yang bisa dibalik memunculkan toast "✓ … · Batal" 10 detik, dan undo mengembalikan persis field yang berubah. Jangan dihubungi pindah ke ⋯ Lainnya, berwarna merah, dan menjelaskan apa yang dihapus sebelum Kunci. Hapus journey lewat ConfirmSheet. Belum dibangun: Percakapan (`ProspectThread`) masih memakai hasilnya sendiri (poin 1).
 
 ### AMB-12 · ✅ · Script default tidak berpengaruh di Hunting
 **AMBIGUITY:** "Jadikan default" menaruh script di urutan pertama dan mengisinya otomatis di Pesan lead. Di Hunting dan Percakapan, script diurutkan menurut judul dan tidak ada yang terisi otomatis.
