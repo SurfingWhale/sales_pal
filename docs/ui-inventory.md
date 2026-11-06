@@ -1,3 +1,5 @@
+> Model perilaku lengkap (state, kontrak, alur, ambiguitas): [docs/interaction/](interaction/README.md).
+
 # Inventaris komponen interaktif
 
 Hasil pencarian statis di kode (29 Okt 2026, `main` sampai PR #87): dialog, popover, tooltip, toast, dan sheet. Patokannya nama komponen/state, karena nomor baris gampang bergeser.

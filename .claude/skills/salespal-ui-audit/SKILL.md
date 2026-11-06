@@ -27,6 +27,10 @@ The judgment lives in the owner's Knowledge Inbox (Notion → *Knowledge Inbox D
 Then improve the interaction hierarchy and state visibility. Priority: interaction quality → state visibility → action hierarchy → contextual interaction → mobile usability → visual polish.
 Don't add components, buttons, modals or animation unless they solve a named interaction problem. Keep the information architecture and business logic unless a UX reason requires the change. The target is natural, predictable, contextual, mobile-friendly interaction, not a prettier UI.
 
+## The interaction model
+
+SalesPal's behaviour is modelled in `docs/interaction/`: A (information architecture), B (flows), C (state models), D (interaction contracts), E (screen behaviour), F (component behaviour), `ambiguities.md` (decisions the owner makes), and `review.md`. Read the relevant parts before changing a screen. Every UI change updates them in the same PR. A behaviour that isn't decided yet goes into `ambiguities.md` as AMBIGUITY / WHY IT MATTERS / RECOMMENDED DECISION / IMPACT. Don't build it on a guess.
+
 ## 0. Before touching code
 
 1. **Read the screen's components** and list each piece of data and every action, including CRUD, filters, search and navigation. Note where each action lives, how many taps it takes, and which Firestore calls it makes.

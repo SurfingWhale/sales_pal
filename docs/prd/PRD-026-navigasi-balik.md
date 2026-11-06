@@ -2,6 +2,7 @@
 
 - **Status:** audit dan perbaikan P1–P2 dibangun 6 Nov 2026. Sisa ada di §5.
 - **Asal:** owner, 6 Nov: *"open leads masa close card dari open chat ke page opening hunting bukan balik ke modals prospect yang di input"*. Owner minta interaction design-nya dibenerin secara agentic: audit, catat yang salah dan yang belum ada, prioritaskan, perbaiki.
+- **Bagian dari:** model interaksi [docs/interaction/](../interaction/README.md). PRD ini hanya mencakup dimensi "ke mana tutup mendarat". State, kontrak kirim, feedback, dan Script Chat ada di sana.
 - **Dasar penilaian:** Knowledge Inbox owner, *UI Interaction Design: Native Feel & Interaction Quality*. Eksekusinya mengikuti skill `salespal-ui-audit`.
 
 ## 1. Prinsip
