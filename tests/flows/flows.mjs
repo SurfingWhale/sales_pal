@@ -2908,6 +2908,9 @@ export const flows = [
         await modal(page).locator("#gd-name").fill("Tim Pindah");
         await modal(page).getByRole("button", { name: "Bikin guild" }).click();
         await expectText(page, "Undang orang");
+        // The guild page can show before its dialog has gone; the step ends at rest,
+        // so the audit doesn't read a closing dialog (CI WebKit, 6 Nov).
+        await page.locator("#gd-name").waitFor({ state: "detached" });
       });
       await t.step("with the workspace picker, the header still fits a 320px phone", async () => {
         const size = page.viewportSize();
@@ -3223,6 +3226,9 @@ export const flows = [
         await modal(page).locator("#gd-name").fill("Tim Uji");
         await modal(page).getByRole("button", { name: "Bikin guild" }).click();
         await expectText(page, "Undang orang");
+        // The guild page can show before its dialog has gone; the step ends at rest,
+        // so the audit doesn't read a closing dialog (CI WebKit, 6 Nov).
+        await page.locator("#gd-name").waitFor({ state: "detached" });
       });
       await t.step("the crest: colour and symbol, then a PNG logo, from the banner", async () => {
         await page.getByRole("button", { name: "Atur lambang & nama guild" }).click();
