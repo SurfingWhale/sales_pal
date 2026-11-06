@@ -176,3 +176,19 @@ Uang sudah masuk?                            (penjual mencatat)
 | Penawaran | [features/penawaran.md](features/penawaran.md) | Janji tertulis kepada klien |
 | Invoice | [features/invoice.md](features/invoice.md) | Menagih dan mencatat uang masuk |
 | Script pesan | [features/script-pesan.md](features/script-pesan.md) | Apa yang dikatakan di setiap tahap |
+
+## 8. Gap lintas feature
+
+Gap per feature ada di §12 setiap file. Kalau dikumpulkan (6 Nov 2026: ±136 gap, 11 sudah diperbaiki di #115/#116), sebagian besar bukan masalah satu layar. Masalahnya adalah **satu aturan sistem yang belum diterapkan di semua tempat**. Memperbaiki aturannya sekali menutup banyak gap sekaligus.
+
+| Aturan sistem yang bocor | Gap yang tertutup bila aturannya diterapkan | Keputusan |
+|---|---|---|
+| **Satu kontrak kirim.** Semua handoff ke WhatsApp/DM memakai antrean kiriman tertunda; dicatat hanya setelah "Udah" | GAP-BER-3/4, GAP-QUO-6/7/8, GAP-INV-1/2, GAP-HUN-9, GAP-PSN-10/13 | DEC-001, DEC-002 |
+| **Satu aturan feedback.** Bisa dibalik → toast setelah tulisan + Batal 10 dtk di tingkat app (bertahan saat pindah layar); tidak bisa dibalik → confirm dulu | GAP-BER-1/5/6, GAP-LEAD-1/2/3/5/10/11, GAP-QUO-3/9/15, GAP-INV-3/4/9, GAP-PCK-2/4/5/6/11, GAP-HUN-4/5/6/17, GAP-SCR-1/2, GAP-PSN-3/5 | DEC-004, DEC-005 |
+| **Satu sheet hasil prospek** | GAP-PCK-1/3, GAP-HUN-3 | DEC-009 |
+| **Satu tumpukan konteks.** Overlay di atas asal; lompatan mengingat asal; permukaan teratas dibuka lagi setelah reload | GAP-HUN-1/16, GAP-BER-8/9/10, GAP-QUO-5/11, GAP-LEAD-12/13, GAP-PSN-1/2, GAP-KON-18/19, GAP-PCK-14 | DEC-007 |
+| **Wadah sesuai isi** (dialog tengah ditinggalkan) | GAP-KON-12, GAP-QUO-16, GAP-INV-4/10 | DEC-003 |
+| **Script yang tepat dipilih untuk orangnya** (default dipakai, tahap dari Posisi, brand) | GAP-HUN-2, GAP-SCR-3/4/5/6/16, GAP-PSN-8, GAP-PCK-10 | DEC-012, DEC-014 |
+| **Status dokumen jujur** (Disetujui/Ditolak/Revisi/Hapus menjaga lead dan versi tetap sinkron) | GAP-QUO-4/10/12/13, GAP-LEAD-6/7, GAP-INV-5/6/7/8 | DEC-011 |
+
+**Urutan yang disarankan:** kontrak kirim dan aturan feedback dulu (keduanya menyentuh setiap hari kerja penjual dan menyangkut kejujuran angka), lalu tumpukan konteks (refactor sedang, dilindungi flow `navigasi balik`), lalu wadah dialog per kelompok, lalu script dan status dokumen.
