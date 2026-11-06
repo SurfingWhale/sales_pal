@@ -6,6 +6,7 @@ import { useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
 import { useSpace } from "@/lib/space";
 import { STAGES, Stage, brandOf, fillTemplate, stageOf, workflowOf, leadData } from "@/lib/templates";
 import { rankScripts } from "@/lib/scriptPick";
+import { addPending, release, removePending } from "@/lib/pendingSend";
 import { SITES } from "@/lib/sites";
 import Icon from "@/components/Icon";
 import { ink } from "@/components/ui";
@@ -18,6 +19,7 @@ import { ink } from "@/components/ui";
 // tell us a message went out, so it counts once you say it did.
 
 export interface ChatLead {
+  id?: string;                       // to keep an unanswered "udah kekirim?" (lib/pendingSend)
   name: string; contact: string; phone: string; email?: string; status: string; lastContact: string;
   quoted?: boolean;                  // a live offer is out
   category: string | null;           // their type of business, read from the lead (lib/scriptPick categoryOf)
@@ -66,6 +68,11 @@ export default function ChatPicker({ lead, wide, draft, next, onSend, onManage }
   const [copied, setCopied] = useState<"" | "ok" | "fail">("");
   // A phone opens on the message: the script is already in, one tap sends it.
   const [step, setStep] = useState<"pick" | "write" | "sent">("write");
+  // "Udah kekirim?" is kept app-wide until answered: if this sheet goes away
+  // first (closed, another tab, iOS reloads the app), the app asks (AMB-06).
+  const pending = useRef<string | undefined>(undefined);
+  const space = useSpace();
+  const spaceKey = `${space.kind}:${space.id}`;
   const [find, setFind] = useState("");
   const choose = (t: PitchTemplate, why: string[] | null) => { setTpl(t); setText(fill(t)); setAuto(why); };
   const take = (t: PitchTemplate) => { touched.current = true; choose(t, null); setStep("write"); };
@@ -83,6 +90,11 @@ export default function ChatPicker({ lead, wide, draft, next, onSend, onManage }
   const needle = find.trim().toLowerCase();
   const listed = needle ? forStage.filter(r => `${r.t.title} ${r.t.body}`.toLowerCase().includes(needle)) : forStage;
   const what = tpl ? tpl.title : draft?.what || "Chat WhatsApp";
+  useEffect(() => {
+    if (step !== "sent" || !lead.id || pending.current) return;
+    pending.current = addPending({ kind: "lead", label: `Pesan ke ${lead.contact || lead.name}`, space: spaceKey, leadId: lead.id, what });
+  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => release(pending.current), []);
   const label = STAGES.find(s => s.id === stage)?.label;
   const pickBrand = (v: string) => {
     touched.current = false; setBrand(v);
@@ -97,13 +109,14 @@ export default function ChatPicker({ lead, wide, draft, next, onSend, onManage }
   const soft: React.CSSProperties = { minHeight: 48, padding: "0 18px", borderRadius: 999, border: "1px solid var(--app-line-strong)", background: "transparent", color: "var(--app-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" };
 
   if (step === "sent") {
+    const answered = () => { removePending(pending.current); pending.current = undefined; };
     return (
       <div style={{ display: "grid", gap: 12, maxWidth: 520, margin: "0 auto" }}>
         <p style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Pesannya udah kekirim?</p>
         <p style={{ margin: 0, fontSize: 14, color: "var(--app-muted)" }}>WhatsApp ga ngasih tahu kami, jadi yang kecatat cuma yang kamu tandai.</p>
-        <button type="button" onClick={() => { onSend(what); next?.go(); }} style={big}>{next ? `Udah, lanjut ke ${next.name}` : "Udah, catat"}</button>
-        {next && <button type="button" onClick={() => onSend(what)} style={soft}>Udah, selesai dulu</button>}
-        <button type="button" onClick={() => setStep("write")} style={soft}>Belum, balik ke pesan</button>
+        <button type="button" onClick={() => { answered(); onSend(what); next?.go(); }} style={big}>{next ? `Udah, lanjut ke ${next.name}` : "Udah, catat"}</button>
+        {next && <button type="button" onClick={() => { answered(); onSend(what); }} style={soft}>Udah, selesai dulu</button>}
+        <button type="button" onClick={() => { answered(); setStep("write"); }} style={soft}>Belum, balik ke pesan</button>
       </div>
     );
   }

@@ -2593,7 +2593,19 @@ export const flows = [
         await page.getByRole("button", { name: "Kasih data →" }).click();
         await page.locator("#cv-phone").fill("081234567890");
         await page.getByRole("button", { name: "Simpan jadi Lead" }).click();
-        await expectText(page, "masuk Leads sebagai Hot");
+        // The sheet says what happened and offers the next step (AMB-15).
+        const sheet = page.getByRole("dialog", { name: /^Kasih data: / });
+        await sheet.getByText(/masuk Leads sebagai Hot/).waitFor();
+        await sheet.getByRole("button", { name: "Buka lead" }).click();
+        const leadPage = page.getByRole("dialog", { name: /^Profil Toko Kue/ });
+        await leadPage.waitFor();
+        await leadPage.getByRole("button", { name: /^Kembali ke / }).first().click();
+        await leadPage.waitFor({ state: "detached" });
+        // Back on their contact page, which the lead's page opened over.
+        const contact = page.getByRole("dialog", { name: "Kontak Toko Kue (@tokokue)" });
+        await contact.waitFor();
+        await contact.getByRole("button", { name: /^Tutup kontak/ }).click();
+        await contact.waitFor({ state: "detached" });
         await pick("ETB");
         await row("Toko Kue (@tokokue)").waitFor();
         await page.getByRole("region", { name: "Sesi hunting" }).getByText(/1 data/).waitFor();
@@ -3463,12 +3475,16 @@ export const flows = [
       });
       await t.step("the report joins them: baseline month, source, unknown row", async () => {
         await page.getByRole("tab", { name: "Report", exact: true }).click();
+        // In a month's first week the report opens on last month. Pick this one,
+        // and again if the report re-mounted under the pick (data arriving).
         await page.locator("#rp-month").selectOption(month);
+        await page.waitForFunction((m) => { const el = document.querySelector("#rp-month"); if (el && el.value !== m) { el.value = m; el.dispatchEvent(new Event("change", { bubbles: true })); } return el?.value === m; }, month);
         await expectText(page, "Rp 18,5 Jt");
         await expectText(page, "— bulan dasar");
         await expectText(page, "Belum ketahuan sumbernya · 1 deal");
-        const v = await page.locator("#rp-text").inputValue();
-        if (!/Sumber omzet terbesar: TikTok/.test(v)) throw new Error(`narrative: ${v.slice(0, 160)}`);
+        // The narrative is written once the month's numbers are in.
+        await page.waitForFunction(() => /Sumber omzet terbesar: TikTok/.test(document.querySelector("#rp-text")?.value || ""), null, { timeout: 8000 })
+          .catch(async () => { throw new Error(`narrative: ${(await page.locator("#rp-text").inputValue()).slice(0, 160)}`); });
       });
       await t.step("freeze it and get a WhatsApp link", async () => {
         await page.getByRole("button", { name: "Bekukan report" }).click();
@@ -3682,6 +3698,62 @@ export const flows = [
         await ret.click();
         await lead().waitFor();
         await page.locator(".sp-sub-btn.is-on", { hasText: "Leads" }).waitFor();
+      });
+    },
+  },
+  {
+    name: "kiriman tertunda: a send whose screen is gone is asked app-wide, also after a reload",
+    async run(t) {
+      const { page, project } = t;
+      const count = async () => Number((await page.getByRole("button", { name: /^Hari ini \d+ dari \d+ pesan/ }).getAttribute("aria-label")).match(/^Hari ini (\d+)/)[1]);
+      const ask = () => page.getByRole("dialog", { name: /^(Pesannya udah kekirim\?|\d+ pesan belum dikonfirmasi)$/ });
+      const openTarget = async (who) => {
+        await go(page, "Hunting");
+        await page.locator("#hunt-search").fill(who);
+        await page.locator("#hunt-search").press("Enter");
+        await page.waitForFunction((w) => document.querySelector("#hunt-target")?.value === w, who);
+      };
+      let before = 0;
+      await t.step("a script to send", async () => {
+        const email = await signup(t);
+        const uid = await uidOf(project, email);
+        await seedDocs(project, [[`users/${uid}/pitchTemplates/tpl_t1`, { title: "Intro tertunda", body: "Halo {nama}, aku liat postingan kamu.", stage: "intro", workflow: "hunting" }]]);
+        await page.reload(); await page.waitForURL("**/dashboard");
+        await go(page, "Hunting");
+        before = await count();
+      });
+      await t.step("copied, then left Hunting before answering: the app asks, and Udah records it", async () => {
+        await openTarget("@tertunda");
+        await page.getByRole("button", { name: "Copy", exact: true }).first().click();
+        await page.getByRole("group", { name: "Konfirmasi kiriman" }).getByText("Pesan ke @tertunda udah kekirim?").waitFor();
+        await go(page, "Beranda");
+        await ask().waitFor();
+        await ask().getByText("Pesan ke @tertunda").waitFor();
+        await t.audit("Kiriman tertunda");
+        await ask().getByRole("button", { name: "Udah, catat" }).click();
+        await ask().waitFor({ state: "detached" });
+        await page.getByRole("status").getByText(/Tercatat: pesan ke @tertunda/).waitFor();
+        await go(page, "Hunting");
+        await page.waitForFunction((n) => /^Hari ini (\d+)/.exec(document.querySelector('[aria-label^="Hari ini "][aria-label*=" pesan"]')?.getAttribute("aria-label") || "")?.[1] === String(n), before + 1);
+      });
+      await t.step("copied, then the app reloads (iOS does that in WhatsApp): asked again, Belum records nothing", async () => {
+        await openTarget("@reload");
+        await page.getByRole("button", { name: "Copy", exact: true }).first().click();
+        await page.getByRole("group", { name: "Konfirmasi kiriman" }).waitFor();
+        await page.reload(); await page.waitForURL("**/dashboard");
+        await ask().getByText("Pesan ke @reload").waitFor();
+        await ask().getByRole("button", { name: "Belum" }).click();
+        await ask().waitFor({ state: "detached" });
+        await go(page, "Hunting");
+        if (await count() !== before + 1) throw new Error("Belum recorded a send");
+      });
+      await t.step("answered on its own screen: never asked twice", async () => {
+        await openTarget("@langsung");
+        await page.getByRole("button", { name: "Copy", exact: true }).first().click();
+        await page.getByRole("group", { name: "Konfirmasi kiriman" }).getByRole("button", { name: "Udah, catat" }).click();
+        await go(page, "Beranda");
+        await page.waitForTimeout(800);
+        if (await ask().count()) throw new Error("an answered send was asked again");
       });
     },
   },

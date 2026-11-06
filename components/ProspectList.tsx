@@ -93,7 +93,7 @@ function Summary({ p, on }: { p: Prospect; on: string }) {
   );
 }
 
-export default function ProspectList({ prospects, ready, hunts, strategy, sessionId, filter, setFilter, onCompose, onOpen, query, embedded, focusId, leaveTo }: {
+export default function ProspectList({ prospects, ready, hunts, strategy, sessionId, filter, setFilter, onCompose, onOpen, query, embedded, focusId, leaveTo, onOpenLead }: {
   prospects: Prospect[]; ready: boolean; hunts: Hunt[]; strategy: Strategy; sessionId?: string;
   filter: ProspectFilter; setFilter: (f: ProspectFilter) => void;
   onCompose: (p: Prospect, next: string[], from: ProspectFilter) => void;   // their page; next = who follows them in this list
@@ -101,7 +101,8 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   query?: string;                   // a search box the page owns
   embedded?: boolean;               // inside Prospek: no box, title or search of its own
   focusId?: string | null;          // back from their page: their card open, in view, even if they left the filter
-  leaveTo?: { id: string; label: string; go: () => void };   // opened from another place: closing their page goes back there
+  leaveTo?: { id: string; label: string; go: () => void };
+  onOpenLead?: (leadId: string) => void;   // Kasih data → Buka lead   // opened from another place: closing their page goes back there
 }) {
   const [ask, askSheet] = useConfirm();
   const space = useSpace();
@@ -112,7 +113,7 @@ export default function ProspectList({ prospects, ready, hunts, strategy, sessio
   const [msg, setMsg] = useState("");
   const [search, setSearch] = useState("");
   const on = today();
-  const o = useOutcome({ strategy, sessionId, onMsg: setMsg, onLocked: () => { setClosed(null); setOpenId(null); } });
+  const o = useOutcome({ strategy, sessionId, onMsg: setMsg, onLocked: () => { setClosed(null); setOpenId(null); }, onOpenLead });
 
   // Back from their message page: their card opens again as their page, once
   // the step back in history has landed (a dialog opened before it would be

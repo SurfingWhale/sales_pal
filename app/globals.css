@@ -737,6 +737,9 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 /* A full sheet is a step of its own: nothing of what opened it shows. */
 .sp-sheet-full { padding: 0 !important; justify-content: center; }
 .sp-sheet-full .sp-sheet { max-height: 100dvh; }
+/* Offline (AMB-07): one line at the top, not a spinner per button. */
+.sp-offline { margin: calc(-1 * var(--sp-3)) 0 var(--sp-3); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-s); background: color-mix(in srgb, var(--warn-text) 12%, transparent); color: var(--app-text); font-size: var(--fs-meta); }
+
 /* "Kembali ke …": you jumped here from another place (PRD-026). */
 .sp-return { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; margin: calc(-1 * var(--sp-3)) 0 var(--sp-3) -6px; padding: 0 8px 0 2px; border: 0; border-radius: var(--r-s); background: none; color: var(--brand-text); font: 600 var(--fs-body) 'Plus Jakarta Sans', sans-serif; cursor: pointer; }
 .sp-return:active { background: var(--state-press); }

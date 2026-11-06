@@ -16,9 +16,10 @@ import ConvertSheet from "@/components/ConvertSheet";
 export type EditKind = "reply" | "nanti" | "tolak" | "dnc" | "note";
 type Editing = { id: string; kind: EditKind; text: string; date: string };
 
-export function useOutcome({ strategy, sessionId, onMsg, onLocked }: {
+export function useOutcome({ strategy, sessionId, onMsg, onLocked, onOpenLead }: {
   strategy: Strategy; sessionId?: string;
   onMsg: (m: string) => void;
+  onOpenLead?: (leadId: string) => void;
   onLocked?: (p: Prospect) => void;   // after Menolak dihubungi
 }) {
   const space = useSpace();
@@ -108,7 +109,7 @@ export function useOutcome({ strategy, sessionId, onMsg, onLocked }: {
 
   const sheet = converting && (
     <ConvertSheet p={converting} sessionId={sessionId} onClose={() => setConverting(null)}
-      onDone={m => { setConverting(null); onMsg(m); }} />
+      onDone={m => { setConverting(null); onMsg(m); }} onOpenLead={onOpenLead} />
   );
 
   return { busy, editing, edit, stop: () => setEditing(null), results, editor, sheet };

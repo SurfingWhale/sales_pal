@@ -34,6 +34,7 @@ import {
 } from "@/lib/prospects";
 import { useOutcome } from "@/components/ProspectOutcome";
 import { HuntInbox, bump, createProspect, ctx, recordSend, saveProspect, unfurl, useFillDefaults, useHuntInbox } from "@/lib/prospectStore";
+import { addPending, release, removePending } from "@/lib/pendingSend";
 import { badge, btnMuted, btnPrimary, btnWA, card, chip, font, heading, inputStyle, label, modalBox, subheading, ink } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmSheet";
 
@@ -55,6 +56,7 @@ const SCORES = 5;   // scripts shown under "Pesan mana yang works?" before Lihat
 interface Waiting {
   who: string; id: string; t: PitchTemplate; text: string; how: SendHow; camp?: Campaign;
   platform: Platform; url: string; source: Prospect["source"]; channel: Channel;
+  pendingId?: string;   // kept app-wide until answered (lib/pendingSend, AMB-06)
 }
 
 function nextIn(ids: string[], prospects: Prospect[]): Prospect | undefined {
@@ -94,6 +96,10 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
   const [blocked, setBlocked] = useState<string | null>(null);
   const [undo, setUndo] = useState<{ label: string; run: () => Promise<void> } | null>(null);
   const [waiting, setWaiting] = useState<Waiting | null>(null);
+  // Leaving Hunting with a question open: the app asks it instead (AMB-06).
+  const waitingNow = useRef<Waiting | null>(null);
+  waitingNow.current = waiting;
+  useEffect(() => () => release(waitingNow.current?.pendingId), []);
   const [prospectFilter, setProspectFilter] = useState<ProspectFilter>("Antrian");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [noting, setNoting] = useState<{ id: string; note: string } | null>(null);
@@ -206,7 +212,8 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
   const defaults = defaultsWith(savedDefaults, business.tagline);
   const fillData = dataFor(target, cur, business.name, defaults);
   const curPost = cur ? [...(cur.history || [])].reverse().find(e => e.kind === "post") : undefined;
-  const outcome = useOutcome({ strategy, sessionId: live?.id, onMsg: setOutcomeMsg });
+  const openLeadById = (id: string) => onOpenLead(id, null, []);
+  const outcome = useOutcome({ strategy, sessionId: live?.id, onMsg: setOutcomeMsg, onOpenLead: openLeadById });
 
   // To the message, from wherever the person was picked; the pane shows first.
   // The page's top, not the field: "‹ Daftar" has to be in view (owner, 23 Okt).
@@ -378,13 +385,23 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
       return;
     }
     setUndo(null);
-    setWaiting({ who: target.trim(), id: curId, t, text, how, camp, platform, url, source, channel: curPost || source.kind === "post" ? channel : "dm" });
+    const w: Waiting = { who: target.trim(), id: curId, t, text, how, camp, platform, url, source, channel: curPost || source.kind === "post" ? channel : "dm" };
+    const had = prospects.some(p => p.id === curId);
+    // A question still open for someone else stays open, app-wide.
+    release(waiting?.pendingId);
+    w.pendingId = addPending({
+      kind: "hunt", label: `Pesan ke ${w.who}`, space: `${space.kind}:${space.id}`, prospectId: curId, sessionId: live?.id,
+      send: { target: w.who, platform, url: url || undefined, templateId: t.id, templateTitle: t.title, text, channel: w.channel,
+        source: had ? undefined : source, campaignId: camp?.id, campaignName: camp?.name },
+    });
+    setWaiting(w);
   }
 
   // They said it went out: the log, the journey and the session count it now.
   // If that fails the question stays, so the send isn't lost.
   async function confirmSent(w: Waiting, thenNext: boolean) {
     setWaiting(null);
+    removePending(w.pendingId);
     const had = prospects.find(p => p.id === w.id);
     try {
       const back = await recordSend(space, {
@@ -397,6 +414,9 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
       setUndo({ label: `Tercatat: ${w.how === "wa" ? "WA" : w.channel === "post" ? "balasan di post" : "DM"} ke ${w.who}`, run: back });
       setTimeout(() => setUndo(u => (u?.run === back ? null : u)), 10000);
     } catch {
+      w.pendingId = addPending({ id: w.pendingId, kind: "hunt", label: `Pesan ke ${w.who}`, space: `${space.kind}:${space.id}`, prospectId: w.id, sessionId: live?.id,
+        send: { target: w.who, platform: w.platform, url: w.url || undefined, templateId: w.t.id, templateTitle: w.t.title, text: w.text, channel: w.channel,
+          source: had ? undefined : w.source, campaignId: w.camp?.id, campaignName: w.camp?.name } });
       setWaiting(w);
       setPasteMsg("Pesan belum kecatat. Cek koneksi lalu tap Udah lagi.");
     }
@@ -420,15 +440,18 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
     else window.open(waLinkFor(p.handle, text), "_blank");
   }
 
+  const threadSend = (p: Prospect, t: PitchTemplate | null, text: string) => ({
+    target: p.handle, platform: p.platform, url: p.url || undefined, templateId: t?.id || "manual", templateTitle: t?.title || "Pesan sendiri",
+    text, channel: (sendFor(p).label === "Copy & buka post" ? "post" : "dm") as Channel,
+  });
   async function logTo(p: Prospect, t: PitchTemplate | null, text: string): Promise<(() => Promise<void>) | null> {
-    const out = sendFor(p);
     try {
-      return await recordSend(space, {
-        target: p.handle, platform: p.platform, url: p.url || undefined, templateId: t?.id || "manual", templateTitle: t?.title || "Pesan sendiri",
-        text, channel: out.label === "Copy & buka post" ? "post" : "dm",
-      }, p, live?.id, strategy);
+      return await recordSend(space, threadSend(p, t, text), p, live?.id, strategy);
     } catch { return null; }
   }
+  // The conversation's "udah kekirim?", kept app-wide until answered (AMB-06).
+  const queueFor = (p: Prospect, t: PitchTemplate | null, text: string) =>
+    addPending({ kind: "hunt", label: `Pesan ke ${p.name || p.handle}`, space: `${space.kind}:${space.id}`, prospectId: p.id, sessionId: live?.id, send: threadSend(p, t, text) });
 
   // "Berikutnya" walks the rest of the list the person was picked from.
   function takeNext() {
@@ -633,7 +656,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
         {waiting && (
           <div role="group" aria-label="Konfirmasi kiriman" className="sp-toast sp-ask">
             <div className="sp-ask-q">Pesan ke {waiting.who} udah kekirim?</div>
-            <button onClick={() => setWaiting(null)} style={{ ...btnMuted, minHeight: 44, padding: "8px 16px", background: "#fff", color: "#141414" }}>Belum</button>
+            <button onClick={() => { removePending(waiting.pendingId); setWaiting(null); }} style={{ ...btnMuted, minHeight: 44, padding: "8px 16px", background: "#fff", color: "#141414" }}>Belum</button>
             <button onClick={() => confirmSent(waiting, !!nextUp)} style={{ ...btnMuted, minHeight: 44, padding: "8px 16px", background: "#005eb0", color: "#fff" }}>{nextUp ? `Udah, lanjut ke ${nextUp.handle}` : "Udah, catat"}</button>
           </div>
         )}
@@ -682,7 +705,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
         const p = prospects.find(x => x.id === threadId);
         if (!p) return null;
         return <ProspectThread key={p.id} p={p} strategy={strategy} templates={templates} fill={dataFor(p.handle, p, business.name, defaults)}
-          sendOut={sendFor(p)} sessionId={live?.id} onHandOver={handOver} onLog={logTo} onClose={() => setThreadId(null)} />;
+          sendOut={sendFor(p)} sessionId={live?.id} onHandOver={handOver} onLog={logTo} onQueue={queueFor} onClose={() => setThreadId(null)} onOpenLead={openLeadById} />;
       })()}
       <div id="hpane-kirim" role="tabpanel" aria-labelledby="hp-kirim" hidden={pane !== "kirim"}>
       {addMenu && (
@@ -888,7 +911,7 @@ export default function Hunting({ hunts, goal, onOpenScripts, journey, leads, ou
         <ProspectList prospects={prospects} ready={journey.ready} hunts={hunts} strategy={strategy} sessionId={live?.id} embedded query={q}
           filter={prospectFilter} setFilter={setProspectFilter} onOpen={p => setThreadId(p.id)} focusId={backTo}
           onCompose={(p, next, from) => { setQ(""); setQueued({ label: from, ids: next }); fromContact.current = true; compose(p); }}
-          leaveTo={focus ? { id: focus.id, label: focus.label, go: focus.back } : undefined} />
+          leaveTo={focus ? { id: focus.id, label: focus.label, go: focus.back } : undefined} onOpenLead={openLeadById} />
       </section>
           <div id="radar-threads"><ThreadsRadar uid={space.me.uid} hunts={hunts} onTarget={targetFromRadar} /></div>
         </>

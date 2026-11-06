@@ -290,7 +290,7 @@ export type NextLead = { name: string; go: () => void };
 
 function chatLead(l: DetailLead): ChatLead {
   return {
-    name: l.name, contact: l.contact, phone: l.phone, email: l.email, status: l.status, lastContact: l.lastContact, quoted: l.quoted,
+    id: l.id, name: l.name, contact: l.contact, phone: l.phone, email: l.email, status: l.status, lastContact: l.lastContact, quoted: l.quoted,
     // What WhatsApp says they are beats the list's category (often left at its default).
     category: categoryOf(l.profile?.wa?.category) || categoryOf(l.category),
     need: l.profile?.need, pain: l.profile?.pain,
