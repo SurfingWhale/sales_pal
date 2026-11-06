@@ -214,6 +214,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   const [pageStart, setPageStart] = useState<"chat" | "edit" | null>(null);
   const [runList, setRunList] = useState<string[] | null>(null);
   const [openDoc, setOpenDoc] = useState<string | null>(null);   // a quote or invoice opened from a lead's Riwayat
+  // Where a jump to another tab came from (PRD-026): closing what you went to see
+  // brings you back there, by its name, instead of leaving you on another tab.
+  const [cameFrom, setCameFrom] = useState<{ tab: string; label: string; leadId?: string } | null>(null);
+  const [huntFocus, setHuntFocus] = useState<string | null>(null);   // a prospect opened from Beranda
   const wide = !useIsNarrow(1023);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   // Tambah lead: one door, opened on the way the button asked for (PRD-022 Q12).
@@ -374,6 +378,21 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   }
 
   // `list`: who to go on to after this one, when it wasn't opened from Leads.
+  // Labels for "Kembali ke …": what the place is called where you came from.
+  const TAB_WORD: Record<string, string> = { Dashboard: "Beranda" };
+  function jump(tab: string) {
+    setCameFrom({ tab: activeTab, label: TAB_WORD[activeTab] || activeTab });
+    setActiveTab(tab);
+  }
+  function goBack() {
+    const c = cameFrom;
+    if (!c) return;
+    setCameFrom(null);
+    setActiveTab(c.tab);
+    const l = c.leadId ? leads.find(x => x.id === c.leadId) : null;
+    if (l) openLead(l);
+  }
+
   function openLead(lead: Lead, start: "chat" | "edit" | null = null, list: string[] | null = null) {
     setRunList(list);
     setSelectedLead(lead);
@@ -397,7 +416,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       onReplied: () => markReplied(l.id),
       onSchedule: (action, date) => updateDoc(spaceDoc(space, "leads", l.id), { nextAction: action, nextActionDate: date }),
       onDone: () => doneFollowUp(l.id),
-      onQuote: () => { setPageOpen(false); startQuote(l); },
+      onQuote: () => { const from = { tab: activeTab, label: l.name, leadId: l.id }; setPageOpen(false); startQuote(l); setCameFrom(from); },
       onDelete: async () => { await deleteLead(l.id); setPageOpen(false); setSelectedLead(null); },
       onSavePhone: phone => updateDoc(spaceDoc(space, "leads", l.id), { phone }),
       onSaveGeo: (geo, address) => updateDoc(spaceDoc(space, "leads", l.id), { geo: geo || deleteField(), ...(address !== undefined ? { address } : {}) }),
@@ -590,20 +609,20 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       kind: "Follow-up", action: hasWa(l.phone) ? "Chat" : "Buka lead", wa: hasWa(l.phone), amount: Number(l.value) || 0,
       onSent: () => followedUp(l), logged: `Follow-up ke ${l.name} dicatat · berikutnya ${longDate(addDays(now, FOLLOW_AGAIN))}`,
       snooze: () => { updateDoc(spaceDoc(space, "leads", l.id), { nextActionDate: addDays(today(), 1) }); },
-      open: () => openLead(l),
+      open: () => openLead(l), inPlace: true,
     })),
     ...queue(prospects, now, strategy).map(p => ({
       key: `p_${p.id}`, when: view(p, now, strategy).due as string, icon: "target" as IconName, title: p.name ? `${p.name} (${p.handle})` : p.handle,
       what: `${statusLabel(p, view(p, now, strategy))} via ${p.platform}`, phone: "", text: "",
       kind: "Hunting", action: p.contact === "baru" ? "Kirim intro" : "Follow-up", wa: false, amount: 0,
-      open: () => setActiveTab("Hunting"),
+      open: () => { setHuntFocus(p.id); jump("Hunting"); },
       journey: journeyOf(p),
     })),
     ...hunts.filter(h => h.status === "Tertarik" && !h.leadId && !h.prospectId).map(h => ({
       key: `h_${h.id}`, when: h.date, icon: "target" as IconName, title: h.target || "Tanpa nama",
       what: `Tertarik via ${h.platform} — jadiin lead`, phone: "", text: "",
       kind: "Tertarik di Hunting", action: "Jadiin lead", wa: false, amount: 0,
-      open: () => setActiveTab("Hunting"),
+      open: () => jump("Hunting"),
     })),
     ...quotes.filter(q => q.status === "Terkirim" && q.sentAt && daysBetween(lastAsk(q), now) >= 3).map(q => ({
       key: `q_${q.id}`, when: addDays(lastAsk(q), 3), icon: "doc" as IconName, title: q.leadName,
@@ -611,19 +630,19 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       text: `Halo ${q.contact || q.leadName}, mau follow up penawaran ${q.number} kemarin. Ada yang bisa aku bantu jelasin?`,
       kind: "Penawaran nunggu", action: q.phone ? "Follow up via WA" : "Lihat penawaran", wa: Boolean(q.phone), amount: total(q),
       onSent: () => nudgedQuote(q), logged: `Follow-up ${q.number} dicatat · muncul lagi ${longDate(addDays(now, 3))} kalau belum dijawab`,
-      open: () => setActiveTab("Penawaran"),
+      open: () => { setOpenDoc(q.id); jump("Penawaran"); },
     })),
     ...stuck.map(s => ({
       key: `s_${s.key}`, when: addDays(s.lastMove, STALL_DAYS), icon: "pause" as IconName, title: s.deal.contactName,
       what: stalledWhat(s), phone: s.deal.phone || "", text: `Halo ${s.deal.contactName}, `,
       kind: "Deal macet", action: "Geser deal", wa: false, amount: s.deal.quoteValue || 0,
-      open: () => setActiveTab(s.where === "guild" ? "Guild" : "Report Klien"),
+      open: () => jump(s.where === "guild" ? "Guild" : "Report Klien"),
     })),
     ...rejections.filter(r => r.followUpDate && r.followUpDate <= soon && r.followUpDate >= addDays(now, -14)).map(r => ({
       key: `r_${r.id}`, when: r.followUpDate, icon: "refresh" as IconName, title: r.leadName,
       what: `Coba lagi setelah ditolak (${r.reason || r.channel})`, phone: "", text: "",
       kind: "Coba lagi", action: "Lihat catatan", wa: false, amount: 0,
-      open: () => setActiveTab("Rejection Log"),
+      open: () => jump("Rejection Log"),
     })),
     // A reminder sent today or yesterday rests the bill for those two days.
     ...invoices.filter(i => owed(i) > 0 && i.dueDate && i.dueDate <= soon && !(i.remindedAt && i.remindedAt >= addDays(now, -1))).map(i => ({
@@ -632,7 +651,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       text: `Halo ${i.contact || i.leadName}, reminder invoice ${i.number} jatuh tempo ${longDate(i.dueDate)}, sisa ${rupiah(balance(i))}. Terima kasih!`,
       kind: invoiceState(i, now) === "Telat" ? "Invoice telat" : "Invoice jatuh tempo", action: i.phone ? "Kirim pengingat" : "Lihat invoice", wa: Boolean(i.phone), amount: balance(i),
       onSent: () => remindedInvoice(i), logged: `Pengingat ${i.number} dicatat · muncul lagi ${longDate(addDays(now, 2))} kalau belum lunas`,
-      open: () => setActiveTab("Invoice"),
+      open: () => { setOpenDoc(i.id); jump("Invoice"); },
     })),
   ].sort((a, b) => a.when.localeCompare(b.when));
   // Paling mendesak is the due task with the most money at stake (a late
@@ -790,7 +809,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
               const on = sectionOf(activeTab).id === sec.id;
               return (
                 <button key={sec.id} className={`sp-nav-btn${on ? " is-on" : ""}`} aria-current={on ? "page" : undefined}
-                  onClick={() => { if (on) window.scrollTo({ top: 0 }); else setActiveTab(sec.tabs[0]); }}>
+                  onClick={() => { setCameFrom(null); if (on) window.scrollTo({ top: 0 }); else setActiveTab(sec.tabs[0]); }}>
                   <span className="sp-nav-icon"><Icon name={sec.icon} size={22} stroke={on ? 1.9 : 1.6} /></span>
                   <span className="sp-nav-label">{sec.label}</span>
                   <span className="sp-nav-short" aria-hidden="true">{sec.short}</span>
@@ -839,7 +858,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         {sectionOf(activeTab).tabs.length > 1 && (
           <div className="sp-subnav" role="tablist" aria-label={sectionOf(activeTab).label} style={{ position: "relative", zIndex: 1 }}>
             {sectionOf(activeTab).tabs.map(tab => (
-              <button key={tab} role="tab" aria-selected={activeTab === tab} className={`sp-sub-btn${activeTab === tab ? " is-on" : ""}`} onClick={() => { if (activeTab === tab) window.scrollTo({ top: 0 }); else setActiveTab(tab); }}>{tab}</button>
+              <button key={tab} role="tab" aria-selected={activeTab === tab} className={`sp-sub-btn${activeTab === tab ? " is-on" : ""}`} onClick={() => { setCameFrom(null); if (activeTab === tab) window.scrollTo({ top: 0 }); else setActiveTab(tab); }}>{tab}</button>
             ))}
           </div>
         )}
@@ -850,6 +869,10 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       {activeTab === "Log aktivitas" && <p className="sp-subhint" aria-label="Rekap hari ini"><b className="tabnum" style={{ color: "var(--app-text)" }}>{sentToday}</b> terkirim hari ini, target {huntGoal}</p>}
 
       <div className="sp-main" style={{ padding: "32px 32px 96px", maxWidth: 1200, margin: "0 auto" }}>
+        {/* You jumped here from somewhere: one tap back to it, by its name (PRD-026). */}
+        {cameFrom && cameFrom.tab !== activeTab && (
+          <button type="button" className="sp-return" onClick={goBack}><Icon name="chevronLeft" size={18} stroke={2} />Kembali ke {cameFrom.label}</button>
+        )}
 
         {/* DASHBOARD */}
         {activeTab === "Dashboard" && (
@@ -969,6 +992,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
         {/* HUNTING */}
         {activeTab === "Hunting" && <Hunting hunts={hunts} goal={huntGoal} onOpenScripts={gotoScripts}
+          focus={huntFocus && cameFrom ? { id: huntFocus, label: cameFrom.label, back: () => { setHuntFocus(null); goBack(); } } : null}
           leads={leads} outreach={outreach} rejections={rejections} quotes={quotes} invoices={invoices} score={l => sc(l as Lead).total}
           onOpenLead={(id, start, list) => { const l = leads.find(x => x.id === id); if (l) openLead(l, start, list); }}
           onGo={tab => setActiveTab(tab)}
@@ -1060,7 +1084,8 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
         <LeadPage key={liveLead.id + (shareFor?.leadId === liveLead.id ? "_share" : "")} lead={liveLead} score={sc(liveLead)} actions={leadActions(liveLead)} wide={wide} start={pageStart}
           next={nextUp ? { name: nextUp.name, go: () => openLead(nextUp, "chat", runList) } : null}
           history={leadHistory(liveLead, { quotes, invoices, outreach, hunts })}
-          onOpenDoc={item => { setPageOpen(false); setSelectedLead(null); setOpenDoc(item.docId || null); setActiveTab(item.kind === "penawaran" ? "Penawaran" : "Invoice"); }}
+          onOpenDoc={item => { const from = { tab: activeTab, label: liveLead.name, leadId: liveLead.id }; setPageOpen(false); setSelectedLead(null); setOpenDoc(item.docId || null); setActiveTab(item.kind === "penawaran" ? "Penawaran" : "Invoice"); setCameFrom(from); }}
+          backLabel={`Kembali ke ${TAB_WORD[activeTab] || activeTab}`}
           onClose={() => { setPageOpen(false); setSelectedLead(null); }} shareFile={shareFor?.leadId === liveLead.id ? shareFor.file : null} />
       )}
 
@@ -1147,7 +1172,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           onSent={async id => { const l = leads.find(x => x.id === id); if (l) await logContact(l, `Follow-up: ${l.nextAction || "Follow-up"}`); }}
           onReplied={id => markReplied(id)} onDone={(id, sent) => doneFollowUp(id, sent)}
           onSchedule={(id, action, date) => updateDoc(spaceDoc(space, "leads", id), { nextAction: action, nextActionDate: date })}
-          onOpen={id => { const l = leads.find(x => x.id === id); setFuRun(null); if (l) openLead(l); }}
+          onOpen={id => { const l = leads.find(x => x.id === id); if (l) openLead(l); }}
           onClose={() => setFuRun(null)} />
       )}
       {/* Global Quick Pitch floating button */}

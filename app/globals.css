@@ -737,6 +737,10 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 /* A full sheet is a step of its own: nothing of what opened it shows. */
 .sp-sheet-full { padding: 0 !important; justify-content: center; }
 .sp-sheet-full .sp-sheet { max-height: 100dvh; }
+/* "Kembali ke …": you jumped here from another place (PRD-026). */
+.sp-return { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; margin: calc(-1 * var(--sp-3)) 0 var(--sp-3) -6px; padding: 0 8px 0 2px; border: 0; border-radius: var(--r-s); background: none; color: var(--brand-text); font: 600 var(--fs-body) 'Plus Jakarta Sans', sans-serif; cursor: pointer; }
+.sp-return:active { background: var(--state-press); }
+
 /* Script pesan (docs/qa-reviews/2026-11-05-script-pesan-ux.md): rows, not cards;
    the six stages as one lifecycle; actions in a sheet; list + editor side by side
    on a laptop. Tokens only (design.md). */

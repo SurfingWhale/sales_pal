@@ -297,7 +297,7 @@ function chatLead(l: DetailLead): ChatLead {
   };
 }
 
-function useChatLog(actions: DetailActions, wide: boolean, next: NextLead | null | undefined, open: boolean) {
+function useChatLog(actions: DetailActions, wide: boolean, next: NextLead | null | undefined, open: boolean, leave?: () => void) {
   const [logged, setLogged] = useState<Logged | null>(null);
   const chatted = (what: string) => {
     Promise.resolve(actions.onContacted(what)).then(
@@ -311,14 +311,16 @@ function useChatLog(actions: DetailActions, wide: boolean, next: NextLead | null
       () => setLogged({ n: Date.now(), err: "Gagal menandai. Cek koneksi." }),
     );
   };
-  // Pesan replaces the page while it's open (Sheet full), so a card's button
-  // lands on it directly and nothing is stacked.
+  // Pesan covers the page while it's open (Sheet full). Opened straight from a
+  // card's Chat button, the page under it was never seen: closing Pesan goes
+  // back to the card too, not to a page you didn't ask for (PRD-026).
   const [writing, setWriting] = useState<Draft | true | null>(open ? true : null);
+  const direct = useRef(open);
   const [managing, setManaging] = useState(false);
   const picker = (lead: DetailLead) => (
     <>
       {writing && (
-        <Sheet full title={`Pesan ke ${lead.contact || lead.name}`} onClose={() => setWriting(null)}>
+        <Sheet full title={`Pesan ke ${lead.contact || lead.name}`} onClose={() => { setWriting(null); if (direct.current && leave) leave(); direct.current = false; }}>
           <ChatPicker lead={chatLead(lead)} wide={wide} next={next} draft={writing === true ? null : writing}
             onSend={what => { chatted(what); setWriting(null); }} onManage={() => setManaging(true)} />
         </Sheet>
@@ -326,7 +328,7 @@ function useChatLog(actions: DetailActions, wide: boolean, next: NextLead | null
       {managing && <ScriptManager onClose={() => setManaging(false)} />}
     </>
   );
-  return { logged, marked, clear: () => setLogged(null), write: (d?: Draft) => setWriting(d || true), picker };
+  return { logged, marked, clear: () => setLogged(null), write: (d?: Draft) => { direct.current = false; setWriting(d || true); }, picker };
 }
 
 function ChatNote({ lead, logged, actions, onClose }: { lead: DetailLead; logged: Logged; actions: DetailActions; onClose: () => void }) {
@@ -456,20 +458,21 @@ function LocationRow({ lead, actions }: { lead: DetailLead; actions: DetailActio
 
 // ---------------------------------------------------------------- LeadPage
 
-export function LeadPage({ lead, score, actions, onClose, shareFile, wide, start, next, history, onOpenDoc }: {
+export function LeadPage({ lead, score, actions, onClose, shareFile, wide, start, next, history, onOpenDoc, backLabel }: {
   lead: DetailLead; score: Score; actions: DetailActions; onClose: () => void; shareFile?: File | null;
   wide: boolean;
   start?: "chat" | "edit" | null;       // a card's button: go straight to the scripts, or to the missing number
   next?: NextLead | null;               // who comes after this one in the list
   history: HistoryItem[];
   onOpenDoc: (item: HistoryItem) => void;
+  backLabel?: string;                   // "Kembali ke Hunting": where closing lands (PRD-026)
 }) {
   const p = lead.profile || {};
   const [editing, setEditing] = useState(false);
   const [editingLead, setEditingLead] = useState(false);
   const [importing, setImporting] = useState(Boolean(shareFile));
   const [scheduling, setScheduling] = useState(false);
-  const { logged, marked, clear, write, picker } = useChatLog(actions, wide, next, start === "chat");
+  const { logged, marked, clear, write, picker } = useChatLog(actions, wide, next, start === "chat", onClose);
   useEffect(() => {
     if (start === "edit") setEditing(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -512,7 +515,7 @@ export function LeadPage({ lead, score, actions, onClose, shareFile, wide, start
           <div className="pb t" aria-hidden="true" style={{ top: 0, height: 100 }}><span /><span /><span /><span /><span /><span /></div>
           <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 100, background: "linear-gradient(to bottom, var(--bar-tint) 0%, var(--bar-tint) 35%, transparent 100%)", pointerEvents: "none" }} />
           <div style={{ position: "absolute", top: "calc(10px + env(safe-area-inset-top, 0px))", left: 12, right: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <button className="glass" onClick={onClose} aria-label="Kembali ke Leads" style={{ width: 44, height: 44, border: 0, borderRadius: "50%", color: "var(--app-text)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}><Icon name={wide ? "close" : "chevronLeft"} size={20} stroke={2} /></button>
+            <button className="glass" onClick={onClose} aria-label={backLabel || "Kembali ke Leads"} style={{ width: 44, height: 44, border: 0, borderRadius: "50%", color: "var(--app-text)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}><Icon name={wide ? "close" : "chevronLeft"} size={20} stroke={2} /></button>
             <Menu lead={lead} actions={actions} onEdit={() => setEditing(true)} onEditLead={() => setEditingLead(true)} onMarked={stand.id === "belum" ? marked : undefined} />
           </div>
         </div>

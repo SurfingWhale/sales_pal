@@ -1209,7 +1209,8 @@ export const flows = [
       };
       // WhatsApp sent, you say so, and it's logged.
       const sentWa = () => page.getByRole("dialog", { name: /^Pesan ke / }).getByRole("button", { name: /^Udah, (catat|selesai dulu)$/ }).click();
-      const closeLead = async () => { await page.getByRole("button", { name: "Kembali ke Leads" }).click(); await page.getByRole("dialog", { name: /^Profil / }).waitFor({ state: "detached" }); };
+      // The close names where it goes back to: Beranda, Hunting or Leads (PRD-026).
+      const closeLead = async () => { await page.getByRole("dialog", { name: /^Profil / }).getByRole("button", { name: /^Kembali ke / }).first().click(); await page.getByRole("dialog", { name: /^Profil / }).waitFor({ state: "detached" }); };
       const views = () => page.getByRole("group", { name: "Tampilan cepat" });
       await t.step("sign up with an account like the owner's: 130 Maps leads, 12 who replied, scripts, a package", async () => {
         const email = await signup(t);
@@ -2610,7 +2611,8 @@ export const flows = [
         await card.getByRole("list", { name: /^Tahap Data, 5 dari 5/ }).waitFor();
         await expand("Toko Kue (@tokokue)");
         await page.getByRole("button", { name: "💬 Percakapan" }).first().click();
-        const th = page.getByRole("dialog", { name: "Toko Kue (@tokokue)" });
+        // The chat opens over their contact page, which stays under it (PRD-026).
+        const th = page.locator(".sp-thread");
         const chat = th.getByRole("log", { name: "Percakapan dengan Toko Kue (@tokokue)" });
         await chat.getByText("ada yang open jasa foto katalog buat UMKM?").first().waitFor();
         await chat.getByText("boleh kak, pricelist-nya berapa?").waitFor();
@@ -2634,6 +2636,11 @@ export const flows = [
         await ask.waitFor({ state: "detached" });
         await th.getByRole("button", { name: "Tutup", exact: true }).last().click();
         await th.waitFor({ state: "detached" });
+        // Closing the chat lands back on their contact page, where it was opened from.
+        const contact = page.getByRole("dialog", { name: "Kontak Toko Kue (@tokokue)" });
+        await contact.waitFor();
+        await contact.getByRole("button", { name: "Tutup kontak" }).click();
+        await contact.waitFor({ state: "detached" });
       });
       await t.step("the next person comes from a queue; a quiet one is dropped to Arsip and brought back", async () => {
         const uid = await uidOf(t.project, email);
@@ -3596,6 +3603,85 @@ export const flows = [
           await page.getByRole("button", { name: "Batal", exact: true }).click();
           await page.getByRole("dialog", { name: "Script pesan" }).getByRole("button", { name: "Ubah Tanya kebutuhan" }).waitFor();
         }
+      });
+    },
+  },
+  {
+    name: "navigasi balik: closing lands where you came from",
+    async run(t) {
+      const { page, project } = t;
+      const contact = () => page.getByRole("dialog", { name: /^Kontak / });
+      const lead = () => page.getByRole("dialog", { name: /^Profil / });
+      await t.step("a production-size account", async () => {
+        const email = await signup(t);
+        await seedDocs(project, bigAccount(await uidOf(project, email)));
+        await page.reload(); await page.waitForURL("**/dashboard");
+      });
+      await t.step("their contact page → Percakapan → close: back on their contact page", async () => {
+        await go(page, "Hunting");
+        await page.getByRole("button", { name: "Journey @contoh_060", exact: true }).click();
+        await page.getByRole("dialog", { name: "Kontak @contoh_060" }).waitFor();
+        await contact().getByRole("button", { name: "💬 Percakapan" }).click();
+        const chat = page.locator(".sp-thread");
+        await chat.waitFor();
+        await t.audit("Percakapan over the contact page");
+        await chat.getByRole("button", { name: "Tutup" }).first().click();
+        await chat.waitFor({ state: "detached" });
+        await page.getByRole("dialog", { name: "Kontak @contoh_060" }).waitFor();
+        // And with the phone's Back.
+        await contact().getByRole("button", { name: "💬 Percakapan" }).click();
+        await chat.waitFor();
+        await page.goBack();
+        await chat.waitFor({ state: "detached" });
+        await page.getByRole("dialog", { name: "Kontak @contoh_060" }).waitFor();
+        await contact().getByRole("button", { name: "Tutup kontak" }).click();
+        await contact().waitFor({ state: "detached" });
+      });
+      await t.step("a lead's Chat button → Pesan → close: back on the list, not on a page you didn't open", async () => {
+        await go(page, "Jualan", "Leads");
+        await page.getByRole("button", { name: /^(Balas|Kirim intro|Follow-up): / }).first().click();
+        const pesan = page.getByRole("dialog", { name: /^Pesan ke / });
+        await pesan.waitFor();
+        await pesan.getByRole("button", { name: "Tutup" }).first().click();
+        await pesan.waitFor({ state: "detached" });
+        await page.waitForTimeout(300);
+        if (await lead().count()) throw new Error("closing Pesan left the lead's page open");
+      });
+      await t.step("Beranda → a prospect's card → their contact page in Hunting → close: back on Beranda", async () => {
+        await go(page, "Beranda");
+        const card = page.locator("article.sp-task").filter({ has: page.getByRole("button", { name: /^(Kirim intro|Follow-up)$/ }) }).first();
+        await card.waitFor();
+        await card.getByRole("button", { name: /^(Kirim intro|Follow-up)$/ }).click();
+        await contact().waitFor();
+        const back = contact().getByRole("button", { name: /^Tutup kontak, kembali ke Beranda/ });
+        await back.waitFor();
+        await back.click();
+        await page.getByRole("heading", { name: /^Perlu ditindak/ }).waitFor();
+      });
+      await t.step("Perlu ditindak → a lead → close: the list is still open", async () => {
+        await page.getByRole("button", { name: "Lihat semua", exact: true }).first().click();
+        const sheet = page.getByRole("dialog", { name: /^Perlu ditindak/ });
+        await sheet.waitFor();
+        await sheet.locator("li", { hasText: "Follow-up ·" }).first().getByRole("button").click();
+        await lead().waitFor();
+        await lead().getByRole("button", { name: "Kembali ke Beranda" }).click();
+        await lead().waitFor({ state: "detached" });
+        await sheet.waitFor();
+        await sheet.getByRole("button", { name: "Tutup" }).click();
+        await sheet.waitFor({ state: "detached" });
+      });
+      await t.step("a lead's Riwayat → a quote → Kembali ke the lead: its page, on the tab it was opened from", async () => {
+        await go(page, "Jualan", "Leads");
+        // A lead with a quote in its history.
+        await page.locator(".lead-row", { hasText: "Usaha Contoh 012" }).first().click();
+        await lead().waitFor();
+        await lead().getByRole("button", { name: /Q-BIG-012/ }).first().click();
+        const ret = page.getByRole("button", { name: /^Kembali ke Usaha Contoh 012/ });
+        await ret.waitFor();
+        await page.keyboard.press("Escape");
+        await ret.click();
+        await lead().waitFor();
+        await page.locator(".sp-sub-btn.is-on", { hasText: "Leads" }).waitFor();
       });
     },
   },
