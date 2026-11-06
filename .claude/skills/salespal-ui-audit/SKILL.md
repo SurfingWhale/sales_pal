@@ -13,6 +13,20 @@ The rules already exist; this skill applies them:
 
 Where those two disagree with taste, they win.
 
+## Knowledge vs execution
+
+The judgment lives in the owner's Knowledge Inbox (Notion → *Knowledge Inbox DA&Code* → "UI Interaction Design — Native Feel & Interaction Quality"): what good interaction is. This skill is the execution: how to apply it to a SalesPal screen now. Use that knowledge as the UX constraint; don't paste it into prompts or docs.
+
+**First pass for every screen or component: interaction review, not redesign.** Identify and write down:
+- the current user context, and what the person is trying to do there;
+- the current UI state of the object (and which states exist: loading, empty, error, success, and the domain states);
+- the primary action, and the secondary actions;
+- the feedback available after each action;
+- the interaction pattern in use (inline action, popover, sheet, modal, navigation) and whether it fits that context.
+
+Then improve the interaction hierarchy and state visibility. Priority: interaction quality → state visibility → action hierarchy → contextual interaction → mobile usability → visual polish.
+Don't add components, buttons, modals or animation unless they solve a named interaction problem. Keep the information architecture and business logic unless a UX reason requires the change. The target is natural, predictable, contextual, mobile-friendly interaction, not a prettier UI.
+
 ## 0. Before touching code
 
 1. **Read the screen's components** and list each piece of data and every action, including CRUD, filters, search and navigation. Note where each action lives, how many taps it takes, and which Firestore calls it makes.

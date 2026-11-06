@@ -21,6 +21,10 @@ export default function DashboardPage() {
     return unsub;
   }, [router]);
 
+  // A wait that never ends reads as a broken app. After 10 s the spinner says
+  // which step is slow and offers a reload instead of spinning on.
+  const [slow, setSlow] = useState(false);
+
   // Invite-only for now (PRD-015): the server says whether this account may
   // come in. If it can't be asked, let them in: every paid route checks again.
   const [entry, setEntry] = useState<"checking" | "in" | "closed">("checking");
@@ -45,13 +49,24 @@ export default function DashboardPage() {
     if (!user) return;
     let live = true;
     setEntry("checking");
-    authFetch("/api/access").then(r => (r.ok ? r.json() : null)).then(j => {
+    // No answer in 8 s counts as "can't be asked": let them in (every paid
+    // route checks again for itself).
+    const ctl = new AbortController();
+    const cut = setTimeout(() => ctl.abort(), 8000);
+    authFetch("/api/access", { signal: ctl.signal }).then(r => (r.ok ? r.json() : null)).then(j => {
       if (!live) return;
       setEntry(j && j.app === false ? "closed" : "in");
       setAsked(j?.request?.status && j.request.status !== "approved" ? j.request.status : null);
-    }, () => { if (live) setEntry("in"); });
-    return () => { live = false; };
+    }, () => { if (live) setEntry("in"); }).finally(() => clearTimeout(cut));
+    return () => { live = false; clearTimeout(cut); ctl.abort(); };
   }, [user, tries]);
+
+  const waiting = user === undefined || (user && entry === "checking");
+  useEffect(() => {
+    if (!waiting) { setSlow(false); return; }
+    const id = setTimeout(() => setSlow(true), 10000);
+    return () => clearTimeout(id);
+  }, [waiting]);
 
   if (user && entry === "closed") {
     return (
@@ -92,12 +107,18 @@ export default function DashboardPage() {
     );
   }
 
-  if (user === undefined || (user && entry === "checking")) {
+  if (waiting) {
     return (
       <div style={{ background: "var(--app-bg, #f0f2f5)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ textAlign: "center" }}>
           <div style={{ width: 44, height: 44, border: "3px solid var(--app-border, #d0d7de)", borderTopColor: "#005eb0", borderRadius: "50%", animation: "spin 0.7s linear infinite", margin: "0 auto 16px" }} />
-          <div style={{ fontSize: 12, color: "var(--app-muted, #57606a)", }}>Memuat…</div>
+          <div role="status" style={{ fontSize: 13, color: "var(--app-muted, #57606a)" }}>{user === undefined ? "Cek login…" : "Cek akses…"}</div>
+          {slow && (
+            <div style={{ marginTop: 16, maxWidth: 300, fontSize: 13, lineHeight: 1.5, color: "var(--app-muted, #57606a)" }}>
+              {user === undefined ? "Login belum kebaca dari browser ini." : "Server belum jawab."} Cek koneksi, lalu muat ulang.
+              <div><button type="button" onClick={() => window.location.reload()} style={{ marginTop: 12, minHeight: 44, padding: "10px 16px", borderRadius: 10, border: 0, background: "#005eb0", color: "#fff", fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>Muat ulang</button></div>
+            </div>
+          )}
         </div>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
