@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { deleteField } from "firebase/firestore";
+import { deleteField, updateDoc } from "firebase/firestore";
 import { addDays, today } from "@/lib/billing";
-import { useSpace } from "@/lib/space";
+import { spaceDoc, useSpace } from "@/lib/space";
 import { objections } from "@/lib/salespal-data";
-import { Prospect, Result, Strategy, dncPatch, notePatch, replyPatch, resultPatch } from "@/lib/prospects";
+import { Prospect, Result, Strategy, dncPatch, huntStatusFor, lastHuntId, notePatch, replyPatch, resultPatch } from "@/lib/prospects";
 import { Counter, bump, ctx, saveProspect, syncHunt } from "@/lib/prospectStore";
 import { btnMuted, btnPrimary, chip, inputStyle, label } from "@/components/ui";
 import ConvertSheet from "@/components/ConvertSheet";
@@ -70,7 +70,9 @@ export function useOutcome({ strategy, sessionId, onMsg, onLocked, onOpenLead }:
         text: said,
         undo: undoable ? async () => {
           await saveProspect(space, p, before);
-          syncHunt(space, p);
+          // syncHunt writes nothing for someone who hadn't answered: put their last DM back to Terkirim.
+          if (huntStatusFor(p)) syncHunt(space, p);
+          else { const h = lastHuntId(p); if (h) updateDoc(spaceDoc(space, "hunts", h), { status: "Terkirim" }).catch(() => undefined); }
           counters.forEach(c => bump(space, sessionId, c, -1));
         } : undefined,
       });
