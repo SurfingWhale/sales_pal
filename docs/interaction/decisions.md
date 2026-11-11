@@ -8,11 +8,11 @@ Asal: [ambiguities.md](ambiguities.md) (disetujui owner 6 Nov 2026), PRD-026, pe
 
 | ID | Keputusan | Status |
 |---|---|---|
-| [DEC-001](#dec-001) | "Terkirim" = penjual mengonfirmasi, bukan saat tap | ✅ Hunting, Percakapan, Pesan lead · ❌ Beranda, penawaran, invoice |
+| [DEC-001](#dec-001) | "Terkirim" = penjual mengonfirmasi, bukan saat tap | ✅ Hunting, Percakapan, Pesan lead, Beranda (#118) · ❌ sheet kirim penawaran/invoice |
 | [DEC-002](#dec-002) | Pertanyaan "udah kekirim?" disimpan sampai dijawab, ditanya di tingkat app | ✅ #116 |
 | [DEC-003](#dec-003) | Dialog tengah ditinggalkan: sheet bawah, layar penuh, atau confirm sheet | 🟡 bertahap |
-| [DEC-004](#dec-004) | Bisa dibalik → langsung + Batal 10 dtk. Tidak bisa dibalik → tanya dulu | 🟡 Kontak prospek ✅ |
-| [DEC-005](#dec-005) | Feedback sukses hanya setelah tulisan berhasil | 🟡 |
+| [DEC-004](#dec-004) | Bisa dibalik → langsung + Batal 10 dtk. Tidak bisa dibalik → tanya dulu | 🟡 toast app `lib/toast` (#118): Kontak prospek, Beranda, Lembar lead, Penawaran, Invoice, Script ✅ · Percakapan belum |
+| [DEC-005](#dec-005) | Feedback sukses hanya setelah tulisan berhasil | 🟡 `withToast` (#118) · Percakapan belum |
 | [DEC-006](#dec-006) | Offline-first: tulis lokal, kirim saat ada sinyal | ✅ #116 |
 | [DEC-007](#dec-007) | Tutup = kembali ke tempat asal; empat jenis perpindahan | ✅ #115 · 🟡 tumpukan konteks |
 | [DEC-008](#dec-008) | Satu aksi utama per layar; yang jarang dan berisiko di ⋯ | 🟡 Kontak prospek ✅ |

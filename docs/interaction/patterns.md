@@ -120,7 +120,7 @@ Apa yang terjadi setelahnya?
 | | |
 |---|---|
 | **Purpose** | Mengatakan apa yang baru saja terjadi, tanpa menghentikan penjual. |
-| **Kapan dipakai** | Setelah setiap aksi yang mengubah data dan tidak memindahkan penjual ke layar yang menunjukkan hasilnya. `.sp-toast` (di atas nav bawah di HP, tengah bawah di laptop), `role="status"`. Isi: subjek + hasil + akibat ("✓ Toko Kue: Tertarik · follow-up Kam 7 Nov"). |
+| **Kapan dipakai** | Setelah setiap aksi yang mengubah data dan tidak memindahkan penjual ke layar yang menunjukkan hasilnya. Satu toast milik app: `toast()` / `withToast()` dari `lib/toast.ts`, dirender `components/AppToast.tsx` (dipasang sekali di SalesTracker, sehingga bertahan saat pindah tab). `.sp-toast` (di atas nav bawah di HP, tengah bawah di laptop), `role="status"`. Isi: subjek + hasil + akibat ("✓ Toko Kue: Tertarik · follow-up Kam 7 Nov"). |
 | **Kapan TIDAK** | Error yang butuh tindakan (P11). Hal yang terlihat jelas di layar (status yang berubah di tempat). |
 | **State pengguna** | "Tadi itu kesimpan nggak?" |
 | **Feedback** | Ini feedback-nya. Muncul **setelah** tulisan berhasil (DEC-005). |
