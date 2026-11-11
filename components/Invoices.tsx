@@ -3,6 +3,7 @@
 import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import { deleteDoc, deleteField, setDoc, updateDoc } from "firebase/firestore";
+import { toast, withToast } from "@/lib/toast";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import { Component,
   Business, Invoice, InvoiceState, Service, addDays, issuerOf, balance, nextNumber, daysBetween, dpAmount, invoiceColor, invoiceState, invoiceText,
@@ -66,8 +67,16 @@ export default function Invoices({ invoices, business, leads, services, componen
     setPayBusy(true); setPayErr("");
     try {
       // Money in means the client has it: a draft becomes issued.
-      await updateDoc(spaceDoc(space, "invoices", paying.inv.id), { payments, ...(isIssued(paying.inv) ? {} : { issue: "Diterbitkan", issuedAt: now }) });
+      const inv = paying.inv, ref = spaceDoc(space, "invoices", inv.id);
+      const issuing = !isIssued(inv);
+      await updateDoc(ref, { payments, ...(issuing ? { issue: "Diterbitkan", issuedAt: now } : {}) });
       setPaying(null);
+      // How much came in and what's left, said, with Batal (GAP-INV-4).
+      const left = balance({ ...inv, payments });
+      toast({
+        text: `${rupiah(amount)} masuk ke ${inv.number} · ${left > 0 ? `sisa ${rupiah(left)}` : "lunas"}${issuing ? " · invoice diterbitkan" : ""}`,
+        undo: () => updateDoc(ref, { payments: inv.payments || [], ...(issuing ? { issue: inv.issue || "Draft", issuedAt: inv.issuedAt ?? deleteField() } : {}) }),
+      });
     } catch { setPayErr("Gagal nyimpen. Cek koneksi lalu coba lagi."); }
     finally { setPayBusy(false); }
   }
@@ -77,9 +86,14 @@ export default function Invoices({ invoices, business, leads, services, componen
   }
 
   // A draft is only a plan; issuing it is what puts it in "belum tertagih".
-  async function issue(inv: Invoice) {
+  // Said, with Batal back to Draft (GAP-INV-3).
+  function issue(inv: Invoice) {
     if (isIssued(inv)) return;
-    await updateDoc(spaceDoc(space, "invoices", inv.id), { issue: "Diterbitkan", issuedAt: now });
+    const ref = spaceDoc(space, "invoices", inv.id);
+    return withToast(`${inv.number} diterbitkan · masuk belum tertagih`, async () => {
+      await updateDoc(ref, { issue: "Diterbitkan", issuedAt: now });
+      return async () => { await updateDoc(ref, { issue: inv.issue || "Draft", issuedAt: inv.issuedAt ?? deleteField() }); };
+    });
   }
 
   async function cancel(inv: Invoice) {
@@ -89,10 +103,16 @@ export default function Invoices({ invoices, business, leads, services, componen
   // Tagih via WA: the bill's words and its PDF through your own WhatsApp
   // (WaSendSheet). Sending it issues a draft, with Batal to take that back.
   function bill(inv: Invoice) { setBilling(inv); }
+  // A bill sent is always written down: remindedAt rests it on Beranda for two
+  // days, also when it was already issued (it used to say "tercatat" and write
+  // nothing, GAP-INV-1 / AMB-08).
   async function markBilled(inv: Invoice): Promise<(() => Promise<void>) | void> {
-    if (isIssued(inv)) return;
-    await updateDoc(spaceDoc(space, "invoices", inv.id), { issue: "Diterbitkan", issuedAt: now });
-    return async () => { await updateDoc(spaceDoc(space, "invoices", inv.id), { issue: inv.issue || "Draft", issuedAt: inv.issuedAt ?? deleteField() }); };
+    const ref = spaceDoc(space, "invoices", inv.id);
+    const issuing = !isIssued(inv);
+    await updateDoc(ref, { remindedAt: now, ...(issuing ? { issue: "Diterbitkan", issuedAt: now } : {}) });
+    return async () => {
+      await updateDoc(ref, { remindedAt: inv.remindedAt ?? deleteField(), ...(issuing ? { issue: inv.issue || "Draft", issuedAt: inv.issuedAt ?? deleteField() } : {}) });
+    };
   }
 
   async function setDue(inv: Invoice, dueDate: string) {

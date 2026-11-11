@@ -1559,6 +1559,14 @@ export const flows = [
         await page.getByText(/Perjanjian Kerja · ditandatangani/).waitFor();
         await page.getByRole("button", { name: "✓ Disetujui" }).click();
         await page.getByRole("button", { name: "Buat invoice DP 50% →" }).waitFor();
+        // A yes makes the lead a Deal: said, and a wrong tap is taken back (GAP-QUO-3).
+        const said = page.locator(".sp-toast");
+        await said.getByText(/ disetujui · .* jadi Deal Rp/).waitFor();
+        await said.getByRole("button", { name: "Batal", exact: true }).click();
+        await said.getByText("✓ Dibatalin").waitFor();
+        await page.getByRole("button", { name: "✓ Disetujui" }).click();
+        await page.getByRole("button", { name: "Buat invoice DP 50% →" }).waitFor();
+        await said.getByRole("button", { name: "Tutup" }).click();
       });
       await t.step("a sent quote keeps the letterhead it went out with", async () => {
         await go(page, "Jualan", "Paket");
@@ -1737,6 +1745,10 @@ export const flows = [
         await modal(page).locator("#pay-amount").fill("100000");
         await modal(page).getByRole("button", { name: "Simpan", exact: true }).click();
         await page.locator("#pay-amount").waitFor({ state: "detached" });
+        // How much came in and what's left, said (GAP-INV-4).
+        const said = page.locator(".sp-toast");
+        await said.getByText(/^✓ Rp\s?100\.000 masuk ke .* · (sisa|lunas)/).waitFor();
+        await said.getByRole("button", { name: "Tutup" }).click();
         await page.getByRole("button", { name: /^Ganti tanggal pembayaran/ }).first().click();
         await page.getByRole("button", { name: "Batal", exact: true }).click();
         await page.getByRole("button", { name: /^Ganti tanggal pembayaran/ }).first().click();

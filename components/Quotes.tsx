@@ -2,7 +2,8 @@
 
 import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
-import { setDoc, deleteDoc, updateDoc, arrayUnion, deleteField } from "firebase/firestore";
+import { setDoc, deleteDoc, getDoc, updateDoc, arrayUnion, deleteField } from "firebase/firestore";
+import { withToast } from "@/lib/toast";
 import { spaceDoc, stamp, useSpace } from "@/lib/space";
 import { Component, QuoteTemplate,
   Business, Invoice, LineItem, QUOTE_STATUS, Quote, QuoteStatus, Service,
@@ -87,8 +88,13 @@ export default function Quotes({ quotes, invoices, leads, services, components, 
     await updateDoc(spaceDoc(space, "quotes", q.id), { followUpAt: today() });
     return async () => { await updateDoc(spaceDoc(space, "quotes", q.id), { followUpAt: before ?? deleteField() }); };
   }
-  async function extend(q: Quote) {
-    await updateDoc(spaceDoc(space, "quotes", q.id), { validUntil: addDays(today(), 7) });
+  // Said back with the new date, and Batal (GAP-QUO-9).
+  function extend(q: Quote) {
+    const ref = spaceDoc(space, "quotes", q.id), prev = q.validUntil, next = addDays(today(), 7);
+    return withToast(`${q.number} berlaku sampai ${longDate(next)}`, async () => {
+      await updateDoc(ref, { validUntil: next });
+      return async () => { await updateDoc(ref, { validUntil: prev }); };
+    });
   }
 
   async function markSigned(q: Quote, kind: "spk" | "nda") {
@@ -149,22 +155,47 @@ export default function Quotes({ quotes, invoices, leads, services, components, 
 
   const draftOf = (q: Quote): DocDraft => ({ ...q, validUntil: q.validUntil, schedule: scheduleOf(q, q.terms || termsOf(business)) });
 
-  async function setStatus(q: Quote, status: QuoteStatus) {
+  // Every status change writes back to what it was with Batal (DEC-004,
+  // GAP-QUO-3/9): Disetujui turns the lead into a Deal and a revision takes
+  // over, so a wrong tap used to be expensive. Returns the undo.
+  async function setStatus(q: Quote, status: QuoteStatus): Promise<() => Promise<void>> {
     const patch: Partial<Quote> = { status };
     if (status === "Terkirim" && !q.sentAt) patch.sentAt = today();
     // Every way to "Terkirim" locks the letterhead and terms, as Kirim penawaran does (AMB-10).
     if (status === "Terkirim") { patch.issuer = q.issuer || issuerOf(business); patch.terms = q.terms || termsOf(business); }
     if (status === "Disetujui") patch.acceptedAt = today();
-    await updateDoc(spaceDoc(space, "quotes", q.id), patch);
+    const ref = spaceDoc(space, "quotes", q.id);
+    const before = Object.fromEntries(Object.keys(patch).map(k => {
+      const v = (q as unknown as Record<string, unknown>)[k];
+      return [k, v === undefined ? deleteField() : v];
+    }));
+    const undos: (() => Promise<unknown>)[] = [() => updateDoc(ref, before)];
+    await updateDoc(ref, patch);
     // An accepted revision takes over from the quote it revises.
-    if (status === "Disetujui" && q.supersedes && quotes.some(x => x.id === q.supersedes)) {
-      await updateDoc(spaceDoc(space, "quotes", q.supersedes), { status: "Digantikan", supersededBy: q.id });
+    const old = status === "Disetujui" && q.supersedes ? quotes.find(x => x.id === q.supersedes) : undefined;
+    if (old) {
+      const oldRef = spaceDoc(space, "quotes", old.id);
+      await updateDoc(oldRef, { status: "Digantikan", supersededBy: q.id });
+      undos.push(() => updateDoc(oldRef, { status: old.status, supersededBy: old.supersededBy ?? deleteField() }));
     }
     // A yes closes the lead, at the value actually agreed.
     if (status === "Disetujui" && q.leadId) {
-      await updateDoc(spaceDoc(space, "leads", q.leadId), { status: "Closed", value: total(q), lastContact: today() }).catch(() => {});
+      const leadRef = spaceDoc(space, "leads", q.leadId);
+      const lead = await getDoc(leadRef).catch(() => null);
+      if (lead?.exists()) {
+        const d = lead.data() as { status?: string; value?: number; lastContact?: string };
+        await updateDoc(leadRef, { status: "Closed", value: total(q), lastContact: today() });
+        undos.push(() => updateDoc(leadRef, { status: d.status ?? deleteField(), value: d.value ?? deleteField(), lastContact: d.lastContact ?? deleteField() }));
+      }
     }
+    return async () => { for (const u of undos.reverse()) await u(); };
   }
+  const said: Partial<Record<QuoteStatus, (q: Quote) => string>> = {
+    Disetujui: q => `${q.number} disetujui${q.leadId ? ` · ${q.leadName} jadi Deal ${rupiah(total(q))}` : ""}`,
+    Ditolak: q => `${q.number} ditandai ditolak`,
+    Terkirim: q => `${q.number} ditandai terkirim · kop dan syarat dikunci`,
+  };
+  const changeStatus = (q: Quote, status: QuoteStatus) => withToast(said[status]?.(q) || `${q.number}: ${status}`, () => setStatus(q, status));
 
   async function sendWA(q: Quote) {
     window.open(waLink(q.phone, quoteText(q, q.issuer || business)), "_blank");
@@ -314,11 +345,11 @@ export default function Quotes({ quotes, invoices, leads, services, components, 
                         </button>}
                     {q.status === "Terkirim" && (
                       <>
-                        <button onClick={() => setStatus(q, "Disetujui")} style={{ ...chip, color: "var(--ok)", borderColor: "#00a86260", fontWeight: 700 }}>✓ Disetujui</button>
-                        <button onClick={() => setStatus(q, "Ditolak")} style={{ ...chip, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440", fontWeight: 700 }}>✗ Ditolak</button>
+                        <button onClick={() => changeStatus(q, "Disetujui")} style={{ ...chip, color: "var(--ok)", borderColor: "#00a86260", fontWeight: 700 }}>✓ Disetujui</button>
+                        <button onClick={() => changeStatus(q, "Ditolak")} style={{ ...chip, color: "color-mix(in srgb, #ff4444 55%, var(--app-text))", borderColor: "#ff444440", fontWeight: 700 }}>✗ Ditolak</button>
                       </>
                     )}
-                    {q.status === "Draft" && <button onClick={() => setStatus(q, "Terkirim")} style={{ ...chip, color: "var(--app-text)", fontWeight: 700 }}>Tandai terkirim</button>}
+                    {q.status === "Draft" && <button onClick={() => changeStatus(q, "Terkirim")} style={{ ...chip, color: "var(--app-text)", fontWeight: 700 }}>Tandai terkirim</button>}
                     {expired && q.status !== "Digantikan" && <button onClick={() => extend(q)} style={{ ...chip, color: "var(--app-text)", fontWeight: 700 }}>Perpanjang 7 hari</button>}
                     {q.status === "Disetujui" && (() => {
                       const m = money(q);

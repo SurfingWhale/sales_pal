@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/lib/toast";
 import { useEffect, useRef, useState } from "react";
 import { deleteDoc, deleteField, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -44,9 +45,7 @@ export default function ScriptManager({ onClose, startNew, stage, data }: {
   const [menu, setMenu] = useState<PitchTemplate | null>(null);
   const [filtering, setFiltering] = useState(false);
   const [err, setErr] = useState("");
-  const [toast, setToast] = useState<{ text: string; undo?: () => Promise<unknown> } | null>(null);
   const [ask, askSheet] = useConfirm();
-  useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 5000); return () => clearTimeout(id); }, [toast]);
 
   // List and editor are two steps (PRD-024 §7): Back or Batal in the editor goes
   // back to the list where it was, or to where it was opened from; ✕ leaves Script
@@ -79,7 +78,8 @@ export default function ScriptManager({ onClose, startNew, stage, data }: {
   const ref = (id: string) => spaceDoc(space, "pitchTemplates", id);
   async function run(fn: () => Promise<unknown>, done?: { text: string; undo?: () => Promise<unknown> }) {
     setErr("");
-    try { await fn(); setMenu(null); if (done) setToast(done); } catch { setErr("Gagal menyimpan. Cek koneksi, lalu coba lagi."); }
+    // The app's toast: Batal for 10 s like everywhere else (GAP-SCR-2).
+    try { await fn(); setMenu(null); if (done) toast(done); } catch { setErr("Gagal menyimpan. Cek koneksi, lalu coba lagi."); }
   }
 
   const needle = q.trim().toLowerCase();
@@ -296,12 +296,6 @@ export default function ScriptManager({ onClose, startNew, stage, data }: {
         </Sheet>
       )}
 
-      {toast && (
-        <div className="sp-toast" role="status" style={{ zIndex: 140 }}>
-          <span style={{ flex: 1, minWidth: 0, fontSize: "var(--fs-meta)" }}>{toast.text}</span>
-          {toast.undo && <button type="button" onClick={() => { const u = toast.undo!; setToast(null); run(u); }} style={{ minHeight: 44, padding: "0 12px", border: 0, background: "transparent", color: "#7ab5ef", fontWeight: 700, cursor: "pointer" }}>Batal</button>}
-        </div>
-      )}
     </Sheet>
   );
 }
@@ -337,6 +331,7 @@ function ScriptEditor({ start, sample, onDone, onCancel, onDirty }: { start: Pit
         ...(t.isDefault ? { isDefault: true } : {}),
         ...(t.archived ? { archived: true } : {}),
       });
+      toast({ text: `Script "${t.title.trim()}" disimpan` });   // GAP-SCR-1
       onDone();
     } catch { setErr("Gagal menyimpan. Cek koneksi, lalu coba lagi."); setSaving(false); }
   }
