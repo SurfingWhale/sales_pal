@@ -462,6 +462,8 @@ export const flows = [
         await showWhy(t.page);
         await expectText(t.page, "Kenapa 5");
         await t.page.getByRole("button", { name: "Mereka bales hari ini" }).click();
+        // Said only once it's written, with Batal (GAP-LEAD-1).
+        await t.page.locator(".sp-toast").getByText("✓ Balasan Kopi Flow dicatat").waitFor();
         await expectText(t.page, "Kenapa 55");
         await t.page.getByRole("button", { name: /^Jadwal/ }).first().click();
         await t.page.getByPlaceholder(/Kirim portfolio/).fill("Kirim portfolio");
@@ -469,6 +471,8 @@ export const flows = [
         await t.page.getByRole("button", { name: "Simpan jadwal" }).click();
         // Saved: the sheet closes by itself.
         await t.page.getByRole("button", { name: "Simpan jadwal" }).waitFor({ state: "detached" });
+        // The date it was set to, said back (GAP-LEAD-3).
+        await t.page.locator(".sp-toast").getByText(/^✓ Kirim portfolio Kopi Flow /).waitFor();
         await expectText(t.page, "Kenapa 75");
         await expectText(t.page, "Potensi tinggi");
         await closeAll(t.page);
@@ -834,6 +838,17 @@ export const flows = [
         await sheet.waitFor({ state: "detached" });
         await page.getByRole("button", { name: "Status Gugur. Ubah data lead" }).first().waitFor();
         await expectText(page, "Belum dijadwalkan");
+        // A big change from inside a form: said, with Batal (GAP-LEAD-2).
+        const said = page.locator(".sp-toast");
+        await said.getByText("✓ Sate Flow ditandai Gugur · alasannya masuk Rejection Log").waitFor();
+        await said.getByRole("button", { name: "Batal", exact: true }).click();
+        await page.getByRole("button", { name: "Status Hot. Ubah data lead" }).first().waitFor();
+        await page.getByRole("button", { name: "Status Hot. Ubah data lead" }).first().click();
+        await sheet.getByRole("button", { name: "Gugur", exact: true }).click();
+        await sheet.locator("#le-why").fill("Budget dipotong");
+        await sheet.getByRole("group", { name: "Coba lagi" }).getByRole("button", { name: "3 bulan lagi" }).click();
+        await sheet.getByRole("button", { name: "Simpan", exact: true }).click();
+        await page.getByRole("button", { name: "Status Gugur. Ubah data lead" }).first().waitFor();
         await closeAll(page);
         await go(page, "Jualan", "Leads");
         const views = page.getByRole("group", { name: "Tampilan cepat" });

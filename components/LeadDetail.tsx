@@ -38,7 +38,7 @@ export interface DetailLead {
 export interface DetailActions {
   onSaveProfile: (p: LeadProfile) => Promise<void> | void;
   onImport: (patch: WaPatch) => Promise<void> | void;
-  onReplied: () => void;
+  onReplied: () => Promise<unknown> | void;   // says so itself (app toast), after the write
   onSchedule: (action: string, date: string) => Promise<void> | void;
   onDone: () => Promise<void> | void;
   onQuote: () => void;
@@ -476,7 +476,6 @@ export function LeadPage({ lead, score, actions, onClose, shareFile, wide, start
   useEffect(() => {
     if (start === "edit") setEditing(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const [noted, setNoted] = useState(false);
   // The chat note floats over the bottom of the page; the page makes room for
   // it, so the last rows (Kontak) can still be scrolled into view.
   const noteRef = useRef<HTMLDivElement>(null);
@@ -535,12 +534,11 @@ export function LeadPage({ lead, score, actions, onClose, shareFile, wide, start
           <NextMessage onOpen={() => write()} lead={chatLead(lead)} />
 
           <nav aria-label="Aksi cepat" className="sp-quick" style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
-            <button aria-label="Mereka bales hari ini" onClick={() => { actions.onReplied(); setNoted(true); setTimeout(() => setNoted(false), 2500); }} style={quick(false)}><Icon name="chat" size={22} />Mereka bales</button>
+            <button aria-label="Mereka bales hari ini" onClick={() => { actions.onReplied(); }} style={quick(false)}><Icon name="chat" size={22} />Mereka bales</button>
             {lead.phone ? <a href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`} style={quick(false)}><Icon name="phone" size={22} />Telepon</a> : <button onClick={() => setEditing(true)} aria-label="Telepon: belum ada nomor, tambah nomor" style={quick(false)}><Icon name="phone" size={22} />Tambah no.</button>}
             <button onClick={actions.onQuote} style={quick(false)}><Icon name="doc" size={22} />Penawaran</button>
             <button onClick={() => setScheduling(true)} style={quick(false)}><Icon name="calendar" size={22} />Jadwal</button>
           </nav>
-          <p role="status" style={{ margin: "6px 4px 0", minHeight: 18, fontSize: 13, color: "var(--ok)" }}>{noted ? "✓ Dicatat" : ""}</p>
           <LeadHistory items={history} onOpen={onOpenDoc} />
 
           <section aria-labelledby="brief-h" style={{ marginTop: 20, position: "relative", isolation: "isolate", borderRadius: 26, overflow: "hidden" }}>

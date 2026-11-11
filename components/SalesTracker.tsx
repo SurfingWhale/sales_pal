@@ -53,6 +53,7 @@ import { profileUrl } from "@/lib/threads";
 import { recordSend, useHuntSession, useProspects, useStrategy } from "@/lib/prospectStore";
 import PendingSends from "@/components/PendingSends";
 import AppToast from "@/components/AppToast";
+import { toast, withToast } from "@/lib/toast";
 import type { PendingSend } from "@/lib/pendingSend";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { Component, Invoice, PriceChange, Quote, QuoteTemplate, Service, addDays, balance, daysBetween, invoiceState, owed, longDate, rupiah, today, total, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
@@ -425,11 +426,17 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
           ...rest, ...(newer ? { lastReplyAt, ...(lastReplyAt > (l.lastContact || "") ? { lastContact: lastReplyAt } : {}) } : {}),
         });
       },
-      onReplied: () => markReplied(l.id),
-      onSchedule: (action, date) => updateDoc(spaceDoc(space, "leads", l.id), { nextAction: action, nextActionDate: date }),
-      onDone: () => doneFollowUp(l.id),
+      onReplied: () => withToast(`Balasan ${l.name} dicatat`, () => markReplied(l.id)),
+      onSchedule: async (action, date) => {
+        // The date it's set to, said back (GAP-LEAD-3).
+        const ref = spaceDoc(space, "leads", l.id);
+        const prev = { nextAction: l.nextAction || "", nextActionDate: l.nextActionDate || "" };
+        await updateDoc(ref, { nextAction: action, nextActionDate: date });
+        toast({ text: `${action || "Follow-up"} ${l.name} ${longDate(date)}`, undo: () => updateDoc(ref, prev) });
+      },
+      onDone: async () => { await doneFollowUp(l.id); toast({ text: `Follow-up ${l.name} selesai` }); },
       onQuote: () => { const from = { tab: activeTab, label: l.name, leadId: l.id }; setPageOpen(false); startQuote(l); setCameFrom(from); },
-      onDelete: async () => { await deleteLead(l.id); setPageOpen(false); setSelectedLead(null); },
+      onDelete: async () => { await deleteLead(l.id); setPageOpen(false); setSelectedLead(null); toast({ text: `Lead ${l.name} dihapus` }); },
       onSavePhone: phone => updateDoc(spaceDoc(space, "leads", l.id), { phone }),
       onSaveGeo: (geo, address) => updateDoc(spaceDoc(space, "leads", l.id), { geo: geo || deleteField(), ...(address !== undefined ? { address } : {}) }),
       onSaveLead: (patch, lost) => saveLead(l, patch, lost),
@@ -441,13 +448,25 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   // Ubah data lead. Gugur clears the reminder and writes why to the Rejection
   // Log, under the lead's owner, in the same commit.
   async function saveLead(l: Lead, patch: LeadPatch, lost?: LostNote) {
+    const ref = spaceDoc(space, "leads", l.id);
+    const change = { ...patch, ...(lost ? { nextAction: "", nextActionDate: "" } : {}) } as Record<string, unknown>;
+    const rej = spaceDoc(space, "rejections", `rej_${Date.now()}`);
     const batch = writeBatch(db);
-    batch.update(spaceDoc(space, "leads", l.id), { ...patch, ...(lost ? { nextAction: "", nextActionDate: "" } : {}) });
-    if (lost) batch.set(spaceDoc(space, "rejections", `rej_${Date.now()}`), stamp(space, {
+    batch.update(ref, change);
+    if (lost) batch.set(rej, stamp(space, {
       leadName: patch.name, leadId: l.id, date: today(), reason: lost.reason, channel: channelOf(patch.source),
       followUpDate: lost.retry, lesson: "",
     }, l));
     await batch.commit();
+    // Gugur is a big change made inside a form: say so, and let it be taken
+    // back with its Rejection Log row (GAP-LEAD-2). Other edits: just say so.
+    const prev = Object.fromEntries(Object.keys(change).map(k => {
+      const v = (l as unknown as Record<string, unknown>)[k];
+      return [k, v === undefined ? deleteField() : v];
+    }));
+    toast(lost
+      ? { text: `${patch.name} ditandai Gugur · alasannya masuk Rejection Log`, undo: async () => { const b = writeBatch(db); b.update(ref, prev); b.delete(rej); await b.commit(); } }
+      : { text: `Data ${patch.name} disimpan` });
   }
 
   // A message confirmed sent is today's contact: once a day per lead, logged in
@@ -528,8 +547,13 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
   }
 
   // They answered: the strongest sign a lead is alive (PRD-008 §2, Respons).
+  // They answered: said only after it's written, with Batal (GAP-LEAD-1).
   async function markReplied(id: string) {
-    await updateDoc(spaceDoc(space, "leads", id), { lastReplyAt: today(), lastContact: today() });
+    const l = leads.find(x => x.id === id);
+    const ref = spaceDoc(space, "leads", id);
+    const prev = { lastReplyAt: l?.lastReplyAt ?? deleteField(), lastContact: l?.lastContact || "" };
+    await updateDoc(ref, { lastReplyAt: today(), lastContact: today() });
+    return async () => { await updateDoc(ref, prev); };
   }
 
   function startQuote(lead: Lead) {
@@ -1209,7 +1233,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       {fuRun && (
         <FollowUpRun queue={fuRun} live={id => leads.find(l => l.id === id)}
           onSent={async id => { const l = leads.find(x => x.id === id); if (l) await logContact(l, `Follow-up: ${l.nextAction || "Follow-up"}`); }}
-          onReplied={id => markReplied(id)} onDone={(id, sent) => doneFollowUp(id, sent)}
+          onReplied={async id => { await markReplied(id); }} onDone={(id, sent) => doneFollowUp(id, sent)}
           onSchedule={(id, action, date) => updateDoc(spaceDoc(space, "leads", id), { nextAction: action, nextActionDate: date })}
           onOpen={id => { const l = leads.find(x => x.id === id); if (l) openLead(l); }}
           onClose={() => setFuRun(null)} />
