@@ -8,7 +8,26 @@ niat pengguna → konteks → aksi → perubahan state → feedback → aksi ber
 
 Satu layar hanyalah satu wujud dari sistem ini. Sebelum mengubah UI, baca dulu artefak yang relevan di sini.
 
-**Status:** draf pertama, 6 Nov 2026. Semua keputusan yang ditandai **AMBIGUITY** di [ambiguities.md](ambiguities.md) menunggu review owner. Kode produksi tidak diubah sampai model ini disetujui.
+**Status:** 6 Nov 2026. Keputusan di [ambiguities.md](ambiguities.md) sudah disetujui owner; yang sudah diambil dicatat di [decisions.md](decisions.md).
+
+## Cara membaca
+
+Dokumentasi ini berlapis. **Alasan dulu, wujud belakangan.** Buka satu feature dan baca dari atas ke bawah:
+
+```
+WHY → USER GOAL → USER STATE → EXPERIENCE FLOW → DECISION FLOW → INTERACTION FLOW
+    → COMPONENT MAP → NAVIGATION → FEEDBACK & RECOVERY → DESIGN RATIONALE
+    → CURRENT IMPLEMENTATION → KNOWN GAPS
+```
+
+| Lapis | Dokumen | Menjawab |
+|---|---|---|
+| Sistem | [architecture.md](architecture.md) | Bagaimana semua feature membentuk satu perjalanan penjual, titik keputusan global, state yang menembus feature |
+| Feature | [features/](features/) (9 file, [template](features/_TEMPLATE.md)) | Kenapa feature ada, apa yang dicoba penjual, state dan keputusannya, lalu interaksi, komponen, navigasi, feedback, alasan pola, dan gap |
+| Pola | [patterns.md](patterns.md) | Primary/secondary/overflow, action sheet, bottom sheet, layar penuh, confirm, toast, undo, retry, handoff eksternal, unsaved changes, Back, loading, error: kapan dan kapan tidak |
+| Keputusan | [decisions.md](decisions.md) | DEC-001…: konteks, masalah, pilihan, alasan, harga. Dibaca sebelum mengusulkan ulang sesuatu |
+
+Artefak di bawah adalah **bahan** untuk lapis di atas: fakta perilaku, bukan alasannya.
 
 | Artefak | Isi | Dipakai untuk |
 |---|---|---|
@@ -18,8 +37,24 @@ Satu layar hanyalah satu wujud dari sistem ini. Sebelum mengubah UI, baca dulu a
 | [D. Kontrak interaksi](D-interaction-contracts.md) | Pemicu → prasyarat → aksi → perubahan state → feedback → aksi berikutnya → konteks balik | Membangun dan mengetes satu aksi |
 | [E. Spesifikasi perilaku layar](E-screen-behavior.md) | Per layar: tujuan, pintu masuk/keluar, aksi utama/sekunder, loading/kosong/error/sukses, Back, tutup, konteks | Membangun dan mengetes satu layar |
 | [F. Peta perilaku komponen](F-component-behavior.md) | Komponen → aksinya → yang terjadi | Tahu komponen mana pemilik perilaku apa |
+| [G. Peta tombol](G-button-map.md) | Setiap tombol: ke mana, pola apa, feedback, penilaian native | Audit cepat sebuah layar |
 | [Ambiguitas](ambiguities.md) | Perilaku yang belum jelas: kenapa penting, keputusan yang disarankan, dampaknya | Keputusan owner |
 | [Review](review.md) | Bisakah pengguna, engineer, dan QA menjawab pertanyaan dasar dari model ini? | Mengukur kelengkapan |
+
+## Pertanyaan yang selalu diajukan
+
+Sebelum menambah atau mengubah interaksi:
+
+1. Penjual sedang mencoba melakukan apa?
+2. Ia sedang di state apa?
+3. Keputusan apa yang sedang ia buat?
+4. Apa yang terjadi kalau ia salah?
+5. Bagaimana ia tahu aksinya berhasil?
+6. Bagaimana ia kembali?
+7. Apa yang terjadi kalau app lain gagal, atau ia tidak kembali?
+8. Kenapa pola ini, dan bukan yang lain ([patterns.md](patterns.md))?
+
+Jangan menambah UI supaya terlihat lengkap, tombol karena ada endpoint, atau modal sebagai wadah umum. "Feedback" bukan "database berhasil": feedback adalah penjual tahu apa yang terjadi dan apa yang bisa ia lakukan.
 
 ## Tiga jenis perpindahan
 
