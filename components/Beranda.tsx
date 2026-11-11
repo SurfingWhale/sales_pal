@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSpace } from "@/lib/space";
+import { addPending, release, removePending } from "@/lib/pendingSend";
+import { toast, toastError, withToast } from "@/lib/toast";
 import LeadMap, { MapLead } from "@/components/LeadMap";
 import Icon, { IconName } from "@/components/Icon";
 import { longDate, waLink } from "@/lib/billing";
@@ -29,12 +32,15 @@ export interface Todo {
   action: string;      // the main button
   phone: string; text: string;  // a WhatsApp message, when the action is one
   wa?: boolean;        // the main action is the WhatsApp message
-  // Opening that message is the send (like Hunting's Copy = kirim): it is
-  // written down at once, `logged` says what, and the undo is Batal.
+  // wa.me can't tell us a message went out, so it counts once the seller says
+  // so (DEC-001). `logged` says what was written; the undo is Batal.
   onSent?: () => Promise<(() => Promise<void>) | void>;
   logged?: string;
+  // What the send belongs to, so the question survives a tab switch or a
+  // reload (lib/pendingSend, DEC-002) and is recorded the same way app-wide.
+  target?: { type: "lead" | "quote" | "invoice"; id: string };
   amount: number;      // rupiah at stake; due tasks with more go first
-  snooze?: () => void; // "Tunda": push it to tomorrow
+  snooze?: () => Promise<() => Promise<void>>; // "Tunda": push it to tomorrow; returns the undo
   open: () => void;
   inPlace?: boolean;   // opens over Beranda (a lead's page), so a sheet it came from stays open under it
   // A prospect from Hunting: how far along, the chat so far, their profile.
@@ -271,7 +277,7 @@ const css = `
 @media (prefers-reduced-motion: reduce) { .sp-seg-btn > span { transition: none; } }
 `;
 
-function withoutTodo(list: Todo[], key: string): Todo[] {
+function withoutTodo<T extends Todo>(list: T[], key: string): T[] {
   return list.filter(t => t.key !== key);
 }
 
@@ -287,25 +293,41 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
   const [chatOf, setChatOf] = useState<Todo | null>(null);
   // Cards whose WhatsApp was opened. wa.me can't tell us a message went out, so
   // a card counts once you say so (PRD-022 §4), and several can wait at a time.
-  const [asking, setAsking] = useState<Todo[]>([]);
-  // What the last one left behind, with Batal.
-  const [sent, setSent] = useState<{ say: string; undo?: () => Promise<void>; err?: boolean } | null>(null);
-  const [undoing, setUndoing] = useState(false);
-  function sendOf(t: Todo) {
-    setAsking(withoutTodo(asking, t.key));
+  // Each question is also kept in the app's queue (lib/pendingSend): if the
+  // seller leaves Beranda or iOS reloads while they're in WhatsApp, the app
+  // asks instead (DEC-002). The answer goes to the app's toast, with Batal.
+  const [asking, setAsking] = useState<(Todo & { pendingId?: string })[]>([]);
+  const space = useSpace();
+  const spaceKey = `${space.kind}:${space.id}`;
+  const askingNow = useRef(asking);
+  askingNow.current = asking;
+  useEffect(() => () => askingNow.current.forEach(a => release(a.pendingId)), []);
+  function opened(t: Todo) {
     if (!t.onSent) return;
-    Promise.resolve(t.onSent()).then(
-      undo => setSent({ say: `✓ ${t.logged || "Dicatat"}`, undo: undo || undefined }),
-      () => setSent({ say: "WhatsApp kebuka, tapi gagal dicatat. Cek koneksi.", err: true }),
-    );
+    const old = asking.find(a => a.key === t.key);
+    release(old?.pendingId);
+    const pendingId = t.target ? addPending({ kind: "todo", label: `Pesan ke ${t.title}`, space: spaceKey, target: t.target }) : undefined;
+    setAsking([...withoutTodo(asking, t.key), { ...t, pendingId }]);
   }
-  async function takeBack() {
-    if (!sent?.undo) return;
-    setUndoing(true);
-    try { await sent.undo(); setSent({ say: "Dibatalin, ga dicatat." }); }
-    catch { setSent({ ...sent, say: "Gagal batalin. Cek koneksi lalu coba lagi.", err: true }); }
-    setUndoing(false);
+  async function sendOf(t: Todo & { pendingId?: string }) {
+    setAsking(a => withoutTodo(a, t.key));
+    removePending(t.pendingId);
+    if (!t.onSent) return;
+    try {
+      const undo = await t.onSent();
+      toast({ text: t.logged || "Dicatat", undo: undo || undefined });
+    } catch {
+      // Not recorded: the question comes back, so the send isn't lost (GAP-BER-4).
+      const pendingId = t.target ? addPending({ kind: "todo", label: `Pesan ke ${t.title}`, space: spaceKey, target: t.target }) : undefined;
+      setAsking(a => [...withoutTodo(a, t.key), { ...t, pendingId }]);
+      toastError("WhatsApp kebuka, tapi gagal dicatat. Cek koneksi lalu tap Udah lagi.");
+    }
   }
+  function notYet(t: Todo & { pendingId?: string }) {
+    setAsking(a => withoutTodo(a, t.key));
+    removePending(t.pendingId);
+  }
+  const snooze = (t: Todo) => t.snooze && withToast(`${t.title} ditunda ke besok`, t.snooze);
   const due = todo.filter(t => t.when <= now).length;
   // A queue, not a feed: the phone swipes through the first ten (the desktop
   // grid shows four), and the whole list opens in its own scrolling sheet.
@@ -435,16 +457,9 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
           <div key={t.key} role="group" aria-label={`Konfirmasi kiriman ke ${t.title}`} className="sp-card sp-sent">
             <span role="status">Pesan ke {t.title} udah kekirim?</span>
             <button onClick={() => sendOf(t)} className="sp-btn blue" style={{ borderRadius: 999 }}>Udah, catat</button>
-            <button onClick={() => setAsking(withoutTodo(asking, t.key))} className="sp-btn line" style={{ borderRadius: 999 }}>Belum</button>
+            <button onClick={() => notYet(t)} className="sp-btn line" style={{ borderRadius: 999 }}>Belum</button>
           </div>
         ))}
-        {sent && (
-          <div role="group" aria-label="Catatan kiriman" className="sp-card sp-sent">
-            <span role="status" className={sent.err ? "is-err" : undefined}>{sent.say}</span>
-            {sent.undo && !sent.err && <button onClick={takeBack} disabled={undoing} className="sp-btn line" style={{ borderRadius: 999 }}>Batal</button>}
-            <button onClick={() => setSent(null)} aria-label="Tutup catatan kiriman" className="sp-btn ghost"><Icon name="close" size={14} stroke={2.2} /></button>
-          </div>
-        )}
         {todo.length === 0 ? (
           <div className="sp-card" style={{ padding: 16, fontSize: 14, color: "var(--app-muted)" }}>
             Aman. Ga ada follow-up, penawaran, deal macet, atau tagihan yang nunggu. Pasang jadwal follow-up dari detail lead.
@@ -479,9 +494,9 @@ export default function Beranda({ now, todo, numbers, mapLeads, onOpenLead, onIm
                   })()}
                   <div className="sp-task-acts">
                     {t.wa && t.phone
-                      ? <a href={waLink(t.phone, t.text)} target="_blank" rel="noreferrer" onClick={() => { if (t.onSent) setAsking([...withoutTodo(asking, t.key), t]); }} className="sp-btn line">{t.action}</a>
+                      ? <a href={waLink(t.phone, t.text)} target="_blank" rel="noreferrer" onClick={() => opened(t)} className="sp-btn line">{t.action}</a>
                       : <button onClick={t.open} className="sp-btn line">{t.action}</button>}
-                    {t.snooze && <button onClick={t.snooze} className="sp-btn ghost">Tunda</button>}
+                    {t.snooze && <button onClick={() => snooze(t)} className="sp-btn ghost">Tunda</button>}
                     {t.wa && t.phone && <button onClick={t.open} className="sp-btn ghost">Buka</button>}
                     {t.journey && t.journey.chat.length > 0 && <button onClick={() => setChatOf(t)} className="sp-btn ghost" aria-haspopup="dialog" aria-label={`Chat terakhir dengan ${t.title}`}>Chat</button>}
                   </div>

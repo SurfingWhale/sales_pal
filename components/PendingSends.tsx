@@ -9,15 +9,16 @@ import { useEffect, useState } from "react";
 import Sheet from "@/components/Sheet";
 import { PendingSend, orphans, removePending, subscribe } from "@/lib/pendingSend";
 import { btnMuted, btnPrimary } from "@/components/ui";
+import { toast } from "@/lib/toast";
 
 export default function PendingSends({ space, record }: {
   space: string;                                        // workspace key
-  record: (p: PendingSend) => Promise<boolean>;         // false: can't record it here (e.g. lead gone)
+  // false: can't record it here (e.g. lead gone); a function: the undo for what was recorded.
+  record: (p: PendingSend) => Promise<boolean | (() => Promise<unknown>)>;
 }) {
   const [list, setList] = useState<PendingSend[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState("");
-  const [done, setDone] = useState("");
 
   useEffect(() => {
     // A beat after a screen lets go, so one that is just re-mounting can take it back.
@@ -30,30 +31,23 @@ export default function PendingSends({ space, record }: {
     return () => { clearTimeout(t); off(); document.removeEventListener("visibilitychange", back); };
   }, [space]);
 
-  if (!list.length && !done) return null;
+  if (!list.length) return null;
 
   async function yes(p: PendingSend) {
     setBusy(p.id); setErr("");
     try {
-      const ok = await record(p);
+      const r = await record(p);
       removePending(p.id);
-      setDone(ok ? `✓ Tercatat: ${p.label.replace(/^Pesan ke /, "pesan ke ")}` : `${p.label} ga bisa dicatat: datanya udah ga ada.`);
+      // The app's toast, with Batal: it stays when this sheet closes (DEC-004).
+      if (r) toast({ text: `Tercatat: ${p.label.replace(/^Pesan ke /, "pesan ke ")}`, undo: typeof r === "function" ? r : undefined });
+      else toast({ text: `${p.label} ga bisa dicatat: datanya udah ga ada.` });
     } catch {
       setErr("Belum kecatat. Cek koneksi lalu tap Udah lagi.");
     }
     setBusy(null);
   }
-  const no = (p: PendingSend) => { removePending(p.id); setDone(""); };
-  const close = () => { if (busy) return; setDone(""); if (!list.length) return; list.forEach(p => removePending(p.id)); };
-
-  if (!list.length) {
-    return (
-      <div className="sp-toast" role="status" style={{ zIndex: 140 }}>
-        <span style={{ flex: 1, minWidth: 0, fontSize: "var(--fs-meta)" }}>{done}</span>
-        <button type="button" onClick={() => setDone("")} aria-label="Tutup" style={{ minHeight: 44, minWidth: 44, border: 0, background: "transparent", color: "#fff", cursor: "pointer" }}>×</button>
-      </div>
-    );
-  }
+  const no = (p: PendingSend) => removePending(p.id);
+  const close = () => { if (busy) return; list.forEach(p => removePending(p.id)); };
   return (
     <Sheet title={list.length > 1 ? `${list.length} pesan belum dikonfirmasi` : "Pesannya udah kekirim?"} onClose={close}>
       <p style={{ margin: "-4px 0 12px", fontSize: "var(--fs-meta)", color: "var(--app-muted)" }}>

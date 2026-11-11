@@ -20,6 +20,8 @@ export type PendingSend = {
 } & (
   | { kind: "hunt"; send: Send; prospectId?: string; sessionId?: string }
   | { kind: "lead"; leadId: string; what: string; followUp?: boolean }
+  // A Beranda card's WhatsApp: a lead's follow-up, a quote's nudge, a bill's reminder.
+  | { kind: "todo"; target: { type: "lead" | "quote" | "invoice"; id: string } }
 );
 
 const KEY = "sp-pending-sends";

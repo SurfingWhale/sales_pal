@@ -52,6 +52,7 @@ import { JOURNEY_STEPS, Prospect, journeyStep, queue, statusColor as prospectCol
 import { profileUrl } from "@/lib/threads";
 import { recordSend, useHuntSession, useProspects, useStrategy } from "@/lib/prospectStore";
 import PendingSends from "@/components/PendingSends";
+import AppToast from "@/components/AppToast";
 import type { PendingSend } from "@/lib/pendingSend";
 import { InboundLead, isMember, leadFromInbound, leadIdFor, mergeInbound } from "@/lib/inbound";
 import { Component, Invoice, PriceChange, Quote, QuoteTemplate, Service, addDays, balance, daysBetween, invoiceState, owed, longDate, rupiah, today, total, useBusiness, useSpaceCollection, waLink } from "@/lib/billing";
@@ -619,7 +620,12 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       what: l.nextAction || "Follow-up", phone: l.phone, text: `Halo ${l.contact || l.name}, `,
       kind: "Follow-up", action: hasWa(l.phone) ? "Chat" : "Buka lead", wa: hasWa(l.phone), amount: Number(l.value) || 0,
       onSent: () => followedUp(l), logged: `Follow-up ke ${l.name} dicatat · berikutnya ${longDate(addDays(now, FOLLOW_AGAIN))}`,
-      snooze: () => { updateDoc(spaceDoc(space, "leads", l.id), { nextActionDate: addDays(today(), 1) }); },
+      target: { type: "lead" as const, id: l.id },
+      snooze: async () => {
+        const ref = spaceDoc(space, "leads", l.id), prev = l.nextActionDate || "";
+        await updateDoc(ref, { nextActionDate: addDays(today(), 1) });
+        return async () => { await updateDoc(ref, { nextActionDate: prev }); };
+      },
       open: () => openLead(l), inPlace: true,
     })),
     ...queue(prospects, now, strategy).map(p => ({
@@ -640,6 +646,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       what: `Penawaran ${q.number} belum dijawab ${daysBetween(q.sentAt as string, now)} hari${q.followUpAt ? ` · follow-up ${longDate(q.followUpAt)}` : ""}`, phone: q.phone,
       text: `Halo ${q.contact || q.leadName}, mau follow up penawaran ${q.number} kemarin. Ada yang bisa aku bantu jelasin?`,
       kind: "Penawaran nunggu", action: q.phone ? "Follow up via WA" : "Lihat penawaran", wa: Boolean(q.phone), amount: total(q),
+      target: { type: "quote" as const, id: q.id },
       onSent: () => nudgedQuote(q), logged: `Follow-up ${q.number} dicatat · muncul lagi ${longDate(addDays(now, 3))} kalau belum dijawab`,
       open: () => { setOpenDoc(q.id); jump("Penawaran"); },
     })),
@@ -661,6 +668,7 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
       what: `${invoiceState(i, now) === "Telat" ? "Telat bayar" : "Jatuh tempo"} ${i.number} · sisa ${rupiah(balance(i))}`, phone: i.phone,
       text: `Halo ${i.contact || i.leadName}, reminder invoice ${i.number} jatuh tempo ${longDate(i.dueDate)}, sisa ${rupiah(balance(i))}. Terima kasih!`,
       kind: invoiceState(i, now) === "Telat" ? "Invoice telat" : "Invoice jatuh tempo", action: i.phone ? "Kirim pengingat" : "Lihat invoice", wa: Boolean(i.phone), amount: balance(i),
+      target: { type: "invoice" as const, id: i.id },
       onSent: () => remindedInvoice(i), logged: `Pengingat ${i.number} dicatat · muncul lagi ${longDate(addDays(now, 2))} kalau belum lunas`,
       open: () => { setOpenDoc(i.id); jump("Invoice"); },
     })),
@@ -1105,15 +1113,20 @@ function Tracker({ user, space, spaces, chooseSpace }: { user: User; space: Spac
 
       {/* "Udah kekirim?" for sends whose screen is gone (AMB-06): recorded the same way. */}
       <PendingSends space={`${space.kind}:${space.id}`} record={async (p: PendingSend) => {
-        if (p.kind === "hunt") {
-          await recordSend(space, p.send, prospects.find(x => x.id === p.prospectId), p.sessionId, strategy);
-          return true;
+        if (p.kind === "hunt") return recordSend(space, p.send, prospects.find(x => x.id === p.prospectId), p.sessionId, strategy);
+        if (p.kind === "todo") {
+          // A Beranda card's WhatsApp, recorded as its card would have.
+          const { type, id } = p.target;
+          if (type === "lead") { const l = leads.find(x => x.id === id); return l ? (await followedUp(l)) || true : false; }
+          if (type === "quote") { const q = quotes.find(x => x.id === id); return q ? (await nudgedQuote(q)) || true : false; }
+          const i = invoices.find(x => x.id === id);
+          return i ? (await remindedInvoice(i)) || true : false;
         }
         const l = leads.find(x => x.id === p.leadId);
         if (!l) return false;
-        await logContact(l, p.what);
-        return true;
+        return (await logContact(l, p.what)) || true;
       }} />
+      <AppToast />
 
       {/* Profile & Settings Modal */}
       {showProfile && (

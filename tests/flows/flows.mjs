@@ -2769,7 +2769,8 @@ export const flows = [
       const { page } = t;
       const card = (name) => page.locator(".sp-task", { hasText: name });
       const order = () => page.locator(".sp-task h3").allTextContents();
-      const note = () => page.getByRole("group", { name: "Catatan kiriman" });
+      // What a send left behind is the app's toast (lib/toast), with Batal.
+      const note = () => page.locator(".sp-toast");
       await t.step("sign up, then two follow-ups and a late bill arrive", async () => {
         const email = await signup(t);
         const uid = await uidOf(t.project, email);
@@ -2809,7 +2810,7 @@ export const flows = [
       });
       await t.step("Batal puts it back on top", async () => {
         await note().getByRole("button", { name: "Batal", exact: true }).click();
-        await note().getByText("Dibatalin, ga dicatat.").waitFor();
+        await note().getByText("✓ Dibatalin").waitFor();
         await page.waitForFunction(() => document.querySelector(".sp-task h3")?.textContent === "Resto Besar", null, { timeout: 8000 });
       });
       await t.step("Kirim pengingat on a late bill rests it for two days", async () => {
@@ -2819,6 +2820,27 @@ export const flows = [
         await page.getByRole("group", { name: "Konfirmasi kiriman ke Toko Tagih" }).getByRole("button", { name: "Udah, catat" }).click();
         await note().getByText(/^✓ Pengingat INV-TELAT-001 dicatat/).waitFor();
         await card("Toko Tagih").first().waitFor({ state: "detached", timeout: 8000 });
+      });
+      await t.step("Tunda says where it went, and Batal brings it back", async () => {
+        // It used to change the date silently (GAP-BER-1).
+        await card("Kopi Kecil").getByRole("button", { name: "Tunda" }).click();
+        await note().getByText("✓ Kopi Kecil ditunda ke besok").waitFor();
+        await card("Kopi Kecil").getByText(/^Telat 2 hari/).waitFor({ state: "detached" });
+        await note().getByRole("button", { name: "Batal", exact: true }).click();
+        await note().getByText("✓ Dibatalin").waitFor();
+        await card("Kopi Kecil").getByText(/^Telat 2 hari/).waitFor();
+      });
+      await t.step("a card's question outlives Beranda: leave, and the app asks", async () => {
+        const [pop] = await Promise.all([page.waitForEvent("popup"), card("Kopi Kecil").getByRole("link", { name: "Chat", exact: true }).click()]);
+        await pop.close();
+        await page.getByRole("group", { name: "Konfirmasi kiriman ke Kopi Kecil" }).waitFor();
+        await page.reload();
+        const sheet = page.getByRole("dialog", { name: "Pesannya udah kekirim?" });
+        await sheet.getByText("Pesan ke Kopi Kecil").waitFor({ timeout: 15000 });
+        await sheet.getByRole("button", { name: "Udah, catat" }).click();
+        await note().getByText(/^✓ Tercatat: pesan ke Kopi Kecil/).waitFor();
+        // Recorded as its card would have: the follow-up moves on, no longer late.
+        await card("Kopi Kecil").getByText(/^Telat 2 hari/).waitFor({ state: "detached", timeout: 8000 });
       });
     },
   },
